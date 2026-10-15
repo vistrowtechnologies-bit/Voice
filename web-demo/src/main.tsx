@@ -5,11 +5,13 @@ import { Analytics, type BeforeSendEvent } from '@vercel/analytics/react'
 import './index.css'
 import App from './App.tsx'
 import { applyTheme, getStoredTheme } from './lib/theme.ts'
+import { captureAttribution } from './lib/attribution.ts'
 
 // Apply the saved (light by default) theme before React renders its auth gate.
 // This eliminates the dark one-frame splash seen while a dashboard session is
 // being restored, without changing the public-site visual system.
 applyTheme(getStoredTheme(), false)
+captureAttribution()
 
 // Show icons only once their font is loaded; until then index.css keeps the
 // ligature names (e.g. "search") invisible instead of drawn as plain text.

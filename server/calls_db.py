@@ -1455,6 +1455,12 @@ def init_tables() -> None:
             # Self-reported at signup ("How did you hear about us?") — pure
             # marketing-attribution data, never read by app logic.
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS referral_source TEXT DEFAULT ''")
+            # Full-page onboarding answers (role, industry, size, use cases,
+            # volume...) and first-touch marketing attribution (utm_*, gclid,
+            # referrer, landing page) as JSON text. Shown in the admin panel;
+            # never read by call logic.
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS onboarding_profile TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS signup_attribution TEXT DEFAULT ''")
             # Evidence of Terms/Privacy consent at signup — one combined
             # checkbox (industry-standard: nobody reads five separate policy
             # boxes at signup), but DPDP requires being able to show WHO
@@ -2446,6 +2452,48 @@ def mark_account_onboarded(account_id: int) -> None:
             conn.execute(
                 f"UPDATE accounts SET onboarded_at = {_NOW} WHERE id = ? AND onboarded_at IS NULL", (account_id,)
             )
+    finally:
+        conn.close()
+
+
+def save_signup_attribution(account_id: int, attribution: dict) -> None:
+    """First touch wins: only fills an empty value, so a later visit with
+    different tags never overwrites where the account actually came from."""
+    if not attribution:
+        return
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE accounts SET signup_attribution = ? WHERE id = ? "
+                "AND COALESCE(signup_attribution, '') = ''",
+                (json.dumps(attribution, ensure_ascii=False), account_id),
+            )
+    finally:
+        conn.close()
+
+
+def save_onboarding_profile(account_id: int, user_id: int, profile: dict) -> None:
+    """Stores the onboarding answers. Also fills the owner's phone and the
+    account's referral source when signup did not collect them (Google
+    sign-ups skip the signup form), without overwriting existing values."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE accounts SET onboarding_profile = ? WHERE id = ?",
+                (json.dumps(profile, ensure_ascii=False), account_id),
+            )
+            if profile.get("referralSource"):
+                conn.execute(
+                    "UPDATE accounts SET referral_source = ? WHERE id = ? AND COALESCE(referral_source, '') = ''",
+                    (profile["referralSource"], account_id),
+                )
+            if profile.get("phone"):
+                conn.execute(
+                    "UPDATE users SET phone = ? WHERE id = ? AND COALESCE(phone, '') = ''",
+                    (profile["phone"], user_id),
+                )
     finally:
         conn.close()
 
@@ -8949,7 +8997,7 @@ def voice_catalog_for_account(account_id: int) -> dict:
         # the words while the audio plays. Same source as voice_preview.
         "sampleTexts": {
             lang: {g: voice_catalog.sample_text(lang, g) for g in ("female", "male")}
-            for lang in ("hi", "en")
+            for lang in voice_catalog.SAMPLE_TEXTS
         },
     }
 
