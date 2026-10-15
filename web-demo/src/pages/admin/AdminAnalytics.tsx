@@ -67,8 +67,8 @@ export function AdminAnalytics() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Avg call length" value={fmtDuration(d.avgDurationSec)} icon="timer" />
         <StatCard label="Active this month" value={d.retention.activeThisMonth} sub={`${d.retention.activeLastMonth} last month`} icon="trending_up" />
-        <StatCard label="MRR" value={fmtINR(d.mrr)} sub="estimated" icon="payments" />
-        <StatCard label="ARPA" value={fmtINR(d.arpa)} sub="per paying account" icon="account_balance" />
+        <StatCard label="MRR" value={fmtINR(d.mrr)} sub="active subscriptions" icon="payments" />
+        <StatCard label="ARPA (last 30 days)" value={fmtINR(d.arpa)} sub="revenue ex GST ÷ paying customers" icon="account_balance" />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <AdminCard className="p-5">

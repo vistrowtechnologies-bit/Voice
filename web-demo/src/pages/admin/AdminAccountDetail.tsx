@@ -17,7 +17,7 @@ import {
   adminUsage,
   type AdminUsageRow,
 } from '../../lib/adminApi'
-import { AdminCard, EmptyState, errMsg, ErrorState, fmtDate, fmtDateTime, fmtDuration, Pill, PlanPill, ROW_FOCUS, rowLinkProps, StatusPill, timeAgo, useDialog } from '../../components/AdminUI'
+import { AdminCard, EmptyState, errMsg, ErrorState, fmtDate, fmtDateTime, fmtDuration, InternalPill, Pill, PlanPill, ROW_FOCUS, rowLinkProps, StatusPill, timeAgo, useDialog } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
 type Tab = 'signup' | 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'billing' | 'copilot' | 'notes'
@@ -98,8 +98,9 @@ export function AdminAccountDetail() {
           </button>
           <div className="flex items-center gap-2">
             <h1 className="font-display text-2xl font-bold tracking-tight">{a.name}</h1>
-            <PlanPill plan={a.plan} />
+            <PlanPill plan={a.effective_plan ?? a.plan} />
             <StatusPill status={a.status} />
+            {a.internal ? <InternalPill /> : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

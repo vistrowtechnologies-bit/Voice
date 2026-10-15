@@ -175,7 +175,7 @@ export function AdminDashboard() {
                     <td className="px-5 py-3 font-semibold">{s.name}</td>
                     <td className="px-5 py-3 text-text-muted">{s.owner_email || '-'}</td>
                     <td className="px-5 py-3">
-                      <PlanPill plan={s.plan} />
+                      <PlanPill plan={s.effectivePlan ?? s.plan} />
                     </td>
                     <td className="px-5 py-3 capitalize text-text-muted">{s.auth_provider || 'password'}</td>
                     <td className="px-5 py-3 text-text-muted" title={fmtDateTime(s.created_at)}>

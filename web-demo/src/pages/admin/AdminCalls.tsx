@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { adminCalls, adminCallDetail, type AdminCallRow, type AdminCallDetail } from '../../lib/adminApi'
 import { AdminCard, EmptyState, errMsg, ErrorState, fmtDateTime, fmtDuration, FilterChip, PageHeader, Pill, ROW_FOCUS, rowLinkProps, SearchInput, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
+import { AdminIpBlockDialog } from '../../components/AdminIpBlockDialog'
 
 const CHANNELS = ['browser', 'phone', 'widget']
 
@@ -21,7 +22,8 @@ const FAILED_DISCONNECT_REASONS = new Set([
   'user_unavailable',
 ])
 
-const fmtCredits = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const fmtCredits = (n: number | null | undefined) =>
+  typeof n === 'number' ? n.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '-'
 
 function latencySummary(values?: number[]): string | null {
   if (!values?.length) return null
@@ -211,6 +213,7 @@ export function AdminCallDetailPage() {
   const [c, setC] = useState<AdminCallDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const [blocking, setBlocking] = useState(false)
 
   useEffect(() => {
     setError(null)
@@ -261,6 +264,30 @@ export function AdminCallDetailPage() {
           )}
         </AdminCard>
 
+        <div className="flex flex-col gap-4">
+        {c.visitor && (
+          <AdminCard className="p-5">
+            <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Visitor</h3>
+            <dl className="flex flex-col gap-2 text-sm">
+              <Field label="IP address" value={c.visitor.ip} mono />
+              <Field label="Started from" value={c.visitor.source} />
+              <Field label="Calls from this IP (30 days)" value={String(c.visitor.callsFromIp30d)} />
+              <Field label="Browser" value={c.visitor.userAgent} mono />
+            </dl>
+            {c.visitor.blockId ? (
+              <Link to="/admin/ip-blocks" className="mt-3 flex items-center gap-2 text-sm font-semibold text-destructive hover:underline">
+                <Icon name="block" className="text-[18px]" /> Blocked. Manage blocked IPs
+              </Link>
+            ) : (
+              <button
+                onClick={() => setBlocking(true)}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/50 bg-surface px-3 py-2 text-sm font-semibold text-destructive hover:bg-destructive/10"
+              >
+                <Icon name="block" className="text-[18px]" /> Block this IP
+              </button>
+            )}
+          </AdminCard>
+        )}
         <AdminCard className="p-5">
           <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Captured lead</h3>
           <dl className="flex flex-col gap-2 text-sm">
@@ -319,7 +346,19 @@ export function AdminCallDetailPage() {
             </div>
           )}
         </AdminCard>
+        </div>
       </div>
+      {blocking && c.visitor && (
+        <AdminIpBlockDialog
+          initialIp={c.visitor.ip}
+          context={`call #${c.id}: `}
+          onClose={() => setBlocking(false)}
+          onBlocked={() => {
+            setBlocking(false)
+            setAttempt((n) => n + 1)
+          }}
+        />
+      )}
     </>
   )
 }

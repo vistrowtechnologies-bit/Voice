@@ -199,6 +199,9 @@ class DbTests(unittest.TestCase):
         row = next(c for c in self.admin.list_all_calls(account_id=aid)["calls"])
         self.assertAlmostEqual(row["credits"], used, places=1)
         self.assertNotAlmostEqual(row["credits"], 10.0, places=1, msg="not the old flat 1x formula")
+        # The admin call page formats credits; call_detail used to omit them
+        # and the page crashed on every call.
+        self.assertAlmostEqual(self.admin.call_detail(row["id"])["credits"], row["credits"], places=2)
 
     def test_trials_raise_no_low_credit_alert_and_get_a_trial_label(self):
         trial = self.account()  # signup starts a trial with a small grant

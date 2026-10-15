@@ -4,9 +4,9 @@ import {
   adminHealth,
   adminOutboundTrunkStatus,
   adminSyncOutboundTrunk,
-  PLAN_PRICING_REF,
-  CREDIT_RATES_REF,
+  adminPricing,
   type AdminHealth,
+  type AdminPricing,
   type AdminOutboundTrunkStatus,
 } from '../../lib/adminApi'
 import { AdminCard, errMsg, ErrorState, fmtINR, PageHeader, useDialog } from '../../components/AdminUI'
@@ -14,6 +14,8 @@ import { Icon } from '../../components/Icon'
 
 export function AdminSettings() {
   const [health, setHealth] = useState<AdminHealth | null>(null)
+  const [pricing, setPricing] = useState<AdminPricing | null>(null)
+  const [pricingError, setPricingError] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const [trunk, setTrunk] = useState<AdminOutboundTrunkStatus | null>(null)
@@ -22,6 +24,11 @@ export function AdminSettings() {
   const [trunkCallerId, setTrunkCallerId] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState('')
+
+  const loadPricing = () => {
+    setPricingError(null)
+    adminPricing().then(setPricing).catch((e: unknown) => setPricingError(errMsg(e)))
+  }
 
   const loadTrunk = () => {
     setTrunkError(null)
@@ -39,6 +46,7 @@ export function AdminSettings() {
 
   useEffect(() => {
     adminHealth().then(setHealth).catch(() => setHealth(null))
+    loadPricing()
     loadTrunk()
   }, [])
 
@@ -66,33 +74,55 @@ export function AdminSettings() {
       <PageHeader title="Settings" subtitle="Platform-wide configuration reference and integration status." />
 
       <div className="grid gap-4 lg:grid-cols-2">
+        {/* Read from the code that bills (GET /admin/pricing), so it can't drift. */}
         <AdminCard className="overflow-hidden">
           <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Plan pricing</div>
-          <div className="divide-y divide-border/60">
-            {Object.entries(PLAN_PRICING_REF).map(([plan, price]) => (
-              <div key={plan} className="flex items-center justify-between px-5 py-3 text-sm">
-                <span className="font-semibold capitalize">{plan}</span>
-                <span className="tabular-nums text-text-muted">{price ? `${fmtINR(price)}/mo` : 'Free'}</span>
-              </div>
-            ))}
-          </div>
+          {pricingError ? (
+            <ErrorState message={`Couldn't load pricing: ${pricingError}`} onRetry={loadPricing} />
+          ) : (
+            <div className="divide-y divide-border/60">
+              {(pricing?.plans || []).map((p) => (
+                <div key={p.plan} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <span className="font-semibold capitalize">{p.plan}</span>
+                  <span className="tabular-nums text-text-muted">
+                    {fmtINR(p.priceInr)}/mo · {p.credits.toLocaleString('en-IN')} credits
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="border-t border-border px-5 py-2 text-[11px] text-text-muted">
-            Edit prices in <code className="text-primary">admin_db.PLAN_PRICING</code> + the marketing pricing page.
+            Source: <code className="text-primary">plan_policy.PLANS</code> (server).
           </div>
         </AdminCard>
 
         <AdminCard className="overflow-hidden">
-          <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Default credit rates</div>
-          <div className="divide-y divide-border/60">
-            {Object.entries(CREDIT_RATES_REF).map(([channel, rate]) => (
-              <div key={channel} className="flex items-center justify-between px-5 py-3 text-sm">
-                <span className="font-semibold capitalize">{channel}</span>
-                <span className="tabular-nums text-text-muted">{rate}× per minute</span>
-              </div>
-            ))}
-          </div>
+          <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Credit rates per minute</div>
+          {pricingError ? (
+            <ErrorState message={`Couldn't load rates: ${pricingError}`} onRetry={loadPricing} />
+          ) : pricing ? (
+            <div className="divide-y divide-border/60 text-sm">
+              {([
+                ['Channel', pricing.channelRates],
+                ['Voice tier', pricing.voiceTiers],
+                ['AI model tier', pricing.modelTiers],
+              ] as const).map(([label, rates]) => (
+                <div key={label} className="px-5 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{label}</div>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                    {Object.entries(rates).map(([k, v]) => (
+                      <span key={k} className="tabular-nums">
+                        <span className="capitalize">{k.replace(/_/g, ' ')}</span> <span className="text-text-muted">{v}×</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="border-t border-border px-5 py-2 text-[11px] text-text-muted">
-            Per-account overrides live on each account's Billing settings.
+            A minute costs channel × voice × model credits, never under {pricing?.minCreditsPerMinute ?? '-'}. Overage bills at{' '}
+            {pricing?.overageMultiplier ?? '-'}× the plan's per-credit price.
           </div>
         </AdminCard>
       </div>

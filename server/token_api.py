@@ -3095,6 +3095,21 @@ def admin_call_detail(call_id: int, admin: dict = Depends(require_platform_owner
     return detail
 
 
+@app.get("/admin/pricing")
+def admin_pricing(admin: dict = Depends(require_platform_owner)) -> dict:
+    """What billing actually charges, read from the code that bills, so the
+    admin Settings page can't drift (it showed phone at 1.5x; it is 1x)."""
+    return {
+        "plans": [{"plan": k, "priceInr": v["price_inr"], "credits": v["credits"]}
+                  for k, v in plan_policy.PLANS.items() if v.get("price_inr")],
+        "channelRates": {k: 1.0 for k in calls_db._CREDIT_RATE_SETTINGS},
+        "voiceTiers": dict(calls_db._VOICE_TIER_MULTIPLIERS),
+        "modelTiers": dict(calls_db._MODEL_TIER_MULTIPLIERS),
+        "minCreditsPerMinute": calls_db._MIN_CREDITS_PER_MINUTE,
+        "overageMultiplier": calls_db.OVERAGE_RATE_MULTIPLIER,
+    }
+
+
 @app.get("/admin/ip-blocks")
 def admin_list_ip_blocks(admin: dict = Depends(require_platform_owner)) -> dict:
     return {"blocks": ip_blocklist.list_blocks()}

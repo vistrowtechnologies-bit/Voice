@@ -860,6 +860,11 @@ def call_detail(call_id: int) -> dict | None:
         if row is None:
             return None
         d = dict(row)
+        import calls_db  # local import: see account_detail
+
+        # Credits this call billed, by the same formula as the customer's bill.
+        rates = calls_db.credit_rates(d["account_id"], conn=conn) if d.get("account_id") is not None else {}
+        d["credits"] = round(calls_db.credits_for_call(d, rates, float(d.get("duration_seconds") or 0) / 60.0), 2)
         # The storage key and the public CRM playback token are bearer
         # secrets; the admin page only needs to know a recording exists.
         d["hasRecording"] = bool(d.pop("recording_key", None))
@@ -1165,7 +1170,7 @@ def usage_cost(from_date: str | None = None, to_date: str | None = None, days: i
         if ids:
             marks = ", ".join("?" for _ in ids)
             names = {r["id"]: dict(r) for r in conn.execute(
-                f"SELECT id, name, plan FROM accounts WHERE id IN ({marks})", ids).fetchall()}
+                f"SELECT a.id, a.name, {_EFFECTIVE_PLAN} plan FROM accounts a WHERE a.id IN ({marks})", ids).fetchall()}
     finally:
         conn.close()
     rows = []

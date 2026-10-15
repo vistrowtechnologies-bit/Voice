@@ -68,8 +68,20 @@ export function StatusPill({ status }: { status: string }) {
   )
 }
 
+const PLAN_PILL_LABELS: Record<string, string> = {
+  starter: 'Starter', growth: 'Growth', scale: 'Scale', 'top-up': 'Top-up', trial: 'Trial', none: 'No plan', free: 'Free',
+}
+
+/** An account's plan. Pass the real commercial state (effective_plan) where
+ *  the API has it; accounts.plan is 'starter' for every signup. */
 export function PlanPill({ plan }: { plan: string }) {
-  return <Pill tone={plan === 'free' ? 'neutral' : 'primary'}>{plan || 'free'}</Pill>
+  const unpaid = !plan || plan === 'free' || plan === 'none' || plan === 'trial'
+  return <Pill tone={unpaid ? 'neutral' : 'primary'}>{PLAN_PILL_LABELS[plan] || plan || 'No plan'}</Pill>
+}
+
+/** Vistrow's own account: listed, but left out of every customer number. */
+export function InternalPill() {
+  return <Pill tone="neutral">Internal</Pill>
 }
 
 /** Horizontal usage/credit bar. */
