@@ -515,13 +515,18 @@ def _sarvam_v4_entry(vid: str, g: str) -> dict:
     name, lang, *style = vid.split("_")
     style_words = " ".join(style).title()
     expressive = "expressive" in style
+    native = _SARVAM_V4_LANG.get(lang, lang)
     return {
         "value": f"{SARVAM_V4_PREFIX}{vid}",
-        "name": f"{name.title()} {style_words} ({_SARVAM_V4_LANG.get(lang, lang)})",
+        # The language Sarvam tuned this voice for is data (native_lang), not
+        # part of the name: the voice speaks all 11 languages, best in this one.
+        "name": f"{name.title()} {style_words}",
         "gender": "male" if g == "m" else "female",
         "tier": "standard",
         "multilingual": True,
-        "note": f"Sarvam v4 · {style_words.lower()}{' · expressive' if expressive else ''}",
+        "native_lang": "hi" if lang == "enhi" else lang,
+        "native_language": native,
+        "note": f"Native {native} · Sarvam v4{' · expressive' if expressive else ''}",
     }
 
 
@@ -661,16 +666,59 @@ DEFAULT_ACCOUNT_VOICES = ["google:chirp3:Achernar", "google:chirp3:Aoede", "pooj
 # for a female voice like Monika is grammatically wrong — sample_text() below
 # picks the right variant from the voice's catalog gender. Bump
 # SAMPLE_TEXT_VERSION (regenerates cached audio) whenever any line changes.
-SAMPLE_TEXT_VERSION = 3
+SAMPLE_TEXT_VERSION = 4
+# Every language says the same thing as the English line, so a customer
+# switching the preview language hears the same sentence in that language.
+# Translations written 2026-10-15; native-speaker review still pending.
 SAMPLE_TEXTS: dict[str, str | dict[str, str]] = {
-    "mr": "नमस्कार! Vistrow Voice मध्ये आपले स्वागत आहे. हा आमच्या मराठी एआय आवाजाचा नमुना आहे.",
-    "ta": "வணக்கம்! Vistrow Voice-க்கு வரவேற்கிறோம். இது எங்கள் தமிழ் செயற்கை நுண்ணறிவு குரலின் மாதிரி.",
-    "te": "నమస్కారం! Vistrow Voice‌కు స్వాగతం. ఇది మా తెలుగు ఏఐ వాయిస్ నమూనా.",
-    "kn": "ನಮಸ್ಕಾರ! Vistrow Voice‌ಗೆ ಸ್ವಾಗತ. ಇದು ನಮ್ಮ ಕನ್ನಡ ಎಐ ಧ್ವನಿಯ ಮಾದರಿ.",
-    "ml": "നമസ്കാരം! Vistrow Voice-ലേക്ക് സ്വാഗതം. ഇത് ഞങ്ങളുടെ മലയാളം എഐ ശബ്ദത്തിന്റെ മാതൃകയാണ്.",
-    "gu": "નમસ્તે! Vistrow Voiceમાં આપનું સ્વાગત છે. આ અમારા ગુજરાતી એઆઈ અવાજનો નમૂનો છે.",
-    "bn": "নমস্কার! Vistrow Voice-এ স্বাগতম। এটি আমাদের বাংলা এআই কণ্ঠের নমুনা।",
-    "pa": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! Vistrow Voice ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ। ਇਹ ਸਾਡੀ ਪੰਜਾਬੀ ਏਆਈ ਆਵਾਜ਼ ਦਾ ਨਮੂਨਾ ਹੈ।",
+    "mr": {
+        "male": (
+            "नमस्कार! मी Vistrow Voice चा एआय एजंट आहे. मी तुमच्या कॉल्सना उत्तर देतो, "
+            "लीड्स क्वालिफाय करतो आणि अपॉइंटमेंट बुक करतो — तेही तुमच्या ग्राहकाच्या स्वतःच्या भाषेत."
+        ),
+        "female": (
+            "नमस्कार! मी Vistrow Voice ची एआय एजंट आहे. मी तुमच्या कॉल्सना उत्तर देते, "
+            "लीड्स क्वालिफाय करते आणि अपॉइंटमेंट बुक करते — तेही तुमच्या ग्राहकाच्या स्वतःच्या भाषेत."
+        ),
+    },
+    "ta": (
+        "வணக்கம்! நான் Vistrow Voice-இன் ஏஐ ஏஜென்ட். உங்கள் அழைப்புகளுக்கு பதிலளிப்பேன், "
+        "லீட்களை தகுதிப்படுத்துவேன், அப்பாயின்ட்மென்ட்களையும் புக் செய்வேன் — அதுவும் உங்கள் வாடிக்கையாளரின் சொந்த மொழியிலேயே."
+    ),
+    "te": (
+        "నమస్కారం! నేను Vistrow Voice ఏఐ ఏజెంట్‌ని. మీ కాల్స్‌కు సమాధానం ఇస్తాను, "
+        "లీడ్స్‌ను క్వాలిఫై చేస్తాను, అపాయింట్‌మెంట్లు బుక్ చేస్తాను — అదీ మీ కస్టమర్ సొంత భాషలోనే."
+    ),
+    "kn": (
+        "ನಮಸ್ಕಾರ! ನಾನು Vistrow Voice ನ ಎಐ ಏಜೆಂಟ್. ನಿಮ್ಮ ಕರೆಗಳಿಗೆ ಉತ್ತರಿಸುತ್ತೇನೆ, "
+        "ಲೀಡ್‌ಗಳನ್ನು ಕ್ವಾಲಿಫೈ ಮಾಡುತ್ತೇನೆ ಮತ್ತು ಅಪಾಯಿಂಟ್‌ಮೆಂಟ್‌ಗಳನ್ನು ಬುಕ್ ಮಾಡುತ್ತೇನೆ — ಅದೂ ನಿಮ್ಮ ಗ್ರಾಹಕರ ಸ್ವಂತ ಭಾಷೆಯಲ್ಲೇ."
+    ),
+    "ml": (
+        "നമസ്കാരം! ഞാൻ Vistrow Voice-ന്റെ എഐ ഏജന്റാണ്. നിങ്ങളുടെ കോളുകൾക്ക് മറുപടി നൽകുകയും "
+        "ലീഡുകൾ ക്വാളിഫൈ ചെയ്യുകയും അപ്പോയിന്റ്മെന്റുകൾ ബുക്ക് ചെയ്യുകയും ചെയ്യും — അതും നിങ്ങളുടെ ഉപഭോക്താവിന്റെ സ്വന്തം ഭാഷയിൽ."
+    ),
+    "gu": (
+        "નમસ્તે! હું Vistrow Voice નો એઆઈ એજન્ટ છું. હું તમારા કૉલ્સનો જવાબ આપું છું, "
+        "લીડ્સ ક્વોલિફાય કરું છું અને એપોઇન્ટમેન્ટ બુક કરું છું — એ પણ તમારા ગ્રાહકની પોતાની ભાષામાં."
+    ),
+    "bn": (
+        "নমস্কার! আমি Vistrow Voice-এর এআই এজেন্ট। আমি আপনার কলের উত্তর দিই, "
+        "লিড কোয়ালিফাই করি আর অ্যাপয়েন্টমেন্ট বুক করি — তাও আপনার গ্রাহকের নিজের ভাষায়।"
+    ),
+    "pa": {
+        "male": (
+            "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ Vistrow Voice ਦਾ ਏਆਈ ਏਜੰਟ ਹਾਂ। ਮੈਂ ਤੁਹਾਡੀਆਂ ਕਾਲਾਂ ਦਾ ਜਵਾਬ ਦਿੰਦਾ ਹਾਂ, "
+            "ਲੀਡਾਂ ਕੁਆਲੀਫਾਈ ਕਰਦਾ ਹਾਂ ਅਤੇ ਅਪਾਇੰਟਮੈਂਟ ਬੁੱਕ ਕਰਦਾ ਹਾਂ — ਉਹ ਵੀ ਤੁਹਾਡੇ ਗਾਹਕ ਦੀ ਆਪਣੀ ਭਾਸ਼ਾ ਵਿੱਚ।"
+        ),
+        "female": (
+            "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ Vistrow Voice ਦੀ ਏਆਈ ਏਜੰਟ ਹਾਂ। ਮੈਂ ਤੁਹਾਡੀਆਂ ਕਾਲਾਂ ਦਾ ਜਵਾਬ ਦਿੰਦੀ ਹਾਂ, "
+            "ਲੀਡਾਂ ਕੁਆਲੀਫਾਈ ਕਰਦੀ ਹਾਂ ਅਤੇ ਅਪਾਇੰਟਮੈਂਟ ਬੁੱਕ ਕਰਦੀ ਹਾਂ — ਉਹ ਵੀ ਤੁਹਾਡੇ ਗਾਹਕ ਦੀ ਆਪਣੀ ਭਾਸ਼ਾ ਵਿੱਚ।"
+        ),
+    },
+    "od": (
+        "ନମସ୍କାର! ମୁଁ Vistrow Voice ର ଏଆଇ ଏଜେଣ୍ଟ। ମୁଁ ଆପଣଙ୍କ କଲ୍‌ର ଉତ୍ତର ଦିଏ, "
+        "ଲିଡ୍ କ୍ୱାଲିଫାଏ କରେ ଏବଂ ଆପଏଣ୍ଟମେଣ୍ଟ ବୁକ୍ କରେ — ତାହା ବି ଆପଣଙ୍କ ଗ୍ରାହକଙ୍କ ନିଜ ଭାଷାରେ।"
+    ),
     "en": (
         "Hi! I'm a Vistrow Voice AI agent. I can answer your calls, qualify "
         "leads, and book appointments — all in your customer's own language."
@@ -995,4 +1043,8 @@ def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
         ),
         "languageLabels": [_ALL_LANGUAGE_LABELS[c] for c in _langs if c in _ALL_LANGUAGE_LABELS],
         "canSwitchLanguage": _can_switch,
+        # Sarvam v4: the language the voice was tuned to sound native in
+        # (preview default; the voice still speaks the other languages).
+        "nativeLang": entry.get("native_lang", ""),
+        "nativeLanguage": entry.get("native_language", ""),
     }

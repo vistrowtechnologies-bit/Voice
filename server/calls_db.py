@@ -8949,7 +8949,7 @@ def voice_catalog_for_account(account_id: int) -> dict:
         # the words while the audio plays. Same source as voice_preview.
         "sampleTexts": {
             lang: {g: voice_catalog.sample_text(lang, g) for g in ("female", "male")}
-            for lang in ("hi", "en")
+            for lang in voice_catalog.SAMPLE_TEXTS
         },
     }
 

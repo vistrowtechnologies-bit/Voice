@@ -803,6 +803,10 @@ export interface VoiceEntry {
   // languageLabels.length, which only holds the locales we name explicitly.
   languageCount: number
   canSwitchLanguage: boolean
+  // Sarvam v4: the language Sarvam tuned the voice to sound native in
+  // ("hi" / "Hindi"). Empty for other voices.
+  nativeLang?: string
+  nativeLanguage?: string
   selected?: boolean
 }
 

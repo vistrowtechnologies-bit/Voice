@@ -620,3 +620,32 @@ Branch `claude/seo-p5-receptionist-ivr` (owner request; Keyword Planner India: i
 - `/ai-ivr` strengthened (title/H1 unchanged): "IVR system, cloud IVR, IVR call" section, IVR guides list linking the 4 posts + /ai-receptionist, 2 new FAQs.
 Facts checked in repo: transfer refuses web calls (`agent/tools.py` transfer_call), 11 languages (`agent/language.py`), Appointments/Scheduling, route call window blank = answer at any time, integrations list, custom functions (AgentDetail), strict mode, consent/retention, calling window/DNC (help articles).
 Verified: `npm --prefix web-demo run build` (SEO route audit: 120 indexable routes pass), `npm run test:seo`, `npx tsx scripts/check-blog-seo.ts` (14 articles), oxlint (no new warnings). Built pages checked at 375 px: no horizontal scroll, one H1. Not done: `graphify update .` (graphify-out is not tracked; run on main after merge). After merge: Vercel deploy only, then request indexing for the 5 new URLs.
+
+### Claude — 2026-10-15 — Sarvam native language: names, filter, listen in any language
+
+Branch `claude/sarvam-native-languages`. The owner asked why voices say "(Hindi)" and how a customer can hear a voice in Tamil or another language.
+
+Sarvam's v4 voice ids are `<name>_<lang>_<style>`. Per Sarvam, `<lang>` is the language each voice was tuned to sound native in; every voice still speaks all 11.
+
+**Catalog** (`server/voice_catalog.py`, copied byte-identical to `agent/voice_catalog.py`; the agent reads only gender/tier/notes of Gemini voices, so no worker deploy is needed)
+- v4 names drop "(Hindi)".
+- New fields `native_lang`/`native_language`, exposed as `nativeLang`/`nativeLanguage`.
+- note = "Native Hindi · Sarvam v4".
+- 22 names now repeat across languages. They are told apart by the native tag and by the note in the agent picker.
+
+**Samples**
+- SAMPLE_TEXTS: every language now says the same sentence as the English line: mr and pa gendered; ta, te, kn, ml, gu, bn, od added or rewritten. Translations are mine; native-speaker review is pending.
+- SAMPLE_TEXT_VERSION 3→4, which regenerates cached previews.
+- Bug fixed: `voice_preview._SARVAM_LANG` only had hi/en, so a Tamil preview was sent to Sarvam/Chirp as hi-IN. It now has all 11 codes.
+- `voice_catalog_for_account` returns sampleTexts for every language.
+
+**Voices page**
+- Rows read "Native Hindi · speaks 11 languages".
+- Sarvam tab has a native-language filter (current split: Hindi 53, English 24, Hinglish 7, Gujarati/Marathi/Punjabi 3, Telugu 2, Bengali/Kannada 1; no Tamil, Malayalam or Odia natives).
+- The spotlight has a "Listen in" row for Sarvam v4 and Chirp HD voices (not Gemini, whose quota is small). Clicking a language plays the same sentence in it; native is marked. The stats tile shows the native language.
+
+**Verified**
+- Local app, with a mock that calls the real `voice_preview.synthesize` (Sarvam key from .env): Aarti → Tamil returned real audio and showed the Tamil sentence highlighted.
+- Server voice tests: 38 pass.
+- `agent/test_sarvam_v4_plugin.py::test_a_rejected_id_falls_back_by_gender` fails with and without this change (local livekit 1.8.3 vs pinned 1.8.6).
+- `npm run build` passes.
