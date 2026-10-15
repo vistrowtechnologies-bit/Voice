@@ -133,7 +133,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
   return (
     <div className="relative mx-auto w-full max-w-[460px] overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.14] via-surface to-surface p-5 shadow-[0_24px_60px_-30px_rgba(168,85,247,0.55)] sm:p-6 lg:ml-auto">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">Hear a sample call</p>
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">Sample call</p>
         <span
           key={switched ? 'switched' : 'start'}
           className={`vs-chip inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold ${
