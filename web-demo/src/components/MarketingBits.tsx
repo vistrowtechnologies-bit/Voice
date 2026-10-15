@@ -16,25 +16,32 @@ export function SectionEyebrow({ children }: { children: string }) {
 // subdomain, a plain client-side navigate('/') would just re-render that
 // subdomain's own root (which redirects to the dashboard), never reaching Home. Force a
 // real cross-host navigation whenever we're not already on marketing.
-export function TalkToArthaButton({ className }: { className?: string }) {
-  const navigate = useNavigate()
+export const LIVE_DEMO_HREF = 'https://www.vistrowvoice.com/#live-demo'
 
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+/** Click handler for any link that should land on the live demo widget
+ * (TalkToArthaButton, the header's "Hear a live call"). */
+export function useGoToLiveDemo(placement: string) {
+  const navigate = useNavigate()
+  return (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault()
-    trackMarketingCta('talk_to_artha_live', 'marketing_talk_to_artha_button')
+    trackMarketingCta('talk_to_artha_live', placement)
     const el = document.getElementById('live-demo')
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     } else if (hostBucket(window.location.hostname) === 'marketing') {
       navigate('/#live-demo')
     } else {
-      window.location.href = 'https://www.vistrowvoice.com/#live-demo'
+      window.location.href = LIVE_DEMO_HREF
     }
   }
+}
+
+export function TalkToArthaButton({ className }: { className?: string }) {
+  const handleClick = useGoToLiveDemo('marketing_talk_to_artha_button')
 
   return (
     <a
-      href="https://www.vistrowvoice.com/#live-demo"
+      href={LIVE_DEMO_HREF}
       onClick={handleClick}
       className={
         className ??

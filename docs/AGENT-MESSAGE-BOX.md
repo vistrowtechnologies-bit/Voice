@@ -11,6 +11,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Tenant worker `CA_TGdpVhSdxDyS`, version `hWzSh4i6QxBJ`; platform `CA_53d8HgBktjZ7`, version `QsqG4DhoSeuy`. Both had Running/registered startup verification; this does not establish live quality.
 - User authorizes merging completed PRs and deployment. Automated verification must not initiate real phone calls or Google requests.
 - Claude (2026-10-10, later): branch `claude/integration-detail-pages`, claim posted on issue #2 (comment 6097967369). Integration detail pages + Sheets styling/per-agent tabs/field choice; touches `agent/tools.py` delivery fan-out and `agent/db.py`, so BOTH workers need a deploy after merge. Codex's 2.5 claim is untouched.
+- Claude (2026-10-15): branch `claude/marketing-header-v2` (PR open, NOT merged): new marketing-site header (language strip, mega-menus, Hear a live call, mobile sheet); web-demo only, Vercel deploy only.
 - Claude (2026-10-15): branch `claude/seo-keyword-placement` (PR open, NOT merged): keyword placement fixes + new /ai-calling-agent page; web-demo only, Vercel deploy only.
 - Claude (2026-10-14): branch `claude/security-tokens-mfa` (PR open, NOT merged): integration tokens encrypted at rest (server + agent + orchestrator). Inert until the owner sets INTEGRATION_ENCRYPTION_KEY everywhere, then INTEGRATION_ENCRYPTION_WRITE=on; see docs/SECURITY-AUDIT-2026-10-12.md.
 
@@ -904,3 +905,17 @@ Branch `claude/seo-voice-samples`. This is web-only work.
 - Titles and H1s were kept on purpose for the language pages, the AI IVR H1 and the home title ("ivr call", "ai voice calling agent" and the language keywords). The checker marks these as kept.
 
 **Next step:** review and merge the PR. Only Vercel deploys; no server or agent deploy is needed. After the deploy, run `python3 web-demo/scripts/check-keyword-placement.py --live` and request indexing for /ai-calling-agent in GSC.
+
+### Claude - 2026-10-15 - new marketing header (branch claude/marketing-header-v2, PR open, NOT merged)
+
+Owner-approved mix of mockup options 5 and 4. Files: `web-demo/src/components/MarketingLayout.tsx` (header only; footer and layout untouched), `web-demo/src/components/MarketingBits.tsx` (live-demo click logic extracted to `useGoToLiveDemo`, TalkToArthaButton unchanged in behaviour), `web-demo/src/lib/marketingContent.ts` (AI receptionist and AI IVR moved from Resources into Product in NAV), `web-demo/src/index.css` (header-only `.mh-*` rules appended). The logged-in dashboard header was not touched.
+
+What it does: utility strip (all 10 language scripts from LANGUAGES, each linking to /languages/<slug>; "Answers 24/7 on phone and web"; Talk to sales -> /contact) scrolls away; the main bar is sticky with blur and a shadow after scroll. Product mega-menu (3 columns + featured "Hear it first" card -> /languages/tamil, a 30 s Hindi-to-Tamil sample), Solutions (industries + language column), Resources (3 columns), Company (narrow list). Panels are always in the prerendered HTML and only hidden, so every menu link is a crawlable <a href>. Hover intent (120 ms open, 180 ms close), click, ArrowDown/Up/Left/Right/Home/End roving, Escape returns focus to the trigger, outside click closes. "Hear a live call" reuses the Talk to Artha live path (scroll to #live-demo or go to /#live-demo).
+
+Deviation: the desktop/mobile switch is at 1024 px (lg), not 900 px; between 900 and 1023 the five menus plus both buttons do not fit. Between 1024 and 1279 the pill reads "Live call" and Sign in moves to the utility strip.
+
+Verified: `npm --prefix web-demo run build` (icons, em-dash, SEO route audit: 125 routes pass), `npm --prefix web-demo run test:seo`, `npx tsx scripts/check-blog-seo.ts` all pass. Browser (local `vite preview` of the build): hover and keyboard on the mega-menus, Escape/outside click, Hear a live call from /pricing lands on the home demo orb, 1024 px fits with no overflow, 375 px has no horizontal scroll, the sheet opens, locks scroll, Escape closes and focus returns, light and dark both checked.
+
+Not verified: real phones/Safari; the live site after deploy.
+
+**Next step:** owner review of the PR screenshots, then merge. Vercel only; no server or agent deploy.
