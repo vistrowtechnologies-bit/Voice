@@ -132,6 +132,9 @@ export interface AdminAccountRow {
   credits_used: number
   credits_total: number
   mrr: number
+  // Signup facts for the list: ad source (utm_source) or "How did you hear".
+  source?: string
+  industry?: string
 }
 
 export interface AdminAccountDetail {
@@ -143,8 +146,12 @@ export interface AdminAccountDetail {
     notes: string
     created_at: string
     onboarded_at: string | null
+    referral_source?: string
+    // Full-page onboarding answers and first-touch attribution (JSON objects).
+    onboarding_profile?: Record<string, string | string[]>
+    signup_attribution?: Record<string, string>
   }
-  owner: { id: number; email: string; name: string } | null
+  owner: { id: number; email: string; name: string; phone?: string; auth_provider?: string | null } | null
   billing: { creditsTotal: number; creditsUsed: number; creditsRemaining: number; minutesUsed: number }
   mrr: number
   users: {

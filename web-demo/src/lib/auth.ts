@@ -41,6 +41,7 @@ export interface AuthState {
     password: string
     referral_source?: string
     phone?: string
+    attribution?: Record<string, string>
   }) => Promise<SignupResult>
   logout: () => Promise<void>
   refresh: () => Promise<void>
@@ -94,6 +95,7 @@ export const apiSignup = (data: {
   password: string
   referral_source?: string
   phone?: string
+  attribution?: Record<string, string>
 }) => authFetch<SignupResult>('/auth/signup', data)
 export interface SignupResult {
   ok: boolean
@@ -184,7 +186,8 @@ export const apiUpdateAccount = (data: { name?: string; country?: string }) =>
   authFetch<{ user: AuthUser }>('/account', data, 'PATCH')
 export const apiAcceptConsent = (version: string) =>
   authFetch<{ user: AuthUser }>('/onboarding/consent', { version })
-export const apiCompleteOnboarding = () => authFetch<{ user: AuthUser }>('/onboarding/complete', {})
+export const apiCompleteOnboarding = (data: { profile?: Record<string, string | string[]>; attribution?: Record<string, string> } = {}) =>
+  authFetch<{ user: AuthUser }>('/onboarding/complete', data)
 export const apiCompleteTour = () => authFetch<{ user: AuthUser }>('/tour/complete', {})
 
 export interface AuthConfig {

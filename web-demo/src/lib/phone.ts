@@ -47,15 +47,35 @@ export const COMMON_DIAL_CODES = Object.entries(PRIMARY_REGION_FOR_DIAL)
   .map(([dial, code]) => ({ code, dial, name: countryName(code) }))
   .sort((a, b) => a.name.localeCompare(b.name))
 
-/** Best guess of a new visitor's country from the browser, before they have
- * a workspace. Only a default — they can change it. */
+// Time zones that name one country. The browser language is a poor signal:
+// most Indian computers run English (US) or (UK), which read as US or GB.
+const COUNTRY_BY_TIMEZONE: Record<string, string> = {
+  'Asia/Kolkata': 'IN', 'Asia/Calcutta': 'IN', 'Asia/Dubai': 'AE', 'Asia/Riyadh': 'SA', 'Asia/Qatar': 'QA',
+  'Asia/Singapore': 'SG', 'Asia/Karachi': 'PK', 'Asia/Dhaka': 'BD', 'Asia/Kathmandu': 'NP', 'Asia/Colombo': 'LK',
+  'Europe/London': 'GB', 'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU',
+}
+
+/** Best guess of a new visitor's country, before they have told us: the
+ * time zone first, then a region in the browser language, else India. */
 export function guessCountry(): string {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const fromZone = COUNTRY_BY_TIMEZONE[zone]
+    if (fromZone) return fromZone
+  } catch {
+    // Older browsers without Intl time zones fall through to the language.
+  }
   const tags = [...(navigator.languages ?? []), navigator.language]
   for (const tag of tags) {
     const region = tag?.split('-')[1]?.toUpperCase()
     if (region && DIAL_BY_COUNTRY.has(region)) return region
   }
   return 'IN'
+}
+
+/** The country for a "+91" picked beside a phone number. */
+export function countryForDialCode(dial: string): string | undefined {
+  return (PRIMARY_REGION_FOR_DIAL as Record<string, string>)[dial]
 }
 
 /** Build the provider-safe number while still accepting a pasted E.164 value. */

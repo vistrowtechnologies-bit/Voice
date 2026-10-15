@@ -42,6 +42,7 @@ import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
 import { ConfirmEmailChange } from './pages/ConfirmEmailChange'
 import { VerifyEmail } from './pages/VerifyEmail'
+import { Onboarding } from './pages/Onboarding'
 import { InviteAccept } from './pages/InviteAccept'
 import { SidebarPreview } from './pages/SidebarPreview'
 import { useEffect } from 'react'
@@ -200,6 +201,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/confirm-email-change" element={<ConfirmEmailChange />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/onboarding" element={guard(<Onboarding />)} />
         <Route path="/invite/:token" element={<InviteAccept />} />
 
         {/* Auth-gated dashboard */}
