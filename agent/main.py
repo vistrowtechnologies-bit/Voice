@@ -63,7 +63,7 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 import db
 import plan_policy
 import worker_heartbeat
-from contact_notes import build_contact_notes
+from contact_notes import build_contact_notes, lead_opening_instruction
 import numpy as np
 import recording
 import storage_gate
@@ -101,6 +101,7 @@ from language import (
     LANGUAGE_NAMES,
     detect_reply_language,
     invites_you_to_continue,
+    lead_language,
     sounds_like,
     to_google_code,
 )
@@ -4022,6 +4023,18 @@ class RealEstateAgent(Agent):
             if self._direction == "outbound"
             else ""
         ) or (config.get("welcome_message") or "").strip()
+        # A fresh ArthaLeads lead on an agent with no opener of its own: the
+        # model's first line names the person and what they enquired about
+        # (see contact_notes.lead_opening_instruction). "" otherwise, which
+        # leaves every existing opening path exactly as it was.
+        self._lead_opening = (
+            lead_opening_instruction(
+                config.get("_lead_fields"), self._visitor_first_name,
+                LANGUAGE_NAMES.get(reply_language, "Hindi"),
+            )
+            if self._direction == "outbound" and not self._welcome_message
+            else ""
+        )
         # Recording + AI disclosure (Compliance → "Announce recording"),
         # folded into whichever opening this call speaks. "" when the account
         # does not record or the owner turned the announcement off.
@@ -4354,7 +4367,8 @@ class RealEstateAgent(Agent):
             else:
                 self.session.generate_reply(
                     instructions=(
-                        "Greet them briefly and say why you are calling, in one short line."
+                        (getattr(self, "_lead_opening", "")
+                         or "Greet them briefly and say why you are calling, in one short line.")
                         + call_disclosure.instruction(getattr(self, "_recording_disclosure", ""))
                     )
                 )
@@ -4443,6 +4457,8 @@ class RealEstateAgent(Agent):
             )
         if _opener:
             _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
+        elif answered and getattr(self, "_lead_opening", ""):
+            _greet += " " + self._lead_opening
         _greet += call_disclosure.instruction(getattr(self, "_recording_disclosure", ""))
         if _opener and self._realtime_wants_tts_greeting():
             self.session.userdata["realtime_greeting_pending"] = True
@@ -5073,6 +5089,7 @@ class RealEstateAgent(Agent):
                     "the conversation. Briefly introduce yourself and the reason for the call, "
                     "then respond directly to what they said. Ask permission to continue only "
                     "if it still reads naturally."
+                    + (" " + self._lead_opening if getattr(self, "_lead_opening", "") else "")
                     + call_disclosure.instruction(getattr(self, "_recording_disclosure", ""))
                 ),
             )
@@ -6116,6 +6133,46 @@ def _call_context_from_job(ctx: JobContext) -> dict:
     }
 
 
+def _voice_speaks_language(voice: str, code: str) -> bool:
+    """Whether this agent voice can open a call in `code` (a LANGUAGE_NAMES
+    code). ElevenLabs is held to the codes it accepts: anything else is
+    only auto-detected from the text, which is no basis for a whole call."""
+    if voice.startswith(("elevenlabs:", "elevenlabs-v3:")):
+        return code in ELEVENLABS_SUPPORTED_LANGUAGES
+    spoken, _switches = voice_catalog.languages_for(voice_catalog.get_voice(voice) or {"value": voice})
+    return code in spoken or to_google_code(code) in spoken
+
+
+def _apply_lead_context(config: dict, call_context: dict, room_name: str) -> dict:
+    """Per-call settings for an outbound call to an ArthaLeads lead; any
+    other call is returned unchanged.
+
+    Carries the lead's fields to RealEstateAgent (its default opener, see
+    contact_notes.lead_opening_instruction) and, when the lead states a
+    language this agent's voice can speak, makes it this call's language.
+    STT, TTS and the "Default language" prompt all follow config["language"].
+    Never persisted: the agent row keeps its own language."""
+    fields = call_context.get("custom_fields") or {}
+    if call_context.get("direction") != "outbound" or fields.get("source") != "arthaleads":
+        return config
+    config = {**config, "_lead_fields": fields}
+    stated = fields.get("preferred_language") or fields.get("language")
+    wanted = lead_language(stated)
+    current = config.get("language") or "hi-IN"
+    if not wanted or wanted == current:
+        if stated and not wanted:
+            logger.info("lead language %r not a supported call language; keeping %s (room=%s)",
+                        str(stated)[:40], current, room_name)
+        return config
+    voice = config.get("voice") or "shubh"
+    if not _voice_speaks_language(voice, wanted):
+        logger.info("lead prefers %s but voice %s cannot speak it; keeping %s (room=%s)",
+                    wanted, voice, current, room_name)
+        return config
+    logger.info("lead language %s -> call language (agent default %s, room=%s)", wanted, current, room_name)
+    return {**config, "language": wanted}
+
+
 _TEMPLATE_VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
 
 
@@ -6800,6 +6857,9 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.info(
             "contact notes appended to prompt: %d line(s) (room=%s)", contact_notes.count("\n"), ctx.room.name
         )
+    if config:
+        config = _apply_lead_context(config, call_context, ctx.room.name)
+        cfg = config
     # "Try it in your language" on the marketing site: the visitor picks a
     # language before the call, so the agent has to OPEN in it rather than
     # opening in Hindi and waiting to be corrected. Restricted to the demo

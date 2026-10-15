@@ -919,3 +919,17 @@ Verified: `npm --prefix web-demo run build` (icons, em-dash, SEO route audit: 12
 Not verified: real phones/Safari; the live site after deploy.
 
 **Next step:** owner review of the PR screenshots, then merge. Vercel only; no server or agent deploy.
+
+### Claude - 2026-10-15 - ArthaLeads leads called within 30 s with full context (branch claude/instant-lead-calls, pushed, NO PR, NOT deployed)
+
+Files: `server/campaign_dialer.py`, `server/token_api.py` (leads_inbound, Meta webhook notify), `server/calls_db.py` (next_calling_window_open), `agent/contact_notes.py`, `agent/language.py`, `agent/main.py`; tests `server/test_instant_lead_calls.py`, `agent/test_lead_call_context.py`, `agent/test_contact_notes.py`.
+
+- Dial on arrival: `campaign_dialer.notify()` (threading.Event) wakes `_loop` for an immediate pass; the loop waits on the event with the 15 s tick as timeout. Instant-lead campaigns (by name) go first in a pass. All gates unchanged (window, concurrency, channel cap, stagger, breaker).
+- leads_inbound: `custom_fields.form_responses` -> `form_answers` ("Label: value · ...", 1200 cap) plus `form_<slug>` keys; `tags` -> comma string; control chars stripped; a form answer about language fills `language` when none is given. `ingest_inbound_lead` runs via `asyncio.to_thread`; queued -> notify(); window closed -> `queued_until` (ISO, account timezone).
+- Agent notes: tracking noise skipped (ids, arthaleads_*, page/source URLs, consent, budget_min/max, channel...); new labelled lines Came via / Ad they responded to / Ad text / Form answers / First WhatsApp message / Tags, not counted against _MAX_EXTRA.
+- Outbound to an ArthaLeads lead with no operator opener: a generate_reply instruction naming the person, project/ad and channel, in the call language (held-opening release, first live turn, realtime greeting). Operator openers untouched.
+- Lead language (preferred_language/language, names or codes) becomes that call's language when the voice can speak it (voice_catalog.languages_for; ElevenLabs limited to hi/en/ta); otherwise the agent language is kept and the reason logged.
+
+Verified: server suite 728 passed / 0 failed (715 + 13 new); agent suite 802 passed (784 + 18 new) in a LiveKit 1.8.6 venv; local throwaway Postgres only. Unverified: a live call; the wake in production assumes one API replica (notify only wakes the dialer in the same process).
+
+**Next step:** owner review -> PR -> merge; needs the Railway deploy AND both LiveKit agents (`lk agent deploy`) for the agent half. The outbound hold still applies.

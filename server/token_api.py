@@ -6597,6 +6597,67 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
     return {"agents": agents}
 
 
+# Control characters (tab/newline included: values become one-line notes) and
+# the Unicode line/paragraph separators, which break prompts and logs.
+_LEAD_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f\u2028\u2029]")
+# Form questions that repeat the contact's own identity add nothing for the agent.
+_FORM_IDENTITY_KEYS = {
+    "full_name", "name", "first_name", "last_name", "phone", "phone_number",
+    "mobile", "mobile_number", "email", "email_address", "whatsapp_number",
+}
+
+
+def _lead_text(value, cap: int) -> str:
+    text = " ".join(_LEAD_CONTROL_CHARS.sub(" ", str(value if value is not None else "")).split())
+    return text[:cap]
+
+
+def _lead_form_fields(extra: dict) -> dict:
+    """ArthaLeads' list-valued custom_fields as flat strings the agent can read.
+
+    custom_fields.form_responses is a list of {key, label, value} (Facebook and
+    website form answers) and custom_fields.tags a list; the scalar-only copy
+    in leads_inbound dropped both. Every value is public, untrusted text:
+    control characters stripped, lengths capped."""
+    out: dict[str, str] = {}
+    answers: list[str] = []
+    responses = extra.get("form_responses")
+    for item in responses[:30] if isinstance(responses, list) else []:
+        if not isinstance(item, dict):
+            continue
+        key = _lead_text(item.get("key"), 100)
+        label = _lead_text(item.get("label"), 120) or key.replace("_", " ")
+        value = _lead_text(item.get("value"), 300)
+        slug = re.sub(r"[^a-z0-9]+", "_", (key or label).casefold()).strip("_")[:48]
+        if not value or not slug or slug in _FORM_IDENTITY_KEYS:
+            continue
+        answers.append(f"{label}: {value}")
+        # Individually addressable as {{custom.form_<slug>}}; the first answer wins.
+        if re.fullmatch(r"[a-z][a-z0-9_]*", slug):
+            out.setdefault(f"form_{slug}", value)
+        # A form is where a lead's language would be asked.
+        if "language" in slug:
+            out.setdefault("language", value)
+    if answers:
+        out["form_answers"] = " · ".join(answers)[:1200]
+    tags = extra.get("tags")
+    if isinstance(tags, list):
+        joined = ", ".join(t for t in (_lead_text(tag, 50) for tag in tags[:20]) if t)
+        if joined:
+            out["tags"] = joined[:500]
+    return out
+
+
+def _queued_until(account_id: int, result: dict) -> dict:
+    """Adds when a queued lead will be dialled if the calling window is shut
+    now, so the sender can say "call scheduled for 9:00" (account timezone)."""
+    if result.get("queued"):
+        opens = calls_db.next_calling_window_open(account_id)
+        if opens is not None:
+            return {**result, "queued_until": opens.isoformat()}
+    return result
+
+
 @app.post("/leads/inbound/{account_id}")
 async def leads_inbound(account_id: int, request: Request, token: str | None = None) -> dict:
     """Generic entry point for any external lead source that can POST JSON —
@@ -6661,6 +6722,9 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
                 if (isinstance(key, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", key)
                         and value is not None and not isinstance(value, (dict, list))):
                     fields[key] = str(value)[:2000]
+            for key, value in _lead_form_fields(extra).items():
+                if key not in fields:
+                    fields[key] = value
         # The agent's contact-notes builder recognises these established keys.
         for source_key, target_key in (
             ("source_detail", "lead_source"),
@@ -6677,7 +6741,8 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
                 fields[target_key] = fields[source_key]
         fields["arthaleads_org_id"] = org_id
         fields["arthaleads_lead_id"] = lead_id
-        result = calls_db.ingest_inbound_lead(
+        result = await asyncio.to_thread(
+            calls_db.ingest_inbound_lead,
             account_id, str(body.get("name") or ""), str(body.get("phone") or ""),
             source="arthaleads", external_id=f"{org_id}:{lead_id}",
             custom_fields=fields, allow_call=body.get("auto_call") is not False,
@@ -6686,7 +6751,9 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         if not result.get("ok"):
             logger.warning("leads_inbound: ArthaLeads lead not queued for account %s: %s",
                            account_id, result.get("reason"))
-        return result
+        if result.get("queued"):
+            campaign_dialer.notify()
+        return await asyncio.to_thread(_queued_until, account_id, result)
     name = str(body.get("name") or body.get("full_name") or "").strip()
     phone = str(body.get("phone") or body.get("phone_number") or "").strip()
     if not phone:
@@ -6696,13 +6763,16 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
     if not phone:
         logger.warning("leads_inbound: no phone number in payload for account %s", account_id)
         return {"ok": False, "reason": "no_phone_in_payload"}
-    result = calls_db.ingest_inbound_lead(
+    result = await asyncio.to_thread(
+        calls_db.ingest_inbound_lead,
         account_id, name, phone, source="facebook_lead_ads",
         external_id=str(body.get("leadgen_id") or body.get("id") or ""),
     )
     if not result.get("ok"):
         logger.warning("leads_inbound: could not queue lead for account %s: %s", account_id, result.get("reason"))
-    return result
+    if result.get("queued"):
+        campaign_dialer.notify()
+    return await asyncio.to_thread(_queued_until, account_id, result)
 
 
 @app.get("/webhooks/meta")
@@ -6794,6 +6864,8 @@ async def webhooks_meta_event(request: Request) -> dict:
             )
             if not result.get("ok"):
                 logger.warning("webhooks_meta_event: could not queue lead %s: %s", leadgen_id, result.get("reason"))
+            if result.get("queued"):
+                campaign_dialer.notify()
     return {"ok": True}
 
 

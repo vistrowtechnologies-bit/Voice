@@ -78,5 +78,94 @@ class ContactNotesTests(unittest.TestCase):
         self.assertIn("- Extra 0: v0", out)
 
 
+# As calls_db.ingest_inbound_lead stores an ArthaLeads lead (after
+# token_api.leads_inbound has flattened form_responses and tags).
+ARTHALEADS_FB = {
+    "lead_source": "Facebook Ad", "project": "SP Khopoli", "project_name": "SP Khopoli",
+    "ad_name": "Khopoli 2BHK carousel", "campaign_name": "Khopoli Oct", "form_name": "Khopoli enquiry",
+    "form_answers": "When do you plan to buy?: Within 3 months · Preferred configuration: 2 BHK",
+    "form_when_do_you_plan_to_buy": "Within 3 months", "tags": "hot, 2bhk",
+    "source": "arthaleads", "channel_source": "facebook", "external_id": "org1:abc",
+    "arthaleads_org_id": "org1", "arthaleads_lead_id": "abc", "arthaleads_source": "Facebook",
+    "created_at": "2026-10-15T10:00:00Z", "consent_basis": "whatsapp_marketing_opt_in",
+    "page_id": "1020", "adset_name": "Pune 30-45", "meta_lead_id": "77001", "project_id": "p-9",
+    "budget_min": "4500000", "budget_currency": "INR", "source_page": "https://x.example/khopoli",
+    "page_url": "https://x.example/khopoli", "channel": "facebook",
+    # Enough unknown extras to fill _MAX_EXTRA on their own.
+    **{f"note_{i}": f"n{i}" for i in range(12)},
+}
+
+
+class ArthaLeadsLeadNotes(unittest.TestCase):
+    def test_lead_facts_are_labelled_and_never_crowded_out(self):
+        out = build_contact_notes(ARTHALEADS_FB)
+        self.assertIn("- Came via: Facebook lead form", out)
+        self.assertIn("- Ad they responded to: Khopoli 2BHK carousel", out)
+        self.assertIn("- Form answers: When do you plan to buy?: Within 3 months · Preferred configuration: 2 BHK", out)
+        self.assertIn("- Tags: hot, 2bhk", out)
+        self.assertIn("- Project: SP Khopoli", out)
+        self.assertEqual(out.count("SP Khopoli"), 1)  # project_name equal to project is not repeated
+        self.assertEqual(sum(l.startswith("- Note ") for l in out.splitlines()), 8)
+        for noise in ("Came from", "arthaleads", "org1", "1020", "77001", "p-9", "4500000", "Pune 30-45",
+                      "x.example", "2026-10-15", "whatsapp_marketing", "Channel", "Form when", "Khopoli Oct"):
+            self.assertNotIn(noise, out)
+
+    def test_came_via(self):
+        from contact_notes import came_via
+
+        self.assertEqual(came_via({"channel_source": "website"}), "Website form")
+        self.assertEqual(came_via({"channel_source": "whatsapp"}), "WhatsApp message")
+        self.assertEqual(came_via({"channel_source": "whatsapp", "ad_headline": "2 BHK"}), "WhatsApp ad")
+        self.assertEqual(came_via({"channel_source": "unknown", "lead_source": "Google Ads"}), "Google ad")
+        self.assertEqual(came_via({"channel_source": "unknown", "lead_source": "Manual"}), "")
+        # Not an ArthaLeads lead: "Came from" stays as it was.
+        self.assertEqual(came_via({"lead_source": "Google Ads"}), "")
+        self.assertIn("- Came from: Google Ads", build_contact_notes({"lead_source": "Google Ads"}))
+
+    def test_whatsapp_ad_lead(self):
+        out = build_contact_notes({
+            "source": "arthaleads", "channel_source": "whatsapp", "lead_source": "WhatsApp",
+            "ad_headline": "2 & 3 BHK at Khopoli", "ad_name": "internal-ad-label",
+            "ad_body": "Riverside homes. " + "y" * 400, "ad_source_url": "https://fb.me/abc",
+            "whatsapp_first_message": "Hi, price please",
+        })
+        self.assertIn("- Came via: WhatsApp ad", out)
+        self.assertIn("- Ad they responded to: 2 & 3 BHK at Khopoli", out)  # headline beats the internal name
+        self.assertNotIn("internal-ad-label", out)
+        self.assertIn("- First WhatsApp message: Hi, price please", out)
+        ad_text = next(l for l in out.splitlines() if l.startswith("- Ad text: "))
+        self.assertLessEqual(len(ad_text), len("- Ad text: ") + 160)
+        self.assertNotIn("fb.me", out)
+
+    def test_a_lead_field_the_prompt_already_uses_is_not_repeated(self):
+        out = build_contact_notes(ARTHALEADS_FB, prompt_text="Answers: {{custom.form_answers}}")
+        self.assertNotIn("- Form answers", out)
+
+
+class LeadOpeningInstruction(unittest.TestCase):
+    def test_names_the_person_the_topic_and_the_channel(self):
+        from contact_notes import lead_opening_instruction
+
+        text = lead_opening_instruction(ARTHALEADS_FB, "Priya", "Telugu")
+        self.assertIn('enquiry about "SP Khopoli" through a Facebook lead form', text)
+        self.assertIn("by their first name, Priya", text)
+        self.assertIn("In Telugu", text)
+        self.assertIn("never add a price, offer or detail that is not there", text)
+
+    def test_falls_back_to_the_ad_and_to_no_name(self):
+        from contact_notes import lead_opening_instruction
+
+        text = lead_opening_instruction(
+            {"source": "arthaleads", "channel_source": "whatsapp", "ad_headline": 'Say "hi"\nnow'}, None, "Hindi")
+        self.assertIn("about \"Say 'hi' now\" through a WhatsApp ad", text)
+        self.assertIn("greet them warmly", text)
+
+    def test_only_for_arthaleads_leads(self):
+        from contact_notes import lead_opening_instruction
+
+        self.assertEqual(lead_opening_instruction({"project": "X", "source": "facebook_lead_ads"}, "A", "Hindi"), "")
+        self.assertEqual(lead_opening_instruction(None, "A", "Hindi"), "")
+
+
 if __name__ == "__main__":
     unittest.main()
