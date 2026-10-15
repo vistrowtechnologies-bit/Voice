@@ -624,7 +624,7 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
       'Record the locality as a separate field (for example sector or micro-market), because one project name can be shared by several phases.',
     ],
     sample: [
-      { speaker: 'Caller', native: 'Noida Extension में 3 BHK देख रहे हैं, budget लगभग 80 लाख है.', gloss: 'We are looking for a 3 BHK in Noida Extension, budget about 80 lakh.' },
+      { speaker: 'Caller', native: 'नोएडा एक्सटेंशन में 3 BHK देख रहे हैं, budget लगभग 80 लाख है.', gloss: 'Looking for a 3 BHK in Noida Extension, budget is around 80 lakh.' },
       { speaker: 'Agent', native: 'ज़रूर. आप ख़ुद रहने के लिए ले रहे हैं या investment के लिए?', gloss: 'Sure. Are you buying to live in or as an investment?' },
       { speaker: 'Caller', native: 'ख़ुद के लिए, अगले छह महीने में.', gloss: 'For ourselves, in the next six months.' },
       { speaker: 'Agent', native: 'ठीक है. क्या इस शनिवार site visit रख दूँ?', gloss: 'All right. Shall I book a site visit this Saturday?' },
@@ -650,10 +650,10 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
       'Ask the agent to confirm the preferred visit day aloud: weekend site visits fill quickly and a misheard day costs a visit.',
     ],
     sample: [
-      { speaker: 'Caller', native: 'हिंजवडीजवळ 2 BHK हवा आहे, बजेट साधारण 70 लाख.', gloss: 'I want a 2 BHK near Hinjewadi, budget around 70 lakh.' },
-      { speaker: 'Agent', native: 'नक्की. तुम्हाला possession कधीपर्यंत हवा आहे?', gloss: 'Sure. By when do you need possession?' },
+      { speaker: 'Caller', native: 'हिंजवडीजवळ 2 BHK हवाय, budget साधारण 70 लाख.', gloss: 'Want a 2 BHK near Hinjewadi, budget around 70 lakh.' },
+      { speaker: 'Agent', native: 'नक्की. possession कधीपर्यंत हवंय?', gloss: 'Sure. When do you need possession?' },
       { speaker: 'Caller', native: 'पुढच्या वर्षापर्यंत चालेल.', gloss: 'By next year is fine.' },
-      { speaker: 'Agent', native: 'ठीक आहे. रविवारी सकाळी site visit बुक करू का?', gloss: 'Okay. Shall I book a site visit on Sunday morning?' },
+      { speaker: 'Agent', native: 'ठीक आहे. रविवारी सकाळी site visit book करू का?', gloss: 'Okay. Shall I book a site visit on Sunday morning?' },
     ],
   },
   {
@@ -676,10 +676,10 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
       'Capture the caller\'s work location as a field; commute is often the real requirement behind a locality.',
     ],
     sample: [
-      { speaker: 'Caller', native: 'ವೈಟ್‌ಫೀಲ್ಡ್ ಹತ್ತಿರ 2 BHK ಬೇಕು, budget ಸುಮಾರು 90 lakh.', gloss: 'I need a 2 BHK near Whitefield, budget around 90 lakh.' },
-      { speaker: 'Agent', native: 'ಖಂಡಿತ. ಇದು ನಿಮ್ಮ ಸ್ವಂತ ವಾಸಕ್ಕೋ ಅಥವಾ investment ಗೋ?', gloss: 'Sure. Is this to live in yourself, or as an investment?' },
+      { speaker: 'Caller', native: 'ವೈಟ್‌ಫೀಲ್ಡ್ ಹತ್ತಿರ 2 BHK ಬೇಕು, budget 90 lakh ಆಸುಪಾಸು.', gloss: 'Need a 2 BHK near Whitefield, budget around 90 lakh.' },
+      { speaker: 'Agent', native: 'ಖಂಡಿತ. ಇದು ಸ್ವಂತಕ್ಕೆ ವಾಸ ಮಾಡೋಕಾ ಅಥವಾ investment ಗೋ?', gloss: 'Sure. Is this for self-use or for investment?' },
       { speaker: 'Caller', native: 'ಸ್ವಂತಕ್ಕೆ. ಈ ವರ್ಷದೊಳಗೆ ಬೇಕು.', gloss: 'For ourselves. We need it within this year.' },
-      { speaker: 'Agent', native: 'ಸರಿ. ಶನಿವಾರ site visit ಬುಕ್ ಮಾಡಲಾ?', gloss: 'Okay. Shall I book a site visit on Saturday?' },
+      { speaker: 'Agent', native: 'ಸರಿ. ಶನಿವಾರ site visit booking ಮಾಡ್ಲಾ?', gloss: 'Okay. Shall I book a site visit on Saturday?' },
     ],
   },
   {
@@ -728,8 +728,8 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
     ],
     sample: [
       { speaker: 'Caller', native: 'SG Highway પાસે 3 BHK જોઈએ છે, બજેટ લગભગ 85 લાખ.', gloss: 'I want a 3 BHK near SG Highway, budget about 85 lakh.' },
-      { speaker: 'Agent', native: 'ચોક્કસ. તમે પોતે રહેવા માટે લો છો કે investment માટે?', gloss: 'Certainly. Are you buying to live in or for investment?' },
-      { speaker: 'Caller', native: 'પોતે રહેવા માટે, દિવાળી પહેલાં.', gloss: 'To live in, before Diwali.' },
+      { speaker: 'Agent', native: 'ચોક્કસ. તમે પોતાના રહેવા માટે લો છો કે investment માટે?', gloss: 'Certainly. Are you buying for personal use or for investment?' },
+      { speaker: 'Caller', native: 'પોતાના રહેવા માટે, દિવાળી પહેલાં.', gloss: 'For personal use, before Diwali.' },
       { speaker: 'Agent', native: 'સરસ. શનિવારે site visit ગોઠવી દઉં?', gloss: 'Great. Shall I arrange a site visit on Saturday?' },
     ],
   },
@@ -786,9 +786,9 @@ export const DEMO_CALLS: DemoCall[] = [
     outcome: 'Qualified investment lead with budget, preferred size, and next-step follow-up.',
     transcript: [
       { speaker: 'Agent', text: 'Namaste, I am calling about your interest in the Khopoli project. Are you exploring this for investment or self-use?' },
-      { speaker: 'Caller', text: 'Investment ke liye.' },
+      { speaker: 'Caller', text: 'Investment ke liye hai.' },
       { speaker: 'Agent', text: 'Great. Which plot size are you roughly looking at, and do you have a budget range in mind?' },
-      { speaker: 'Caller', text: 'Around 6000 square feet. Pricing bata dijiye.' },
+      { speaker: 'Caller', text: 'Lagbhag 6000 square feet. Pricing bata dijiye.' },
       { speaker: 'Agent', text: 'I will have the sales team confirm exact availability and pricing. I am noting this as an investment enquiry for a larger plot.' },
     ],
     fields: [
@@ -837,7 +837,7 @@ export const DEMO_CALLS: DemoCall[] = [
     transcript: [
       { speaker: 'Agent', text: 'Namaskar, tumhi project sathi enquiry keli hoti. Site visit schedule karaychi aahe ka?' },
       { speaker: 'Caller', text: 'Ho, Saturday la possible aahe ka?' },
-      { speaker: 'Agent', text: 'Saturday preference note karto. Morning ki afternoon convenient aahe?' },
+      { speaker: 'Agent', text: 'Saturday cha preference note karto. Morning ki afternoon chaalel?' },
       { speaker: 'Caller', text: 'Afternoon.' },
       { speaker: 'Agent', text: 'Perfect. Sales team exact slot confirm karun tumhala details pathavel.' },
     ],

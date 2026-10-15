@@ -834,3 +834,14 @@ At the owner's request; same branch and same PR.
 **Not changed:** code comments and dashboard-only strings.
 
 **Deploy:** the Vercel build carries the site changes. `help_articles.py` also feeds the dashboard help chat on the server side, so Railway picks up the new wording on its next deploy.
+
+### Claude — 2026-10-15 — native sample lines regenerated with Sarvam (PR pending, NOT merged)
+
+Branch `claude/seo-native-samples`. Owner asked for the Indian-language sample conversation lines on public marketing pages to be rewritten by Sarvam so they read as native speech.
+
+- Model `sarvam-105b-conversations`, temperature 0.3, JSON output. 32 requests, about 30k tokens total.
+- 116 lines sent across 10 languages. 57 were regenerated, 58 came back unchanged because Sarvam judged them already natural, and 1 was flagged (Kannada demo-call caller line; Sarvam added a greeting and mixed scripts). The original is kept for the flagged line.
+- Files: `web-demo/src/lib/marketingContent.ts`, `seoExpansionContent.ts`, `pages/marketing/AiTelecaller.tsx`, `AiReceptionist.tsx`, `VoiceBot.tsx`. Report: `docs/SEO-NATIVE-SAMPLES-2026-10-15.md`.
+- Verified: build (SEO audit and em-dash check), `test:seo` (no expected-phrase changes needed), `check-blog-seo`.
+- Unverified: native-speaker review per language.
+- Next step: review and merge the PR. The change is web only, so Vercel is the only deploy. No agent or server deploy is needed.
