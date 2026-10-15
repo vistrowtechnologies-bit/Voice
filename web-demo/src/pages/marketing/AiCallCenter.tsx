@@ -23,7 +23,7 @@ const COMPLIANCE = [
   {
     icon: 'schedule',
     title: 'Calling window',
-    body: 'With the calling window enforced, outbound dials outside your permitted hours and days are blocked automatically, in the callee’s timezone.',
+    body: 'With the calling window enforced, outbound dials outside your permitted hours and days are blocked automatically, using your account’s timezone.',
   },
   {
     icon: 'block',
@@ -93,8 +93,8 @@ export function AiCallCenter() {
   return (
     <MarketingLayout>
       <Seo
-        title="AI Call Center Software for India | Vistrow Voice"
-        description="AI call center software that takes first-line inbound calls and follow-ups in Indian languages, transfers phone calls to your team, and logs every call."
+        title="AI Call Center Automation Software for India | Vistrow Voice"
+        description="Call center automation for the first line: AI call center software that takes inbound calls and follow-ups in Indian languages and logs every call."
         path="/ai-call-center"
         jsonLd={FAQ_JSONLD}
       />
@@ -201,6 +201,10 @@ export function AiCallCenter() {
               every dial still passes the compliance checks below. For lead calls specifically, see the{' '}
               <Link to="/ai-telecaller" className="font-semibold text-primary underline-offset-4 hover:underline">
                 AI telecaller
+              </Link>{' '}
+              page; for one agent across inbound and outbound calls, see the{' '}
+              <Link to="/ai-calling-agent" className="font-semibold text-primary underline-offset-4 hover:underline">
+                AI calling agent
               </Link>{' '}
               page.
             </p>

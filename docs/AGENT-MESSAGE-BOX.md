@@ -11,6 +11,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Tenant worker `CA_TGdpVhSdxDyS`, version `hWzSh4i6QxBJ`; platform `CA_53d8HgBktjZ7`, version `QsqG4DhoSeuy`. Both had Running/registered startup verification; this does not establish live quality.
 - User authorizes merging completed PRs and deployment. Automated verification must not initiate real phone calls or Google requests.
 - Claude (2026-10-10, later): branch `claude/integration-detail-pages`, claim posted on issue #2 (comment 6097967369). Integration detail pages + Sheets styling/per-agent tabs/field choice; touches `agent/tools.py` delivery fan-out and `agent/db.py`, so BOTH workers need a deploy after merge. Codex's 2.5 claim is untouched.
+- Claude (2026-10-15): branch `claude/seo-keyword-placement` (PR open, NOT merged): keyword placement fixes + new /ai-calling-agent page; web-demo only, Vercel deploy only.
 - Claude (2026-10-14): branch `claude/security-tokens-mfa` (PR open, NOT merged): integration tokens encrypted at rest (server + agent + orchestrator). Inert until the owner sets INTEGRATION_ENCRYPTION_KEY everywhere, then INTEGRATION_ENCRYPTION_WRITE=on; see docs/SECURITY-AUDIT-2026-10-12.md.
 
 ## Takeover checklist
@@ -885,3 +886,21 @@ Branch `claude/seo-voice-samples`. This is web-only work.
 - A single self-pause seen once in the preview pane. It could not be reproduced in 3 later runs.
 
 **Next step:** review and merge the PR. Only Vercel deploys; no server or agent deploy is needed.
+
+### Claude — 2026-10-15 — SEO keyword placement (branch `claude/seo-keyword-placement`)
+
+**What changed (web-demo only)**
+- New page `/ai-calling-agent` (`src/pages/marketing/AiCallingAgent.tsx`): umbrella page for "AI calling agent", "AI calling" and "automated calling software". Inbound and outbound, lead follow-ups, languages, DND / calling window / retries / phone-only transfer, FAQPage schema. Links to /ai-telecaller and /product/outbound to keep the three pages distinct. Registered in App.tsx, seoPages.ts (+ OG card, `public/og/ai-calling-agent.png`), nav, footer, related links; linked from home, /product/outbound, /ai-telecaller, /voice-bot and /ai-call-center.
+- Titles, descriptions, opening copy and H2s updated for: home, /ai-ivr, /ai-call-center, /vs-ivr, /product/inbound, the buyer guide, /voice-bot (H2), /languages/{hindi,kannada,telugu} (new optional `intro` and `regionalHeading` fields on LanguagePage; the overview cards keep the short blurb), and 3 IVR articles (excerpt + one heading).
+- `test-language-seo.mjs`: the Hindi phrase changed from "Hinglish AI voice calling agent" to "AI calling agent in Hindi", because the Hindi description changed.
+- New `web-demo/scripts/check-keyword-placement.py`. It checks the local dist (or `--live`); `--strict` exits 1 on any gap.
+
+**Verified:** `npm run build` (SEO audit of 125 routes and the em-dash check), `test:seo`, `check-blog-seo` and `check-keyword-placement.py --strict` (33 of 33) all pass. I also looked at the new page in the browser.
+
+**Facts checked in code:** transfer refuses web calls (`agent/tools.py` transfer_call), the DND check is `calls_db.is_dnc` with honor_dnc on by default, the calling window uses the account timezone (`within_calling_window`), a campaign schedule only narrows the window (`campaign_dialer.py`), and the agent adds DND numbers itself (`tools.do_not_call`).
+
+**Unverified / notes**
+- The existing /product/outbound copy says the calling window is enforced "in the callee's timezone", but the code uses the account timezone. I did not change it; it is flagged for a separate fix.
+- Titles and H1s were kept on purpose for the language pages, the AI IVR H1 and the home title ("ivr call", "ai voice calling agent" and the language keywords). The checker marks these as kept.
+
+**Next step:** review and merge the PR. Only Vercel deploys; no server or agent deploy is needed. After the deploy, run `python3 web-demo/scripts/check-keyword-placement.py --live` and request indexing for /ai-calling-agent in GSC.

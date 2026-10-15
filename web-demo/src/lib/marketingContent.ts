@@ -153,7 +153,7 @@ export const PRODUCT_DETAIL: Record<
     eyebrow: 'Product · Inbound Calling',
     headline: 'Answer every call, day or night.',
     subhead:
-      'Point your number at Vistrow and Artha picks up on the first ring - qualifying, answering, and routing without hold music.',
+      'Point your number at Vistrow and Artha picks up every inbound call on the first ring - qualifying, answering, and routing without hold music.',
     features: [
       { icon: 'schedule', title: '24/7 pickup', body: 'No missed calls, no voicemail - every caller reaches a helpful agent instantly.' },
       { icon: 'fact_check', title: 'Auto-qualification', body: 'Captures intent, budget, and contact details as lead fields, ready for your team.' },
@@ -163,7 +163,7 @@ export const PRODUCT_DETAIL: Record<
     guideSections: [
       {
         eyebrow: 'How it works',
-        title: 'What happens when a customer rings your number.',
+        title: 'What happens on an inbound call to your number.',
         items: [
           { icon: 'dialpad', title: '1. Connect a number', body: 'Provision the number with your telephony provider (EnableX today), connect it under Phone Numbers in full international format, and run a test call.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
           { icon: 'route', title: '2. Route it to an agent', body: 'On the Inbound page, pick the number and the agent and create the route. It is live immediately.', to: '/help/inbound/route-inbound-calls', link: 'Route incoming calls' },
@@ -234,7 +234,7 @@ export const PRODUCT_DETAIL: Record<
         items: [
           { icon: 'event_repeat', title: 'Retries', body: 'Set a maximum number of attempts and a gap between them, with separate rules for busy lines and voicemail if you want them.' },
           { icon: 'speed', title: 'Concurrency and pace', body: 'Choose how many calls run at once and an optional limit on attempts per minute. The channel limit on your telephony account is the real ceiling.' },
-          { icon: 'schedule', title: 'Calling window', body: 'TRAI norms limit unsolicited calls to 9am to 9pm, Monday to Saturday. With the calling window enforced, dials outside your hours and days are blocked in the callee’s timezone.' },
+          { icon: 'schedule', title: 'Calling window', body: 'TRAI norms limit unsolicited calls to 9am to 9pm, Monday to Saturday. With the calling window enforced, dials outside your hours and days are blocked, using your account’s timezone.' },
           { icon: 'data_object', title: 'Variables', body: 'Use {{name}}-style variables in the welcome message and prompt so each call carries the contact’s own details.' },
           { icon: 'block', title: 'Do-Not-Call', body: 'Add numbers by hand or in bulk. When a caller asks not to be called again, the agent adds them itself.' },
           { icon: 'bolt', title: 'Instant lead follow-up', body: 'A private webhook queues a call within about 15 to 30 seconds of a new lead arriving, still subject to your compliance rules.', to: '/help/integrations/instant-lead-follow-up', link: 'How it works' },
@@ -248,6 +248,7 @@ export const PRODUCT_DETAIL: Record<
           { icon: 'account_balance', title: 'EMI and payment reminders', body: 'Polite, consistent reminders to customers who already owe a payment, with every call logged.', to: '/solutions/finance', link: 'Finance and collections' },
           { icon: 'apartment', title: 'Follow-up on property enquiries', body: 'Call back brochure downloads and missed site visits.', to: '/solutions/real-estate', link: 'Real estate' },
           { icon: 'phone_callback', title: 'Lead calls and callbacks', body: 'Qualify new enquiries and ring back people who asked for a later call, the routine part of a telecaller’s day.', to: '/ai-telecaller', link: 'AI telecaller' },
+          { icon: 'call', title: 'Inbound and outbound on one agent', body: 'The agent that runs your campaigns can also answer your business number and website calls, with the same instructions and call records.', to: '/ai-calling-agent', link: 'AI calling agent' },
         ],
         note: 'Only call people you are permitted to call. Consent and regulatory obligations remain yours; Vistrow enforces the calling window and Do-Not-Call list you configure.',
       },
@@ -980,6 +981,7 @@ export const NAV: NavGroup[] = [
       { label: 'AI call center', to: '/ai-call-center', icon: 'support_agent', desc: 'First-line calls and follow-ups, with handoff.' },
       { label: 'AI voice bot', to: '/voice-bot', icon: 'record_voice_over', desc: 'What a voice bot is and how a call works.' },
       { label: 'AI telecaller', to: '/ai-telecaller', icon: 'phone_callback', desc: 'Lead calls, follow-ups and callbacks.' },
+      { label: 'AI calling agent', to: '/ai-calling-agent', icon: 'call', desc: 'Inbound and outbound calls on one agent.' },
     ],
   },
   {
@@ -1031,6 +1033,7 @@ export const FOOTER_COLUMNS = [
       { label: 'AI call center', to: '/ai-call-center' },
       { label: 'AI voice bot', to: '/voice-bot' },
       { label: 'AI telecaller', to: '/ai-telecaller' },
+      { label: 'AI calling agent', to: '/ai-calling-agent' },
     ],
   },
   {
@@ -1131,6 +1134,11 @@ export interface LanguagePage {
   greeting: string
   /** One-line positioning for the landing page hero. */
   blurb: string
+  /** Longer hero paragraph for the language page; the blurb stays on the
+   * /languages overview cards. Falls back to the blurb. */
+  intro?: string
+  /** Heading for the regional-calls section; defaults to "Where X calls matter most." */
+  regionalHeading?: string
   /** Search-intent phrase this page should visibly answer. */
   /** Local business contexts where this language matters most. */
   localUseCases?: string[]
@@ -1175,6 +1183,8 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'North & Central India',
     greeting: 'नमस्ते',
     blurb: 'The default for most Indian call flows - including the everyday Hinglish your customers actually speak, not textbook Hindi.',
+    intro: 'The default for most Indian call flows: an AI voice agent in Hindi that speaks the everyday Hinglish your customers actually use, not textbook Hindi. Put it on inbound lines, reminders and follow-ups as an AI calling agent in Hindi.',
+    regionalHeading: 'Where an AI voice agent in Hindi helps most.',
     localUseCases: [
       'Real estate enquiries from Hindi and Hinglish-speaking buyers',
       'Support calls where customers switch between Hindi and English',
@@ -1186,7 +1196,7 @@ export const LANGUAGES: LanguagePage[] = [
       'Handles numbers, dates, names, and project details clearly for sales teams',
     ],
     seoFaq: {
-      q: 'Is this a Hindi voice bot or a real AI phone calling agent?',
+      q: 'Is this an AI calling agent in Hindi or just a Hindi voice bot?',
       a: 'It is a real AI phone calling agent: it speaks, listens, qualifies the caller, answers approved questions, and logs the conversation. That makes it different from a recorded Hindi IVR or a translated chatbot.',
     },
     sampleExchange: {
@@ -1318,6 +1328,8 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Andhra Pradesh & Telangana',
     greeting: 'నమస్కారం',
     blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.',
+    intro: 'An AI voice calling agent in Telugu that handles Hyderabad and coastal Andhra call volume around the clock, on your phone lines and your website.',
+    regionalHeading: 'Where an AI voice calling agent in Telugu helps most.',
     localUseCases: [
       'Hyderabad real estate, education, healthcare, and service enquiries',
       'Inbound calls from Andhra Pradesh and Telangana customers',
@@ -1332,7 +1344,7 @@ export const LANGUAGES: LanguagePage[] = [
     ],
     seoFaq: {
       q: 'Can Artha handle Telugu callers on both phone and website calls?',
-      a: 'Yes. The same Telugu AI voice agent can answer phone calls and website voice-widget conversations, then save the transcript, summary, and lead details for your team.',
+      a: 'Yes. The same Telugu AI voice calling agent can answer phone calls and website voice-widget conversations, then save the transcript, summary, and lead details for your team.',
     },
     sampleExchange: {
       context: 'An inbound call to a clinic’s appointment line',
@@ -1390,6 +1402,8 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Karnataka',
     greeting: 'ನಮಸ್ಕಾರ',
     blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.',
+    intro: 'Serve Bengaluru and wider Karnataka with an AI voice calling agent in Kannada that answers and makes calls, with English code-switching where it feels natural.',
+    regionalHeading: 'Where an AI voice calling agent in Kannada helps most.',
     localUseCases: [
       'Bengaluru and Karnataka property enquiries where English-only calling loses context',
       'Support and booking calls for local customers who prefer Kannada',

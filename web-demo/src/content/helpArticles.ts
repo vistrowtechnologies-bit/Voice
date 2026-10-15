@@ -257,7 +257,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     "slug": "calling-rules",
     "title": "Calling window and Do-Not-Call",
     "summary": "Keep outbound calling within TRAI rules automatically.",
-    "body": "## Calling window\nTRAI norms limit unsolicited calls to 9am–9pm, Monday–Saturday. With **Enforce calling window** on, outbound dials outside your hours and days are blocked automatically, in the callee's timezone.\n\n## Do-Not-Call\nEvery outbound dial is checked against your **Do-Not-Call registry** first. Add numbers with **Block** or **Bulk import numbers**. When a caller asks your agent not to be called again, the agent adds them itself.\n\nClick **Save rules** after changing anything."
+    "body": "## Calling window\nTRAI norms limit unsolicited calls to 9am–9pm, Monday–Saturday. With **Enforce calling window** on, outbound dials outside your hours and days are blocked automatically, using your account's timezone.\n\n## Do-Not-Call\nEvery outbound dial is checked against your **Do-Not-Call registry** first. Add numbers with **Block** or **Bulk import numbers**. When a caller asks your agent not to be called again, the agent adds them itself.\n\nClick **Save rules** after changing anything."
    },
    {
     "slug": "consent-recording-retention",

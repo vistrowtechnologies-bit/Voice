@@ -108,7 +108,7 @@ export function VoiceBot() {
 
       <section className="mx-auto max-w-3xl px-5 py-8 md:px-8">
         <SectionEyebrow>In plain words</SectionEyebrow>
-        <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What a voice bot is.</h2>
+        <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What an AI voice bot is.</h2>
         <div className="mt-4 space-y-4 leading-relaxed text-text-muted">
           <p>
             A voice bot is a computer program you can talk to. You call a number or press a button on a website, and
@@ -255,7 +255,11 @@ export function VoiceBot() {
               <Link to="/vs-ivr" className="font-semibold text-primary underline-offset-4 hover:underline">
                 voice agent vs IVR comparison
               </Link>{' '}
-              goes through it.
+              goes through it. For one bot that answers your number and also calls customers back, see the{' '}
+              <Link to="/ai-calling-agent" className="font-semibold text-primary underline-offset-4 hover:underline">
+                AI calling agent
+              </Link>{' '}
+              page.
             </p>
           </div>
         </div>

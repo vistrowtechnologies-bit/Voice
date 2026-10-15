@@ -127,7 +127,7 @@ export function LanguageDetail() {
               <span className="block">AI voice agents that speak</span>{' '}
               <span className="block bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">{lang.name}.</span>
             </h1>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-text-muted">{lang.blurb}</p>
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-text-muted">{lang.intro ?? lang.blurb}</p>
             <div className="mt-7">
               <Link
                 to="/contact"
@@ -316,7 +316,7 @@ export function LanguageDetail() {
           <div className="grid gap-8 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
             <div>
               <SectionEyebrow>{`${lang.region} calls`}</SectionEyebrow>
-              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">Where {lang.name} calls matter most.</h2>
+              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">{lang.regionalHeading ?? `Where ${lang.name} calls matter most.`}</h2>
               <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
                 <Icon name="public" className="text-[16px]" />
                 {lang.region}

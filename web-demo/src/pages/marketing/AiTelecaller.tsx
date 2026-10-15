@@ -47,7 +47,7 @@ const RULES = [
   {
     icon: 'schedule',
     title: 'Calling window',
-    body: 'With the calling window enforced, dials outside your permitted hours and days are blocked automatically, in the contact’s timezone.',
+    body: 'With the calling window enforced, dials outside your permitted hours and days are blocked automatically, using your account’s timezone.',
   },
   {
     icon: 'history',
@@ -171,6 +171,8 @@ export function AiTelecaller() {
           <Link to="/product/inbound" className={linkClass}>inbound call answering</Link>,{' '}
           <Link to="/product/outbound" className={linkClass}>outbound campaigns</Link> and{' '}
           <Link to="/help/integrations/instant-lead-follow-up" className={linkClass}>calling new leads within seconds</Link>.
+          For the same agent on every kind of business call, see the{' '}
+          <Link to="/ai-calling-agent" className={linkClass}>AI calling agent</Link> page.
         </p>
       </section>
 
