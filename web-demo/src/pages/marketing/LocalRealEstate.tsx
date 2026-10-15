@@ -88,6 +88,94 @@ export function LocalRealEstate() {
         </div>
       </section>
 
+      <section className="mx-auto grid max-w-7xl gap-8 px-5 pb-14 md:px-8 lg:grid-cols-2">
+        <div>
+          <SectionEyebrow>{`How ${page.state} buyers call`}</SectionEyebrow>
+          <h2 className="mt-3 font-display text-2xl font-bold tracking-tight sm:text-3xl">What property calls sound like here</h2>
+          <p className="mt-4 leading-relaxed text-text-muted">{page.market}</p>
+          <h3 className="mt-6 font-display text-base font-semibold">What to set up for this market</h3>
+          <ul className="mt-3 space-y-3">
+            {page.localNotes.map((note) => (
+              <li key={note} className="flex gap-2 text-sm leading-relaxed text-text-muted">
+                <Icon name="check_circle" className="mt-0.5 shrink-0 text-[17px] text-cyan" />
+                <span>{note}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-3xl border border-border bg-surface p-6 sm:p-8">
+          <SectionEyebrow>{`Sample ${page.language} enquiry`}</SectionEyebrow>
+          <ol className="mt-5 space-y-4">
+            {page.sample.map((turn, i) => (
+              <li key={i} className={turn.speaker === 'Agent' ? 'border-l-2 border-primary pl-4' : 'border-l-2 border-border pl-4'}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">{turn.speaker === 'Agent' ? 'Agent' : 'Caller'}</p>
+                <p lang={page.langCode} className="mt-1.5 text-base leading-relaxed text-text">{turn.native}</p>
+                <p className="mt-1 text-sm italic leading-relaxed text-text-muted">{turn.gloss}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-5 text-xs leading-relaxed text-text-muted">
+            Written sample to show the flow, not a recording of a real call. The project details are fictional.
+            {page.demoCall && (
+              <>
+                {' '}A longer{' '}
+                <Link to={`/demo-calls/${page.demoCall}`} className="font-semibold text-primary hover:underline">
+                  {page.language} sample call transcript
+                </Link>{' '}
+                shows the captured lead fields.
+              </>
+            )}
+          </p>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+        <SectionEyebrow>Set it up for your project</SectionEyebrow>
+        <h2 className="mt-3 max-w-2xl font-display text-2xl font-bold tracking-tight sm:text-3xl">From brochure to live calls</h2>
+        <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+          <article className="rounded-2xl border border-border bg-surface p-6">
+            <h3 className="font-display text-base font-semibold">1. Load the project facts</h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
+              Upload the brochure, price sheet and FAQs to the{' '}
+              <Link to="/product/knowledge-base" className="font-semibold text-primary hover:underline">knowledge base</Link>, and
+              keep unit inventory in the{' '}
+              <Link to="/help/knowledge-base/live-catalog" className="font-semibold text-primary hover:underline">live catalog</Link>{' '}
+              so availability is looked up, not remembered.
+            </p>
+          </article>
+          <article className="rounded-2xl border border-border bg-surface p-6">
+            <h3 className="font-display text-base font-semibold">{`2. Write the ${page.language} opening`}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
+              Set {page.language} as the default language, write a short welcome message, and pick a voice that sounds natural in it.
+              The{' '}
+              <Link to={`/languages/${page.language.toLowerCase()}`} className="font-semibold text-primary hover:underline">
+                {page.language} language guide
+              </Link>{' '}
+              covers mixed speech and numbers.
+            </p>
+          </article>
+          <article className="rounded-2xl border border-border bg-surface p-6">
+            <h3 className="font-display text-base font-semibold">3. Connect the lead sources</h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
+              Route your project number to the agent, add the{' '}
+              <Link to="/product/widget" className="font-semibold text-primary hover:underline">website call widget</Link>{' '}
+              to listing pages, and post ad-form leads to{' '}
+              <Link to="/help/integrations/instant-lead-follow-up" className="font-semibold text-primary hover:underline">instant lead follow-up</Link>{' '}
+              so new enquiries get a call back within your calling window.
+            </p>
+          </article>
+          <article className="rounded-2xl border border-border bg-surface p-6">
+            <h3 className="font-display text-base font-semibold">4. Book visits and hand over</h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
+              Site visits land in the built-in{' '}
+              <Link to="/help/appointments/manage-appointments" className="font-semibold text-primary hover:underline">appointments calendar</Link>, and
+              each qualified lead goes to your CRM, Slack or Google Sheets through{' '}
+              <Link to="/integrations" className="font-semibold text-primary hover:underline">integrations</Link>.
+            </p>
+          </article>
+        </div>
+      </section>
+
       <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
         <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
           <SectionEyebrow>Why local pages matter</SectionEyebrow>
@@ -100,7 +188,22 @@ export function LocalRealEstate() {
             <Link to={`/languages/${page.language.toLowerCase()}`} className="font-semibold text-primary underline-offset-4 hover:underline">
               {page.language} AI voice calling agent
             </Link>{' '}
-            page.
+            page. For calling new leads back, see{' '}
+            <Link to="/ai-telecaller" className="font-semibold text-primary underline-offset-4 hover:underline">
+              how an AI telecaller works
+            </Link>
+            .
+          </p>
+          <p className="mt-4 max-w-3xl text-sm text-text-muted">
+            Other markets:{' '}
+            {LOCAL_REAL_ESTATE_PAGES.filter((other) => other.slug !== page.slug).map((other, i, list) => (
+              <span key={other.slug}>
+                <Link to={`/solutions/real-estate/${other.slug}`} className="font-semibold text-primary underline-offset-4 hover:underline">
+                  {`${other.language} calls in ${other.state}`}
+                </Link>
+                {i < list.length - 1 ? ', ' : '.'}
+              </span>
+            ))}
           </p>
         </div>
       </section>

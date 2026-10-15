@@ -28,7 +28,7 @@ const PARTS = [
   {
     icon: 'task_alt',
     title: 'It acts',
-    body: 'Tools let it do things during the call: check free slots and book one, request a callback, save lead details, or transfer the call.',
+    body: 'Tools let it do things during the call: check free slots and book one, request a callback, save lead details, or, on phone calls, transfer to a colleague.',
   },
 ]
 

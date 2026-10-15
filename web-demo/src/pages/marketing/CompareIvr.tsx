@@ -339,6 +339,49 @@ export function CompareIvr() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+        <SectionEyebrow>Further reading</SectionEyebrow>
+        <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Guides for planning the switch</h2>
+        <ul className="mt-5 grid gap-3 text-sm leading-relaxed text-text-muted md:grid-cols-2">
+          <li>
+            <Link to="/resources/blog/when-to-use-voice-ai-instead-of-ivr" className="font-semibold text-primary hover:underline">
+              AI voice agent or IVR: how to choose the call experience
+            </Link>{' '}
+            - which calls still suit a keypad menu, and how to test a conversational path against it.
+          </li>
+          <li>
+            <Link to="/resources/blog/what-is-ivr-interactive-voice-response" className="font-semibold text-primary hover:underline">
+              What IVR is and how it works
+            </Link>{' '}
+            - menus, keypad tones and call flows explained from the start.
+          </li>
+          <li>
+            <Link to="/resources/blog/ivr-in-banking-and-finance" className="font-semibold text-primary hover:underline">
+              IVR in banking and finance
+            </Link>{' '}
+            - what should stay on a verified keypad flow and what a voice agent can take.
+          </li>
+          <li>
+            <Link to="/resources/blog/how-to-choose-an-ivr-service-provider-india" className="font-semibold text-primary hover:underline">
+              How to choose an IVR service provider in India
+            </Link>{' '}
+            - questions about channels, languages, numbers and pricing to ask before you sign.
+          </li>
+          <li>
+            <Link to="/help/inbound/route-inbound-calls" className="font-semibold text-primary hover:underline">
+              Routing inbound calls to an agent
+            </Link>{' '}
+            - set hours, active days and a call limit for the line you pilot on.
+          </li>
+          <li>
+            <Link to="/ai-receptionist" className="font-semibold text-primary hover:underline">
+              AI receptionist for phone and website calls
+            </Link>{' '}
+            - the front-desk version of the same idea, with bookings and transfers.
+          </li>
+        </ul>
+      </section>
+
       <FaqSection items={FAQ} />
 
       <CTABand />

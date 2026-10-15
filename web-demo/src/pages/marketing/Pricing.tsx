@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
@@ -9,7 +10,7 @@ import { PLANS, SHARED_PLAN_FEATURES, planHighlights } from '../../lib/plans'
 const FAQ = [
   {
     q: 'What is a credit?',
-    a: 'A credit pays for conversation time. With the AI model you can choose today (Vistrow Bharat) and a Standard or HD voice, one minute of a call uses 2 credits, on the browser widget and on phone calls alike — telephony is billed separately by whichever provider you connect. A Standard voice is the baseline; an Economy voice uses 0.5× of that and a Premium voice 2×. Both channels draw from the same monthly pool.',
+    a: 'A credit pays for conversation time. With the AI model you can choose today (Vistrow Bharat) and a Standard or HD voice, one minute of a call uses 2 credits, on the browser widget and on phone calls alike — telephony is billed separately by whichever provider you connect. A Vistrow Native voice uses 1 credit a minute, and a Premium voice uses twice the Standard rate. Both channels draw from the same monthly pool.',
   },
   {
     q: 'Which languages are supported?',
@@ -92,6 +93,74 @@ export function Pricing() {
         </details>
         <p className="mt-5 text-center text-sm text-text-muted">Prices are in INR per month, excluding applicable taxes and telephony. Voice and model choices affect credits per minute.</p>
         <p className="mt-3 text-center text-sm text-text-muted">Not sure which plan fits? Our team can help estimate your usage and arrange setup.</p>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+        <SectionEyebrow>Estimate your plan</SectionEyebrow>
+        <h2 className="mt-3 max-w-2xl font-display text-2xl font-bold sm:text-3xl">How far a month of credits goes</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-text-muted">
+          Credits pay for the minutes an agent spends in conversation. On Vistrow Bharat, the model every new agent uses,
+          a Standard or HD voice uses 2 credits a minute and a Vistrow Native voice uses 1. The table divides each plan's
+          monthly credits by those rates. It is arithmetic, not a promise of results: count only connected conversation
+          time, and leave room for test calls.
+        </p>
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-border">
+          <table className="w-full min-w-[30rem] text-left text-sm">
+            <thead className="bg-surface text-xs uppercase tracking-wider text-text-muted">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Plan</th>
+                <th className="px-4 py-3 font-semibold">Credits / month</th>
+                <th className="px-4 py-3 font-semibold">Minutes, Standard or HD voice</th>
+                <th className="px-4 py-3 font-semibold">Minutes, Native voice</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PLANS.map((plan) => (
+                <tr key={plan.key} className="border-t border-border">
+                  <td className="px-4 py-3 font-semibold">{plan.name}</td>
+                  <td className="px-4 py-3 text-text-muted">{plan.creditsNum.toLocaleString('en-IN')}</td>
+                  <td className="px-4 py-3 text-text-muted">about {(plan.creditsNum / 2).toLocaleString('en-IN')}</td>
+                  <td className="px-4 py-3 text-text-muted">about {plan.creditsNum.toLocaleString('en-IN')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-8 grid gap-6 md:grid-cols-3">
+          <div>
+            <h3 className="font-display text-base font-semibold">Start from your call volume</h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
+              Multiply the calls you expect each month by their average length. A short enquiry that ends in a
+              booking might take two or three minutes; a qualification call with several questions takes longer.
+              Your own{' '}
+              <Link to="/help/calls/find-a-call" className="font-semibold text-primary hover:underline">call history</Link>{' '}
+              shows real durations once the agent is live.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-display text-base font-semibold">Pick capacity, not just minutes</h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
+              Plans also differ in the number of agents, concurrent calls and features such as{' '}
+              <Link to="/product/outbound" className="font-semibold text-primary hover:underline">outbound campaigns</Link>,{' '}
+              <Link to="/product/integrations" className="font-semibold text-primary hover:underline">CRM integrations</Link>{' '}
+              and API access. A team that only needs a{' '}
+              <Link to="/product/widget" className="font-semibold text-primary hover:underline">website voice widget</Link>{' '}
+              has different needs from one running follow-up calls.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-display text-base font-semibold">Remember the other costs</h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
+              Telephony (number rental and carrier minutes) is billed by your provider, and GST applies to plan
+              prices. The{' '}
+              <Link to="/ai-voice-bot-pricing-india" className="font-semibold text-primary hover:underline">voice bot pricing guide</Link>{' '}
+              and the article on{' '}
+              <Link to="/resources/blog/ai-voice-agent-pricing-india" className="font-semibold text-primary hover:underline">estimating AI voice agent cost</Link>{' '}
+              walk through a full budget. The help centre explains{' '}
+              <Link to="/help/billing/how-credits-work" className="font-semibold text-primary hover:underline">how credits are counted</Link>.
+            </p>
+          </div>
+        </div>
       </section>
 
       {/* FAQ */}

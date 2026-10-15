@@ -54,7 +54,7 @@ const BASE_COMPARE_VENDORS: CompareVendor[] = [
     rows: [
       { dimension: 'Core use case', vendor: 'Business calling, IVR, tracking, and routing.', vistrow: 'AI-led inbound, outbound, and web conversations.' },
       { dimension: 'Caller experience', vendor: 'Structured call flows and routing logic.', vistrow: 'Natural spoken conversation with knowledge-grounded answers.' },
-      { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'Indian-language and global-language voice options with page-level language selection.' },
+      { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'Hindi, English and 9 more Indian languages, with a default language per agent and mid-call switching.' },
       { dimension: 'CRM output', vendor: 'Depends on integration configuration.', vistrow: 'Lead fields, transcript, call outcome, and recording link are prepared for CRM sync.' },
       { dimension: 'Where it fits', vendor: 'Telephony-first teams.', vistrow: 'Teams that want the AI agent to do the first conversation.' },
     ],
@@ -458,6 +458,8 @@ export interface BuyerGuide {
   approaches?: Array<{ title: string; fits: string; tradeoff: string }>
   checklist?: Array<{ criterion: string; good: string; test: string }>
   trial?: string[]
+  /** Heading over `trial`, when the steps are not a vendor shortlist. */
+  trialTitle?: string
   related?: Array<{ to: string; label: string }>
 }
 
@@ -501,7 +503,7 @@ const BASE_BUYER_GUIDES: BuyerGuide[] = [
   },
   {
     slug: 'ai-voice-bot-pricing-india',
-    title: 'AI Voice Bot Pricing in India | Cost Factors and Calculator',
+    title: 'AI Voice Bot Pricing in India | Cost Factors and Estimates',
     description:
       'Understand AI voice bot pricing in India: telephony, STT, LLM, TTS, recordings, CRM sync, support, call minutes, and what to compare before buying.',
     eyebrow: 'Pricing guide',
@@ -529,11 +531,53 @@ const BASE_BUYER_GUIDES: BuyerGuide[] = [
         body: 'Vistrow Voice uses credit-based plans so operators can see usage and scale call volume without learning every underlying model price.',
         bullets: ['Plan-level visibility', 'Call-level credit breakdown', 'Separate voice/model tiers where needed'],
       },
+      {
+        title: 'Phone calls and website calls cost differently',
+        body: 'A phone call needs a number and carrier minutes on top of the AI conversation. A call from a website widget runs in the visitor’s browser, so there is no carrier charge, but it still uses speech recognition, the model and the voice. Ask whether a vendor prices the two channels the same way and whether telephony is included or billed by your provider.',
+        bullets: ['Number rental and carrier minutes for phone calls', 'Browser calls without a phone number', 'Whether both channels draw from one balance'],
+      },
+      {
+        title: 'Voice and model choices move the price',
+        body: 'Most platforms let you trade quality against cost. A more expressive or premium voice usually costs more per minute than a standard one, and some models cost more than others. Pick the cheapest combination that still sounds natural in your callers’ language and answers correctly, and confirm it on recorded test calls rather than a preview button.',
+        bullets: ['Compare voices on a real phone line', 'Check that the cheaper voice speaks your language well', 'Re-test after changing the model'],
+      },
+    ],
+    checklist: [
+      { criterion: 'Billing unit', good: 'You know whether you pay per minute, per call, per credit or per seat, and how a part-minute is counted.', test: 'Ask for the bill of one sample call broken down line by line.' },
+      { criterion: 'Telephony', good: 'Number rental and carrier minutes are either included or clearly passed through.', test: 'Ask who issues the telephony invoice and in what currency.' },
+      { criterion: 'Channels', good: 'Phone and website calls are priced in a way you can predict.', test: 'Price the same five-minute conversation on both channels.' },
+      { criterion: 'Voice tiers', good: 'Each voice shows its cost before you choose it.', test: 'Look for the rate next to the voice in the dashboard, not only in a sales deck.' },
+      { criterion: 'Model tiers', good: 'Model choices that change the rate are labelled.', test: 'Switch the model on a test agent and compare two otherwise identical calls.' },
+      { criterion: 'Recordings and storage', good: 'Recordings, transcripts and retention are included or priced openly.', test: 'Ask how long recordings are kept and whether longer retention costs more.' },
+      { criterion: 'Integrations', good: 'CRM and webhook delivery is part of the plan, with retries when a delivery fails.', test: 'Check which plan includes the integration you need.' },
+      { criterion: 'Usage visibility', good: 'A usage view shows spend by day, agent and channel, and each call shows what it used.', test: 'Open the usage screen after a test day and reconcile it with your call list.' },
+      { criterion: 'Limits and overage', good: 'You know what happens when the balance runs out or the call limit is reached.', test: 'Ask whether calls stop, queue or are billed at a higher rate.' },
+      { criterion: 'Taxes and contract', good: 'GST, minimum terms and any setup or support fees are written down.', test: 'Get the full monthly figure for your expected volume in writing.' },
+    ],
+    trialTitle: 'Estimate a monthly budget in five steps.',
+    trial: [
+      'Count last month’s calls by type and note the average length of each type from your phone system or call logs.',
+      'Decide which of those call types the agent should handle in the first month, and which stay with your team.',
+      'Multiply the handled calls by their average length to get conversation minutes, then add a margin for test calls and retries.',
+      'Apply each vendor’s rate for the voice and model you would actually use, plus telephony and taxes, to get a monthly range.',
+      'Run a short pilot, compare the real usage screen with your estimate, and adjust before committing to a larger plan.',
+    ],
+    related: [
+      { to: '/pricing', label: 'Vistrow Voice plans' },
+      { to: '/help/billing/how-credits-work', label: 'How credits are counted' },
+      { to: '/help/billing/plans', label: 'What each plan includes' },
+      { to: '/resources/blog/ai-voice-agent-pricing-india', label: 'Estimating AI voice agent cost' },
+      { to: '/best-ai-voice-calling-software-india', label: 'Buyer guide to AI calling software' },
+      { to: '/voice-bot', label: 'What an AI voice bot is' },
+      { to: '/compare/exotel', label: 'Vistrow Voice vs Exotel' },
+      { to: '/compare/elevenlabs', label: 'Vistrow Voice vs ElevenLabs' },
     ],
     faqs: [
       { q: 'How much does an AI voice bot cost in India?', a: 'It depends on monthly minutes, phone vs web calls, voice quality, model choice, recording storage, and integrations. Compare the full workflow cost, not only one API price.' },
       { q: 'Why are voice AI calls priced per minute?', a: 'Because live calls consume streaming speech recognition, language-model reasoning, voice synthesis, transport, and storage while the conversation is happening.' },
       { q: 'Can I reduce cost by using a smaller LLM?', a: 'Yes, for structured qualification flows a smaller fast model can work well. You still need to test accuracy, hallucination controls, and latency on real calls.' },
+      { q: 'Is a website voice widget cheaper than phone calls?', a: 'Usually, because a browser call needs no phone number or carrier minutes. The AI part of the conversation still costs the same kind of usage, so check how your vendor prices each channel.' },
+      { q: 'Where are Vistrow Voice prices listed?', a: 'Plan prices, the credits each plan includes and how many credits a minute uses are on the pricing page. Each call in the dashboard also shows the credits it used.' },
     ],
   },
 ]
@@ -547,6 +591,16 @@ export interface LocalRealEstatePage {
   title: string
   description: string
   examples: string[]
+  /** BCP-47 code for the sample lines (sets the lang attribute). */
+  langCode: string
+  /** How property calls in this market tend to sound. General observations, no statistics. */
+  market: string
+  /** Market-specific things to configure or test. */
+  localNotes: string[]
+  /** Written sample (not a recording), labelled as such on the page. */
+  sample: Array<{ speaker: 'Caller' | 'Agent'; native: string; gloss: string }>
+  /** Matching /demo-calls slug, when a sample transcript exists in this language. */
+  demoCall?: string
 }
 
 export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
@@ -560,6 +614,21 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
     description:
       'Qualify Hindi and Hinglish real estate leads with an AI calling agent that asks budget, location, project interest, timeline, and syncs the outcome to CRM.',
     examples: ['Budget qualification for property enquiries', 'Project FAQ calls in Hindi or Hinglish', 'Site-visit follow-up after a website enquiry'],
+    langCode: 'hi-IN',
+    demoCall: 'hindi-real-estate-lead-qualification',
+    market:
+      'In Hindi-speaking markets, property enquiries rarely stay in one language. A caller from Noida or Lucknow will describe the requirement in Hindi and switch to English for the property terms: BHK, carpet area, possession, RERA number, loan approval. Buyers in Delhi NCR also compare projects across a wide area, so the same call can move between Noida, Greater Noida and Gurugram, and the agent needs to record which locality the caller actually means.',
+    localNotes: [
+      'Set the default language to Hindi; the agent follows callers who answer in English or Hinglish.',
+      'Put RERA numbers, possession dates and approved loan partners in the knowledge base, so the agent quotes them instead of guessing.',
+      'Record the locality as a separate field (for example sector or micro-market), because one project name can be shared by several phases.',
+    ],
+    sample: [
+      { speaker: 'Caller', native: 'Noida Extension में 3 BHK देख रहे हैं, budget लगभग 80 लाख है.', gloss: 'We are looking for a 3 BHK in Noida Extension, budget about 80 lakh.' },
+      { speaker: 'Agent', native: 'ज़रूर. आप ख़ुद रहने के लिए ले रहे हैं या investment के लिए?', gloss: 'Sure. Are you buying to live in or as an investment?' },
+      { speaker: 'Caller', native: 'ख़ुद के लिए, अगले छह महीने में.', gloss: 'For ourselves, in the next six months.' },
+      { speaker: 'Agent', native: 'ठीक है. क्या इस शनिवार site visit रख दूँ?', gloss: 'All right. Shall I book a site visit this Saturday?' },
+    ],
   },
   {
     slug: 'marathi-ai-calling-agent-mumbai-real-estate',
@@ -571,6 +640,21 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
     description:
       'Use a Marathi AI voice agent for Mumbai, Pune, and Maharashtra property leads: qualify buyer intent, budget, location, site visits, and CRM-ready outcomes.',
     examples: ['Mumbai project enquiries', 'Pune site-visit booking calls', 'Marathi-Hindi buyer follow-ups'],
+    langCode: 'mr-IN',
+    demoCall: 'marathi-site-visit-booking',
+    market:
+      'Maharashtra buyers move between Marathi, Hindi and English, often in one sentence. In Mumbai many callers open in Hindi even when the project brochure is in Marathi, while Pune and Nashik enquiries are more often in Marathi. Questions tend to focus on carpet area, possession timelines, society charges and distance to work hubs such as Hinjewadi, Kharadi or the Thane–Belapur belt.',
+    localNotes: [
+      'Marathi works well as the default for Pune and Nashik projects; for Mumbai, test both Marathi and Hindi openings with your own callers.',
+      'Keep carpet area and possession dates per tower in the knowledge base; buyers ask for them by wing or building.',
+      'Ask the agent to confirm the preferred visit day aloud: weekend site visits fill quickly and a misheard day costs a visit.',
+    ],
+    sample: [
+      { speaker: 'Caller', native: 'हिंजवडीजवळ 2 BHK हवा आहे, बजेट साधारण 70 लाख.', gloss: 'I want a 2 BHK near Hinjewadi, budget around 70 lakh.' },
+      { speaker: 'Agent', native: 'नक्की. तुम्हाला possession कधीपर्यंत हवा आहे?', gloss: 'Sure. By when do you need possession?' },
+      { speaker: 'Caller', native: 'पुढच्या वर्षापर्यंत चालेल.', gloss: 'By next year is fine.' },
+      { speaker: 'Agent', native: 'ठीक आहे. रविवारी सकाळी site visit बुक करू का?', gloss: 'Okay. Shall I book a site visit on Sunday morning?' },
+    ],
   },
   {
     slug: 'kannada-ai-voice-bot-bangalore-real-estate',
@@ -582,6 +666,21 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
     description:
       'Handle Bengaluru real estate enquiries in Kannada and English with an AI voice bot that qualifies requirements and creates structured follow-up records.',
     examples: ['Bengaluru apartment enquiries', 'Kannada-English project questions', 'Lead qualification before sales handoff'],
+    langCode: 'kn-IN',
+    demoCall: 'kannada-inbound-property-enquiry',
+    market:
+      'Bengaluru is one of the most mixed-language property markets in India. Many buyers moved to the city for work and call in English or Hindi, while Kannada-speaking families often mix Kannada with English property terms. Enquiries cluster around employment corridors such as Whitefield, Sarjapur Road, Electronic City and North Bengaluru, and buyers frequently ask about documentation, such as which kind of khata a property has.',
+    localNotes: [
+      'Choose the default language by audience: Kannada for local family buyers, English for projects marketed to people relocating to the city. The agent follows a caller who switches.',
+      'Documentation questions such as khata type, approvals or OC status should be answered only from approved facts, or routed to your sales team.',
+      'Capture the caller\'s work location as a field; commute is often the real requirement behind a locality.',
+    ],
+    sample: [
+      { speaker: 'Caller', native: 'ವೈಟ್‌ಫೀಲ್ಡ್ ಹತ್ತಿರ 2 BHK ಬೇಕು, budget ಸುಮಾರು 90 lakh.', gloss: 'I need a 2 BHK near Whitefield, budget around 90 lakh.' },
+      { speaker: 'Agent', native: 'ಖಂಡಿತ. ಇದು ನಿಮ್ಮ ಸ್ವಂತ ವಾಸಕ್ಕೋ ಅಥವಾ investment ಗೋ?', gloss: 'Sure. Is this to live in yourself, or as an investment?' },
+      { speaker: 'Caller', native: 'ಸ್ವಂತಕ್ಕೆ. ಈ ವರ್ಷದೊಳಗೆ ಬೇಕು.', gloss: 'For ourselves. We need it within this year.' },
+      { speaker: 'Agent', native: 'ಸರಿ. ಶನಿವಾರ site visit ಬುಕ್ ಮಾಡಲಾ?', gloss: 'Okay. Shall I book a site visit on Saturday?' },
+    ],
   },
   {
     slug: 'telugu-ai-calling-agent-hyderabad-real-estate',
@@ -593,6 +692,21 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
     description:
       'Qualify Hyderabad and Telugu real estate leads with an AI calling agent for phone and website conversations, transcripts, and CRM-ready summaries.',
     examples: ['Hyderabad plot or apartment enquiries', 'Telugu-English qualification calls', 'Follow-up calls after brochure downloads'],
+    langCode: 'te-IN',
+    demoCall: 'telugu-website-widget-call',
+    market:
+      'Telugu property markets cover two quite different kinds of enquiry. In Hyderabad, apartment and villa enquiries around Gachibowli, Kokapet, Kompally and the outer ring road often mix Telugu, English and Hindi. Around Vijayawada, Guntur and Visakhapatnam, open plots in approved layouts are common, and buyers describe size in square yards and ask about layout approvals. An agent for these markets has to be ready for both.',
+    localNotes: [
+      'Add a plot-size field in square yards alongside BHK, so plot and apartment enquiries both produce a usable record.',
+      'Keep layout approval details (for example HMDA or DTCP references) in the knowledge base, and route anything not listed there to your team.',
+      'Test Telugu numbers carefully: prices in lakhs and crores and plot sizes are the details callers check first.',
+    ],
+    sample: [
+      { speaker: 'Caller', native: 'గచ్చిబౌలి దగ్గర 3 BHK కావాలి, budget దాదాపు 1.2 కోట్లు.', gloss: 'I need a 3 BHK near Gachibowli, budget about 1.2 crore.' },
+      { speaker: 'Agent', native: 'తప్పకుండా. మీరు సొంతంగా ఉండటానికా, investment కోసమా?', gloss: 'Of course. Is it to live in yourself, or for investment?' },
+      { speaker: 'Caller', native: 'సొంతానికే. మూడు నెలల్లో కొనాలని అనుకుంటున్నాం.', gloss: 'For ourselves. We plan to buy within three months.' },
+      { speaker: 'Agent', native: 'సరే. ఈ ఆదివారం site visit బుక్ చేయమంటారా?', gloss: 'Okay. Shall I book a site visit this Sunday?' },
+    ],
   },
   {
     slug: 'gujarati-ai-calling-agent-ahmedabad-real-estate',
@@ -604,6 +718,20 @@ export const LOCAL_REAL_ESTATE_PAGES: LocalRealEstatePage[] = [
     description:
       'Use a Gujarati AI voice agent to qualify property leads in Ahmedabad, Surat, Vadodara, and Gujarat with call transcripts and CRM-ready lead fields.',
     examples: ['Gujarati property enquiry calls', 'Ahmedabad site-visit requests', 'Budget and location qualification before human follow-up'],
+    langCode: 'gu-IN',
+    market:
+      'Gujarat buyers usually prefer to talk property in Gujarati, with English for the specifications and some Hindi in Surat and Vadodara. Enquiries in Ahmedabad cluster along SG Highway, Shela, Gota and the newer western suburbs, and in Surat around Vesu and Pal. Housing types are described in local terms such as tenement, row house and bungalow as well as flats, and buyers often ask about the booking amount and the payment schedule early in the call.',
+    localNotes: [
+      'Use Gujarati as the default language; the agent switches when a caller answers in Hindi or English.',
+      'Include housing type (flat, tenement, row house, bungalow) as a field so the sales team knows which inventory to discuss.',
+      'Keep the payment schedule and booking terms in the knowledge base in your own words, and route negotiation to a person.',
+    ],
+    sample: [
+      { speaker: 'Caller', native: 'SG Highway પાસે 3 BHK જોઈએ છે, બજેટ લગભગ 85 લાખ.', gloss: 'I want a 3 BHK near SG Highway, budget about 85 lakh.' },
+      { speaker: 'Agent', native: 'ચોક્કસ. તમે પોતે રહેવા માટે લો છો કે investment માટે?', gloss: 'Certainly. Are you buying to live in or for investment?' },
+      { speaker: 'Caller', native: 'પોતે રહેવા માટે, દિવાળી પહેલાં.', gloss: 'To live in, before Diwali.' },
+      { speaker: 'Agent', native: 'સરસ. શનિવારે site visit ગોઠવી દઉં?', gloss: 'Great. Shall I arrange a site visit on Saturday?' },
+    ],
   },
 ]
 

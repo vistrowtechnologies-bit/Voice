@@ -99,7 +99,7 @@ const HOWTO: { icon: string; title: string; body: string }[] = [
   {
     icon: 'swap_calls',
     title: 'Hand off to a human',
-    body: 'Set a transfer number on the agent. When a caller needs a person, the agent hands off with context instead of dead-ending the call.',
+    body: 'Set a transfer number on the agent. When a phone caller needs a person, the agent dials your colleague into the call instead of dead-ending it. Website calls take a callback request instead.',
   },
 ]
 

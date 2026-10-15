@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -54,6 +55,12 @@ export function Careers() {
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           We’re a small team making phone calls answerable by an AI that actually sounds like it’s from
           here - in 10 Indian languages plus English, in real time.
+        </p>
+        <p className="mx-auto mt-3 max-w-xl text-sm text-text-muted">
+          Read{' '}
+          <Link to="/about" className="font-semibold text-primary hover:underline">about Vistrow Voice and how we build</Link>
+          , or see{' '}
+          <Link to="/changelog" className="font-semibold text-primary hover:underline">what we shipped recently</Link>.
         </p>
       </section>
 
