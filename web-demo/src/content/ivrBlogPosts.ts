@@ -158,7 +158,7 @@ export const IVR_POSTS: IvrBlogPost[] = [
         'The controls that matter most in finance are the ones that limit what the agent says and when it calls. On Vistrow Voice these are dashboard settings rather than prompt wording.',
       ], points: [
         'Strict knowledge mode: the agent quotes your approved answers and says it will check with the team when something is not covered.',
-        'Calling window: outbound dials outside your allowed hours and days are blocked automatically, in the callee’s timezone.',
+        'Calling window: outbound dials outside your allowed hours and days are blocked automatically, using your account’s timezone.',
         'Do-Not-Call list: every outbound dial is checked first, and the agent adds a caller who asks not to be called again.',
         'Spoken consent: the agent can ask at the start of the call whether recording and follow-up are acceptable, and the answer is saved.',
         'Retention: transcripts and recordings older than the number of days you set are deleted automatically.',
