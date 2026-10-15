@@ -1028,17 +1028,17 @@ def _backfill_legacy_account_id(conn: dbconn.Conn, account_id: int) -> None:
         conn.execute(f"UPDATE {table} SET account_id = ? WHERE account_id IS NULL", (account_id,))
 
 
+STARTER_AGENT_DESCRIPTION = "Default sales agent — qualifies leads and books appointments in 11 Indian languages."
+ONBOARDING_AGENT_SETTING = "onboarding_agent_id"
+
+
 def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
     """Starter state for a brand-new (non-legacy) account: one default agent
     to test with, its own copy of the well-known integrations, and its own
     billing settings — mirrors what init_tables used to seed globally."""
     conn.execute(
         "INSERT INTO agents (account_id, name, description) VALUES (?, ?, ?)",
-        (
-            account_id,
-            "Artha",
-            "Default sales agent — qualifies leads and books appointments in 11 Indian languages.",
-        ),
+        (account_id, "Artha", STARTER_AGENT_DESCRIPTION),
     )
     for key, name, category, description in _SEED_INTEGRATIONS:
         conn.execute(
@@ -2515,6 +2515,41 @@ def save_onboarding_profile(account_id: int, user_id: int, profile: dict) -> Non
                 )
     finally:
         conn.close()
+
+
+def apply_onboarding_agent(account_id: int, fields: dict) -> int | None:
+    """Writes the onboarding-built settings onto the account's starter agent.
+
+    Only before onboarding is finished, and only to the untouched starter
+    (still the signup name, description and an empty prompt) or the agent a
+    previous onboarding step already set up, so going back and changing an
+    answer re-applies, but nothing the customer built is ever overwritten.
+    Returns the agent id, or None when there was nothing safe to set up."""
+    conn = _connect()
+    try:
+        acct = conn.execute("SELECT onboarded_at FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        if not acct or acct["onboarded_at"]:
+            return None
+        marker = _get_setting(conn, account_id, ONBOARDING_AGENT_SETTING)
+        row = None
+        if marker and marker.isdigit():
+            row = conn.execute(
+                "SELECT id FROM agents WHERE id = ? AND account_id = ?", (int(marker), account_id)
+            ).fetchone()
+        if row is None:
+            row = conn.execute(
+                "SELECT id FROM agents WHERE account_id = ? AND name = 'Artha' AND description = ? "
+                "AND COALESCE(system_prompt, '') = '' ORDER BY id LIMIT 1",
+                (account_id, STARTER_AGENT_DESCRIPTION),
+            ).fetchone()
+        if row is None:
+            return None
+        agent_id = row["id"]
+    finally:
+        conn.close()
+    update_agent(agent_id, fields, account_id)
+    set_setting(ONBOARDING_AGENT_SETTING, str(agent_id), account_id)
+    return agent_id
 
 
 def mark_user_tour_complete(user_id: int) -> None:

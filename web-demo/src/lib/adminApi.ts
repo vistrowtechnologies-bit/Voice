@@ -164,6 +164,21 @@ export interface AdminAccountDetail {
     created_at: string
   }[]
   agents: { id: number; name: string; status: string; voice: string; model: string; kb_id: number | null; updated_at: string }[]
+  /** The starter agent onboarding set up from the answers; null if it never ran. */
+  onboardingAgent?:
+    | { deleted: true }
+    | {
+        deleted?: undefined
+        id: number
+        name: string
+        status: string
+        language: string
+        welcomeMessage: string
+        postCallFields: string[]
+        updatedAt: string | null
+        changed: { instructions: boolean; language: boolean; welcome: boolean; fields: boolean }
+      }
+    | null
   knowledgeBases: { id: number; name: string; strict: number; sources: number }[]
   numbers: { id: number; number: string; label: string; agent_id: number | null; status: string }[]
   integrations: { key: string; name: string; category: string; status: string }[]

@@ -834,3 +834,9 @@ At the owner's request; same branch and same PR.
 **Not changed:** code comments and dashboard-only strings.
 
 **Deploy:** the Vercel build carries the site changes. `help_articles.py` also feeds the dashboard help chat on the server side, so Railway picks up the new wording on its next deploy.
+
+### Claude — 2026-10-15 — onboarding answers set up the first agent (branch `claude/onboarding-first-agent`, PR open, NOT merged)
+
+Changes: new `server/onboarding_agent.py` builds the starter agent's instructions, language, welcome line (Hindi/English only) and after-call fields from the onboarding answers, deterministically (no model call). `calls_db.apply_onboarding_agent` writes them only before onboarding is finished and only onto the untouched starter "Artha" (or the agent a previous run set up; settings key `onboarding_agent_id`). New `POST /onboarding/agent` (finish step, so "Talk to Artha" is tailored); `/onboarding/complete` applies it once more. Admin account "Signup & onboarding" tab gets a "First agent, set up from onboarding" table: answer → setting → value → "As set up" / "Changed by customer" (rebuilt from the stored answers).
+
+Verified: 14 server tests (`test_onboarding_agent.py`, `test_onboarding_profile.py`), tsc, localhost walk-through against a mock that runs the real module (finish step and admin table in both states). Not verified: against a real database; existing accounts are already onboarded so nothing changes for them. Server-only + dashboard: no LiveKit agent deploy needed.

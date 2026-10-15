@@ -325,7 +325,102 @@ function SignupTab({ d }: { d: Detail }) {
           <p className="px-4 py-3 text-sm text-text-muted">No answers yet (onboarded before the questions existed, or not finished).</p>
         )}
       </AdminCard>
+      <OnboardingAgentCard d={d} />
     </div>
+  )
+}
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  'hi-IN': 'Hindi', 'en-IN': 'English', 'mr-IN': 'Marathi', 'ta-IN': 'Tamil', 'te-IN': 'Telugu', 'kn-IN': 'Kannada',
+  'ml-IN': 'Malayalam', 'gu-IN': 'Gujarati', 'bn-IN': 'Bengali', 'pa-IN': 'Punjabi', 'od-IN': 'Odia',
+}
+
+/** Which onboarding answer became which setting on the starter agent, and
+ *  whether the customer has changed that setting since. */
+function OnboardingAgentCard({ d }: { d: Detail }) {
+  const info = d.onboardingAgent
+  const profile = d.account.onboarding_profile ?? {}
+  const list = (v: string | string[] | undefined) => (Array.isArray(v) ? v.join(', ') : v || '-')
+  const header = <div className="border-b border-border px-4 py-3 text-sm font-bold">First agent, set up from onboarding</div>
+  if (!info || info.deleted) {
+    return (
+      <AdminCard className="overflow-hidden lg:col-span-2">
+        {header}
+        <p className="px-4 py-3 text-sm text-text-muted">
+          {info?.deleted
+            ? 'Onboarding set up a starter agent, but the customer has since deleted it.'
+            : 'Not set up: onboarded before this existed, onboarding not finished, or the starter agent was already customised.'}
+        </p>
+      </AdminCard>
+    )
+  }
+  const state = (changed: boolean) =>
+    changed ? <Pill tone="warning">Changed by customer</Pill> : <Pill tone="active">As set up</Pill>
+  const rows: { answer: string; from: string; setting: string; value: string; changed: boolean }[] = [
+    {
+      answer: 'Company, industry, goals',
+      from: [d.account.name, list(profile.industry === 'Other' ? profile.industryOther : profile.industry), list(profile.useCases)].join(' · '),
+      setting: 'Instructions',
+      value: 'Role, goals, call flow, details to collect, tone, never-do rules',
+      changed: info.changed.instructions,
+    },
+    {
+      answer: 'Caller languages',
+      from: list(profile.languages),
+      setting: 'Language',
+      value: LANGUAGE_NAMES[info.language] ?? info.language,
+      changed: info.changed.language,
+    },
+    {
+      answer: 'Company, language',
+      from: d.account.name,
+      setting: 'Welcome line',
+      value: info.welcomeMessage || 'Default greeting (outbound only, or a language without a reviewed line)',
+      changed: info.changed.welcome,
+    },
+    {
+      answer: 'Industry, goals',
+      from: [list(profile.industry), list(profile.useCases)].join(' · '),
+      setting: 'After-call notes',
+      value: info.postCallFields.join(', ') || '-',
+      changed: info.changed.fields,
+    },
+  ]
+  return (
+    <AdminCard className="overflow-hidden lg:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <span className="text-sm font-bold">First agent, set up from onboarding</span>
+        <span className="text-xs text-text-muted">
+          {info.name} · #{info.id} · {info.status}
+          {info.updatedAt ? ` · last saved ${fmtDateTime(info.updatedAt)}` : ''}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
+              <th className="px-4 py-2.5 font-semibold">Onboarding answer</th>
+              <th className="px-4 py-2.5 font-semibold">Agent setting</th>
+              <th className="px-4 py-2.5 font-semibold">Set to</th>
+              <th className="px-4 py-2.5 font-semibold">Now</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.setting} className="border-b border-border/60 align-top last:border-0">
+                <td className="px-4 py-3">
+                  <div className="font-semibold">{r.answer}</div>
+                  <div className="text-xs text-text-muted">{r.from}</div>
+                </td>
+                <td className="px-4 py-3 font-semibold">{r.setting}</td>
+                <td className="max-w-md px-4 py-3 text-text-muted">{r.value}</td>
+                <td className="whitespace-nowrap px-4 py-3">{state(r.changed)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </AdminCard>
   )
 }
 

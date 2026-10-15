@@ -4,7 +4,7 @@ import { BrowserTestModal } from '../components/AgentTestCall'
 import { Icon } from '../components/Icon'
 import { fetchAgents } from '../lib/api'
 import { getAttribution } from '../lib/attribution'
-import { apiAcceptConsent, apiCompleteOnboarding, apiUpdateAccount, useAuth } from '../lib/auth'
+import { apiAcceptConsent, apiCompleteOnboarding, apiSetupOnboardingAgent, apiUpdateAccount, useAuth } from '../lib/auth'
 import { BRAND } from '../lib/brand'
 import { PhoneInput, isValidPhone } from '../components/PhoneInput'
 import { countryForDialCode, dialCodeFor, guessCountry } from '../lib/phone'
@@ -304,6 +304,7 @@ export function Onboarding() {
   const [saveError, setSaveError] = useState('')
   const [agent, setAgent] = useState<AgentConfig | null>(null)
   const [testing, setTesting] = useState(false)
+  const [agentReady, setAgentReady] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -362,6 +363,41 @@ export function Onboarding() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const profile = () => ({
+    role: a.role,
+    roleOther: a.role === 'Other' ? a.roleOther.trim() : '',
+    phone: needsPhone && phoneDigits ? `${dialCodeFor(a.phoneCountry)} ${phoneDigits}` : '',
+    referralSource: needsReferral ? a.referralSource : '',
+    website: a.website.trim(),
+    industry: a.industry,
+    industryOther: a.industry === 'Other' ? a.industryOther.trim() : '',
+    companySize: a.companySize,
+    useCases: a.useCases,
+    useCaseOther: a.useCases.includes('Something else') ? a.useCaseOther.trim() : '',
+    channels: a.channels,
+    languages: a.languages,
+    callVolume: a.callVolume,
+    currentSolution: a.currentSolution,
+    timeline: a.timeline,
+  })
+
+  // Reaching the last step sets the starter agent up from the answers, so
+  // "Talk to Artha" there already speaks for this business. Runs again if the
+  // owner goes back and changes something; finishing applies it once more.
+  useEffect(() => {
+    if (step !== 'finish') return
+    let cancelled = false
+    setAgentReady(false)
+    apiSetupOnboardingAgent({ profile: profile(), company: a.company.trim() })
+      .then(({ agentId }) => fetchAgents().then((list) => !cancelled && setAgent(list.find((g) => g.id === agentId) ?? list[0] ?? null)))
+      .catch(() => undefined)
+      .finally(() => !cancelled && setAgentReady(true))
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per arrival on the step
+  }, [step])
+
   const finish = async () => {
     if (!user) return
     if (missing.finish.length) {
@@ -380,23 +416,8 @@ export function Onboarding() {
       }
       if (Object.keys(accountChanges).length) await apiUpdateAccount(accountChanges)
       const { user: updated } = await apiCompleteOnboarding({
-        profile: {
-          role: a.role,
-          roleOther: a.role === 'Other' ? a.roleOther.trim() : '',
-          phone: needsPhone && phoneDigits ? `${dialCodeFor(a.phoneCountry)} ${phoneDigits}` : '',
-          referralSource: needsReferral ? a.referralSource : '',
-          website: a.website.trim(),
-          industry: a.industry,
-          industryOther: a.industry === 'Other' ? a.industryOther.trim() : '',
-          companySize: a.companySize,
-          useCases: a.useCases,
-          useCaseOther: a.useCases.includes('Something else') ? a.useCaseOther.trim() : '',
-          channels: a.channels,
-          languages: a.languages,
-          callVolume: a.callVolume,
-          currentSolution: a.currentSolution,
-          timeline: a.timeline,
-        },
+        profile: profile(),
+        company: a.company.trim(),
         attribution: getAttribution(),
       })
       try {
@@ -602,19 +623,34 @@ export function Onboarding() {
                   <div className="min-w-0 flex-1">
                     <p className="font-display text-lg font-semibold">Meet {agentName}</p>
                     <p className="text-sm text-text-muted">
-                      Speaks {a.languages.slice(0, 3).join(', ') || 'Hindi and English'} and switches language mid-call.
+                      {agentReady
+                        ? `Set up for ${a.company.trim() || 'your business'}. Speaks ${a.languages.filter((l) => l !== 'Other').slice(0, 3).join(', ') || 'Hindi and English'} and switches language mid-call.`
+                        : `Setting ${agentName} up for ${a.company.trim() || 'your business'}…`}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setTesting(true)}
-                    disabled={!agent}
+                    disabled={!agent || !agentReady}
                     className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white shadow-[0_10px_24px_-10px_var(--color-primary)] hover:brightness-105 disabled:opacity-50"
                   >
                     <Icon name="mic" className="text-[18px]" /> Talk to {agentName}
                   </button>
                 </div>
               </div>
+              {agentReady && (agent?.postCallFields?.length ?? 0) > 0 && (
+                <div className="rounded-2xl border border-border bg-surface p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Notes after every call</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {agent!.postCallFields.map((f) => (
+                      <span key={f.key} className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                        {f.key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-text-muted">You can change the instructions, voice and these notes on the agent page any time.</p>
+                </div>
+              )}
               <ul className="grid gap-2.5 sm:grid-cols-3">
                 {[
                   ['auto_awesome', 'Personalise your agent', 'Voice, language and script'],
