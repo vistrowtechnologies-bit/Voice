@@ -57,6 +57,7 @@ _SKIP_KEYS = {
     "budget_min", "budget_max", "budget_currency", "whatsapp_consent", "form_responses",
     # Rendered with their own labels by _lead_lines.
     "ad_headline", "ad_body", "form_answers", "whatsapp_first_message", "tags",
+    "repeat_enquiry", "enquiry_at",
 }
 # Ids and per-integration bookkeeping, whatever the exact key.
 _SKIP_PREFIXES = ("arthaleads_", "form_")
@@ -136,6 +137,9 @@ def _lead_lines(custom_fields: dict, used: set[str]) -> list[str]:
         value = _clean(custom_fields.get(key), cap)
         if value and key not in used:
             lines.append(f"- {label}: {value}")
+    # ArthaLeads marks a known person enquiring again (a new WhatsApp chat).
+    if str(custom_fields.get("repeat_enquiry") or "").strip().casefold() in ("true", "1", "yes"):
+        lines.append("- Enquired before: yes, this is a repeat enquiry")
     return lines
 
 

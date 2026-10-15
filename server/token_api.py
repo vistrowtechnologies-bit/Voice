@@ -6697,6 +6697,9 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
             return {"ok": False, "reason": "invalid_event"}
         lead_id = str(body.get("lead_id") or "").strip()
         org_id = str(body.get("org_id") or "").strip()
+        enquiry_id = str(body.get("enquiry_id") or "").strip()
+        if len(enquiry_id) > 128:
+            return {"ok": False, "reason": "missing_or_invalid_lead_identity"}
         if not lead_id or not org_id or len(lead_id) > 128 or len(org_id) > 128:
             return {"ok": False, "reason": "missing_or_invalid_lead_identity"}
         if body.get("opt_out") is True or body.get("do_not_call") is True:
@@ -6744,7 +6747,10 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         result = await asyncio.to_thread(
             calls_db.ingest_inbound_lead,
             account_id, str(body.get("name") or ""), str(body.get("phone") or ""),
-            source="arthaleads", external_id=f"{org_id}:{lead_id}",
+            # A repeat enquiry about an existing lead carries its own
+            # enquiry_id (evt_re_<lead>_<ms>): it is a new event to call on,
+            # while a re-delivery of the same enquiry still dedupes.
+            source="arthaleads", external_id=f"{org_id}:{lead_id}" + (f":{enquiry_id}" if enquiry_id else ""),
             custom_fields=fields, allow_call=body.get("auto_call") is not False,
             requested_agent_id=str(body.get("agent_id") or "") if body.get("auto_call") is True else "",
         )
