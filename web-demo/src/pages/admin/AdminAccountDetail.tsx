@@ -20,8 +20,9 @@ import {
 import { AdminCard, EmptyState, ErrorState, fmtDate, fmtDateTime, fmtDuration, Pill, PlanPill, StatusPill, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
-type Tab = 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'billing' | 'copilot' | 'notes'
+type Tab = 'signup' | 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'billing' | 'copilot' | 'notes'
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'signup', label: 'Signup & onboarding' },
   { id: 'health', label: 'Health' },
   { id: 'users', label: 'Users' },
   { id: 'agents', label: 'Agents' },
@@ -41,7 +42,7 @@ export function AdminAccountDetail() {
   const { refresh } = useAuth()
   const [d, setD] = useState<Detail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('health')
+  const [tab, setTab] = useState<Tab>('signup')
   const [modal, setModal] = useState<null | 'credits' | 'plan' | 'status' | 'reset'>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -126,7 +127,10 @@ export function AdminAccountDetail() {
 
       <div className="grid gap-3 md:grid-cols-4">
         <MetaCard label="Account owner" value={d.owner?.email || '-'} />
-        <MetaCard label="Onboarded" value={fmtDate(a.created_at)} />
+        <MetaCard
+          label="Signed up"
+          value={`${fmtDate(a.created_at)}${a.onboarded_at ? '' : ' · onboarding not finished'}`}
+        />
         <MetaCard label="Capacity" value={`${d.users.length} users · ${d.agents.length} agents`} />
         <AdminCard className="p-4">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Credit utilization</div>
@@ -160,6 +164,7 @@ export function AdminAccountDetail() {
       </div>
 
       <div className="mt-4">
+        {tab === 'signup' && <SignupTab d={d} />}
         {tab === 'health' && <HealthTab d={d} />}
         {tab === 'users' && <UsersTab d={d} />}
         {tab === 'agents' && <AgentsTab d={d} />}
@@ -236,6 +241,91 @@ function ActionBtn({ onClick, children }: { onClick: () => void; children: React
     <button onClick={onClick} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-text transition-colors hover:border-primary">
       {children}
     </button>
+  )
+}
+
+const PROFILE_LABELS: [string, string][] = [
+  ['role', 'Role'],
+  ['roleOther', 'Role (other)'],
+  ['industry', 'Industry'],
+  ['industryOther', 'Industry (other)'],
+  ['companySize', 'Company size'],
+  ['website', 'Website'],
+  ['useCases', 'Wants to'],
+  ['useCaseOther', 'Other use'],
+  ['channels', 'Channels'],
+  ['languages', 'Languages'],
+  ['callVolume', 'Calls per month'],
+  ['currentSolution', 'Handles calls today with'],
+  ['timeline', 'Go-live timeline'],
+  ['completedAt', 'Onboarding finished'],
+]
+
+const ATTRIBUTION_LABELS: [string, string][] = [
+  ['utm_source', 'Source (utm_source)'],
+  ['utm_medium', 'Medium (utm_medium)'],
+  ['utm_campaign', 'Campaign'],
+  ['utm_term', 'Keyword (utm_term)'],
+  ['utm_content', 'Ad (utm_content)'],
+  ['gclid', 'Google Ads click ID'],
+  ['fbclid', 'Meta click ID'],
+  ['msclkid', 'Microsoft Ads click ID'],
+  ['referrer', 'Came from site'],
+  ['landing_page', 'First page visited'],
+  ['first_seen_at', 'First visit'],
+]
+
+function FactList({ rows }: { rows: [string, string][] }) {
+  return (
+    <dl className="divide-y divide-border/60">
+      {rows.map(([k, v]) => (
+        <div key={k} className="flex gap-4 px-4 py-2.5 text-sm">
+          <dt className="w-48 shrink-0 text-text-muted">{k}</dt>
+          <dd className="min-w-0 break-words font-semibold">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** Who signed up, how they found us and what they said they need. */
+function SignupTab({ d }: { d: Detail }) {
+  const a = d.account
+  const profile = a.onboarding_profile ?? {}
+  const attribution = a.signup_attribution ?? {}
+  const show = (v: string | string[] | undefined) => (Array.isArray(v) ? v.join(', ') : v || '')
+  const DATE_KEYS = new Set(['completedAt', 'first_seen_at'])
+  const value = (k: string, v: string | string[] | undefined) => (DATE_KEYS.has(k) && typeof v === 'string' ? fmtDateTime(v) : show(v))
+  const contact: [string, string][] = [
+    ['Owner', `${d.owner?.name || '-'} · ${d.owner?.email || '-'}`],
+    ['Phone', d.owner?.phone || '-'],
+    ['Signed up with', d.owner?.auth_provider || 'password'],
+    ['How they heard about us', a.referral_source || '-'],
+    ['Onboarding', a.onboarded_at ? `Finished ${fmtDateTime(a.onboarded_at)}` : 'Not finished'],
+  ]
+  const profileRows = PROFILE_LABELS.filter(([k]) => show(profile[k])).map(([k, label]) => [label, value(k, profile[k])] as [string, string])
+  const attributionRows = ATTRIBUTION_LABELS.filter(([k]) => attribution[k]).map(([k, label]) => [label, value(k, attribution[k])] as [string, string])
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <AdminCard className="overflow-hidden">
+        <div className="border-b border-border px-4 py-3 text-sm font-bold">Contact & signup</div>
+        <FactList rows={contact} />
+        <div className="border-y border-border px-4 py-3 text-sm font-bold">Where they came from</div>
+        {attributionRows.length ? (
+          <FactList rows={attributionRows} />
+        ) : (
+          <p className="px-4 py-3 text-sm text-text-muted">No ad or referral data (direct visit, or signed up before tracking).</p>
+        )}
+      </AdminCard>
+      <AdminCard className="overflow-hidden">
+        <div className="border-b border-border px-4 py-3 text-sm font-bold">Onboarding answers</div>
+        {profileRows.length ? (
+          <FactList rows={profileRows} />
+        ) : (
+          <p className="px-4 py-3 text-sm text-text-muted">No answers yet (onboarded before the questions existed, or not finished).</p>
+        )}
+      </AdminCard>
+    </div>
   )
 }
 

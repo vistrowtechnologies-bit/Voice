@@ -630,3 +630,105 @@ Branch `claude/security-tokens-mfa`, commit ab00513d (privacy audit 2026-10-12 g
 - Production orchestrator Railway service is live (railway status: SUCCESS) and reads integrations, so it needs the key too.
 Verified: server suite 670 passed (local pgserver Postgres, DATABASE_URL set in the same command); agent suite 746 passed / 15 skipped in a livekit-agents 1.8.6 venv from agent/requirements.txt; orchestrator test_server_routing 9 passed. Not verified: any deploy, real decryption on Railway/LiveKit (no key set anywhere yet).
 Next (owner, in order): merge -> Railway Voice/orchestrator/staging deploy + `lk agent deploy` both workers -> set INTEGRATION_ENCRYPTION_KEY on all five readers (LiveKit via `lk agent update-secrets --secrets-file`, never `--overwrite`) -> then INTEGRATION_ENCRYPTION_WRITE=on -> check `left(config_json,7)` = `enc:v1:` and Send test on Sheets/Zoho/ArthaLeads.
+### Claude — 2026-10-14 — Full-page onboarding before the dashboard, signup data in admin
+
+Branch `claude/fullpage-onboarding`. The owner asked for a full-page onboarding that is required before platform access and collects as much as possible, like other SaaS brands.
+
+**Customer side**
+- New `/onboarding` page (`web-demo/src/pages/Onboarding.tsx`), four steps:
+  1. About you: role, phone if missing, how you heard if a Google/GitHub sign-up.
+  2. Business: company, website, industry, size, country.
+  3. Goals: uses, channels, languages, calls/month, current solution, go-live timeline.
+  4. Ready: test call with the default agent, summary, Terms consent.
+- The draft is saved in localStorage, so a reload resumes where the customer left off.
+- `RequireAuth` sends any user whose account is not onboarded to `/onboarding` (support sessions excepted). `OnboardingModal` is deleted.
+
+**Data capture**
+- First-touch attribution (`lib/attribution.ts`, captured in `main.tsx`): utm_*, gclid/fbclid/msclkid, external referrer, landing page.
+- Sent with `/auth/signup` and again on `/onboarding/complete`, so Google sign-ups are covered.
+- Server: `accounts.onboarding_profile` and `signup_attribution` (JSON text, `ADD COLUMN IF NOT EXISTS`). New `server/onboarding_profile.py` cleaning (whitelist + caps).
+- `save_onboarding_profile` fills the owner's phone and `referral_source` only when empty. Attribution is first-touch only.
+
+**Admin**
+- New first tab "Signup & onboarding" on the account page: contact, sign-up method, how they heard, ad/referrer data, all answers.
+- Accounts list gains Source and Industry columns. The "Onboarded" card, which actually showed the signup date, is relabelled "Signed up".
+
+**Fixes along the way**
+- `guessCountry` now uses the time zone first. Indian browsers set to en-US/en-GB had defaulted to US/GB: the old popup saved `country: GB` for a +91 customer in the local test.
+- The signup Terms error no longer turns every field red.
+
+**Verified**
+- Local app with a mock API: dashboard redirects to `/onboarding`; validation; all 4 steps; the completion payload; landing on `/dashboard`; the admin tab; 375 px has no horizontal scroll.
+- 5 server unit tests; `npm run build`.
+- Read-only prod query: all 6 real accounts are already onboarded, so nobody is blocked. Only test account 8 "Staging QA" is not.
+
+**Not verified:** against a real Postgres. Staging holds PR #72's unmerged build, so I did not overwrite it. The migration is the same ADD COLUMN IF NOT EXISTS pattern as the neighbouring lines.
+
+### Claude — 2026-10-15 — Onboarding redesign (premium), required vs optional, no country question
+
+Branch `claude/fullpage-onboarding` (PR #107), owner feedback:
+- **Country:** no longer a question. Account country comes from the phone's calling code (step 1, or the code given at signup), else the time-zone guess.
+- **Required now:** role; phone if missing; how you heard (OAuth sign-ups only); company; industry; team size; uses; languages; calls per month.
+- **Optional:** website, plus a collapsed "A few more details (optional, skip if you like)" block with channels, current solution and timeline.
+- **New design:**
+  - top bar with logo, a 4-segment labelled progress bar and sign-out;
+  - large icon cards for role, industry and uses; segmented controls for size and volume; pills for languages and referral;
+  - a live "Your workspace" preview on the right that fills in as answers are given;
+  - step fade-in; Enter to continue; only unanswered required questions turn red;
+  - the step and answers survive a reload; two cards per row on phones.
+- **Copy:** dropped claims the product doesn't do yet ("tailor your agent and its sample scripts").
+
+Verified in the local app at 1440 px and 375 px (no horizontal scroll); `npm run build` passes.
+
+### Claude — 2026-10-15 — Phone input: flags, searchable countries, digit limits; AI referral option
+
+Branch `claude/fullpage-onboarding` (PR #107).
+
+New `web-demo/src/components/PhoneInput.tsx`, used on signup and onboarding:
+- **Picker:** emoji flag plus calling code, with a searchable list of every country.
+  - Typing a letter on the closed picker opens it already filtered.
+  - Name, ISO code, aliases (uk, usa, uae, ksa…) and dial digits all match; popular countries (IN, US, GB, AE…) rank first among equal matches.
+  - Arrow keys and Enter work; Enter does not advance the onboarding step (`defaultPrevented` check).
+  - The search clears whenever the picker closes.
+- **Number field:** digits only, capped per country (IN/US/GB 10, AE/SA 9, SG/QA 8; others 6..15 minus code digits). `isValidPhone` also requires IN numbers to start 6–9.
+- Onboarding stores `phoneCountry` (ISO) and sets the account country from it.
+
+"How did you hear about us?" gains "AI assistant (ChatGPT, Gemini, Claude…)" on both pages; signup also gains "Google search".
+
+Verified in the local app:
+- "12345abc678…" becomes "9876543210"-style 10 digits;
+- "u" lists US, UK, UAE first; "uk" → United Kingdom; "uae" and "971" → UAE;
+- Enter picks a country without changing step;
+- the signup field matches the other inputs;
+- build passes.
+
+Note: Windows shows the two-letter code instead of a flag emoji.
+
+### Claude — 2026-10-15 — Sarvam native language: names, filter, listen in any language
+
+Branch `claude/sarvam-native-languages`. The owner asked why voices say "(Hindi)" and how a customer can hear a voice in Tamil or another language.
+
+Sarvam's v4 voice ids are `<name>_<lang>_<style>`. Per Sarvam, `<lang>` is the language each voice was tuned to sound native in; every voice still speaks all 11.
+
+**Catalog** (`server/voice_catalog.py`, copied byte-identical to `agent/voice_catalog.py`; the agent reads only gender/tier/notes of Gemini voices, so no worker deploy is needed)
+- v4 names drop "(Hindi)".
+- New fields `native_lang`/`native_language`, exposed as `nativeLang`/`nativeLanguage`.
+- note = "Native Hindi · Sarvam v4".
+- 22 names now repeat across languages. They are told apart by the native tag and by the note in the agent picker.
+
+**Samples**
+- SAMPLE_TEXTS: every language now says the same sentence as the English line: mr and pa gendered; ta, te, kn, ml, gu, bn, od added or rewritten. Translations are mine; native-speaker review is pending.
+- SAMPLE_TEXT_VERSION 3→4, which regenerates cached previews.
+- Bug fixed: `voice_preview._SARVAM_LANG` only had hi/en, so a Tamil preview was sent to Sarvam/Chirp as hi-IN. It now has all 11 codes.
+- `voice_catalog_for_account` returns sampleTexts for every language.
+
+**Voices page**
+- Rows read "Native Hindi · speaks 11 languages".
+- Sarvam tab has a native-language filter (current split: Hindi 53, English 24, Hinglish 7, Gujarati/Marathi/Punjabi 3, Telugu 2, Bengali/Kannada 1; no Tamil, Malayalam or Odia natives).
+- The spotlight has a "Listen in" row for Sarvam v4 and Chirp HD voices (not Gemini, whose quota is small). Clicking a language plays the same sentence in it; native is marked. The stats tile shows the native language.
+
+**Verified**
+- Local app, with a mock that calls the real `voice_preview.synthesize` (Sarvam key from .env): Aarti → Tamil returned real audio and showed the Tamil sentence highlighted.
+- Server voice tests: 38 pass.
+- `agent/test_sarvam_v4_plugin.py::test_a_rejected_id_falls_back_by_gender` fails with and without this change (local livekit 1.8.3 vs pinned 1.8.6).
+- `npm run build` passes.

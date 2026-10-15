@@ -53,6 +53,7 @@ import ops_alert_worker
 import widget_avatars
 import widget_chat
 import voice_catalog
+import onboarding_profile
 from help_content import FAQS
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
@@ -813,6 +814,8 @@ class SignupRequest(BaseModel):
     password: str
     referral_source: str = ""
     phone: str = ""
+    # First-touch marketing tags captured in the browser (utm_*, gclid, ...).
+    attribution: dict = {}
 
 
 class LoginRequest(BaseModel):
@@ -1687,11 +1690,12 @@ def auth_signup(req: SignupRequest, request: Request) -> dict:
         req.referral_source.strip(),
         req.phone.strip(),
     )
+    calls_db.save_signup_attribution(created["account_id"], onboarding_profile.clean_attribution(req.attribution))
     code, _ = calls_db.create_email_verification(created["user_id"])
     if code is None:
         raise HTTPException(429, "Please wait before requesting another code")
     user = calls_db.get_user_by_email(email)
-    html = email_sender.render_email(
+    email_html = email_sender.render_email(
         preheader="Verify your Vistrow Voice email",
         heading="Verify your email",
         body_html=(
@@ -1704,7 +1708,7 @@ def auth_signup(req: SignupRequest, request: Request) -> dict:
     email_sent = email_sender.send_email(
         email,
         f"{code} is your Vistrow Voice verification code",
-        html,
+        email_html,
         email_sender.FROM_EMAIL_VERIFICATION,
     )
     logger.info("new signup: account #%s (%s)", created["account_id"], email)
@@ -1749,7 +1753,7 @@ def auth_resend_email_verification(req: ResendEmailVerificationRequest, request:
     code, retry_after = calls_db.create_email_verification(user["id"])
     if code is None:
         raise HTTPException(429, f"Please wait {retry_after} seconds before requesting another code")
-    html = email_sender.render_email(
+    email_html = email_sender.render_email(
         preheader="Your new Vistrow Voice verification code",
         heading="Verify your email",
         body_html=(
@@ -1759,7 +1763,7 @@ def auth_resend_email_verification(req: ResendEmailVerificationRequest, request:
             "This code expires in 10 minutes."
         ),
     )
-    if not email_sender.send_email(email, f"{code} is your Vistrow Voice verification code", html, email_sender.FROM_EMAIL_VERIFICATION):
+    if not email_sender.send_email(email, f"{code} is your Vistrow Voice verification code", email_html, email_sender.FROM_EMAIL_VERIFICATION):
         raise HTTPException(503, "We could not send the verification email. Please try again")
     return {"ok": True, "resendAfter": retry_after}
 
@@ -1995,12 +1999,12 @@ def public_contact(req: ContactRequest, request: Request) -> dict:
             ("Use case", req.use_case.strip() or "-"),
         ]
     )
-    html = email_sender.render_email(
+    email_html = email_sender.render_email(
         preheader=f"New demo request from {name}",
         heading="New demo request",
         body_html=details,
     )
-    sent = email_sender.send_email(notify_to, f"New demo request: {name}", html, email_sender.FROM_WEBSITE)
+    sent = email_sender.send_email(notify_to, f"New demo request: {name}", email_html, email_sender.FROM_WEBSITE)
     if not sent:
         # Same "never crash on email failure" contract as password reset —
         # but this lead has nowhere else to land, so log it in full rather
@@ -2039,7 +2043,7 @@ def auth_request_password_reset(req: RequestResetRequest, request: Request) -> d
     if user is not None:
         token = calls_db.create_password_reset(user["id"])
         link = f"{_app_base_url(request)}/reset-password?token={token}"
-        html = email_sender.render_email(
+        email_html = email_sender.render_email(
             preheader="Reset your Vistrow Voice password",
             heading="Reset your password",
             body_html=(
@@ -2050,7 +2054,7 @@ def auth_request_password_reset(req: RequestResetRequest, request: Request) -> d
             cta_label="Reset password",
             cta_url=link,
         )
-        sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html, email_sender.FROM_ACCOUNT_SECURITY)
+        sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", email_html, email_sender.FROM_ACCOUNT_SECURITY)
         if not sent:
             # Email delivery isn't set up yet — surface the link in the server
             # log so the operator can still complete a reset during setup.
@@ -2327,7 +2331,7 @@ def request_email_change(req: EmailChangeRequest, request: Request, user: dict =
         raise HTTPException(400, "Create a password first, then change your sign-in email")
     token = calls_db.create_email_change_request(user["user_id"], new_email)
     link = f"{_app_base_url(request)}/confirm-email-change?token={token}"
-    html = email_sender.render_email(
+    email_html = email_sender.render_email(
         preheader="Confirm your new Vistrow Voice sign-in email",
         heading="Confirm your new email",
         body_html=(
@@ -2337,7 +2341,7 @@ def request_email_change(req: EmailChangeRequest, request: Request, user: dict =
         cta_label="Confirm new email",
         cta_url=link,
     )
-    email_sender.send_email(new_email, "Confirm your new Vistrow Voice email", html, email_sender.FROM_ACCOUNT_SECURITY)
+    email_sender.send_email(new_email, "Confirm your new Vistrow Voice email", email_html, email_sender.FROM_ACCOUNT_SECURITY)
     calls_db.record_security_event(user["user_id"], "email_change_requested", user_agent=request.headers.get("user-agent", ""))
     return {"ok": True}
 
@@ -2720,7 +2724,16 @@ def accept_consent(data: dict = Body(...), user: dict = Depends(current_user)) -
 
 
 @app.post("/onboarding/complete")
-def complete_onboarding(user: dict = Depends(current_user)) -> dict:
+def complete_onboarding(data: dict | None = Body(None), user: dict = Depends(current_user)) -> dict:
+    """Finishes the full-page onboarding. The dashboard sends the answers
+    and the browser's first-touch attribution; both are optional so an older
+    client can still finish."""
+    data = data or {}
+    profile = onboarding_profile.clean_profile(data.get("profile"))
+    if profile:
+        profile["completedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        calls_db.save_onboarding_profile(user["account_id"], user["user_id"], profile)
+    calls_db.save_signup_attribution(user["account_id"], onboarding_profile.clean_attribution(data.get("attribution")))
     calls_db.mark_account_onboarded(user["account_id"])
     return {"user": _me_payload(user["user_id"])}
 
@@ -2801,7 +2814,7 @@ def team_invite(req: InviteMemberRequest, request: Request, user: dict = Depends
     inviter = calls_db.get_user_by_id(user["user_id"])
     invite = calls_db.create_invite(user["account_id"], email, name, role, user["user_id"])
     link = f"{_app_base_url(request)}/invite/{invite['token']}"
-    html = email_sender.render_email(
+    email_html = email_sender.render_email(
         preheader=f"{inviter['name']} invited you to join {inviter['account_name']} on Vistrow Voice",
         heading="You're invited",
         body_html=(
@@ -2812,7 +2825,7 @@ def team_invite(req: InviteMemberRequest, request: Request, user: dict = Depends
         cta_label="Accept invite",
         cta_url=link,
     )
-    sent = email_sender.send_email(email, f"You're invited to join {inviter['account_name']} on Vistrow Voice", html, email_sender.FROM_INVITES)
+    sent = email_sender.send_email(email, f"You're invited to join {inviter['account_name']} on Vistrow Voice", email_html, email_sender.FROM_INVITES)
     if not sent:
         logger.info("invite created for account %s but email is not configured; link not sent", user["account_id"])
     return {"ok": True, "emailSent": sent, "inviteLink": link}
@@ -3249,7 +3262,7 @@ def admin_reset_password(account_id: int, request: Request, admin: dict = Depend
     user = calls_db.get_user_by_id(owner_uid)
     token = calls_db.create_password_reset(owner_uid)
     link = f"{_app_base_url(request)}/reset-password?token={token}"
-    html = email_sender.render_email(
+    email_html = email_sender.render_email(
         preheader="Reset your Vistrow Voice password",
         heading="Reset your password",
         body_html=(
@@ -3259,7 +3272,7 @@ def admin_reset_password(account_id: int, request: Request, admin: dict = Depend
         cta_label="Reset password",
         cta_url=link,
     )
-    sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html, email_sender.FROM_ACCOUNT_SECURITY)
+    sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", email_html, email_sender.FROM_ACCOUNT_SECURITY)
     admin_db.write_audit(admin["user_id"], admin["email"], "reset_password", account_id, owner_uid, detail=f"reset link issued to {user['email']}")
     # Return the link so the operator can share it directly if email isn't configured.
     return {"ok": True, "emailSent": sent, "resetLink": link}

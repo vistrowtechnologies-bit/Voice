@@ -74,7 +74,17 @@ function CreditBadge({ credits }: { credits: number }) {
 }
 
 function languageSummary(entry: VoiceEntry): string {
+  if (entry.nativeLanguage) return `Native ${entry.nativeLanguage} · speaks ${entry.languageCount} languages`
   return entry.canSwitchLanguage ? `${entry.languageCount} languages` : `${entry.languageLabels[0] ?? 'One language'} only`
+}
+
+// Voices the preview can play in any language it speaks: one model, every
+// language. Gemini voices are left out because their TTS quota is tiny.
+const listensInAnyLanguage = (v: VoiceEntry) => v.value.startsWith('sarvam4:') || v.value.startsWith('google:chirp3:')
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  hi: 'Hindi', en: 'English', mr: 'Marathi', ta: 'Tamil', te: 'Telugu', kn: 'Kannada',
+  ml: 'Malayalam', gu: 'Gujarati', bn: 'Bengali', pa: 'Punjabi', od: 'Odia',
 }
 
 // Realtime tabs are one per Live model: `rt:<model value>`.
@@ -192,7 +202,7 @@ function VoiceRow({
         <p className="truncate text-sm font-bold">{entry.name}</p>
         <p className="truncate text-xs text-text-muted">
           {GENDER_LABEL[entry.gender]} · {detail ?? languageSummary(entry)}
-          {!detail && entry.canSwitchLanguage && <span className="text-cyan"> · switches live</span>}
+          {!detail && entry.canSwitchLanguage && !entry.nativeLanguage && <span className="text-cyan"> · switches live</span>}
           <span className="font-semibold text-text"> · {credits ?? voiceCredits(entry)}</span>
         </p>
       </div>
@@ -237,8 +247,16 @@ function Spotlight({
   realtimeModelLabel,
   stickyTop,
   nameRef,
+  listenLangs,
+  activeLang,
+  onListenIn,
 }: {
   entry: VoiceEntry
+  // Languages this voice can be previewed in (code + name), the one playing
+  // now, and a handler that switches the preview to another one and plays it.
+  listenLangs: { code: string; name: string }[]
+  activeLang: string
+  onListenIn: (code: string) => void
   // Height of the dashboard's sticky header, so the panel sticks below it.
   stickyTop: number
   nameRef: React.RefObject<HTMLHeadingElement | null>
@@ -344,12 +362,19 @@ function Spotlight({
             <p className="font-display text-base font-semibold">{entry.languageCount}</p>
             <p className="text-[11px] font-bold text-text-muted">{entry.languageCount === 1 ? 'Language' : 'Languages'}</p>
           </div>
-          <div className="rounded-xl bg-surface-high px-2 py-2.5">
-            <p className={`font-display text-base font-semibold ${entry.canSwitchLanguage ? 'text-cyan' : 'text-amber'}`}>
-              {entry.canSwitchLanguage ? 'Live' : 'Fixed'}
-            </p>
-            <p className="text-[11px] font-bold text-text-muted">Language switch</p>
-          </div>
+          {entry.nativeLanguage ? (
+            <div className="rounded-xl bg-surface-high px-2 py-2.5">
+              <p className="font-display text-base font-semibold text-cyan">{entry.nativeLanguage}</p>
+              <p className="text-[11px] font-bold text-text-muted">Native language</p>
+            </div>
+          ) : (
+            <div className="rounded-xl bg-surface-high px-2 py-2.5">
+              <p className={`font-display text-base font-semibold ${entry.canSwitchLanguage ? 'text-cyan' : 'text-amber'}`}>
+                {entry.canSwitchLanguage ? 'Live' : 'Fixed'}
+              </p>
+              <p className="text-[11px] font-bold text-text-muted">Language switch</p>
+            </div>
+          )}
           <div className="rounded-xl bg-surface-high px-2 py-2.5">
             <p className="font-display text-base font-semibold">{voiceCredits(entry).replace(' credits/min', '')}</p>
             <p className="text-[11px] font-bold text-text-muted">Credits / min</p>
@@ -357,6 +382,41 @@ function Spotlight({
         </div>
         )}
 
+        {!realtime && listenLangs.length > 1 ? (
+          <div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-text-muted">Listen in</p>
+            <div className="flex flex-wrap gap-1.5">
+              {listenLangs.map((l) => {
+                const on = l.code === activeLang
+                const native = l.code === entry.nativeLang
+                return (
+                  <button
+                    key={l.code}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onListenIn(l.code)}
+                    title={native ? `${l.name}: the language this voice was made for` : `Hear this voice in ${l.name}`}
+                    className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold transition-colors ${
+                      on
+                        ? 'border-primary bg-primary text-white'
+                        : 'border-border bg-surface text-text-muted hover:border-primary/50 hover:text-text'
+                    }`}
+                  >
+                    <Icon name={on && playing ? 'graphic_eq' : 'play_arrow'} className="text-[14px]" />
+                    {l.name}
+                    {native && <span className={`text-[10px] ${on ? 'text-white/80' : 'text-primary'}`}>· native</span>}
+                  </button>
+                )
+              })}
+            </div>
+            {entry.nativeLanguage && (
+              <p className="mt-2 text-[11px] text-text-muted">Sounds most natural in {entry.nativeLanguage}. Same sentence in every language.</p>
+            )}
+            {entry.languageCount > listenLangs.length && (
+              <p className="mt-1 text-[11px] text-text-muted">Also speaks {entry.languageCount - listenLangs.length} more languages.</p>
+            )}
+          </div>
+        ) : (
         <div className={`hidden flex-wrap gap-1.5 ${realtime ? '' : 'lg:flex'}`}>
           {entry.languageLabels.slice(0, LANG_CHIPS).map((label) => (
             <span key={label} className="rounded-md bg-surface-high px-2 py-0.5 text-[11px] font-bold text-text-muted">
@@ -367,6 +427,7 @@ function Spotlight({
             <span className="rounded-md bg-surface-high px-2 py-0.5 text-[11px] font-bold text-text-muted">+{moreLangs} more</span>
           )}
         </div>
+        )}
 
         {!target ? null : target.selected ? (
           <button
@@ -418,6 +479,10 @@ export function Voices() {
   const [expanded, setExpanded] = useState(false)
   const [selectedValue, setSelectedValue] = useState<string | null>(null)
   const [playRequest, setPlayRequest] = useState<string | null>(null)
+  // Preview language picked per voice with "Listen in"; otherwise the
+  // voice's native language, else the page's Hindi/English switch.
+  const [langChoice, setLangChoice] = useState<Record<string, string>>({})
+  const [nativeFilter, setNativeFilter] = useState('')
 
   async function load() {
     try {
@@ -539,6 +604,8 @@ export function Voices() {
           name: hd ? hd.name.replace(/ HD$/, '') : gemini,
           note: `${gemini} · ${v.note.split(' · ')[0]} voice`,
           selected: hd?.selected,
+          // Google's Live API documents 99 languages (checked 2026-10-15).
+          languageCount: 99,
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -546,8 +613,18 @@ export function Voices() {
   }, [data])
 
   const query = search.trim().toLowerCase()
-  const matches = (voice: VoiceEntry) =>
-    [voice.name, voice.note, voice.tierLabel, ...voice.languageLabels].filter(Boolean).some((value) => value.toLowerCase().includes(query))
+  // Search relevance: the voice's name, then voices native to the searched
+  // language, then single-language voices for it, then style/tier words, then
+  // any voice that can also speak it. 0 = no match.
+  const searchScore = (voice: VoiceEntry): number => {
+    const has = (v?: string) => !!v && v.toLowerCase().includes(query)
+    if (has(voice.name)) return 5
+    if (has(voice.nativeLanguage)) return 4
+    if (!voice.canSwitchLanguage && voice.languageLabels.some(has)) return 4
+    if (has(voice.note) || has(voice.tierLabel)) return 2
+    if (voice.languageLabels.some(has)) return 1
+    return 0
+  }
   const passesFilter = (voice: VoiceEntry) =>
     filter === 'all' || (filter === 'added' ? !!voice.selected : voice.gender === filter)
 
@@ -559,18 +636,37 @@ export function Voices() {
   const base = realtimeActive
     ? realtimeVoices
     : query
-      ? everyVoice.filter(matches)
+      ? everyVoice
+          .map((v, i) => ({ v, i, score: searchScore(v) }))
+          .filter((x) => x.score > 0)
+          .sort((a, b) => b.score - a.score || a.i - b.i)
+          .map((x) => x.v)
       : filter === 'added'
         ? everyVoice
         : (activeTab?.voices ?? [])
-  const shown = base.filter(passesFilter)
+  // "Native language" filter for tabs whose voices have one (Sarvam v4).
+  const nativeOptions = [...new Set(base.map((v) => v.nativeLanguage).filter(Boolean) as string[])].sort()
+  const nativeActive = nativeOptions.includes(nativeFilter) ? nativeFilter : ''
+  const shown = base.filter(passesFilter).filter((v) => !nativeActive || v.nativeLanguage === nativeActive)
   const visible = query || expanded || (filter === 'added' && !realtimeActive) ? shown : shown.slice(0, PAGE_SIZE)
   const addedVoices = (data?.voices ?? []).filter((v) => v.selected)
 
   // The spotlight follows the chosen voice while it stays in view, else the
   // first one listed, so the panel is never empty when the list is not.
   const current = shown.find((v) => v.value === selectedValue) ?? shown[0]
-  const previewLang = current ? current.forceLang || lang : lang
+  const previewLang = current ? langChoice[current.value] || current.forceLang || current.nativeLang || lang : lang
+  const listenLangs =
+    current && listensInAnyLanguage(current)
+      ? [...new Set(current.languages.map((c) => c.split('-')[0]))]
+          .filter((c) => data?.sampleTexts?.[c] && LANGUAGE_NAMES[c])
+          .map((c) => ({ code: c, name: LANGUAGE_NAMES[c] }))
+          .sort((a, b) => (a.code === current.nativeLang ? -1 : b.code === current.nativeLang ? 1 : 0))
+      : []
+  const listenIn = (code: string) => {
+    if (!current) return
+    setLangChoice((prev) => ({ ...prev, [current.value]: code }))
+    setPlayRequest(current.value)
+  }
   const preview = useVoicePreview(current?.value ?? '', previewLang, { pausable: true })
   const sampleSet = data?.sampleTexts?.[previewLang]
   const sample = current ? (sampleSet?.[current.gender === 'female' ? 'female' : 'male'] ?? '') : ''
@@ -797,6 +893,23 @@ export function Voices() {
                           {f.label}
                         </button>
                       ))}
+                      {nativeOptions.length > 1 && (
+                        <select
+                          value={nativeActive}
+                          onChange={(e) => setNativeFilter(e.target.value)}
+                          aria-label="Native language"
+                          className={`rounded-full border px-3 py-1 text-xs font-bold outline-none transition-colors ${
+                            nativeActive ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border bg-transparent text-text-muted'
+                          }`}
+                        >
+                          <option value="">Any native language</option>
+                          {nativeOptions.map((n) => (
+                            <option key={n} value={n}>
+                              Native {n} ({base.filter((v) => v.nativeLanguage === n).length})
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       {!query && filter !== 'added' && activeTab && <span className="ml-auto text-[11px] text-text-muted">{activeTab.note}</span>}
                       {realtimeActive && realtimeModel && (
                         <span className="ml-auto text-[11px] text-text-muted">
@@ -879,6 +992,9 @@ export function Voices() {
                   realtimeHd={realtimeActive ? (realtimeHdFor.get(current.value) ?? null) : undefined}
                   realtimeModelLabel={realtimeModel?.label}
                   sample={sample}
+                  listenLangs={listenLangs}
+                  activeLang={previewLang}
+                  onListenIn={listenIn}
                   playState={preview.state}
                   progress={preview.progress}
                   busy={busyVoice === (realtimeActive ? realtimeHdFor.get(current.value)?.value : current.value)}
