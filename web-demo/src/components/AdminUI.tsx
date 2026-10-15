@@ -2,7 +2,7 @@
 // component vocabulary (stat cards, pills, tables, cards) rendered in the app's
 // own design tokens (violet primary, surface/border) rather than a separate
 // palette, so it stays consistent with the tenant dashboard.
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { Icon } from './Icon'
 
 export function AdminCard({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -207,6 +207,58 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
       )}
     </div>
   )
+}
+
+/** Backend message from a thrown admin API error (adminApi surfaces `detail`). */
+export function errMsg(e: unknown, fallback = 'Request failed'): string {
+  return e instanceof Error && e.message ? e.message : fallback
+}
+
+/** Focus ring for a clickable table row reached by keyboard. */
+export const ROW_FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary'
+
+/** Props that make a clickable <tr> keyboard-reachable: Tab to it, Enter/Space opens. */
+export function rowLinkProps(open: () => void) {
+  return {
+    tabIndex: 0,
+    onClick: open,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.target !== e.currentTarget) return
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        open()
+      }
+    },
+  }
+}
+
+/** Modal plumbing for hand-rolled dialogs: Esc closes, focus moves inside on
+ * open (first input, else first focusable) and returns to the opener on close.
+ * Spread the returned ref onto the dialog container. */
+export function useDialog<T extends HTMLElement = HTMLDivElement>(onClose: () => void) {
+  const ref = useRef<T>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null
+    const el = ref.current
+    const target =
+      el?.querySelector<HTMLElement>('input:not([disabled]), select:not([disabled]), textarea:not([disabled])') ??
+      el?.querySelector<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')
+    target?.focus()
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        closeRef.current()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      opener?.focus?.()
+    }
+  }, [])
+  return ref
 }
 
 /** Absolute local time for a `title` tooltip next to a relative "2m ago". */

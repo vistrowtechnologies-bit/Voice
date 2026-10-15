@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react'
 import { adminAnalytics, type AdminAnalytics as Data } from '../../lib/adminApi'
-import { AdminCard, AreaChart, BarList, EmptyState, fmtDuration, fmtINR, PageHeader, StatCard, TimeRange } from '../../components/AdminUI'
+import { AdminCard, AreaChart, BarList, EmptyState, errMsg, ErrorState, fmtDuration, fmtINR, PageHeader, StatCard, TimeRange } from '../../components/AdminUI'
 
 export function AdminAnalytics() {
   const [days, setDays] = useState(30)
   const [d, setD] = useState<Data | null>(null)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     setD(null)
-    setError(false)
-    adminAnalytics(days).then(setD).catch(() => setError(true))
-  }, [days])
+    setError(null)
+    adminAnalytics(days)
+      .then(setD)
+      .catch((e: unknown) => setError(errMsg(e)))
+  }, [days, attempt])
 
-  if (error) return <EmptyState icon="error" message="Couldn't load analytics." />
+  if (error) return <ErrorState message={`Couldn't load analytics: ${error}`} onRetry={() => setAttempt((n) => n + 1)} />
+
   if (!d) return <div className="h-40 animate-pulse rounded-xl border border-border bg-surface" />
 
   const maxFunnel = Math.max(...d.funnel.map((f) => f.count), 1)
