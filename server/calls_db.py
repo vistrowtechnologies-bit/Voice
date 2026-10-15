@@ -6266,6 +6266,71 @@ def configure_arthaleads_inbound(account_id: int, sources: dict, routes: list[di
         conn.close()
 
 
+def _arthaleads_agent_route(account_id: int, agent_ref: str, source: str) -> tuple[dict | None, str]:
+    """ArthaLeads chose the agent (its lead.created contract: call only when
+    auto_call is true and only with agent_id, no fallback). agent_ref is the
+    agent id our picker gave ArthaLeads (internal id; the public Agent ID is
+    accepted too). The caller number is the agent's own assigned number,
+    else the number of a Voice-side ArthaLeads route for the same agent.
+    Returns (route, "") or (None, reason)."""
+    ref = str(agent_ref or "").strip()
+    if not ref or len(ref) > 40:
+        return None, "agent_not_found"
+    conn = _connect()
+    try:
+        agent = conn.execute(
+            "SELECT id FROM agents WHERE account_id = ? AND (CAST(id AS TEXT) = ? OR public_id = ?) "
+            "AND status = 'live' AND kb_id IS NOT NULL AND is_platform_demo = 0 "
+            "AND (public_demo_slug = '' OR public_demo_slug IS NULL) LIMIT 1",
+            (account_id, ref, ref),
+        ).fetchone()
+        if not agent:
+            return None, "agent_not_live"
+        number = conn.execute(
+            "SELECT number FROM phone_numbers WHERE account_id = ? AND agent_id = ? AND status = 'active' "
+            "ORDER BY id LIMIT 1",
+            (account_id, agent["id"]),
+        ).fetchone()
+        from_number = number["number"] if number else ""
+        if not from_number:
+            try:
+                routing = json.loads(_get_setting(conn, account_id, _ARTHALEADS_INBOUND_ROUTING) or "{}")
+            except (TypeError, ValueError):
+                routing = {}
+            for route in routing.get("routes") or []:
+                if not isinstance(route, dict) or int(route.get("agentId") or 0) != agent["id"]:
+                    continue
+                if conn.execute(
+                    "SELECT 1 FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+                    (account_id, str(route.get("fromNumber") or "")),
+                ).fetchone():
+                    from_number = str(route.get("fromNumber"))
+                    break
+        if not from_number:
+            return None, "agent_has_no_caller_number"
+        return {"source": source or "arthaleads", "match": f"agent:{agent['id']}",
+                "agentId": agent["id"], "fromNumber": from_number}, ""
+    finally:
+        conn.close()
+
+
+def arthaleads_lead_id_for_call(call_id: int, account_id: int) -> str:
+    """The ArthaLeads lead a campaign call was placed for ('' if none)."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT custom_fields FROM campaign_contacts WHERE call_id = ? AND account_id = ? ORDER BY id DESC LIMIT 1",
+            (call_id, account_id),
+        ).fetchone()
+    finally:
+        conn.close()
+    try:
+        fields = json.loads(row["custom_fields"] or "{}") if row else {}
+    except (TypeError, ValueError):
+        fields = {}
+    return str(fields.get("arthaleads_lead_id") or "") if isinstance(fields, dict) else ""
+
+
 def get_or_create_instant_campaign(account_id: int, source: str = "", route: dict | None = None) -> int | None:
     """The destination for new leads from an external source.
 
@@ -6354,6 +6419,7 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
     external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
+    requested_agent_id: str = "",
 ) -> dict:
     """Entry point for every external lead source (Facebook Lead Ads via
     Zapier or a native Meta webhook, WhatsApp Cloud API, or any other
@@ -6381,7 +6447,11 @@ def ingest_inbound_lead(
         fields.get("source_detail"), fields.get("lead_source"), fields.get("source"), fields.get("channel")
     ) if (category := _arthaleads_source(value))), "") if source == "arthaleads" else ""
     route = None
-    if source == "arthaleads" and allow_call and arthaleads_source:
+    no_call_reason = "no_matching_enabled_route"
+    if source == "arthaleads" and allow_call and requested_agent_id:
+        # ArthaLeads routed the lead and named the agent: honour exactly that.
+        route, no_call_reason = _arthaleads_agent_route(account_id, requested_agent_id, arthaleads_source)
+    elif source == "arthaleads" and allow_call and arthaleads_source:
         try:
             routing = json.loads(get_setting(_ARTHALEADS_INBOUND_ROUTING, account_id) or "{}")
         except (TypeError, ValueError):
@@ -6390,6 +6460,10 @@ def ingest_inbound_lead(
     if source == "arthaleads":
         fields["channel_source"] = arthaleads_source or "unknown"
     campaign_id = get_or_create_instant_campaign(account_id, source, route)
+    if source == "arthaleads" and route and campaign_id is None:
+        # The route is fine but its campaign was paused by a person or the
+        # carrier circuit breaker; that pause wins.
+        no_call_reason = "auto_call_campaign_paused"
     if campaign_id is None and source != "arthaleads":
         return {"ok": False, "reason": "auto_call_not_ready_or_paused"}
     fields["source"] = source
@@ -6507,7 +6581,7 @@ def ingest_inbound_lead(
                 ).fetchone()
         queued = bool(campaign_id and contact_id)
         if source == "arthaleads" and not queued:
-            return {"ok": True, "reason": "no_matching_enabled_route", "imported": True,
+            return {"ok": True, "reason": no_call_reason if allow_call else "auto_call_off", "imported": True,
                     "contactId": contact_row["id"], "queued": False}
         return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id,
                 "contactId": contact_row["id"] if source == "arthaleads" else None,

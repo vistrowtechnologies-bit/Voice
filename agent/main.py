@@ -8380,6 +8380,15 @@ async def entrypoint(ctx: JobContext) -> None:
                         if saved_call_id else ""
                     ),
                     "recording_mime_type": "audio/wav",
+                    # For tools.crm_outcome / the ArthaLeads bridge.
+                    "direction": call_context.get("direction") or "",
+                    "arthaleads_lead_id": str(
+                        (call_context.get("custom_fields") or {}).get("arthaleads_lead_id") or ""
+                    ),
+                    "site_visit": lead_data.get("site_visit") or {},
+                    "callback": lead_data.get("callback") or {},
+                    "opted_out": bool(lead_data.get("opted_out")),
+                    "timezone": ((cfg.get("_availability_config") or {}).get("timezone") or "Asia/Kolkata"),
                 },
                 call_id=saved_call_id,
             )

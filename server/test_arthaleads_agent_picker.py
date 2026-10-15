@@ -26,13 +26,15 @@ class ArthaLeadsAgentPickerTests(unittest.TestCase):
         )
         return fn, db
 
-    def test_returns_only_active_agents_with_a_named_knowledge_base(self):
+    def test_returns_only_live_agents_with_a_named_knowledge_base(self):
         fn, db = self._endpoint(
             agents=[
-                {"id": 7, "publicId": "4829301756", "name": "Siya Khopoli", "status": "active", "kbId": 3,
+                # Real stored values: agents are 'live', 'paused' or 'draft'.
+                {"id": 7, "publicId": "4829301756", "name": "Siya Khopoli", "status": "live", "kbId": 3,
                  "systemPrompt": "private prompt"},
-                {"id": 8, "name": "Paused", "status": "inactive", "kbId": 3},
-                {"id": 9, "name": "No knowledge", "status": "active", "kbId": None},
+                {"id": 8, "name": "Paused", "status": "paused", "kbId": 3},
+                {"id": 10, "name": "Draft", "status": "draft", "kbId": 3},
+                {"id": 9, "name": "No knowledge", "status": "live", "kbId": None},
             ],
             knowledge_bases=[{"id": 3, "name": "Khopoli project"}],
         )
