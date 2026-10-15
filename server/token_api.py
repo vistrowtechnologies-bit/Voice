@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import base64
 import hashlib
 import hmac
@@ -17,6 +18,7 @@ import urllib.request
 from pathlib import Path
 
 import admin_db
+import ip_blocklist
 import agent_builder
 import mfa
 import vendor_health
@@ -176,6 +178,9 @@ async def no_store_api_responses(request: Request, call_next):
     return response
 
 
+ACCOUNT_SUSPENDED_MESSAGE = "This workspace is suspended. Contact support@vistrowvoice.com to restore access."
+
+
 # "View as" (a super-admin support session) can look at everything and fix
 # a customer's setup, but never touch what is the customer's own: keys,
 # billing, team, profile and sign-in, recordings, numbers, integration
@@ -190,6 +195,12 @@ _SUPPORT_BLOCKED_PATHS = re.compile(
     r"|^/telephony/(connect|disconnect)$"
     r"|^/widget/sites/[^/]+/regenerate-key$"
     r"|^/calls/[^/]+/push-to-arthaleads$"
+    # Admin audit 2026-10-15: anything that dials real numbers or spends the
+    # customer's credits (campaign create/edit/start/test-dial, test calls,
+    # AI analysis of a call).
+    r"|^/campaigns(/|$)"
+    r"|^/telephony/test-call$"
+    r"|^/calls/[^/]+/analyze$"
 )
 
 # An API key works for the product API (agents, calls, contacts, campaigns...)
@@ -278,6 +289,11 @@ async def require_session(request: Request, call_next):
             return JSONResponse({"detail": "Support session expired — please sign in again"}, status_code=401)
         if session.get("imp") and not _support_admin_still_signed_in(session):
             return JSONResponse({"detail": "Support session expired — please sign in again"}, status_code=401)
+        # A suspended workspace is locked out of everything, not only calls
+        # (admin audit 2026-10-15: suspend used to stop calls alone). "View
+        # as" still works so support can look into it.
+        if not session.get("imp") and (profile.get("account_status") or "active") == "suspended":
+            return JSONResponse({"detail": ACCOUNT_SUSPENDED_MESSAGE, "code": "account_suspended"}, status_code=403)
         # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
         request.state.user_id = session["uid"]
         request.state.account_id = session["aid"]
@@ -297,6 +313,8 @@ async def require_session(request: Request, call_next):
         resolved = calls_db.resolve_api_key_with_scopes(api_key)
         if resolved is not None:
             account_id, scopes = resolved
+            if calls_db.account_status(account_id) == "suspended":
+                return JSONResponse({"detail": ACCOUNT_SUSPENDED_MESSAGE, "code": "account_suspended"}, status_code=403)
             request.state.account_id = account_id
             request.state.user_id = calls_db.account_owner_user_id(account_id)
             request.state.impersonator_id = None
@@ -456,6 +474,29 @@ def _live_session(request: Request) -> dict | None:
 # cookie's own `samesite=lax` is what's actually gating cross-site use of it).
 # If a future frontend calls this API cross-origin with cookies, it needs
 # allow_credentials=True + a real origin allowlist here, not a wildcard.
+# A blocked visitor can still reach sign-in and the admin panel, so the
+# platform owner can never lock themselves out (adding a block that covers
+# the admin's own IP is refused too); everything else answers 403.
+_IP_BLOCK_EXEMPT_PATHS = {"/healthz", "/auth/config", "/auth/login", "/auth/login/mfa", "/auth/me", "/auth/logout"}
+_IP_BLOCK_EXEMPT_PREFIXES = ("/admin/", "/auth/oauth/")
+IP_BLOCKED_MESSAGE = "Access from your network has been blocked."
+
+
+@app.middleware("http")
+async def ip_block_guard(request: Request, call_next):
+    """Admin IP blocklist (ip_blocklist.py). Registered before CORS so the
+    403 still carries CORS headers and the website/widget can show it."""
+    path = request.url.path
+    if request.method == "OPTIONS" or path in _IP_BLOCK_EXEMPT_PATHS or path.startswith(_IP_BLOCK_EXEMPT_PREFIXES):
+        return await call_next(request)
+    ip = _client_ip(request)
+    block_id = ip_blocklist.blocked_by(ip)
+    if block_id is not None:
+        logger.info("blocked request from %s (block %s): %s %s", ip, block_id, request.method, path)
+        return JSONResponse({"detail": IP_BLOCKED_MESSAGE, "code": "ip_blocked"}, status_code=403)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -772,6 +813,11 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         .with_grants(api.VideoGrants(room_join=True, room=req.room))
         .to_jwt()
     )
+    # For the admin call page and the IP blocklist.
+    await asyncio.to_thread(
+        ip_blocklist.record_visitor, req.room, client_ip, request.headers.get("user-agent", ""),
+        "website demo" if agent_id is None else "dashboard test",
+    )
     return {"token": token, "url": livekit_url}
 
 
@@ -849,6 +895,10 @@ def _set_session_cookie(
     when a session is re-issued). new_sign_in: a real sign-in, so a new
     device gets a security email."""
     profile = calls_db.get_user_by_id(user_id)
+    # Every sign-in path (password, two-step, Google, GitHub, reset, invite)
+    # and every session re-issue goes through here.
+    if profile is not None and (profile.get("account_status") or "active") == "suspended":
+        raise HTTPException(403, ACCOUNT_SUSPENDED_MESSAGE)
     device_id = request.cookies.get(_DEVICE_COOKIE_NAME, "") if request is not None else ""
     if not re.fullmatch(r"[A-Za-z0-9_-]{20,160}", device_id):
         device_id = secrets.token_urlsafe(32)
@@ -2152,6 +2202,8 @@ def auth_me(request: Request, response: Response) -> dict:
     profile = calls_db.get_user_by_id(session["uid"])
     if profile is None or int(profile.get("session_version") or 1) != int(session.get("sv") or 1):
         raise HTTPException(401, "Session expired — please sign in again")
+    if not session.get("imp") and (profile.get("account_status") or "active") == "suspended":
+        raise HTTPException(403, ACCOUNT_SUSPENDED_MESSAGE)
     if session.get("sid"):
         if not calls_db.validate_user_session(session["sid"], session["uid"]):
             raise HTTPException(401, "This device was signed out")
@@ -3035,7 +3087,69 @@ def admin_call_detail(call_id: int, admin: dict = Depends(require_platform_owner
     detail = admin_db.call_detail(call_id)
     if detail is None:
         raise HTTPException(404, "Call not found")
+    try:
+        detail["visitor"] = ip_blocklist.visitor_for_room(detail.get("room_name"))
+    except Exception:
+        logger.exception("visitor lookup failed for call %s", call_id)
+        detail["visitor"] = None
     return detail
+
+
+@app.get("/admin/pricing")
+def admin_pricing(admin: dict = Depends(require_platform_owner)) -> dict:
+    """What billing actually charges, read from the code that bills, so the
+    admin Settings page can't drift (it showed phone at 1.5x; it is 1x)."""
+    return {
+        "plans": [{"plan": k, "priceInr": v["price_inr"], "credits": v["credits"]}
+                  for k, v in plan_policy.PLANS.items() if v.get("price_inr")],
+        "channelRates": {k: 1.0 for k in calls_db._CREDIT_RATE_SETTINGS},
+        "voiceTiers": dict(calls_db._VOICE_TIER_MULTIPLIERS),
+        "modelTiers": dict(calls_db._MODEL_TIER_MULTIPLIERS),
+        "minCreditsPerMinute": calls_db._MIN_CREDITS_PER_MINUTE,
+        "overageMultiplier": calls_db.OVERAGE_RATE_MULTIPLIER,
+    }
+
+
+@app.get("/admin/ip-blocks")
+def admin_list_ip_blocks(admin: dict = Depends(require_platform_owner)) -> dict:
+    return {"blocks": ip_blocklist.list_blocks()}
+
+
+class AdminIpBlockRequest(BaseModel):
+    ip: str
+    reason: str = ""
+    expiresDays: int | None = None
+
+
+@app.post("/admin/ip-blocks")
+def admin_add_ip_block(req: AdminIpBlockRequest, request: Request, admin: dict = Depends(require_platform_owner)) -> dict:
+    reason = _admin_reason(req.reason)
+    try:
+        network = ip_blocklist.normalize(req.ip)
+        own = _client_ip(request)
+        if ip_blocklist._parse_ip(own) is not None and ipaddress.ip_address(own) in ipaddress.ip_network(network):
+            raise HTTPException(400, "That would block your own connection. Pick a different IP or range.")
+        added = ip_blocklist.add_block(network, reason, admin["email"], req.expiresDays)
+    except ip_blocklist.InvalidIp as exc:
+        raise HTTPException(400, str(exc)) from exc
+    admin_db.write_audit(admin["user_id"], admin["email"], "ip_block", None,
+                         detail=f"blocked {added['network']}"
+                                + (f" for {req.expiresDays} days" if req.expiresDays else "") + f". {reason}")
+    return {"ok": True, **added}
+
+
+class AdminIpUnblockRequest(BaseModel):
+    reason: str = ""
+
+
+@app.post("/admin/ip-blocks/{block_id}/remove")
+def admin_remove_ip_block(block_id: int, req: AdminIpUnblockRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    reason = _admin_reason(req.reason)
+    network = ip_blocklist.remove_block(block_id)
+    if network is None:
+        raise HTTPException(404, "Block not found")
+    admin_db.write_audit(admin["user_id"], admin["email"], "ip_unblock", None, detail=f"unblocked {network}. {reason}")
+    return {"ok": True}
 
 
 @app.get("/admin/analytics")
@@ -3223,6 +3337,15 @@ def _admin_reason(reason: str | None) -> str:
     return reason
 
 
+def _admin_account_or_404(account_id: int) -> dict:
+    """A write to an account that doesn't exist used to return 200 (and
+    adjust_credits left an orphan settings row)."""
+    detail = admin_db.account_detail(account_id)
+    if detail is None:
+        raise HTTPException(404, "Account not found")
+    return detail
+
+
 class AdminCreditsRequest(BaseModel):
     total: int
     reason: str = ""
@@ -3231,8 +3354,13 @@ class AdminCreditsRequest(BaseModel):
 @app.post("/admin/accounts/{account_id}/credits")
 def admin_set_credits(account_id: int, req: AdminCreditsRequest, admin: dict = Depends(require_platform_owner)) -> dict:
     reason = _admin_reason(req.reason)
+    if req.total < 0:
+        raise HTTPException(400, "Credits can't be negative")
+    _admin_account_or_404(account_id)
+    previous = calls_db.billing_summary(account_id).get("creditsTotal")
     admin_db.adjust_credits(account_id, req.total)
-    admin_db.write_audit(admin["user_id"], admin["email"], "adjust_credits", account_id, detail=f"set credits_total={req.total}. {reason}")
+    admin_db.write_audit(admin["user_id"], admin["email"], "adjust_credits", account_id,
+                         detail=f"credits_total {previous} -> {req.total}. {reason}")
     return admin_db.account_detail(account_id)
 
 
@@ -3246,6 +3374,7 @@ def admin_set_plan(account_id: int, req: AdminPlanRequest, admin: dict = Depends
     reason = _admin_reason(req.reason)
     if req.plan not in admin_db.PLAN_PRICING:
         raise HTTPException(400, "Unknown plan")
+    _admin_account_or_404(account_id)
     admin_db.change_plan(account_id, req.plan)
     calls_db.end_trial(account_id)
     admin_db.write_audit(admin["user_id"], admin["email"], "change_plan", account_id, detail=f"plan={req.plan}. {reason}")
@@ -3262,6 +3391,9 @@ def admin_set_status(account_id: int, req: AdminStatusRequest, admin: dict = Dep
     reason = _admin_reason(req.reason)
     if req.status not in ("active", "suspended"):
         raise HTTPException(400, "Status must be active or suspended")
+    target = _admin_account_or_404(account_id)
+    if req.status == "suspended" and (target.get("account") or target).get("is_platform_owner"):
+        raise HTTPException(400, "The platform owner's own workspace can't be suspended")
     admin_db.set_account_status(account_id, req.status)
     admin_db.write_audit(admin["user_id"], admin["email"], "set_status", account_id, detail=f"status={req.status}. {reason}")
     return admin_db.account_detail(account_id)
@@ -3273,6 +3405,7 @@ class AdminNotesRequest(BaseModel):
 
 @app.post("/admin/accounts/{account_id}/notes")
 def admin_set_notes(account_id: int, req: AdminNotesRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    _admin_account_or_404(account_id)
     admin_db.set_account_notes(account_id, req.notes)
     admin_db.write_audit(admin["user_id"], admin["email"], "add_note", account_id, detail="updated internal notes")
     return admin_db.account_detail(account_id)
@@ -7287,7 +7420,7 @@ class WidgetTokenRequest(BaseModel):
 
 
 @app.post("/widget/token")
-async def create_widget_token(req: WidgetTokenRequest) -> dict:
+async def create_widget_token(req: WidgetTokenRequest, request: Request) -> dict:
     """Public, unauthenticated endpoint the embeddable widget.js calls from
     an arbitrary third-party website — auth is the site key itself, not a
     dashboard session. Issues a LiveKit token for a fresh room pre-tagged
@@ -7405,6 +7538,9 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
         .with_name(req.identity)
         .with_grants(api.VideoGrants(room_join=True, room=room))
         .to_jwt()
+    )
+    await asyncio.to_thread(
+        ip_blocklist.record_visitor, room, _client_ip(request), request.headers.get("user-agent", ""), "widget",
     )
     return {"token": token, "url": livekit_url, "room": room}
 

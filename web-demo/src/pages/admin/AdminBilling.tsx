@@ -49,7 +49,7 @@ export function AdminBilling() {
         />
         <StatCard label="Contracted MRR (active subscriptions)" value={fmtINR(d.mrr)} icon="payments" />
         <StatCard label="Paying accounts" value={d.payingAccounts.toLocaleString('en-IN')} sub="active subscription or paid invoice (35 d)" icon="verified" />
-        <StatCard label="ARPA" value={fmtINR(d.arpa)} icon="account_balance" />
+        <StatCard label="ARPA (last 30 days)" value={fmtINR(d.arpa)} sub="revenue ex GST ÷ paying customers" icon="account_balance" />
       </div>
 
       <AdminCard className="mt-6 p-5">
@@ -99,7 +99,7 @@ export function AdminBilling() {
         </AdminCard>
 
         <AdminCard className="overflow-hidden">
-          <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Revenue by plan (MRR)</div>
+          <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Customers by plan</div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -117,7 +117,7 @@ export function AdminBilling() {
                       <PlanPill plan={p.plan} />
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums">{p.accounts}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-text-muted">{p.price ? fmtINR(p.price) : 'Free'}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-text-muted">{p.price ? fmtINR(p.price) : '-'}</td>
                     <td className="px-5 py-3 text-right font-semibold tabular-nums">{fmtINR(p.mrr)}</td>
                   </tr>
                 ))}

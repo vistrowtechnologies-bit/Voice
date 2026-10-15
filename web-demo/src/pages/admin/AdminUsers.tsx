@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminUsers, type AdminUserRow } from '../../lib/adminApi'
-import { AdminCard, EmptyState, ErrorState, fmtDate, PageHeader, Pill, SearchInput, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, ErrorState, fmtDate, PageHeader, Pill, ROW_FOCUS, rowLinkProps, SearchInput, timeAgo } from '../../components/AdminUI'
 
 export function AdminUsers() {
   const [search, setSearch] = useState('')
@@ -54,8 +54,9 @@ export function AdminUsers() {
               {rows.map((u) => (
                 <tr
                   key={u.id}
-                  onClick={() => navigate(`/admin/accounts/${u.account_id}`)}
-                  className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
+                  {...rowLinkProps(() => navigate(`/admin/accounts/${u.account_id}`))}
+                  className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high ${ROW_FOCUS}`}
+
                 >
                   <td className="px-4 py-3">
                     <div className="font-semibold">{u.name}</div>

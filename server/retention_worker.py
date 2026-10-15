@@ -19,6 +19,7 @@ import threading
 import time
 
 import calls_db
+import ip_blocklist
 
 logger = logging.getLogger("vistrow-retention")
 
@@ -59,6 +60,13 @@ def run_purge_now() -> int:
                         events, calls_db.ERROR_EVENT_RETENTION_DAYS)
     except Exception:
         logger.exception("error_events purge failed")
+    try:
+        visitors = ip_blocklist.purge_old_visitor_ips()
+        if visitors:
+            logger.info("retention: purged %s visitor IP(s) older than %s days",
+                        visitors, ip_blocklist.VISITOR_IP_RETENTION_DAYS)
+    except Exception:
+        logger.exception("visitor_ips purge failed")
     return total
 
 

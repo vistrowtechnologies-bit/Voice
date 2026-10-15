@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { adminAccounts, type AdminAccountRow } from '../../lib/adminApi'
-import { AdminCard, EmptyState, ErrorState, fmtINR, FilterChip, MiniBar, PageHeader, PlanPill, SearchInput, StatusPill, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, ErrorState, fmtINR, FilterChip, InternalPill, MiniBar, PageHeader, PlanPill, ROW_FOCUS, rowLinkProps, SearchInput, StatusPill, timeAgo } from '../../components/AdminUI'
 
 const PLANS = ['free', 'starter', 'growth', 'scale']
 
@@ -43,6 +43,8 @@ export function AdminAccounts() {
     }, 200)
     return () => clearTimeout(t)
   }, [search, plan, status, activity, attempt])
+
+  const customers = rows.filter((r) => !r.internal)
 
   return (
     <>
@@ -96,8 +98,9 @@ export function AdminAccounts() {
               {rows.map((a) => (
                 <tr
                   key={a.id}
-                  onClick={() => navigate(`/admin/accounts/${a.id}`)}
-                  className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
+                  {...rowLinkProps(() => navigate(`/admin/accounts/${a.id}`))}
+                  className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high ${ROW_FOCUS}`}
+
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 font-semibold">
@@ -106,13 +109,14 @@ export function AdminAccounts() {
                       </span>
                       {a.name}
                       {a.is_platform_owner ? <span className="text-[10px] text-cyan">★</span> : null}
+                      {a.internal ? <InternalPill /> : null}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-text-muted">{a.owner_email || '-'}</td>
                   <td className="px-4 py-3 text-text-muted">{a.source || '-'}</td>
                   <td className="px-4 py-3 text-text-muted">{a.industry || '-'}</td>
                   <td className="px-4 py-3">
-                    <PlanPill plan={a.plan} />
+                    <PlanPill plan={a.effective_plan ?? a.plan} />
                   </td>
                   <td className="px-4 py-3">
                     <StatusPill status={a.status} />
@@ -120,7 +124,11 @@ export function AdminAccounts() {
                   <td className="px-4 py-3 text-right tabular-nums">{a.users}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{a.agents}</td>
                   <td className="px-4 py-3">
-                    <MiniBar used={a.credits_used} total={a.credits_total} />
+                    {a.credits_used === null || a.credits_total === null ? (
+                      <span className="text-[11px] text-text-muted">-</span>
+                    ) : (
+                      <MiniBar used={a.credits_used} total={a.credits_total} />
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{a.calls.toLocaleString()}</td>
                   <td className="px-4 py-3 text-text-muted">{timeAgo(a.last_call)}</td>
@@ -136,9 +144,10 @@ export function AdminAccounts() {
 
       {rows.length > 0 && (
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <MiniStat label="Active tenants" value={rows.filter((r) => r.calls > 0).length.toLocaleString()} />
-          <MiniStat label="Est. monthly revenue" value={fmtINR(rows.reduce((s, r) => s + r.mrr, 0))} />
-          <MiniStat label="Suspended" value={rows.filter((r) => r.status === 'suspended').length.toLocaleString()} />
+          {/* Customers on this page only: internal accounts are left out. */}
+          <MiniStat label="Active customers (this page)" value={customers.filter((r) => r.calls > 0).length.toLocaleString()} />
+          <MiniStat label="Subscription revenue / month (this page)" value={fmtINR(customers.reduce((s, r) => s + r.mrr, 0))} />
+          <MiniStat label="Suspended (this page)" value={customers.filter((r) => r.status === 'suspended').length.toLocaleString()} />
         </div>
       )}
     </>

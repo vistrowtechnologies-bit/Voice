@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { adminUsage, type AdminUsage as Data, type AdminUsageRow } from '../../lib/adminApi'
-import { AdminCard, EmptyState, ErrorState, fmtINR, PageHeader, PlanPill, StatCard } from '../../components/AdminUI'
+import { AdminCard, EmptyState, ErrorState, fmtINR, InternalPill, PageHeader, PlanPill, StatCard } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
 type SortKey = keyof Omit<AdminUsageRow, 'id'>
@@ -132,7 +132,12 @@ export function AdminUsage() {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <StatCard label="Minutes" value={num(data.totals.minutes)} sub={`${num(data.totals.calls)} calls`} icon="call" />
             <StatCard label="Revenue (net, ex-GST)" value={fmtINR(data.totals.revenueInr)} icon="currency_rupee" />
-            <StatCard label="Vendor cost (estimated)" value={fmtINR(data.totals.estCostInr)} sub={`incl. ${num(data.totals.testMinutes)} test min`} icon="receipt_long" />
+            <StatCard
+              label="Vendor cost (estimated, customers)"
+              value={fmtINR(data.totals.estCostInr)}
+              sub={`incl. ${num(data.totals.testMinutes)} test min${data.internalTotals ? ` · internal accounts ~${fmtINR(data.internalTotals.estCostInr)} more` : ''}`}
+              icon="receipt_long"
+            />
             <StatCard label="Margin (estimated)" value={fmtINR(data.totals.marginInr)} icon="savings" />
           </div>
 
@@ -163,6 +168,7 @@ export function AdminUsage() {
                       <tr key={r.id} className="border-b border-border/60 last:border-0">
                         <td className="px-4 py-3 font-semibold">
                           <Link to={`/admin/accounts/${r.id}`} className="text-primary hover:underline">{r.name}</Link>
+                          {r.internal ? <span className="ml-2"><InternalPill /></span> : null}
                         </td>
                         <td className="px-4 py-3"><PlanPill plan={r.plan} /></td>
                         <td className="px-4 py-3 text-right tabular-nums">{num(r.calls)}</td>
@@ -178,7 +184,7 @@ export function AdminUsage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-border bg-surface-high/50 font-semibold">
-                      <td className="px-4 py-3" colSpan={2}>Total ({rows.length} accounts)</td>
+                      <td className="px-4 py-3" colSpan={2}>Total, customers ({rows.filter((r) => !r.internal).length} accounts)</td>
                       <td className="px-4 py-3 text-right tabular-nums">{num(data.totals.calls)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{num(data.totals.minutes)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{num(data.totals.credits)}</td>

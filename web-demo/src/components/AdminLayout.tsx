@@ -32,6 +32,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
       { to: '/admin/support', label: 'Support inbox', icon: 'support_agent' },
       { to: '/admin/audit', label: 'Audit log', icon: 'manage_search' },
       { to: '/admin/privacy-requests', label: 'Privacy Requests', icon: 'policy' },
+      { to: '/admin/ip-blocks', label: 'Blocked IPs', icon: 'block' },
       { to: '/admin/health', label: 'System Health', icon: 'health_and_safety' },
       { to: '/admin/vendor-credits', label: 'Vendor Credits', icon: 'account_balance_wallet' },
       { to: '/admin/settings', label: 'Settings', icon: 'settings' },

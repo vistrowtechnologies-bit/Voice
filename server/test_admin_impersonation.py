@@ -297,10 +297,13 @@ class BlockListTests(unittest.TestCase):
                              ("POST", "/team/invite"), ("PATCH", "/profile"), ("POST", "/profile/avatar"),
                              ("POST", "/auth/login"), ("POST", "/calls/9/recording/delete"),
                              ("PATCH", "/telephony/numbers/2"), ("POST", "/integrations/zoho_crm/disconnect"),
-                             ("POST", "/storage/recordings/delete")):
+                             ("POST", "/storage/recordings/delete"),
+                             # Admin audit 2026-10-15: dialling or spending the customer's credits.
+                             ("POST", "/campaigns"), ("PATCH", "/campaigns/3"), ("POST", "/campaigns/3/test-dial"),
+                             ("POST", "/telephony/test-call"), ("POST", "/calls/9/analyze")):
             self.assertTrue(blocks(method, path), path)
         for method, path in (("GET", "/api-keys"), ("POST", "/auth/logout"), ("POST", "/agents"), ("PATCH", "/agents/4"),
-                             ("POST", "/integrations/zoho_crm/test"), ("POST", "/calls/9/analyze"), ("HEAD", "/billing")):
+                             ("POST", "/integrations/zoho_crm/test"), ("GET", "/campaigns"), ("HEAD", "/billing")):
             self.assertFalse(blocks(method, path), path)
 
 
