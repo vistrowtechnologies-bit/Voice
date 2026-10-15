@@ -341,6 +341,35 @@ class DatabaseBacked(unittest.TestCase):
         self.assertIn("Priya", opener)
         self.assertIn("In Telugu", opener)
 
+    def test_repeat_enquiry_is_called_again_and_its_redelivery_is_not(self):
+        """ArthaLeads sends a known person's new enquiry with the existing
+        lead_id plus enquiry_id (2026-10-15): keyed on lead_id alone it was
+        swallowed as 'already received' and never called."""
+        token = self.db.get_or_create_lead_webhook_token(self.aid)
+        ns = _token_api_namespace(self.db, Mock())
+        lead_id = os.urandom(6).hex()
+        base = {**CTWA_LEAD, "lead_id": lead_id, "agent_id": str(self.agent)}
+        first = asyncio.run(ns["leads_inbound"](self.aid, _request(base, token)))
+        self.assertTrue(first["queued"], first)
+        # That call happened and finished.
+        self.sql("UPDATE campaign_contacts SET status = 'done' WHERE id = ?", (first["contact_id"],))
+
+        enquiry = {**base, "enquiry_id": f"evt_re_{lead_id}_1792079265000",
+                   "custom_fields": {**base.get("custom_fields", {}), "repeat_enquiry": True}}
+        again = asyncio.run(ns["leads_inbound"](self.aid, _request(enquiry, token)))
+        self.assertTrue(again["queued"], again)
+        self.assertNotEqual(again["contact_id"], first["contact_id"])
+        fields = json.loads(self.sql("SELECT custom_fields FROM campaign_contacts WHERE id = ?",
+                                     (again["contact_id"],))["custom_fields"])
+        self.assertIn("- Enquired before: yes, this is a repeat enquiry", _agent_contact_notes().build_contact_notes(fields))
+
+        redelivered = asyncio.run(ns["leads_inbound"](self.aid, _request(enquiry, token)))
+        self.assertTrue(redelivered.get("deduped"), redelivered)
+        self.assertEqual(redelivered["contact_id"], again["contact_id"])
+        # And without enquiry_id the same lead stays deduped, as before.
+        plain = asyncio.run(ns["leads_inbound"](self.aid, _request(base, token)))
+        self.assertTrue(plain.get("deduped"), plain)
+
     def test_click_to_whatsapp_lead_reaches_the_agent_with_the_ad(self):
         _result, fields = self._deliver(CTWA_LEAD)
         notes_module = _agent_contact_notes()
