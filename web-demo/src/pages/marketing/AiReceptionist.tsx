@@ -380,6 +380,17 @@ export function AiReceptionist() {
                 </li>
               ))}
             </ul>
+            <p className="mt-4 text-sm leading-relaxed text-text-muted">
+              For callers in the south, see{' '}
+              <Link to="/languages/kannada" className="font-semibold text-primary underline-offset-4 hover:underline">
+                a Kannada receptionist for Bengaluru and Karnataka
+              </Link>{' '}
+              or{' '}
+              <Link to="/languages/telugu" className="font-semibold text-primary underline-offset-4 hover:underline">
+                a Telugu receptionist for Hyderabad and Andhra Pradesh
+              </Link>
+              ; both pages have short sample lines.
+            </p>
           </div>
           <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">

@@ -247,6 +247,7 @@ export const PRODUCT_DETAIL: Record<
           { icon: 'event_repeat', title: 'Appointment and visit reminders', body: 'Confirm or reschedule bookings so fewer slots go unused.', to: '/solutions/healthcare', link: 'Healthcare' },
           { icon: 'account_balance', title: 'EMI and payment reminders', body: 'Polite, consistent reminders to customers who already owe a payment, with every call logged.', to: '/solutions/finance', link: 'Finance and collections' },
           { icon: 'apartment', title: 'Follow-up on property enquiries', body: 'Call back brochure downloads and missed site visits.', to: '/solutions/real-estate', link: 'Real estate' },
+          { icon: 'phone_callback', title: 'Lead calls and callbacks', body: 'Qualify new enquiries and ring back people who asked for a later call, the routine part of a telecaller’s day.', to: '/ai-telecaller', link: 'AI telecaller' },
         ],
         note: 'Only call people you are permitted to call. Consent and regulatory obligations remain yours; Vistrow enforces the calling window and Do-Not-Call list you configure.',
       },
@@ -962,6 +963,7 @@ export const NAV: NavGroup[] = [
       { label: 'Voice AI platform', to: '/voice-ai-platform', icon: 'hub', desc: 'Every part of the platform, from builder to reports.' },
       { label: 'AI call center', to: '/ai-call-center', icon: 'support_agent', desc: 'First-line calls and follow-ups, with handoff.' },
       { label: 'AI voice bot', to: '/voice-bot', icon: 'record_voice_over', desc: 'What a voice bot is and how a call works.' },
+      { label: 'AI telecaller', to: '/ai-telecaller', icon: 'phone_callback', desc: 'Lead calls, follow-ups and callbacks.' },
     ],
   },
   {
@@ -1012,6 +1014,7 @@ export const FOOTER_COLUMNS = [
       { label: 'Voice AI platform', to: '/voice-ai-platform' },
       { label: 'AI call center', to: '/ai-call-center' },
       { label: 'AI voice bot', to: '/voice-bot' },
+      { label: 'AI telecaller', to: '/ai-telecaller' },
     ],
   },
   {
@@ -1128,6 +1131,9 @@ export interface LanguagePage {
   regionalCalls?: { title: string; body: string; to: string; link: string }[]
   /** Practical notes on script, dialect, numbers and testing for this language. */
   guide?: { title: string; body: string }[]
+  /** Short single lines (native script + English gloss), labelled on the page
+   * as written examples of how the agent phrases common moments. */
+  sampleLines?: { label: string; native: string; gloss: string }[]
   /** Further FAQs, appended after seoFaq. */
   extraFaqs?: { q: string; a: string }[]
   /** Links to registered pages that go deeper (solutions, compare, product, demo calls). */
@@ -1300,6 +1306,8 @@ export const LANGUAGES: LanguagePage[] = [
       'Hyderabad real estate, education, healthcare, and service enquiries',
       'Inbound calls from Andhra Pradesh and Telangana customers',
       'Outbound confirmation, reminder, and lead qualification campaigns',
+      'Clinic and hospital appointment lines in Vijayawada, Visakhapatnam, Guntur, Warangal and Tirupati',
+      'Coaching, college and admission enquiries from Telugu-speaking families',
     ],
     callBehaviors: [
       'Keeps the conversation in Telugu while understanding English product terms',
@@ -1328,6 +1336,34 @@ export const LANGUAGES: LanguagePage[] = [
       { title: 'Clinic and diagnostic bookings', body: 'Appointment and timing calls for clinics in Andhra Pradesh and Telangana, where many patients would rather not navigate an English menu.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
       { title: 'Hyderabad property enquiries', body: 'Buyer calls about projects, budgets and site visits, qualified in Telugu before your sales team calls back.', to: '/solutions/real-estate/telugu-ai-calling-agent-hyderabad-real-estate', link: 'Telugu real estate calling' },
       { title: 'Admissions and service enquiries', body: 'Course, fee and timing questions answered from your approved information, around the clock.', to: '/product/inbound', link: 'Inbound call answering' },
+      { title: 'Lead follow-ups across both states', body: 'New enquiries from Hyderabad, Vijayawada or Vizag called back in Telugu, qualified, and handed to your team with a callback time.', to: '/ai-telecaller', link: 'AI telecaller for lead calls' },
+      { title: 'Front-desk calls', body: 'Timings, directions and bookings for clinics, salons and service centres, with a transfer to a person on phone calls.', to: '/ai-receptionist', link: 'AI receptionist' },
+      { title: 'Website visitors', body: 'A visitor on your Telugu or English site taps to talk and is answered in Telugu, no phone number or app needed.', to: '/product/widget', link: 'Website call widget' },
+    ],
+    sampleLines: [
+      { label: 'Greeting', native: 'నమస్కారం! నేను Artha, మీకు ఎలా సహాయం చేయగలను?', gloss: 'Hello! I’m Artha, how can I help you?' },
+      { label: 'When the caller is busy', native: 'ఇప్పుడు busy గా ఉంటే, ఏ టైమ్ లో call చేయమంటారు?', gloss: 'If you’re busy now, what time should we call?' },
+      { label: 'A question outside the knowledge base', native: 'ఆ విషయం మా team తో confirm చేసి మీకు చెప్తాము.', gloss: 'We’ll confirm that with our team and get back to you.' },
+      { label: 'Transfer on a phone call', native: 'ఒక్క నిమిషం, మిమ్మల్ని మా sales team కి connect చేస్తాను.', gloss: 'One minute, I’ll connect you to our sales team.' },
+    ],
+    guide: [
+      { title: 'Script and respect', body: 'Write the welcome message in Telugu script, opening with “నమస్కారం”, rather than in romanised Telugu. Callers expect “గారు” after their name; say so in the prompt, as in the sample above, and the agent keeps doing it.' },
+      { title: 'Telangana and Andhra speech', body: 'Hyderabad Telugu borrows Hindi and Urdu words, while coastal Andhra and Rayalaseema callers sound different again. Some Hyderabad callers move to Hindi altogether, and the agent can follow them there. Test with callers from each region you serve before launch.' },
+      { title: 'Numbers and units', body: 'Amounts are usually said in lakhs and crores, often in English, and Hyderabad plots are commonly quoted in square yards. Put the units you actually use into the knowledge base and post-call fields so budgets and sizes are captured the way your team reads them.' },
+    ],
+    extraFaqs: [
+      { q: 'Does the agent understand Hyderabad Telugu mixed with Hindi and English?', a: 'It follows everyday spoken Telugu with English words inside a sentence, and it can switch to Hindi or English when the caller does. Speech differs across Telangana, coastal Andhra and Rayalaseema, so run test calls with callers from your regions and tighten the prompt where it mishears.' },
+      { q: 'Can a Telugu call be transferred to someone on my team?', a: 'On phone calls, yes. Set a transfer number and the agent dials your colleague into the call and stays on until they answer; if nobody picks up, it takes a callback request. Website widget calls cannot be transferred to a phone, so the agent captures a callback number.' },
+      { q: 'Can it capture plot sizes and budgets the way Hyderabad buyers say them?', a: 'Yes, if you set it up. Add the units you sell in, such as square yards or BHK, to the knowledge base, and define post-call fields for size and budget. The values are then pulled from each transcript for your sales team.' },
+    ],
+    related: [
+      { to: '/demo-calls/telugu-website-widget-call', label: 'Telugu website-widget demo call' },
+      { to: '/solutions/real-estate/telugu-ai-calling-agent-hyderabad-real-estate', label: 'Telugu real estate calling in Hyderabad' },
+      { to: '/ai-receptionist', label: 'AI receptionist' },
+      { to: '/ai-telecaller', label: 'AI telecaller' },
+      { to: '/solutions/healthcare', label: 'Clinic appointment calls' },
+      { to: '/languages/kannada', label: 'Kannada calling' },
+      { to: '/languages/tamil', label: 'Tamil calling' },
     ],
   },
   {
@@ -1342,6 +1378,8 @@ export const LANGUAGES: LanguagePage[] = [
       'Bengaluru and Karnataka property enquiries where English-only calling loses context',
       'Support and booking calls for local customers who prefer Kannada',
       'Campaign follow-ups where the agent must understand Kannada plus English terms',
+      'Clinic, diagnostic lab and hospital lines in Mysuru, Mangaluru, Hubballi-Dharwad and Belagavi',
+      'Coaching, college and admission enquiries from Kannada-speaking families',
     ],
     callBehaviors: [
       'Opens in Kannada and handles natural Kannada-English code-switching',
@@ -1370,6 +1408,34 @@ export const LANGUAGES: LanguagePage[] = [
       { title: 'Bengaluru property enquiries', body: 'Buyer calls about projects, budgets and site visits in Whitefield, Sarjapur or Hebbal, answered in Kannada.', to: '/solutions/real-estate/kannada-ai-voice-bot-bangalore-real-estate', link: 'Kannada real estate calling' },
       { title: 'Clinic and service bookings', body: 'Appointment calls for clinics and service centres across Karnataka, booked into your real availability.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
       { title: 'Support lines', body: 'Status and how-to calls from customers who would rather not switch to English, with a transfer when a person is needed.', to: '/solutions/support', link: 'Customer support calls' },
+      { title: 'Lead follow-ups beyond Bengaluru', body: 'Enquiries from Mysuru, Hubballi or Mangaluru called back in Kannada, qualified, and handed to your team with a callback time.', to: '/ai-telecaller', link: 'AI telecaller for lead calls' },
+      { title: 'Front-desk calls', body: 'Timings, directions and bookings for clinics, salons and service centres, with a transfer to a person on phone calls.', to: '/ai-receptionist', link: 'AI receptionist' },
+      { title: 'Website visitors', body: 'A visitor on your site taps to talk and is answered in Kannada, no phone number or app needed.', to: '/product/widget', link: 'Website call widget' },
+    ],
+    sampleLines: [
+      { label: 'Greeting', native: 'ನಮಸ್ಕಾರ! ನಾನು Artha, ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ?', gloss: 'Hello! I’m Artha, how can I help you?' },
+      { label: 'When the caller is busy', native: 'ಈಗ busy ಇದ್ರೆ, ಯಾವ ಸಮಯಕ್ಕೆ call ಮಾಡಲಿ?', gloss: 'If you’re busy now, what time shall we call?' },
+      { label: 'A question outside the knowledge base', native: 'ಆ ವಿಷಯ ನಮ್ಮ team ಹತ್ರ confirm ಮಾಡಿ ನಿಮಗೆ ತಿಳಿಸ್ತೀವಿ.', gloss: 'We’ll confirm that with our team and let you know.' },
+      { label: 'Transfer on a phone call', native: 'ಒಂದು ನಿಮಿಷ, ನಿಮ್ಮನ್ನು ನಮ್ಮ sales team ಗೆ connect ಮಾಡ್ತೀನಿ.', gloss: 'One minute, I’ll connect you to our sales team.' },
+    ],
+    guide: [
+      { title: 'Script and welcome line', body: 'Write the welcome message in Kannada script, opening with “ನಮಸ್ಕಾರ”, rather than in romanised Kannada. Keep the English words your callers already use, such as “site visit” or “EMI”, instead of formal Kannada terms nobody says on the phone.' },
+      { title: 'Bengaluru and the rest of Karnataka', body: 'Bengaluru calls are heavily mixed with English, and some callers move to Hindi, Tamil or Telugu, which the agent can follow. Calls from Mysuru, Hubballi-Dharwad or Belagavi tend to stay in Kannada and sound different. Test with callers from each region you serve.' },
+      { title: 'Localities and project names', body: 'Add the area names callers will say, such as Whitefield, Sarjapur Road, Electronic City, Hebbal or Kanakapura Road, along with your project and product names, to the knowledge base so the agent recognises them and answers about the right place.' },
+    ],
+    extraFaqs: [
+      { q: 'Does the agent understand Bengaluru Kannada mixed with English?', a: 'It follows everyday spoken Kannada with English words inside a sentence, and keeps replying in Kannada unless the caller moves to English. Speech differs between Bengaluru, Mysuru, coastal and North Karnataka, so run test calls with callers from your regions before launch.' },
+      { q: 'Can a Kannada call be transferred to someone on my team?', a: 'On phone calls, yes. Set a transfer number and the agent dials your colleague into the call and stays on until they answer; if nobody picks up, it takes a callback request. Website widget calls cannot be transferred to a phone, so the agent captures a callback number.' },
+      { q: 'Does it speak Tulu or Konkani?', a: 'No. The agent speaks Kannada, English and nine other Indian languages, but not Tulu or Konkani. Coastal Karnataka callers usually use Kannada or English on business calls; test with a few of them if that region matters to you.' },
+    ],
+    related: [
+      { to: '/demo-calls/kannada-inbound-property-enquiry', label: 'Kannada property-enquiry demo call' },
+      { to: '/solutions/real-estate/kannada-ai-voice-bot-bangalore-real-estate', label: 'Kannada real estate calling in Bengaluru' },
+      { to: '/ai-receptionist', label: 'AI receptionist' },
+      { to: '/ai-telecaller', label: 'AI telecaller' },
+      { to: '/product/inbound', label: 'Inbound call answering' },
+      { to: '/languages/telugu', label: 'Telugu calling' },
+      { to: '/languages/tamil', label: 'Tamil calling' },
     ],
   },
   {
