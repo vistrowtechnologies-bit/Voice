@@ -191,19 +191,18 @@ function Question({ label, hint, optional, error, children }: { label: string; h
 /** Live summary on the right that fills in as the customer answers. */
 function WorkspacePreview({ a, agentName }: { a: Answers; agentName: string }) {
   const industry = a.industry === 'Other' ? a.industryOther : a.industry
-  const initials = (a.company.trim() || 'Your company').split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')
-  const empty = 'rounded-md bg-surface-high text-transparent select-none'
+  const initials = a.company.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')
   return (
     <div className="overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_24px_60px_-30px_color-mix(in_srgb,var(--color-primary)_45%,transparent)]">
       <div className="relative h-24 bg-[radial-gradient(120%_140%_at_0%_0%,color-mix(in_srgb,var(--color-primary)_55%,transparent),transparent_60%),radial-gradient(120%_140%_at_100%_100%,color-mix(in_srgb,var(--color-cyan)_45%,transparent),transparent_55%)]">
         <span className="absolute -bottom-7 left-6 flex h-14 w-14 items-center justify-center rounded-2xl border-4 border-surface bg-primary font-display text-lg font-bold text-white">
-          {initials}
+          {initials || <Icon name="business" className="text-[24px]" />}
         </span>
       </div>
       <div className="px-6 pb-6 pt-10">
         <p className="font-display text-xl font-semibold tracking-tight">{a.company.trim() || 'Your company'}</p>
         <p className="mt-1 text-sm text-text-muted">
-          {industry || <span className={empty}>Industry here</span>}
+          {industry || 'Industry and team size will show here'}
           {a.companySize && <> · {a.companySize === 'Just me' ? 'Just you' : `${a.companySize} people`}</>}
         </p>
 
@@ -266,7 +265,9 @@ export function Onboarding() {
       role: '', roleOther: '',
       dialCode: dialCodeFor(guessCountry()), phoneNumber: '',
       referralSource: '',
-      company: user?.accountName ?? '', website: '',
+      // Google and GitHub sign-ups get an automatic "Priya's Workspace" name;
+      // that is not their business, so ask instead of pre-filling it.
+      company: user?.accountName && !/'s Workspace$/.test(user.accountName) ? user.accountName : '', website: '',
       industry: '', industryOther: '', companySize: '',
       // The calling code they picked at signup beats any browser guess.
       country: (fromPhone && countryForDialCode(fromPhone)) || guessCountry(),
@@ -521,10 +522,10 @@ export function Onboarding() {
             <>
               <div className="grid gap-5 sm:grid-cols-2">
                 <Question label="Company name" error={err('company')}>
-                  <input className={inputCls} value={a.company} onChange={(e) => set('company', e.target.value)} placeholder="Sunrise Realty" />
+                  <input className={inputCls} value={a.company} onChange={(e) => set('company', e.target.value)} placeholder="Your company name" />
                 </Question>
                 <Question label="Website" optional>
-                  <input className={inputCls} value={a.website} onChange={(e) => set('website', e.target.value)} placeholder="sunriserealty.in" />
+                  <input className={inputCls} value={a.website} onChange={(e) => set('website', e.target.value)} placeholder="yourcompany.com" />
                 </Question>
               </div>
               <Question label="Industry" error={err('industry')}>
