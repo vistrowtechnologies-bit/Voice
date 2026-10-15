@@ -6581,7 +6581,10 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
     for agent in calls_db.list_agents(account_id):
         kb_id = agent.get("kbId")
         kb_name = knowledge_bases.get(str(kb_id)) if kb_id is not None else None
-        if agent.get("status") != "active" or not kb_name:
+        # Agents are stored 'live' / 'paused' / 'draft'. This compared against
+        # 'active', which no agent ever has, so the list was always empty and
+        # ArthaLeads could never pick an agent for auto-calls (2026-10-15).
+        if agent.get("status") != "live" or not kb_name:
             continue
         agents.append({
             "id": str(agent["id"]),
@@ -6678,6 +6681,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
             account_id, str(body.get("name") or ""), str(body.get("phone") or ""),
             source="arthaleads", external_id=f"{org_id}:{lead_id}",
             custom_fields=fields, allow_call=body.get("auto_call") is not False,
+            requested_agent_id=str(body.get("agent_id") or "") if body.get("auto_call") is True else "",
         )
         if not result.get("ok"):
             logger.warning("leads_inbound: ArthaLeads lead not queued for account %s: %s",

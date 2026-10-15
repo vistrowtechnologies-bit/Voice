@@ -483,6 +483,32 @@ def _call_transcript_message(transcript: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _saved_call_outcome(call: dict) -> dict:
+    """crm_outcome (agent/tools.py) from what a saved call row still knows:
+    the booked site visit and whether the caller ever spoke. Callback and
+    opt-out live only in the live session, so a manual re-send can't carry
+    them."""
+    visit = call.get("siteVisit") or {}
+    caller_spoke = any(
+        t.get("speaker") == "visitor" and (t.get("text") or "").strip() for t in (call.get("transcript") or [])
+    )
+    if visit.get("date"):
+        out = {"booking": "Site Visit Booked", "status": "Site Visit"}
+        try:
+            from zoneinfo import ZoneInfo
+            import datetime as _dt
+
+            out["site_visit_at"] = _dt.datetime.strptime(
+                f"{visit['date']} {(visit.get('time') or '10:00')[:5]}", "%Y-%m-%d %H:%M"
+            ).replace(tzinfo=ZoneInfo("Asia/Kolkata")).isoformat()
+        except (ValueError, KeyError):
+            pass
+        return out
+    if not caller_spoke:
+        return {"booking": "Not Reachable"} if call.get("direction") == "outbound" else {}
+    return {"status": "Contacted"}
+
+
 def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
     """Manually (re)send one specific call's lead to ArthaLeads — for a call
     the automatic delivery skipped (never marked qualified during the call)
@@ -530,6 +556,9 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
         "recording_url": recording_url,
         "recording_mime_type": "audio/wav",
         "extracted_data": call.get("extractedData") or {},
+        "arthaleads_lead_id": calls_db.arthaleads_lead_id_for_call(call_id, account_id),
+        "direction": call.get("direction") or "",
+        "crm_outcome": _saved_call_outcome(call),
     }
     ok, detail = _post_json(_ARTHALEADS_URL, body)
     try:
