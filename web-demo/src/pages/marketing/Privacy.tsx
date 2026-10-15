@@ -137,7 +137,7 @@ export function Privacy() {
           particular voice, model, tool or integration. Each handles data under its own contract or terms
           and our instructions.
         </p>
-        <div className="overflow-x-auto rounded-xl border border-border">
+        <div className="w-full max-w-full overflow-x-auto rounded-xl border border-border">
           <table className="w-full min-w-[640px] border-collapse">
             <thead className="bg-surface-high">
               <tr>

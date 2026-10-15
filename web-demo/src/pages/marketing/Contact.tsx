@@ -4,7 +4,7 @@ import { trackQualifyLead } from '../../lib/analytics'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
-import { CONTACT_EMAIL, CONTACT_PHONE } from '../../lib/marketingContent'
+import { CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL } from '../../lib/marketingContent'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
 
 const BENEFITS = [
@@ -22,7 +22,7 @@ export function Contact() {
     <MarketingLayout>
       <Seo
         title="Book a Demo - Vistrow Voice"
-        description="See Vistrow Voice on a live call. Get a walkthrough tuned to your use case, watch Artha qualify a call in your language, and get a pricing and rollout plan."
+        description="Book a Vistrow Voice demo or contact Vistrow Technologies Pvt. Ltd. by email, phone or WhatsApp. See Artha qualify a call in your language."
         path="/contact"
       />
       <section className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-5 py-16 md:px-8 lg:grid-cols-2 lg:py-20">
@@ -55,6 +55,30 @@ export function Contact() {
               <Icon name="call" className="text-[18px]" />
               Or call us at {CONTACT_PHONE}
             </a>
+            <a
+              href={CONTACT_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary"
+            >
+              <Icon name="chat" className="text-[18px]" />
+              Or message us on WhatsApp at {CONTACT_PHONE}
+            </a>
+          </div>
+          <div className="mt-8 rounded-2xl border border-border bg-surface p-5">
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-text-muted">
+              <Icon name="business" className="text-[18px]" />
+              The company behind Vistrow Voice
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-text">
+              Vistrow Voice is a product of <strong>Vistrow Technologies Pvt. Ltd.</strong>, part of{' '}
+              <a href="https://vistrow.com" target="_blank" rel="noopener" className="font-semibold text-primary hover:underline">
+                Vistrow
+              </a>
+              . Write to us at{' '}
+              <a href={`mailto:${CONTACT_EMAIL}`} className="font-semibold text-primary hover:underline">{CONTACT_EMAIL}</a>
+              , call or WhatsApp {CONTACT_PHONE}, and a person from our team replies.
+            </p>
           </div>
         </div>
 

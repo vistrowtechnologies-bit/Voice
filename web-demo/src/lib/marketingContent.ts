@@ -1073,8 +1073,11 @@ export const FOOTER_COLUMNS = [
   },
 ]
 
-/** Company phone, shown in the footer's tel: link. */
-export const CONTACT_PHONE = '+91 80801 97945'
+/** Company phone, shown in the footer's tel: link and on the Contact page. */
+export const CONTACT_PHONE = '+91 90670 97779'
+
+/** Same number on WhatsApp (sales chat), as a wa.me click-to-chat link. */
+export const CONTACT_WHATSAPP_URL = 'https://wa.me/919067097779'
 
 /** Company email, shown in the footer's mailto: link and on the Contact page. */
 export const CONTACT_EMAIL = 'info@vistrowvoice.com'
