@@ -61,9 +61,11 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 # construct EarlyFlushTTS until that completeness test passes reliably.
 
 import db
+import follow_ups
 import plan_policy
+import retry_rules
 import worker_heartbeat
-from contact_notes import build_contact_notes, lead_opening_instruction
+from contact_notes import FOLLOW_UP_KINDS, build_contact_notes, lead_opening_instruction
 import numpy as np
 import recording
 import storage_gate
@@ -1357,7 +1359,9 @@ _VOICEMAIL_GREETING_PATTERN = re.compile(
     r"after the (tone|beep).{0,25}(leave|record)|"
     r"voice ?mail(box)?|voicemail|"
     r"mailbox is full|"
-    r"वॉइस ?मेल|आवाज़ संदेश|संदेश छोड़ें|टोन के बाद",
+    r"वॉइस ?मेल|आवाज़ संदेश|संदेश छोड़ें|टोन के बाद|"
+    # Telugu: "voice mail", "after the beep", "record / leave your message"
+    r"వాయిస్ ?మెయిల్|బీప్\s+తర్వాత|సందేశాన్ని\s+(రికార్డ్|వదల)",
     re.IGNORECASE,
 )
 
@@ -1392,9 +1396,32 @@ _CARRIER_UNAVAILABLE_PATTERN = re.compile(
     r"person\s+you\s+(have\s+)?call(ed|led)|पर्सन\s+यू\s+हैव\s+कॉल्ड|"
     r"जिस\s+व्यक्ति\s+को\s+कॉल\s+किया|इतर\s+कोणाशी\s+बोलत\s+आहे|कुछ\s+समय\s+पश्चात\s+प्रयास|"
     # Tamil / Telugu / Kannada equivalents of "the number you dialled"
-    r"டயல்\s+செய்த\s+எண்|డయల్\s+చేసిన\s+నంబర్|ಡಯಲ್\s+ಮಾಡಿದ\s+ಸಂಖ್ಯೆ",
+    r"டயல்\s+செய்த\s+எண்|డయల్\s+చేసిన\s+నంబర్|ಡಯಲ್\s+ಮಾಡಿದ\s+ಸಂಖ್ಯೆ|"
+    # Telugu: "the customer you are calling is busy / switched off / not
+    # reachable / out of coverage area" (Airtel/Jio Telugu announcements).
+    r"మీరు\s+(కాల్|డయల్)\s+చేస(్తున్న|ిన)\s+(కస్టమర్|వినియోగదారు|నంబర్)|"
+    r"కవరేజ్?ీ?\s+ప్రాంతంలో\s+లేరు|స్విచ్\s*ఆఫ్\s+(చేయబడింది|అయి)|ప్రస్తుతం\s+అందుబాటులో\s+లేరు",
     re.IGNORECASE,
 )
+
+# Splits a carrier announcement into the two outcomes the follow-up rules
+# retry on different timescales: 'busy' (on another call — worth trying
+# again in minutes) vs 'switched_off' (switched off / not reachable / out
+# of coverage — hours). Only ever applied to text _CARRIER_UNAVAILABLE_PATTERN
+# already matched, so these words can be loose.
+_CARRIER_BUSY_PATTERN = re.compile(
+    r"busy|another\s+call|व्यस्त|दूसरी\s+कॉल|बात\s+कर\s+रह|बोलत\s+आहे|વ્યસ્ત|"
+    r"பிஸி|బిజీ|మరో\s+కాల్|ಕಾರ್ಯನಿರತ",
+    re.IGNORECASE,
+)
+
+
+def _carrier_outcome(text: str) -> str:
+    """'' when `text` is not a carrier announcement, else 'busy' or
+    'switched_off' (what the campaign contact is recorded as)."""
+    if not text or not _CARRIER_UNAVAILABLE_PATTERN.search(text):
+        return ""
+    return "busy" if _CARRIER_BUSY_PATTERN.search(text) else "switched_off"
 
 # Marks the funnel's DISCOVERY->PAIN->IMPACT->SOLUTION_FIT->INTEREST jump in
 # _current_objective below — a caller asking about cost/plans is the
@@ -4023,6 +4050,14 @@ class RealEstateAgent(Agent):
             if self._direction == "outbound"
             else ""
         ) or (config.get("welcome_message") or "").strip()
+        # A scheduled follow-up call (callback at the asked time, site-visit
+        # reminder, nurture — see follow_ups.py) opens with why we are
+        # calling back, even when the operator wrote an outbound opener:
+        # "is now a good time to talk about your enquiry" is the wrong first
+        # line to someone who asked us to ring them at this hour.
+        _lead_fields = config.get("_lead_fields") or {}
+        if self._direction == "outbound" and _lead_fields.get("follow_up_kind") in FOLLOW_UP_KINDS:
+            self._welcome_message = ""
         # A fresh ArthaLeads lead on an agent with no opener of its own: the
         # model's first line names the person and what they enquired about
         # (see contact_notes.lead_opening_instruction). "" otherwise, which
@@ -4997,26 +5032,27 @@ class RealEstateAgent(Agent):
             # so unlike the voicemail branch below this says nothing at all —
             # it just hangs up. Speaking here would only bill the tenant for
             # more seconds of talking to a recording.
-            if text and _CARRIER_UNAVAILABLE_PATTERN.search(text):
+            if _carrier := _carrier_outcome(text):
                 _room = _userdata.get("room")
                 logger.info(
-                    "carrier unavailable announcement detected on outbound call "
-                    "(room=%s): %r", getattr(_room, "name", None), text[:120],
+                    "carrier announcement (%s) detected on outbound call "
+                    "(room=%s): %r", _carrier, getattr(_room, "name", None), text[:120],
                 )
                 _contact_id = _userdata.get("campaign_contact_id")
                 _campaign_id = _userdata.get("campaign_id")
                 if _contact_id and _campaign_id:
                     try:
-                        # 'no_answer', not 'voicemail': nobody picked up, the
-                        # network answered. Both retry, but the campaign
-                        # report should say what actually happened.
+                        # 'busy' / 'switched_off', not 'voicemail': nobody
+                        # picked up, the network answered. All retry, but on
+                        # their own gaps, and the campaign report should say
+                        # what actually happened.
                         await asyncio.to_thread(
                             db.record_campaign_voicemail,
-                            int(_contact_id), int(_campaign_id), "no_answer",
+                            int(_contact_id), int(_campaign_id), _carrier,
                         )
                     except Exception:
                         logger.exception(
-                            "could not record no_answer for contact %s", _contact_id
+                            "could not record %s for contact %s", _carrier, _contact_id
                         )
                 _userdata["ending_call"] = True
                 _userdata["failure_reason"] = "carrier_unavailable"
@@ -6034,6 +6070,45 @@ async def _record_unanswered_campaign_dial(call_context: dict, why: str) -> None
         logger.exception("could not record no_answer for contact %s", contact_id)
 
 
+def _schedule_follow_up(
+    cfg: dict, call_context: dict, lead_data: dict, extracted: dict, call_id: int, agent_id: int | None
+) -> int | None:
+    """Queue the follow-up call this finished call earns, if any — the
+    agent's own rules (agents.follow_up_policy, read here from the agent
+    config) decide what and when (follow_ups.plan); the row goes to the
+    dialer (db.schedule_follow_up_call). Blocking: run in a thread."""
+    phone = lead_data.get("phone")
+    account_id = cfg.get("account_id")
+    if not (phone and account_id and agent_id):
+        return None
+    policy = retry_rules.follow_up_policy(cfg.get("follow_up_policy"))
+    try:
+        tz = ZoneInfo(db.get_compliance_config(account_id).get("timezone") or "Asia/Kolkata")
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        tz = ZoneInfo("Asia/Kolkata")
+    previous = call_context.get("custom_fields") or {}
+    plan = follow_ups.plan(policy, lead_data, extracted, datetime.now(tz), str(previous.get("follow_up_kind") or ""))
+    if not plan:
+        return None
+    # The previous call's lead fields carry over (ArthaLeads lead id, project,
+    # language...) so the follow-up updates the same CRM lead and opens on
+    # what they enquired about; the kind drives the opener.
+    fields = {
+        **previous,
+        "follow_up_kind": plan["kind"],
+        "previous_call_id": call_id,
+        "follow_up_summary": plan["summary"],
+    }
+    visit = lead_data.get("site_visit") or {}
+    if plan["kind"] == "visit_reminder":
+        fields["follow_up_visit_at"] = f"{visit.get('date')} {visit.get('time') or ''}".strip()
+    return db.schedule_follow_up_call(
+        account_id, agent_id, phone, lead_data.get("name") or "", fields,
+        plan["at"].astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        source_campaign_id=call_context.get("campaign_id"),
+    )
+
+
 def _call_context_from_job(ctx: JobContext) -> dict:
     """Room metadata names which dashboard agent should handle this call, and
     (for phone/widget calls) which number or site it came in on:
@@ -6144,8 +6219,9 @@ def _voice_speaks_language(voice: str, code: str) -> bool:
 
 
 def _apply_lead_context(config: dict, call_context: dict, room_name: str) -> dict:
-    """Per-call settings for an outbound call to an ArthaLeads lead; any
-    other call is returned unchanged.
+    """Per-call settings for an outbound call to an ArthaLeads lead or a
+    scheduled follow-up call (custom_fields.follow_up_kind, follow_ups.py);
+    any other call is returned unchanged.
 
     Carries the lead's fields to RealEstateAgent (its default opener, see
     contact_notes.lead_opening_instruction) and, when the lead states a
@@ -6153,7 +6229,9 @@ def _apply_lead_context(config: dict, call_context: dict, room_name: str) -> dic
     STT, TTS and the "Default language" prompt all follow config["language"].
     Never persisted: the agent row keeps its own language."""
     fields = call_context.get("custom_fields") or {}
-    if call_context.get("direction") != "outbound" or fields.get("source") != "arthaleads":
+    if call_context.get("direction") != "outbound" or not (
+        fields.get("source") == "arthaleads" or fields.get("follow_up_kind") in FOLLOW_UP_KINDS
+    ):
         return config
     config = {**config, "_lead_fields": fields}
     stated = fields.get("preferred_language") or fields.get("language")
@@ -8484,6 +8562,23 @@ async def entrypoint(ctx: JobContext) -> None:
                     db.set_call_extracted_data,
                     saved_call_id, {**_extra_lead_facts(lead_data), **extracted},
                 )
+
+        # The follow-up call this one earns, if any (callback at the asked
+        # time, site-visit reminder, nurture — follow_ups.py), queued for the
+        # dialer. After the analysis: the nurture rule reads interest_level.
+        # Never for a test run or a public demo agent.
+        if (
+            saved_call_id
+            and not call_context.get("test_run_id")
+            and not cfg.get("is_platform_demo")
+            and not cfg.get("public_demo_slug")
+        ):
+            try:
+                await asyncio.to_thread(
+                    _schedule_follow_up, cfg, call_context, lead_data, extracted, saved_call_id, resolved_agent_id,
+                )
+            except Exception:
+                logger.exception("could not schedule a follow-up call for room %s", ctx.room.name)
 
         # ORDER MATTERS. The recorder used to stop AFTER the ambience player
         # was closed, and aclose() can hang: on an ambience-enabled call the

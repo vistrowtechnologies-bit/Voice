@@ -33,7 +33,8 @@ import {
   voiceLabel,
   voicePickerGroups,
 } from '../lib/agentOptions'
-import type { AgentConfig, AgentVariable, CustomFunction, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
+import type { AgentConfig, AgentVariable, CustomFunction, FollowUpPolicy, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
+import { FOLLOW_UP_DEFAULTS } from '../lib/types'
 import { InfoTip } from '../components/ui/Tooltip'
 
 // Must match agent/main.py's template_vars keys exactly (the substitution
@@ -208,6 +209,7 @@ function AgentEditorForm({
     memoryEnabled: agent.memoryEnabled ?? false,
     liveCatalogEnabled: agent.liveCatalogEnabled ?? false,
     crmIntegrationKeys: agent.crmIntegrationKeys ?? [],
+    followUpPolicy: agent.followUpPolicy ?? FOLLOW_UP_DEFAULTS,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -901,6 +903,16 @@ function AgentEditorForm({
 </TabPane>
 
         <TabPane tab="tools" active={tab}>
+<Panel icon="event_repeat" title="Follow-ups" subtitle="Retries by reason, and the calls scheduled after a conversation">
+          <FollowUpEditor
+            value={form.followUpPolicy ?? FOLLOW_UP_DEFAULTS}
+            onChange={(v) => set('followUpPolicy', v)}
+            inputCls={inputCls}
+          />
+        </Panel>
+</TabPane>
+
+        <TabPane tab="after" active={tab}>
 <Panel icon="psychology" title="Memory" subtitle="Recognize returning callers">
           <Toggle
             checked={form.memoryEnabled}
@@ -1232,6 +1244,95 @@ export function PostCallFieldsEditor({
       >
         + Add field
       </button>
+    </div>
+  )
+}
+
+// Ranges match server/retry_rules.py follow_up_policy, which clamps on save.
+const FOLLOW_UP_MAX_ATTEMPTS = 10
+const FOLLOW_UP_MAX_GAP_MINUTES = 7 * 24 * 60
+const FOLLOW_UP_MAX_NURTURE_DAYS = 30
+
+function FollowUpEditor({
+  value,
+  onChange,
+  inputCls,
+}: {
+  value: FollowUpPolicy
+  onChange: (v: FollowUpPolicy) => void
+  inputCls: string
+}) {
+  const patch = (p: Partial<FollowUpPolicy>) => onChange({ ...value, ...p })
+  const bounded = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(n) || min))
+  const minutes = (key: 'busyMinutes' | 'switchedOffMinutes' | 'noAnswerMinutes' | 'voicemailMinutes', label: string) => (
+    <NumberField
+      label={label}
+      value={value[key]}
+      onChange={(n) => patch({ [key]: bounded(n, 1, FOLLOW_UP_MAX_GAP_MINUTES) })}
+      inputCls={inputCls}
+    />
+  )
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[11px] text-text-muted">
+        Applies to leads this agent calls automatically (ArthaLeads auto-calls and the follow-up calls below).
+        Bulk campaigns keep the retry settings from their own wizard.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <NumberField
+          label="Max tries per lead"
+          value={value.maxAttempts}
+          onChange={(n) => patch({ maxAttempts: bounded(n, 1, FOLLOW_UP_MAX_ATTEMPTS) })}
+          hint="1-10, counting every dial. After the last one the lead is reported as not reachable."
+          inputCls={inputCls}
+        />
+        {minutes('busyMinutes', 'Retry after busy (min)')}
+        {minutes('switchedOffMinutes', 'Retry after switched off (min)')}
+        {minutes('noAnswerMinutes', 'Retry after no answer (min)')}
+        {minutes('voicemailMinutes', 'Retry after voicemail (min)')}
+      </div>
+      <Toggle
+        checked={value.callbackEnabled}
+        onChange={(v) => patch({ callbackEnabled: v })}
+        label="Call back at the time the caller asked for"
+        hint="When a caller asks to be rung back on a day or time, that call is placed then (inside your calling window)."
+      />
+      <div className="flex flex-col gap-2">
+        <Toggle
+          checked={value.visitReminderEnabled}
+          onChange={(v) => patch({ visitReminderEnabled: v })}
+          label="Site-visit reminder call"
+          hint="A short confirm-or-reschedule call the day before a booked visit; 2 hours before when the visit is less than a day away."
+        />
+        {value.visitReminderEnabled && (
+          <Field label="Reminder time (day before)">
+            <input
+              type="time"
+              value={value.visitReminderTime}
+              onChange={(e) => patch({ visitReminderTime: e.target.value || FOLLOW_UP_DEFAULTS.visitReminderTime })}
+              className={`${inputCls} sm:w-40`}
+            />
+          </Field>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <Toggle
+          checked={value.nurtureEnabled}
+          onChange={(v) => patch({ nurtureEnabled: v })}
+          label="Nurture call for interested leads"
+          hint="One follow-up call at 11:00 when a call ended interested with no visit booked and no call-back asked for."
+        />
+        {value.nurtureEnabled && (
+          <div className="sm:w-40">
+            <NumberField
+              label="Days after the call"
+              value={value.nurtureDays}
+              onChange={(n) => patch({ nurtureDays: bounded(n, 1, FOLLOW_UP_MAX_NURTURE_DAYS) })}
+              inputCls={inputCls}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
