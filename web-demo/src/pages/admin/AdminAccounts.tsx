@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { adminAccounts, type AdminAccountRow } from '../../lib/adminApi'
-import { AdminCard, EmptyState, ErrorState, fmtINR, FilterChip, MiniBar, PageHeader, PlanPill, SearchInput, StatusPill, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, ErrorState, fmtINR, FilterChip, MiniBar, PageHeader, PlanPill, ROW_FOCUS, rowLinkProps, SearchInput, StatusPill, timeAgo } from '../../components/AdminUI'
 
 const PLANS = ['free', 'starter', 'growth', 'scale']
 
@@ -96,8 +96,9 @@ export function AdminAccounts() {
               {rows.map((a) => (
                 <tr
                   key={a.id}
-                  onClick={() => navigate(`/admin/accounts/${a.id}`)}
-                  className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
+                  {...rowLinkProps(() => navigate(`/admin/accounts/${a.id}`))}
+                  className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high ${ROW_FOCUS}`}
+
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 font-semibold">

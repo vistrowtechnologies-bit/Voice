@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useId, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
   adminAccountDetail,
@@ -17,7 +17,7 @@ import {
   adminUsage,
   type AdminUsageRow,
 } from '../../lib/adminApi'
-import { AdminCard, EmptyState, ErrorState, fmtDate, fmtDateTime, fmtDuration, Pill, PlanPill, StatusPill, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, errMsg, ErrorState, fmtDate, fmtDateTime, fmtDuration, Pill, PlanPill, ROW_FOCUS, rowLinkProps, StatusPill, timeAgo, useDialog } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
 type Tab = 'signup' | 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'billing' | 'copilot' | 'notes'
@@ -42,7 +42,17 @@ export function AdminAccountDetail() {
   const { refresh } = useAuth()
   const [d, setD] = useState<Detail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('signup')
+  // Selected tab lives in ?tab= so reload and back/forward keep it.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const tab: Tab = TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : 'signup'
+  const setTab = (t: Tab) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (t === 'signup') next.delete('tab')
+      else next.set('tab', t)
+      return next
+    })
   const [modal, setModal] = useState<null | 'credits' | 'plan' | 'status' | 'reset'>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -183,10 +193,18 @@ export function AdminAccountDetail() {
           field={{ label: 'New credit total', type: 'number', initial: String(Math.round(d.billing.creditsTotal)) }}
           helperText={`Currently ${Math.round(d.billing.creditsUsed).toLocaleString()} used of ${Math.round(d.billing.creditsTotal).toLocaleString()} - the field above is the new total, not an amount to add. Use a quick-add button below, or type total = used + however many credits you want remaining.`}
           presets={[100, 500, 1000, 5000]}
+          validate={(val) => {
+            const t = val.trim()
+            if (!/^\d+$/.test(t)) return { error: 'Enter a whole number of credits (0 or more).' }
+            const used = Math.round(d.billing.creditsUsed)
+            if (Number(t) < used)
+              return { warning: `This total is below the ${used.toLocaleString()} credits already used - the account will have no credits left.` }
+            return {}
+          }}
           confirmLabel="Update credits"
           onClose={() => setModal(null)}
           onConfirm={async (val, reason) => {
-            const updated = await adminSetCredits(accountId, Number(val), reason)
+            const updated = await adminSetCredits(accountId, Number(val.trim()), reason)
             setD(updated)
             setModal(null)
             setBanner(`Credits set to ${Number(val).toLocaleString()}.`)
@@ -280,7 +298,7 @@ function FactList({ rows }: { rows: [string, string][] }) {
     <dl className="divide-y divide-border/60">
       {rows.map(([k, v]) => (
         <div key={k} className="flex gap-4 px-4 py-2.5 text-sm">
-          <dt className="w-48 shrink-0 text-text-muted">{k}</dt>
+          <dt className="w-28 shrink-0 text-text-muted sm:w-48">{k}</dt>
           <dd className="min-w-0 break-words font-semibold">{v}</dd>
         </div>
       ))}
@@ -493,7 +511,7 @@ function CallsTab({ d, navigate }: { d: Detail; navigate: (p: string) => void })
       </div>
       <TabTable head={['Time', 'Channel', 'Duration', 'Lead', 'Language']} empty={d.calls.length === 0}>
         {d.calls.map((c) => (
-          <tr key={c.id} onClick={() => navigate(`/admin/calls/${c.id}`)} className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high">
+          <tr key={c.id} {...rowLinkProps(() => navigate(`/admin/calls/${c.id}`))} className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high ${ROW_FOCUS}`}>
             <td className="px-4 py-3 text-text-muted" title={fmtDateTime(c.started_at)}>{timeAgo(c.started_at)}</td>
             <td className="px-4 py-3 capitalize">{c.call_type}</td>
             <td className="px-4 py-3 tabular-nums">{fmtDuration(c.duration_seconds)}</td>
@@ -579,6 +597,7 @@ function IntegrationsTab({ d }: { d: Detail }) {
 function NotesTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
   const [notes, setNotes] = useState(d.account.notes || '')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <AdminCard className="p-5 lg:col-span-2">
@@ -591,13 +610,25 @@ function NotesTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
           placeholder="Administrative notes about this account - only visible to platform admins."
           className="min-h-[140px] w-full resize-y rounded-lg border border-border bg-surface-high p-3 text-sm outline-none focus:border-primary"
         />
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex items-center justify-end gap-3">
+          {saveError && (
+            <p role="alert" className="text-xs text-destructive">
+              Couldn't save the note: {saveError}
+            </p>
+          )}
           <button
             disabled={saving}
             onClick={async () => {
               setSaving(true)
-              await adminSetNotes(d.account.id, notes).finally(() => setSaving(false))
-              onSaved()
+              setSaveError(null)
+              try {
+                await adminSetNotes(d.account.id, notes)
+                onSaved()
+              } catch (e) {
+                setSaveError(errMsg(e))
+              } finally {
+                setSaving(false)
+              }
             }}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50"
           >
@@ -639,6 +670,7 @@ function ReasonModal({
   danger,
   helperText,
   presets,
+  validate,
   onClose,
   onConfirm,
 }: {
@@ -654,6 +686,8 @@ function ReasonModal({
   // in field's current numeric value + the preset amount rather than
   // requiring the admin to do that math themselves.
   presets?: number[]
+  // Field check run as the admin types: `error` blocks confirm, `warning` only informs.
+  validate?: (value: string) => { error?: string; warning?: string }
   onClose: () => void
   onConfirm: (value: string, reason: string) => Promise<void>
 }) {
@@ -663,12 +697,16 @@ function ReasonModal({
   const [err, setErr] = useState('')
   // Mirrors the backend rule (trimmed length >= 5); the server still enforces it.
   const reasonOk = reason.trim().length >= MIN_REASON
+  const check = validate ? validate(value) : {}
+  const dialogRef = useDialog(onClose)
+  const titleId = useId()
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
-      <AdminCard className="w-full max-w-md p-6">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-md">
+      <AdminCard className="p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">{title}</h2>
+          <h2 id={titleId} className="font-display text-lg font-semibold">{title}</h2>
           <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text">
             <Icon name="close" className="text-[20px]" />
           </button>
@@ -688,6 +726,8 @@ function ReasonModal({
               ) : (
                 <input type="number" value={value} onChange={(e) => setValue(e.target.value)} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary" />
               )}
+              {check.error && <span className="text-xs text-destructive">{check.error}</span>}
+              {!check.error && check.warning && <span className="text-xs text-amber">{check.warning}</span>}
               {helperText && <span className="text-[11px] text-text-muted">{helperText}</span>}
               {presets && presets.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
@@ -715,7 +755,7 @@ function ReasonModal({
               Cancel
             </button>
             <button
-              disabled={busy || !reasonOk}
+              disabled={busy || !reasonOk || !!check.error}
               onClick={async () => {
                 setBusy(true)
                 setErr('')
@@ -737,6 +777,7 @@ function ReasonModal({
           )}
         </div>
       </AdminCard>
+      </div>
     </div>
   )
 }
@@ -747,6 +788,8 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
   const [emailSent, setEmailSent] = useState(false)
 
   const [err, setErr] = useState('')
+  const dialogRef = useDialog(onClose)
+  const titleId = useId()
 
   const run = async () => {
     setBusy(true)
@@ -764,9 +807,10 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
-      <AdminCard className="w-full max-w-md p-6">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-md">
+      <AdminCard className="p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">Reset owner password</h2>
+          <h2 id={titleId} className="font-display text-lg font-semibold">Reset owner password</h2>
           <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text">
             <Icon name="close" className="text-[20px]" />
           </button>
@@ -805,9 +849,11 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
           </>
         )}
       </AdminCard>
+      </div>
     </div>
   )
 }
+
 
 const KIND_LABELS: Record<string, string> = {
   subscription: 'Subscription',
