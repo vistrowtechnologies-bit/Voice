@@ -13,7 +13,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-10, later): branch `claude/integration-detail-pages`, claim posted on issue #2 (comment 6097967369). Integration detail pages + Sheets styling/per-agent tabs/field choice; touches `agent/tools.py` delivery fan-out and `agent/db.py`, so BOTH workers need a deploy after merge. Codex's 2.5 claim is untouched.
 - Claude (2026-10-15): branch `claude/marketing-header-v2` (PR open, NOT merged): new marketing-site header (language strip, mega-menus, Hear a live call, mobile sheet); web-demo only, Vercel deploy only.
 - Claude (2026-10-15): branch `claude/seo-keyword-placement` (PR open, NOT merged): keyword placement fixes + new /ai-calling-agent page; web-demo only, Vercel deploy only.
-- Claude (2026-10-15): branch `claude/follow-up-calls` (pushed, NO PR, NOT deployed): per-agent follow-up rules (smart retries by reason, auto call-back, visit reminder, nurture) and the Not Reachable report to ArthaLeads; needs Railway first, then both workers.
+- Claude (2026-10-15): PR #128 `claude/follow-up-calls` MERGED (main a4d64313) and DEPLOYED: Railway SUCCESS (columns follow_up_policy, crm_notified_at present), phone worker `4pVPHHbYCoC8`, platform-demo `cKDf7Q96GgmR`, both Running/registered, 44 INFO / 0 warnings.
 - Claude (2026-10-14): branch `claude/security-tokens-mfa` (PR open, NOT merged): integration tokens encrypted at rest (server + agent + orchestrator). Inert until the owner sets INTEGRATION_ENCRYPTION_KEY everywhere, then INTEGRATION_ENCRYPTION_WRITE=on; see docs/SECURITY-AUDIT-2026-10-12.md.
 
 ## Takeover checklist
@@ -935,7 +935,7 @@ Verified: server suite 728 passed / 0 failed (715 + 13 new); agent suite 802 pas
 
 **Next step:** owner review -> PR -> merge; needs the Railway deploy AND both LiveKit agents (`lk agent deploy`) for the agent half. The outbound hold still applies.
 
-### Claude - 2026-10-15 - follow-up calling (branch claude/follow-up-calls, pushed, NO PR, NOT deployed)
+### Claude - 2026-10-15 - follow-up calling (PR #128, merged a4d64313, deployed; see entry below)
 
 Owner decisions of 2026-10-15 as per-agent settings (new "Follow-ups" panel on the agent page, `agents.follow_up_policy` JSON, defaults applied when absent): max tries 3; retry after busy 10 min / switched off 2 h / no answer 30 min / voicemail 2 h; auto call-back at the asked time (on); site-visit reminder the day before at 11:00, or 2 h before when the visit is under 24 h away (on); nurture call 3 days after an interested call at 11:00 (on). After the last try an ArthaLeads lead is reported as `crm_outcome: {booking: "Not Reachable", attempts: N}`.
 
@@ -948,3 +948,11 @@ Verified: server suite 917 passed / 0 failed; agent suite 1066 passed (16 skippe
 Deploy needs: Railway FIRST (adds the two columns), then BOTH LiveKit workers (agent/db.py reads agents.follow_up_policy in every retry decision; a new worker against the old schema logs an exception per retry resolution and the reaper then resolves the contact as failed). Outbound hold still applies: the "Follow-up calls" campaign places real outbound calls once deployed.
 
 **Next step:** owner review -> PR -> merge; Railway, then `cd agent && lk agent deploy` for both workers; then `graphify update .` on main (no graph in this worktree).
+
+### Claude - 2026-10-15 - PR #128 follow-up calls merged and deployed
+
+- Merge a4d64313 (3a35b47c follow-up calls + 3a28ce44 numeric call_id for the Not Reachable report). Railway deploy SUCCESS, healthz 200; `information_schema` on production confirms `agents.follow_up_policy` and `campaign_contacts.crm_notified_at`.
+- Workers deployed from `git archive origin/main agent` at a4d64313: phone `CA_TGdpVhSdxDyS` version `4pVPHHbYCoC8` (registered 17:31:37Z), platform-demo `CA_53d8HgBktjZ7` version `cKDf7Q96GgmR` (registered 17:34:03Z). 40 s of logs each: 44 INFO, 0 warnings, 0 exceptions. Rollback: `lk agent rollback` to the previous versions.
+- `graphify update .` run on main.
+- Unverified: no real call has exercised the new retry/call-back/visit-reminder/nurture paths yet (outbound hold; account 1 has no phone number). Telugu never run on a real call.
+- Left: owner adds a number to account 1 or points ArthaLeads at account 2; enable "Auto-call new leads" in ArthaLeads; live outbound test (transfer / no-answer / busy) before the hold is lifted.
