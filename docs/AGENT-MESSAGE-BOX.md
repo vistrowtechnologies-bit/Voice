@@ -18,7 +18,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
 - Claude (2026-10-16): PR #132 `claude/chat-lead-delivery` MERGED with PR #130 (one push): widget text chats delivered to the integrations (idle sweep from the dialer tick + /widget/chat/end beacon); Railway deploy, widget bundle in server/static.
 - Claude (2026-10-16): branch `claude/contact-arthaleads-details` (PR open, NOT merged): contact page Lead details card hides ArthaLeads internal keys/tags, shows "From ArthaLeads" line + link; display only, web-demo only, Vercel deploy only.
-- Claude (2026-10-16): branch `claude/lead-details-brochure` (LOCAL commit only, NOT pushed, no PR, owner reviews first): standard post-call lead facts (INR budget, purpose, property type, BHK, location, timeline) stored and sent to ArthaLeads with summary/key_points; new send_brochure tool. Needs `lk agent deploy` on BOTH workers after merge.
+- Claude (2026-10-16, updated 22:55 IST): branch `claude/lead-details-brochure` (local commits 6677701e + 93de8a7c, NOT pushed yet, owner checks ArthaLeads staging first): standard post-call lead facts stored and sent to ArthaLeads with summary/key_points; send_brochure tool. Function-level claim on issue #2 (comment 6220772439), overlap with prompt-cuts/tool-guardrails cleared by that session. Per [RULES] I stop at PR-ready; the SEO session is the deployer (combined release, then `lk agent deploy` on BOTH workers + Railway for one server line). Dependency: ArthaLeads side is on arthaleads staging bc0446c and should reach ArthaLeads main with or before this deploy.
 
 ## Takeover checklist
 
@@ -1064,3 +1064,11 @@ Verified: agent suite 879 passed / 0 failed (main 857; my export of main showed 
 Not verified: the real gpt-5.4-mini output on call 1392's transcript (LLM mocked; the test transcript uses the four quoted caller lines with abridged agent lines; production DB not read); the strict schema against the live API (the shape copies the server's working call_intelligence schema: plain strings, "" for empty); whether the model calls send_brochure at the right times on a live call; ArthaLeads' handling of the new keys (Part B, ArthaLeads repo). `graphify update .` not run (no graphify-out in this worktree).
 
 Left: owner review → push/PR → merge → `lk agent deploy` both workers + Railway (one-line server change). Cost: one extra gpt-5.4-mini request per call where the caller spoke, plus the send_brochure schema on every tenant LLM request (~350 chars).
+
+### Claude — 2026-10-16 22:55 IST — lead details: location/brochure prompt fix + coordination
+
+- Commit 93de8a7c (local): `agent/lead_facts.py` SYSTEM_PROMPT. preferred_location comes only from the caller's own lines, never the project's name or town, and is written in English letters. brochure_requested is also true when the agent offered or promised a brochure and the caller agreed.
+- Evidence: the real gpt-5.4-mini on call 1392's stored transcript plus 3 synthetic transcripts gave 16/16 correct runs (before: location = project town in 2/3 runs, brochure flag 4/5). Unit tests: 31 passed (local placeholder DB).
+- ArthaLeads (other repo): staging bc0446c is pushed. Railway staging and Vercel both report success for that commit. It covers: filling empty lead fields, untouched Apartment/Buy defaults on integration leads, detailsSetByPerson, AI-call status pill, brochure task. ArthaLeads main is not updated.
+- Unverified: staging UI in a browser (no staging login available to the agent), live call behaviour.
+- Next: owner signs in to app-staging so the UI can be checked, then push this branch and open a PR for the deployer.
