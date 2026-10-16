@@ -187,6 +187,7 @@ export interface AdminAccountDetail {
         welcomeMessage: string
         postCallFields: string[]
         updatedAt: string | null
+        setUp: { language: string; welcomeMessage: string; postCallFields: string[] }
         changed: { instructions: boolean; language: boolean; welcome: boolean; fields: boolean }
       }
     | null

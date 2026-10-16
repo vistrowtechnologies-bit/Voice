@@ -136,6 +136,8 @@ class AdminMappingTests(unittest.TestCase):
         self.assertTrue(info["changed"]["instructions"])
         self.assertTrue(info["changed"]["language"])
         self.assertFalse(info["changed"]["fields"])
+        self.assertEqual(info["language"], "en-IN")
+        self.assertEqual(info["setUp"]["language"], "hi-IN")  # what onboarding set, shown as "was"
 
 
 if __name__ == "__main__":

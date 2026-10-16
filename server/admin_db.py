@@ -675,6 +675,12 @@ def _onboarding_agent(conn, acct: dict) -> dict | None:
         "welcomeMessage": row.get("welcome_message") or "",
         "postCallFields": [f.get("key") for f in fields if isinstance(f, dict)],
         "updatedAt": row.get("updated_at"),
+        # What onboarding set, shown next to the current value once changed.
+        "setUp": {
+            "language": expected["language"],
+            "welcomeMessage": expected["welcomeMessage"],
+            "postCallFields": [f["key"] for f in expected["postCallFields"]],
+        },
         "changed": {
             "instructions": (row.get("system_prompt") or "") != expected["systemPrompt"],
             "language": row["language"] != expected["language"],

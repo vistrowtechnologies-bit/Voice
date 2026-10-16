@@ -375,7 +375,7 @@ function OnboardingAgentCard({ d }: { d: Detail }) {
   }
   const state = (changed: boolean) =>
     changed ? <Pill tone="warning">Changed by customer</Pill> : <Pill tone="active">As set up</Pill>
-  const rows: { answer: string; from: string; setting: string; value: string; changed: boolean }[] = [
+  const rows: { answer: string; from: string; setting: string; value: string; was?: string; changed: boolean }[] = [
     {
       answer: 'Company, industry, goals',
       from: [d.account.name, list(profile.industry === 'Other' ? profile.industryOther : profile.industry), list(profile.useCases)].join(' · '),
@@ -388,13 +388,15 @@ function OnboardingAgentCard({ d }: { d: Detail }) {
       from: list(profile.languages),
       setting: 'Language',
       value: LANGUAGE_NAMES[info.language] ?? info.language,
+      was: LANGUAGE_NAMES[info.setUp.language] ?? info.setUp.language,
       changed: info.changed.language,
     },
     {
       answer: 'Company, language',
       from: d.account.name,
       setting: 'Welcome line',
-      value: info.welcomeMessage || 'Default greeting (outbound only, or a language without a reviewed line)',
+      value: info.welcomeMessage || 'Default greeting',
+      was: info.setUp.welcomeMessage || 'Default greeting (outbound only, or a language without a reviewed line)',
       changed: info.changed.welcome,
     },
     {
@@ -402,6 +404,7 @@ function OnboardingAgentCard({ d }: { d: Detail }) {
       from: [list(profile.industry), list(profile.useCases)].join(' · '),
       setting: 'After-call notes',
       value: info.postCallFields.join(', ') || '-',
+      was: info.setUp.postCallFields.join(', ') || '-',
       changed: info.changed.fields,
     },
   ]
@@ -420,7 +423,7 @@ function OnboardingAgentCard({ d }: { d: Detail }) {
             <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
               <th className="px-4 py-2.5 font-semibold">Onboarding answer</th>
               <th className="px-4 py-2.5 font-semibold">Agent setting</th>
-              <th className="px-4 py-2.5 font-semibold">Set to</th>
+              <th className="px-4 py-2.5 font-semibold">Value</th>
               <th className="px-4 py-2.5 font-semibold">Now</th>
             </tr>
           </thead>
@@ -432,7 +435,16 @@ function OnboardingAgentCard({ d }: { d: Detail }) {
                   <div className="text-xs text-text-muted">{r.from}</div>
                 </td>
                 <td className="px-4 py-3 font-semibold">{r.setting}</td>
-                <td className="max-w-md px-4 py-3 text-text-muted">{r.value}</td>
+                <td className="max-w-md px-4 py-3 text-text-muted">
+                  {r.changed && r.was ? (
+                    <>
+                      <div><span className="font-semibold text-text">Now:</span> {r.value}</div>
+                      <div className="mt-0.5 text-xs">Onboarding set: {r.was}</div>
+                    </>
+                  ) : (
+                    r.changed ? r.value : (r.was ?? r.value)
+                  )}
+                </td>
                 <td className="whitespace-nowrap px-4 py-3">{state(r.changed)}</td>
               </tr>
             ))}
