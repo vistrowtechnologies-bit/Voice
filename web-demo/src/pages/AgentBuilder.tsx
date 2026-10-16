@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ClonedVoiceOptions, clonedVoiceFallbackName, useClonedVoices } from '../components/ClonedVoiceOptions'
 import { SuccessCheck } from '../components/CopilotParts'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -79,6 +80,7 @@ export function AgentBuilder() {
   const [error, setError] = useState<string | null>(null)
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
   const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
+  const clonedVoices = useClonedVoices()
   useEffect(() => {
     fetchMyVoices().then(setMyVoices).catch(() => setMyVoices([]))
   }, [])
@@ -321,7 +323,11 @@ export function AgentBuilder() {
               <Section title="Voice & language" icon="record_voice_over" busy={busy === 'voice'} disabled={busy !== null} onRegenerate={() => regenerate('voice')}>
                 <Field label="Voice">
                   <select value={draft.voice} onChange={(e) => set('voice', e.target.value)} className={inputCls}>
-                    {!myVoices.some((v) => v.value === draft.voice) && <option value={draft.voice}>{voiceLabel(draft.voice)}</option>}
+                    {!myVoices.some((v) => v.value === draft.voice) &&
+                      !clonedVoices.some((v) => v.voiceValue === draft.voice && v.status === 'ready') && (
+                        <option value={draft.voice}>{clonedVoiceFallbackName(draft.voice, clonedVoices) ?? voiceLabel(draft.voice)}</option>
+                      )}
+                    <ClonedVoiceOptions voices={clonedVoices} />
                     {voicePickerGroups(myVoices).map((group) =>
                       group.voices.length === 0 ? null : (
                         <optgroup key={group.key} label={`${group.label} - ${group.note}`}>
@@ -416,7 +422,7 @@ export function AgentBuilder() {
             </div>
             <aside className="order-first lg:order-none">
               <div className="lg:sticky lg:top-4">
-                <AgentPreviewCard draft={draft} voices={myVoices} />
+                <AgentPreviewCard draft={draft} voices={myVoices} clonedName={clonedVoiceFallbackName(draft.voice, clonedVoices)} />
               </div>
             </aside>
           </div>
@@ -431,7 +437,7 @@ export function AgentBuilder() {
       {createdId !== null && draft && (
         <CreatedOverlay
           draft={draft}
-          voiceName={myVoices.find((v) => v.value === draft.voice)?.name ?? voiceLabel(draft.voice)}
+          voiceName={myVoices.find((v) => v.value === draft.voice)?.name ?? clonedVoiceFallbackName(draft.voice, clonedVoices) ?? voiceLabel(draft.voice)}
           onOpen={(test) => navigate(`/dashboard/agents/${createdId}?drafted=1${test ? '&test=1' : ''}`)}
         />
       )}
@@ -525,8 +531,8 @@ function BuildingChecklist() {
 }
 
 /** The agent as callers will meet it; updates as the draft is edited. */
-function AgentPreviewCard({ draft, voices }: { draft: AgentDraft; voices: VoiceEntry[] }) {
-  const voiceName = voices.find((v) => v.value === draft.voice)?.name ?? voiceLabel(draft.voice)
+function AgentPreviewCard({ draft, voices, clonedName }: { draft: AgentDraft; voices: VoiceEntry[]; clonedName?: string }) {
+  const voiceName = voices.find((v) => v.value === draft.voice)?.name ?? clonedName ?? voiceLabel(draft.voice)
   const language = LANGUAGES.find(([code]) => code === draft.language)?.[1] ?? draft.language
   const tone = TONES.find((t) => t.value === draft.tone)?.label ?? draft.tone
   const tools = OPTIONAL_FUNCTIONS.filter((f) => functionOn(draft.enabledFunctions, f.name)).length

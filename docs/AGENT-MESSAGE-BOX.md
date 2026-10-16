@@ -18,6 +18,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
 - Claude (2026-10-16): PR #132 `claude/chat-lead-delivery` MERGED with PR #130 (one push): widget text chats delivered to the integrations (idle sweep from the dialer tick + /widget/chat/end beacon); Railway deploy, widget bundle in server/static.
 - Claude (2026-10-16): branch `claude/contact-arthaleads-details` (PR open, NOT merged): contact page Lead details card hides ArthaLeads internal keys/tags, shows "From ArthaLeads" line + link; display only, web-demo only, Vercel deploy only.
+- Claude (2026-10-16): branch `claude/voice-clone-ui` (NOT pushed, NOT merged): dashboard half of "Clone your voice" (Voices page section + 5-step dialog, in-browser recorder/upload, consent, Your voices list, cloned voices in agent pickers). Coded against the /voices/custom contract incl. firstCloneFree; tested only against a local mock API. web-demo only, Vercel deploy only, must ship with the server half.
 
 ## Takeover checklist
 
@@ -1027,4 +1028,12 @@ Files: web-demo/src/lib/leadDetails.ts (new arthaleadsOrigin / visibleLeadEntrie
 - Tags: drops "arthaleads", "channel:*", and any "label:value" tag whose value the card already shows. Non-ArthaLeads contacts untouched.
 - Evidence: npm run test:leads passes (new cases), tsc -b --noEmit, lint (exit 0, nothing in touched files), full npm run build pass.
 - Not verified: the page in a real browser against a real ArthaLeads contact. Next: review + merge (Vercel only), then open contact 9 of workspace 1 and check the card.
+
+### Claude — 2026-10-16 — voice clone UI (branch claude/voice-clone-ui)
+
+Files: new web-demo/src/components/VoiceClone.tsx (section, dialog, Your voices list), ClonedVoiceOptions.tsx (picker group), src/lib/voiceClone.ts (pure helpers), src/lib/useAudioRecorder.ts; api.ts gets typed /voices/custom functions (upload via XHR for progress); Voices.tsx mounts the section; AgentDetail.tsx and AgentBuilder.tsx offer ready cloned voices as a "Your voices" group and send "custom:vv_..." unchanged. Odia is sent as or-IN per the contract (agent LANGUAGES uses od-IN).
+
+Verified: `npm run build` (icons, tsc, SEO gates) passes; test:voice-clone (new), test:menu/import/leads/consent, test:seo pass. In the browser against a local mock API: free and blocked quotes, mic-blocked fallback to upload, recording with a stubbed audio stream (timer, level meter, playback, 30 s gate), consent + checkbox gating, multipart POST (name, language, sample.webm, consent.webm), processing to ready polling and stop, preview playback, rename, 409 delete refusal, picker shows ready voices only, 320 px width with no sideways scroll.
+
+Not verified: a real microphone, Safari (mp4 recording), the file-upload path in a real browser, and anything against the real server API. Next step: after the server half merges, run the browser checklist in the handoff on staging.
 

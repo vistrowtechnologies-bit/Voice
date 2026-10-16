@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { useVoicePreview } from '../components/VoicePreviewButton'
+import { CloneVoiceSection } from '../components/VoiceClone'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
 import { BHARAT_MODEL_MULTIPLIER, LIVE_MODEL_MULTIPLIER, creditsPerMinuteLabel, formatCredits } from '../lib/plans'
 import { ADMIN_ONLY_MODELS } from '../lib/agentOptions'
@@ -811,6 +812,8 @@ export function Voices() {
             {error && (
               <div className="rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">{error}</div>
             )}
+
+            <CloneVoiceSection />
 
             <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
               <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
