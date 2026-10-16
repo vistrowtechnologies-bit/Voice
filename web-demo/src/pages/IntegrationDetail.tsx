@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArthaleadsRouting } from '../components/ArthaleadsRouting'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { IntegrationLogo } from '../components/IntegrationLogo'
@@ -810,7 +809,24 @@ function SettingsTab({
         <FieldsPanel integration={integration} canManage={canManage} onSaved={onSaved} onNotice={onNotice} />
       )}
       {connected && DELIVERY_KEYS.includes(key) && <AgentsPanel integration={integration} canManage={canManage} onNotice={onNotice} />}
-      {key === 'arthaleads' && <ArthaleadsRouting canManage={canManage} />}
+      {key === 'arthaleads' && (
+        <Panel title="Calling new ArthaLeads leads" icon="call" subtitle="Set up in ArthaLeads, in one place.">
+          <p className="text-xs text-text-muted">
+            Which new leads get a call, and which agent calls them, is chosen in ArthaLeads under Integrations → Vistrow Voice →
+            Auto-call new leads. Your account is linked there automatically once the connection key above is saved. The agent
+            you pick there calls from its own phone number, so give that agent a number in Phone Numbers first.
+          </p>
+          <a
+            href="https://app.arthaleads.com/integrations/vistrow-calling"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex w-fit items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text"
+          >
+            Open auto-call settings in ArthaLeads
+            <Icon name="open_in_new" className="text-[15px]" />
+          </a>
+        </Panel>
+      )}
       {key === 'facebook' && <LeadWebhookPanel />}
       {key === 'sheets' && isSheetsOauth(integration) && (
         <Panel title="Your sheet" icon="table_chart">
