@@ -38,6 +38,7 @@ import billing_documents
 import storage_usage
 from storage import b2_client
 import campaign_window
+import lead_quality
 import retry_rules
 from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
@@ -2813,7 +2814,9 @@ def _lead_status(row: dict) -> str:
     # site visits. Computed per request, never stored, so no migration.
     if row["site_visit_json"]:
         return "Appointment Booked"
-    if row["lead_name"]:
+    # A real name and a way to reach them - not "Website visitor" with no
+    # contact (lead_quality.QUALIFIED_SQL is the same rule for the counts).
+    if lead_quality.is_qualified(row["lead_name"], _row_get(row, "lead_phone"), _row_get(row, "lead_email")):
         return "Qualified"
     return "New"
 
@@ -3466,9 +3469,9 @@ def summary(account_id: int) -> dict:
     conn = _connect()
     try:
         row = conn.execute(
-            """
+            f"""
             SELECT COUNT(*) AS total,
-                   SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) AS qualified,
+                   SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
                    SUM(CASE WHEN site_visit_json IS NOT NULL THEN 1 ELSE 0 END) AS visits,
                    COALESCE(SUM(duration_seconds), 0) AS total_seconds,
                    COALESCE(AVG(duration_seconds), 0) AS avg_seconds
@@ -3637,10 +3640,10 @@ def usage_trends(account_id: int, days: int = 14) -> dict:
     conn = _connect()
     try:
         rows = conn.execute(
-            """
+            f"""
             SELECT started_at::date::text AS day,
                    COUNT(*) AS total,
-                   SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) AS qualified,
+                   SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
                    COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
             FROM calls
             WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date
@@ -3666,14 +3669,14 @@ def period_comparison(account_id: int, days: int = 14) -> dict:
     conn = _connect()
     try:
         row = conn.execute(
-            """
+            f"""
             SELECT
               COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval) current_calls,
-              COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval AND lead_name IS NOT NULL) current_qualified,
+              COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval AND {lead_quality.QUALIFIED_SQL}) current_qualified,
               COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval AND site_visit_json IS NOT NULL) current_booked,
               COALESCE(SUM(duration_seconds) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval), 0) current_seconds,
               COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval) previous_calls,
-              COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval AND lead_name IS NOT NULL) previous_qualified,
+              COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval AND {lead_quality.QUALIFIED_SQL}) previous_qualified,
               COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval AND site_visit_json IS NOT NULL) previous_booked,
               COALESCE(SUM(duration_seconds) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval), 0) previous_seconds
             FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = ''
@@ -3769,9 +3772,9 @@ def analytics(account_id: int) -> dict:
                 "minutes": round(r["s"] / 60, 1),
             }
             for r in conn.execute(
-                """
+                f"""
                 SELECT COALESCE(call_type, 'browser') t, COUNT(*) c,
-                       SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) q,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) q,
                        COALESCE(SUM(duration_seconds), 0) s
                 FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = '' GROUP BY t ORDER BY c DESC
                 """,
@@ -3785,9 +3788,9 @@ def analytics(account_id: int) -> dict:
         # and should count as that agent, not as a second phantom bar.
         by_agent_map: dict[str, dict] = {}
         for r in conn.execute(
-            """
+            f"""
             SELECT agent_id, COUNT(*) c,
-                   SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) q,
+                   SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) q,
                    COALESCE(SUM(duration_seconds), 0) s
             FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = '' GROUP BY agent_id
             """,

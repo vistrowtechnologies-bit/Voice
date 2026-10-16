@@ -61,6 +61,7 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 # construct EarlyFlushTTS until that completeness test passes reliably.
 
 import db
+from lead_placeholders import is_placeholder
 import follow_ups
 import plan_policy
 import retry_rules
@@ -3288,6 +3289,22 @@ def _prompt_safe_name(name: str | None) -> str:
     text = "".join(" " if unicodedata.category(ch)[0] == "C" else ch for ch in str(name or ""))
     text = re.sub(r"\s+", " ", text.replace('"', "'")).strip()
     return text[:_MAX_VISITOR_NAME].strip()
+
+
+def _seed_lead_from_visitor(call_context: dict) -> dict:
+    """The lead as typed into the widget's pre-call form, before the agent's
+    own log_lead runs. /widget/token sends "Website visitor" for a blank
+    name; that placeholder is not a name, so it is not seeded (it made
+    contact-less widget calls show as "Qualified" leads)."""
+    lead: dict = {}
+    name = call_context.get("visitor_name")
+    if name and not is_placeholder(name):
+        lead["name"] = name
+    if call_context.get("visitor_phone"):
+        lead["phone"] = call_context["visitor_phone"]
+    if call_context.get("visitor_email"):
+        lead["email"] = call_context["visitor_email"]
+    return lead
 
 
 class RealEstateAgent(Agent):
@@ -6818,13 +6835,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # own log_lead tool never runs (call ends early, visitor hangs up, etc).
     # The agent's own log_lead call later still overwrites these if it
     # captures something more specific during the conversation.
-    lead_data: dict = {}
-    if call_context["visitor_name"]:
-        lead_data["name"] = call_context["visitor_name"]
-    if call_context["visitor_phone"]:
-        lead_data["phone"] = call_context["visitor_phone"]
-    if call_context["visitor_email"]:
-        lead_data["email"] = call_context["visitor_email"]
+    lead_data = _seed_lead_from_visitor(call_context)
     cfg = config or {}
     # Per-account concurrent-call cap (starter/growth/scale) — claims a slot
     # now, before any STT/LLM/TTS spend, and releases it in log_call's
