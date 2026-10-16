@@ -32,6 +32,11 @@ logger = logging.getLogger("vistrow-integrations")
 _DELIVERY_KEYS = {"webhook", "slack", "whatsapp", "sheets", "arthaleads", "zoho_crm"}
 
 _ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"
+# Base of ArthaLeads' API for the link handshake (single-token contract,
+# 2026-10-16); env override for a staging ArthaLeads.
+_ARTHALEADS_API_BASE = (os.environ.get("ARTHALEADS_API_BASE") or _ARTHALEADS_URL.rsplit("/webhook/", 1)[0]).rstrip("/")
+_ARTHALEADS_REJECTED = "ArthaLeads did not accept this key. Copy it again from ArthaLeads → Integrations → Vistrow Voice."
+_ARTHALEADS_PLAN = "ArthaLeads says this feature needs its Enterprise plan."
 
 
 def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
@@ -547,6 +552,83 @@ def _arthaleads_token(account_id: int) -> tuple[str, str]:
     if not token:
         return "", "No ArthaLeads token saved"
     return token, ""
+
+
+def _arthaleads_api_post(path: str, payload: dict, timeout: int = 8) -> tuple[int, str]:
+    """(HTTP status, body text) of a POST to ArthaLeads' API; status 0 and the
+    error text when no response came back. Never raises."""
+    req = urllib.request.Request(
+        f"{_ARTHALEADS_API_BASE}{path}",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "User-Agent": "Vistrow-Voice/1.0"},
+        method="POST",
+    )
+    try:
+        with kb_crawl.safe_opener().open(req, timeout=timeout) as resp:
+            return resp.status, resp.read(2000).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read(2000).decode("utf-8", "replace")
+        except Exception:
+            body = ""
+        return e.code, body
+    except (urllib.error.URLError, TimeoutError, ValueError, RuntimeError, OSError) as e:
+        return 0, str(e)
+
+
+def link_arthaleads(account_id: int, token: str) -> tuple[dict, str]:
+    """The single-token handshake: tells ArthaLeads which Vistrow account this
+    connection key now belongs to, so its auto-call setup fills itself in.
+    Returns (link, detail) where link is the server-managed config.link —
+    status "linked" (ArthaLeads accepted), "rejected" (401/403: wrong key or
+    plan; do not save the key), or "pending" (ArthaLeads unreachable or
+    answered oddly; the key is valid as far as we know, retry from Test)."""
+    checked_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    status, text = _arthaleads_api_post("/webhook/vistrow/link", {
+        "token": token,
+        "account_id": str(account_id),
+        "base_url": calls_db.public_base_url() or "https://api.vistrowvoice.com",
+        "account_name": calls_db.account_name(account_id),
+    })
+    if status in (401, 403):
+        detail = _ARTHALEADS_PLAN if status == 403 else _ARTHALEADS_REJECTED
+        return {"status": "rejected", "error": detail, "checked_at": checked_at}, detail
+    body = None
+    if status == 200:
+        try:
+            body = json.loads(text)
+        except ValueError:
+            body = None
+    if isinstance(body, dict) and body.get("success") is True:
+        org_name = str(body.get("org_name") or "").strip()
+        link = {"status": "linked", "org_name": org_name, "linked_at": str(body.get("linked_at") or checked_at),
+                "checked_at": checked_at}
+        return link, f"Linked with ArthaLeads ({org_name or 'your organisation'}). Vistrow account {account_id}."
+    error = (f"HTTP {status}: {text[:120]}" if status else text)[:160].strip() or "no response"
+    logger.warning("arthaleads link pending for account %s: %s", account_id, error)
+    return ({"status": "pending", "error": error, "checked_at": checked_at},
+            "Saved, but ArthaLeads could not be reached to finish linking. Click Send test to retry.")
+
+
+def unlink_arthaleads(account_id: int, token: str) -> bool:
+    """Best-effort: tells ArthaLeads this key no longer drives auto-calls."""
+    status, text = _arthaleads_api_post("/webhook/vistrow/unlink", {"token": token})
+    if status != 200:
+        logger.warning("arthaleads unlink failed for account %s: %s %s", account_id, status, text[:120])
+    return status == 200
+
+
+def relink_arthaleads(account_id: int) -> tuple[bool, str]:
+    """Test button: re-run the handshake with the stored key and refresh
+    config.link. True only when ArthaLeads confirmed the link."""
+    integ = next((i for i in calls_db.list_integrations(account_id, strict=True) if i["key"] == "arthaleads"), None)
+    config = (integ or {}).get("config") or {}
+    token = (config.get("token") or "").strip()
+    if (integ or {}).get("status") != "connected" or not token:
+        return False, "ArthaLeads isn't connected"
+    link, detail = link_arthaleads(account_id, token)
+    calls_db.update_integration("arthaleads", "connected", {**config, "link": link}, account_id)
+    return link["status"] == "linked", detail
 
 
 def _arthaleads_call_body(account_id: int, call_id: int, call: dict, token: str) -> dict:

@@ -5286,6 +5286,19 @@ def update_integration(key: str, data: dict = Body(...), user: dict = Depends(re
         config.pop(server_key, None)
         if keep_stored and server_key in stored:
             config[server_key] = stored[server_key]
+    if key == "arthaleads":
+        # Single-token handshake (docs: ArthaLeads contract 2026-10-16): the
+        # key is saved only once ArthaLeads accepts it; config.link records
+        # the outcome and is never taken from the browser.
+        if keep_stored:
+            link, detail = integrations_dispatch.link_arthaleads(
+                user["account_id"], (config.get("token") or "").strip()
+            )
+            if link["status"] == "rejected":
+                raise HTTPException(400, detail)
+            config["link"] = link
+        elif (stored.get("token") or "").strip():
+            integrations_dispatch.unlink_arthaleads(user["account_id"], stored["token"].strip())
     calls_db.update_integration(
         key,
         data.get("status", "not_connected"),
@@ -5299,11 +5312,21 @@ def update_integration(key: str, data: dict = Body(...), user: dict = Depends(re
 _SERVER_MANAGED_INTEGRATION_KEYS = (
     "accounts_base", "api_domain", "access_token", "refresh_token", "expires_at",
     "bot_token", "pageAccessToken",
+    # ArthaLeads link outcome: set by the handshake, never by the browser.
+    "link",
 )
 
 
 @app.post("/integrations/{key}/test")
 def test_integration(key: str, user: dict = Depends(require_role("admin"))) -> dict:
+    if key == "arthaleads":
+        # Re-run the link handshake first (it refreshes config.link), then
+        # the sample lead as before; report both.
+        linked, link_detail = integrations_dispatch.relink_arthaleads(user["account_id"])
+        if not linked:
+            return {"ok": False, "detail": link_detail}
+        ok, detail = integrations_dispatch.test_integration(user["account_id"], key)
+        return {"ok": ok, "detail": f"{link_detail} {detail}"}
     ok, detail = integrations_dispatch.test_integration(user["account_id"], key)
     return {"ok": ok, "detail": detail}
 
@@ -6570,7 +6593,7 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
     authorization = request.headers.get("authorization", "")
     if not header_token and authorization.lower().startswith("bearer "):
         header_token = authorization[7:].strip()
-    if calls_db.account_id_for_lead_webhook_token(header_token) != account_id:
+    if calls_db.account_id_for_inbound_token(header_token) != account_id:
         raise HTTPException(404, "Not found")
 
     knowledge_bases = {
@@ -6684,7 +6707,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
     authorization = request.headers.get("authorization", "")
     if not header_token and authorization.lower().startswith("bearer "):
         header_token = authorization[7:].strip()
-    if calls_db.account_id_for_lead_webhook_token(header_token or token or "") != account_id:
+    if calls_db.account_id_for_inbound_token(header_token or token or "") != account_id:
         raise HTTPException(404, "Not found")
     try:
         body = await request.json()

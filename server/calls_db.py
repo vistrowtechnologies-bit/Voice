@@ -6086,6 +6086,40 @@ def account_id_for_lead_webhook_token(token: str) -> int | None:
         conn.close()
 
 
+def account_id_for_inbound_token(token: str) -> int | None:
+    """Auth for the inbound-lead routes: the account's lead-webhook token
+    (Zapier etc.) or, since the single-token handshake (2026-10-16), the
+    ArthaLeads connection key saved on a connected arthaleads integration.
+    Same constant-time compare as above; never a WHERE value = ?."""
+    account_id = account_id_for_lead_webhook_token(token)
+    if account_id is not None or not token:
+        return account_id
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT account_id, config_json FROM integrations WHERE key = 'arthaleads' AND status = 'connected'"
+        ).fetchall()
+    finally:
+        conn.close()
+    for row in rows:
+        try:
+            stored = str((integration_crypto.decode_config(row["config_json"]) or {}).get("token") or "")
+        except (TypeError, ValueError):
+            continue
+        if stored and secrets.compare_digest(stored.encode(), token.encode()):
+            return row["account_id"]
+    return None
+
+
+def account_name(account_id: int) -> str:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT name FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        return (row["name"] or "") if row else ""
+    finally:
+        conn.close()
+
+
 def facebook_page_connection(page_id: str) -> dict | None:
     """Which account owns this Facebook Page, and the Page access token to
     fetch lead data with — looked up by page_id since Meta's leadgen webhook
