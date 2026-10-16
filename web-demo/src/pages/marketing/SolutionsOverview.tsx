@@ -85,7 +85,7 @@ export function SolutionsOverview() {
       />
       <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
         <SectionEyebrow>Solutions</SectionEyebrow>
-        <h1 className="mt-4 font-display text-5xl font-bold leading-[1.05] tracking-tight">
+        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.05] tracking-tight min-[400px]:text-5xl">
           Voice AI for your industry.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
