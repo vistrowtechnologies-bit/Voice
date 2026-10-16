@@ -15,7 +15,8 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-15): branch `claude/seo-keyword-placement` (PR open, NOT merged): keyword placement fixes + new /ai-calling-agent page; web-demo only, Vercel deploy only.
 - Claude (2026-10-15): PR #128 `claude/follow-up-calls` MERGED (main a4d64313) and DEPLOYED: Railway SUCCESS (columns follow_up_policy, crm_notified_at present), phone worker `4pVPHHbYCoC8`, platform-demo `cKDf7Q96GgmR`, both Running/registered, 44 INFO / 0 warnings.
 - Claude (2026-10-14): branch `claude/security-tokens-mfa` (PR open, NOT merged): integration tokens encrypted at rest (server + agent + orchestrator). Inert until the owner sets INTEGRATION_ENCRYPTION_KEY everywhere, then INTEGRATION_ENCRYPTION_WRITE=on; see docs/SECURITY-AUDIT-2026-10-12.md.
-- Claude (2026-10-16): branch `claude/arthaleads-single-token` (PR open, NOT merged): ArthaLeads single-token handshake — saving the ArthaLeads key links the account at ArthaLeads and the same key authenticates ArthaLeads → Voice on `/leads/inbound/*`. Needs the ArthaLeads half (`/webhook/vistrow/link|unlink`, built in parallel) deployed before merging; Railway deploy only (no agent code).
+- Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
+- Claude (2026-10-16): PR #132 `claude/chat-lead-delivery` MERGED with PR #130 (one push): widget text chats delivered to the integrations (idle sweep from the dialer tick + /widget/chat/end beacon); Railway deploy, widget bundle in server/static.
 
 ## Takeover checklist
 
@@ -958,7 +959,7 @@ Deploy needs: Railway FIRST (adds the two columns), then BOTH LiveKit workers (a
 - Unverified: no real call has exercised the new retry/call-back/visit-reminder/nurture paths yet (outbound hold; account 1 has no phone number). Telugu never run on a real call.
 - Left: owner adds a number to account 1 or points ArthaLeads at account 2; enable "Auto-call new leads" in ArthaLeads; live outbound test (transfer / no-answer / busy) before the hold is lifted.
 
-### Claude — 2026-10-16 — ArthaLeads single-token handshake (branch `claude/arthaleads-single-token`, PR open, NOT merged)
+### Claude — 2026-10-16 — ArthaLeads single-token handshake (PR #129, merged c74f5d08, live)
 
 Contract: the customer pastes the ArthaLeads connection key once in Voice; Voice tells ArthaLeads which account it belongs to, and the same key then authenticates ArthaLeads → Voice (`POST /leads/inbound/{id}`, `GET /leads/inbound/{id}/agents`) alongside the existing lead-webhook token. The ArthaLeads half (`POST /webhook/vistrow/link` and `/unlink`) is being built in parallel in prophuntllp-bit/arthaleads against the same contract.
 
@@ -978,3 +979,34 @@ Left: merge only after the ArthaLeads side is deployed (otherwise every key save
 Changes: new `POST /admin/accounts/{id}/users/{uid}/reset-two-step` (platform owner only; reason required; user must belong to the account and have two-step on; clears it via `calls_db.disable_mfa`, records security event `mfa_reset_by_support`, writes audit `reset_two_step`, emails the user). Admin account Users tab gets a "Two-step login" column with Reset (reason dialog; ReasonModal now shows helper text without a field). Login code step links to support@vistrowvoice.com for users who lost both phone and recovery codes. Customers could already turn it off themselves in Settings → Sign-in & security; the platform owner account can't (required for the admin panel).
 
 Verified: `server/test_admin_reset_two_step.py` (3 tests, route loaded via AST like test_admin_impersonation, no DB), tsc, localhost run against a mock (code screen link; admin Reset dialog → column flips to Off with banner). Not verified: against a real DB or real email send. Server + dashboard only; no agent deploy.
+### Claude — 2026-10-16 — Widget text chats delivered to integrations (branch `claude/chat-lead-delivery`, PR open, NOT merged)
+
+Problem (verified 2026-10-16): a widget text chat is logged by `calls_db.upsert_widget_chat_call` (call_type `widget`, room `widget-chat-{session}`) but nothing ever delivered it to the account's integrations — voice calls fan out from the agent at call end, a text chat has no agent. A visitor chatted 49 s with name+phone+email and ArthaLeads only got it when the owner pressed "Send to ArthaLeads" 1.5 h later.
+
+Changed (Railway server + widget bundle; no agent code):
+- `server/calls_db.py`: migration columns `calls.integrations_delivered_at TEXT`, `calls.integrations_delivery_json TEXT` (same list as `arthaleads_status`); `idle_widget_chats(idle_seconds=180, max_age_days=7)`; `widget_chat_call(site_id, session_id)`; `claim_widget_chat_delivery` (atomic NULL→now stamp, so sweep and beacon never double-deliver); `mark_widget_chat_delivered` (result JSON).
+- `server/integrations_dispatch.py`: `deliver_widget_chat(call)` builds the call-end-shaped lead (type `call_completed`, channel "Website chat", transcript as {speaker: Caller|Agent, text}, agent name/public id, language, duration, page_path, call_id, message; no recording), sends via `deliver_lead` to webhook/slack/whatsapp/sheets/zoho_crm and via `push_call_to_arthaleads` to ArthaLeads (stamps `arthaleads_status` like a manual send), writes Activity rows, and stamps the markers even on failure or skip (`{"skipped": "no_contact"}` when no phone and no email). `deliver_lead` now honours the owner's event and field choices (`_wants_event`, `apply_field_choice`) and takes `skip_keys`; it had no other callers. `_saved_turns` normalises both saved transcript shapes — before this, a manual "Send to ArthaLeads" for a text chat sent an EMPTY transcript/message because `{role, content}` turns were not recognised (only `{speaker, text}`); fixed for the manual button too.
+- `server/campaign_dialer.py`: `_deliver_idle_widget_chats()` runs every tick next to `_report_exhausted_contacts()` (per-row try/except). `DISABLE_CAMPAIGN_DIALER=1` (local runs) disables this sweep too.
+- `server/token_api.py`: `POST /widget/chat/end` (public, `siteKey` + `sessionId`, raw JSON body so `sendBeacon`'s text/plain needs no CORS preflight, rate-limited 60/h per IP) → delivery in a background thread, idle rule bypassed. `ended_at` is deliberately NOT moved to "now": it already equals the last turn, and stretching it would bill idle tab time.
+- `widget/src/widget.ts`: `endChatSession()` (once per chat session, only if the visitor sent a message) on the X button (chat branch), "End chat", `pagehide` and `visibilitychange→hidden`; `navigator.sendBeacon` with `fetch keepalive` fallback. Rebuilt with `npm run build` in `widget/` and copied to `server/static/widget.js` (the only deploy path: Railway serves `/widget.js` from that file; no automated build step).
+- Tests: new `server/test_widget_chat_delivery.py` (7 tests, HTTP faked at `integrations_dispatch._post_json`, `/widget/chat/end` lifted via ast with the thread run inline).
+
+Verified: all 7 new tests FAIL on origin/main's server+agent files (`campaign_dialer has no attribute _deliver_idle_widget_chats`, no `widget_chat_end` route) and pass on the branch; full server suite 760 passed / 0 failed (753 baseline + 7) on a throwaway local Postgres; widget `tsc --noEmit` clean; `vite build` clean, bundle 530,488 B vs 530,054 B committed (diff is only the new code).
+
+First tick after deploy: chats from the last 7 days with phone or email that were never delivered WILL be sent to every connected integration (and ArthaLeads) once; older chats are left alone forever. Expect a one-off burst on accounts with chat traffic.
+
+Unverified: no real browser has exercised the beacon (sendBeacon behaviour on pagehide is from the spec, not observed here); no request to the real ArthaLeads; dashboard not opened. `graphify update .` not run (no `graphify-out/` in this worktree).
+
+Left for Codex/owner: merge + Railway deploy (migration runs on startup); watch the first tick's log lines `widget chat N delivered: {...}`; confirm ArthaLeads receives a chat lead with a non-empty transcript.
+
+### Claude — 2026-10-16 — QA fix programme, phase 1 (orchestrator security/compliance)
+
+Branch `claude/qa-phase1-orchestrator` (PR pending). Files: orchestrator/db.py, tools.py, session.py, server.py, new compliance.py, tests.
+- Verified bug, fixed: cross-account webhook (unscoped get_webhook_url + duplicate _post_webhook) removed; delivery only via account-scoped get_delivery_integrations, honouring per-integration events/fields, once each.
+- Fixed: no cross-account agent fallback (get_agent_config scoped by account; unassigned number not answered; platform demo only via is_platform_demo flag).
+- Fixed: DNC + calling window enforced at /telephony/enablex/outbound-test-call (covers Call now, test call, campaign dials); DB failure refuses without marking blocked.
+- Fixed: orchestrator honours record_calls/require_consent/announce_recording. Default record_calls is False (same as agent/), so orchestrator tenants stop recording until they turn it on.
+- Evidence: orchestrator suite 34 passed (placeholder DATABASE_URL); new tests fail before / pass after; SQL checked on throwaway pgserver Postgres. Not verified: a live EnableX call.
+- Not ported to orchestrator: Zoho CRM + Google-sign-in Sheets delivery, plan CRM gate, per-agent crm_integration_keys / agent webhook (phase 2).
+- QA false alarm: Testing Lab already forces LiveKit for Lab runs (AgentTestCall.tsx forceLiveKit).
+- Next: merge + Railway deploy of orchestrator, read-only live probe; phase 2 = ignored agent settings + inbound rules on orchestrator.

@@ -368,17 +368,37 @@ def _deliver_one(key: str, config: dict, lead: dict, account_id: int | None = No
     return _post_json(url, body)
 
 
-def deliver_lead(account_id: int, lead: dict) -> dict:
+def _wants_event(key: str, config: dict, lead: dict) -> bool:
+    """Server-side twin of agent/tools.py _integration_wants_event: honours
+    the owner's chosen event types; a lead without a known type is never
+    filtered."""
+    if key not in calls_db.EVENT_CONFIGURABLE_KEYS or (key == "sheets" and config.get("mode") == "oauth"):
+        return True
+    event = lead.get("type")
+    if event not in calls_db.INTEGRATION_EVENTS:
+        return True
+    chosen = config.get("events")
+    if not isinstance(chosen, list) or not chosen:
+        chosen = calls_db.default_integration_events(key)
+    return event in chosen
+
+
+def deliver_lead(account_id: int, lead: dict, skip_keys: frozenset = frozenset()) -> dict:
     """Deliver `lead` to every connected delivery integration for the tenant.
     Best-effort: returns a per-integration result map, never raises. Stamps
-    last_sync on each success so the UI can show 'last delivered'."""
+    last_sync on each success so the UI can show 'last delivered'. Applies
+    the owner's event and field choices per integration, as the agent's
+    call-end fan-out does."""
     results: dict[str, str] = {}
     for integ in calls_db.list_integrations(account_id):
         key = integ["key"]
-        if key not in _DELIVERY_KEYS or integ.get("status") != "connected":
+        config = integ.get("config") or {}
+        if key not in _DELIVERY_KEYS or key in skip_keys or integ.get("status") != "connected":
+            continue
+        if not _wants_event(key, config, lead):
             continue
         try:
-            ok, detail = _deliver_one(key, integ.get("config") or {}, lead, account_id)
+            ok, detail = _deliver_one(key, config, apply_field_choice(key, config, lead), account_id)
         except Exception:
             logger.exception("integration %s delivery crashed", key)
             ok, detail = False, "error"
@@ -473,19 +493,27 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
     return ok, detail
 
 
-def _call_transcript_message(transcript: list[dict]) -> str:
-    """Renders a get_call()-shaped transcript ({speaker, text} turns) as
-    readable "Caller: ... / Agent: ..." lines — the ArthaLeads-side twin of
-    agent/tools.py's _transcript_message, which only ever sees the raw
-    {role, text} shape from a live session."""
-    lines = []
+def _saved_turns(transcript: list[dict]) -> list[dict]:
+    """A saved call's transcript as {speaker: "Caller"|"Agent", text} turns,
+    empty turns dropped. Voice calls store {speaker: "visitor"|"agent",
+    text}; widget text chats store the chat model's {role: "user"|
+    "assistant", content} (calls_db.upsert_widget_chat_call)."""
+    turns = []
     for turn in transcript:
-        text = (turn.get("text") or "").strip()
+        text = str(turn.get("text") or turn.get("content") or "").strip()
         if not text:
             continue
-        speaker = "Caller" if turn.get("speaker") == "visitor" else "Agent"
-        lines.append(f"{speaker}: {text}")
-    return "\n".join(lines)
+        caller = turn.get("speaker") == "visitor" or turn.get("role") == "user"
+        turns.append({"speaker": "Caller" if caller else "Agent", "text": text})
+    return turns
+
+
+def _call_transcript_message(transcript: list[dict]) -> str:
+    """Renders a saved transcript as readable "Caller: ... / Agent: ..."
+    lines — the ArthaLeads-side twin of agent/tools.py's
+    _transcript_message, which only ever sees the raw {role, text} shape
+    from a live session."""
+    return "\n".join(f"{t['speaker']}: {t['text']}" for t in _saved_turns(transcript))
 
 
 def _saved_call_outcome(call: dict) -> dict:
@@ -494,9 +522,7 @@ def _saved_call_outcome(call: dict) -> dict:
     opt-out live only in the live session, so a manual re-send can't carry
     them."""
     visit = call.get("siteVisit") or {}
-    caller_spoke = any(
-        t.get("speaker") == "visitor" and (t.get("text") or "").strip() for t in (call.get("transcript") or [])
-    )
+    caller_spoke = any(t["speaker"] == "Caller" for t in _saved_turns(call.get("transcript") or []))
     if visit.get("date"):
         out = {"booking": "Site Visit Booked", "status": "Site Visit"}
         try:
@@ -647,11 +673,7 @@ def _arthaleads_call_body(account_id: int, call_id: int, call: dict, token: str)
         "phone": call.get("phone", ""),
         "email": call.get("email", ""),
         "message": _call_transcript_message(transcript),
-        "transcript": [
-            {"speaker": "Caller" if t.get("speaker") == "visitor" else "Agent", "text": t.get("text", "")}
-            for t in transcript
-            if (t.get("text") or "").strip()
-        ],
+        "transcript": _saved_turns(transcript),
         "sentiment": call.get("sentiment") or "neutral",
         "duration_seconds": call.get("durationSeconds"),
         "channel": call.get("channel") or "",
@@ -667,6 +689,55 @@ def _arthaleads_call_body(account_id: int, call_id: int, call: dict, token: str)
         "direction": call.get("direction") or "",
         "crm_outcome": _saved_call_outcome(call),
     }
+
+
+def deliver_widget_chat(call: dict) -> dict:
+    """Deliver one finished widget text chat ({id, account_id} from
+    calls_db.idle_widget_chats or widget_chat_call) to the account's
+    integrations — the server-side twin of the agent's call-end fan-out,
+    which text chats never pass through (no LiveKit room, no agent). Same
+    skip rule as voice: nothing reaches a CRM without a phone number or
+    email. ArthaLeads goes through push_call_to_arthaleads so the call's
+    arthaleads_status is stamped exactly as a manual send would. Always
+    stamps integrations_delivered_at, so a failing integration is not
+    retried every tick (the manual Send button is the retry)."""
+    call_id, account_id = int(call["id"]), int(call["account_id"])
+    if not calls_db.claim_widget_chat_delivery(call_id, account_id):
+        return {}
+    saved = calls_db.get_call(call_id, account_id)
+    if saved is None:
+        return {}
+    if not (saved.get("phone") or saved.get("email")):
+        results = {"skipped": "no_contact"}
+    else:
+        transcript = _saved_turns(saved.get("transcript") or [])
+        lead = {
+            "type": "call_completed",
+            "name": saved.get("name"),
+            "phone": saved.get("phone"),
+            "email": saved.get("email"),
+            "channel": "Website chat",
+            "duration_seconds": saved.get("durationSeconds"),
+            "transcript": transcript,
+            "message": "\n".join(f"{t['speaker']}: {t['text']}" for t in transcript),
+            "extracted_data": saved.get("extractedData") or {},
+            "language": saved.get("replyLanguage") or "",
+            "agent_name": saved.get("agent") or "",
+            "agent_id": calls_db.agent_public_id(saved.get("agentId")),
+            "page_path": saved.get("pagePath") or "",
+            "call_id": call_id,
+        }
+        results = deliver_lead(account_id, lead, skip_keys=frozenset({"arthaleads"}))
+        if _arthaleads_token(account_id)[0]:
+            ok, detail = push_call_to_arthaleads(account_id, call_id)
+            results["arthaleads"] = "ok" if ok else detail
+        for key, outcome in results.items():
+            calls_db.record_integration_delivery(
+                account_id, key, "call_completed", "sent" if outcome == "ok" else "failed",
+                "" if outcome == "ok" else outcome, saved.get("name") or "", call_id,
+            )
+    calls_db.mark_widget_chat_delivered(call_id, account_id, results)
+    return results
 
 
 def report_contact_not_reachable(account_id: int, contact: dict) -> tuple[bool, str]:
