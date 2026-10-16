@@ -132,7 +132,6 @@ export interface UserPreferences {
   notify_leads: boolean
   notify_calls: boolean
   notify_billing: boolean
-  notify_product: boolean
   dashboard_checklist_dismissed: boolean
   dashboard_hidden_cards: string
   bell_calls: boolean

@@ -158,7 +158,8 @@ export function WebsiteWidget() {
 
         <Card>
           <h3 className="mb-3 text-sm font-semibold">Add your website</h3>
-          <div className="flex flex-wrap items-end gap-3">
+          {/* Grid, not flex-wrap: flex-1 fields never wrapped and squeezed to a few characters at ~800px. */}
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Field label="Site name">
               <input
                 value={newName}
@@ -212,13 +213,13 @@ export function WebsiteWidget() {
                 value={newGreeting}
                 onChange={(e) => setNewGreeting(e.target.value.slice(0, 140))}
                 placeholder="Hi! I'm Artha - ask me anything, no forms."
-                className="w-full min-w-[240px] rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+                className="w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
               />
             </Field>
             <button
               onClick={handleCreate}
               disabled={!newName.trim()}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
+              className="flex items-center justify-center gap-2 justify-self-start rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
             >
               <Icon name="add" className="text-[18px]" />
               Add website
