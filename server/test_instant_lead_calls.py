@@ -221,7 +221,7 @@ class LeadsInboundRoute(unittest.TestCase):
             return ingest_result
 
         db = SimpleNamespace(
-            account_id_for_lead_webhook_token=Mock(return_value=42),
+            account_id_for_inbound_token=Mock(return_value=42),
             ingest_inbound_lead=ingest,
             next_calling_window_open=Mock(return_value=opens),
         )

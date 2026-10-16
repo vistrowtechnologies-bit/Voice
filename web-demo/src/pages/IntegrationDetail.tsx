@@ -842,6 +842,8 @@ function ConnectionForm({
   const [name, setName] = useState(key === 'webhook' && connected ? integration.name : '')
   const [showToken, setShowToken] = useState(false)
   const [saving, setSaving] = useState(false)
+  const { user } = useAuth()
+  const link = integration.config.link
 
   const needsUrl = key !== 'arthaleads'
   const canSave = canManage && !saving && (needsUrl ? /^https:\/\/\S+$/.test(url.trim()) : token.trim().length > 0)
@@ -904,7 +906,11 @@ function ConnectionForm({
         {(key === 'webhook' || key === 'arthaleads') && (
           <Field
             label={key === 'arthaleads' ? 'Connection key' : 'Auth token (optional)'}
-            hint={key === 'arthaleads' ? 'In ArthaLeads, open Integrations → Vistrow Voice and copy the connection key.' : 'Sent as a "token" field in the JSON body.'}
+            hint={
+              key === 'arthaleads'
+                ? 'Paste the connection token from ArthaLeads → Integrations → Vistrow Voice (Connection tab). That is the only step: ArthaLeads is linked to this account automatically.'
+                : 'Sent as a "token" field in the JSON body.'
+            }
           >
             <div className="flex gap-2">
               <input
@@ -925,6 +931,17 @@ function ConnectionForm({
                 <Icon name={showToken ? 'visibility_off' : 'visibility'} className="text-[16px]" />
               </button>
             </div>
+            {key === 'arthaleads' && connected && link?.status === 'linked' && (
+              <p className="mt-1.5 text-xs text-success">
+                Verified with ArthaLeads{link.org_name ? ` · ${link.org_name}` : ''} · Vistrow account {user?.accountId}
+              </p>
+            )}
+            {key === 'arthaleads' && connected && link?.status === 'pending' && (
+              <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-500">Saved, but ArthaLeads could not be reached to finish linking. Click Send test to retry.</p>
+            )}
+            {key === 'arthaleads' && connected && link?.status === 'rejected' && (
+              <p className="mt-1.5 text-xs text-destructive">{link.error}</p>
+            )}
           </Field>
         )}
         {canManage && (

@@ -569,6 +569,15 @@ export interface Campaign {
   contacts?: CampaignContact[]
 }
 
+// ArthaLeads single-token handshake outcome; set by the server, never by the browser.
+export interface IntegrationLink {
+  status: 'linked' | 'pending' | 'rejected'
+  org_name?: string
+  linked_at?: string
+  checked_at?: string
+  error?: string
+}
+
 export interface Integration {
   key: string
   name: string
@@ -578,7 +587,7 @@ export interface Integration {
   // Mostly strings (url, channel, google_email...), plus `events` (string[])
   // and the Sheets sheet_id (number). Tokens are redacted server-side.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>
+  config: Record<string, any> & { link?: IntegrationLink }
   lastSync: string | null
   lastError: string | null
   // True for integrations switched off for new connections (Facebook Lead
