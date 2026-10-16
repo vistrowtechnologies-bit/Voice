@@ -300,7 +300,19 @@ export interface FollowUpPolicy {
   visitReminderTime: string
   nurtureEnabled: boolean
   nurtureDays: number
+  /** Wait before the first automatic call to a new lead: 0, 30, 60, 120,
+   * 300 or 600 seconds. A "Call now" request is never delayed. */
+  firstCallDelaySeconds: number
 }
+
+export const FIRST_CALL_DELAY_CHOICES: { seconds: number; label: string }[] = [
+  { seconds: 0, label: 'Immediately' },
+  { seconds: 30, label: 'After 30 seconds' },
+  { seconds: 60, label: 'After 1 minute' },
+  { seconds: 120, label: 'After 2 minutes' },
+  { seconds: 300, label: 'After 5 minutes' },
+  { seconds: 600, label: 'After 10 minutes' },
+]
 
 export const FOLLOW_UP_DEFAULTS: FollowUpPolicy = {
   maxAttempts: 3,
@@ -313,6 +325,7 @@ export const FOLLOW_UP_DEFAULTS: FollowUpPolicy = {
   visitReminderTime: '11:00',
   nurtureEnabled: true,
   nurtureDays: 3,
+  firstCallDelaySeconds: 0,
 }
 
 export interface AgentVariable {

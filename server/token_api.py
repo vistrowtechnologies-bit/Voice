@@ -10,6 +10,7 @@ import os
 import re
 import secrets
 import subprocess
+import datetime
 import threading
 import time
 import urllib.error
@@ -6682,13 +6683,29 @@ def _lead_form_fields(extra: dict) -> dict:
 
 
 def _queued_until(account_id: int, result: dict) -> dict:
-    """Adds when a queued lead will be dialled if the calling window is shut
-    now, so the sender can say "call scheduled for 9:00" (account timezone)."""
+    """Adds when a queued lead will be dialled if that is not right now: the
+    calling window is shut, or the agent waits before a first call ("call new
+    leads after"). The later of the two wins, so the sender can say "call
+    scheduled for 9:00" (account timezone)."""
     if result.get("queued"):
         opens = calls_db.next_calling_window_open(account_id)
+        if result.get("delay_seconds"):
+            due = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=result["delay_seconds"])
+            if opens is None or due > opens:
+                opens = due
         if opens is not None:
             return {**result, "queued_until": opens.isoformat()}
     return result
+
+
+def _wake_dialer(result: dict) -> None:
+    """Dial a queued lead now, or when its first-call delay is over."""
+    if not result.get("queued"):
+        return
+    if result.get("delay_seconds"):
+        campaign_dialer.notify_after(result["delay_seconds"])
+    else:
+        campaign_dialer.notify()
 
 
 @app.post("/leads/inbound/{account_id}")
@@ -6790,8 +6807,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         if not result.get("ok"):
             logger.warning("leads_inbound: ArthaLeads lead not queued for account %s: %s",
                            account_id, result.get("reason"))
-        if result.get("queued"):
-            campaign_dialer.notify()
+        _wake_dialer(result)
         return await asyncio.to_thread(_queued_until, account_id, result)
     name = str(body.get("name") or body.get("full_name") or "").strip()
     phone = str(body.get("phone") or body.get("phone_number") or "").strip()
@@ -6809,8 +6825,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
     )
     if not result.get("ok"):
         logger.warning("leads_inbound: could not queue lead for account %s: %s", account_id, result.get("reason"))
-    if result.get("queued"):
-        campaign_dialer.notify()
+    _wake_dialer(result)
     return await asyncio.to_thread(_queued_until, account_id, result)
 
 
@@ -6903,8 +6918,7 @@ async def webhooks_meta_event(request: Request) -> dict:
             )
             if not result.get("ok"):
                 logger.warning("webhooks_meta_event: could not queue lead %s: %s", leadgen_id, result.get("reason"))
-            if result.get("queued"):
-                campaign_dialer.notify()
+            _wake_dialer(result)
     return {"ok": True}
 
 
