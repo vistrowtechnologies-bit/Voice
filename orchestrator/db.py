@@ -433,24 +433,122 @@ def book_native_appointment(
         conn.close()
 
 
-def get_delivery_integrations(account_id: int | None) -> list[dict]:
+# Minimal mirror of agent/plan_policy.py's account_policy(...)["features"]["crm"]:
+# the "crm" feature needs the Growth plan or higher; the platform owner always
+# has it; an unknown plan or a missing account fails closed. It reads
+# accounts.plan only (no subscriptions row, no trial marker), exactly as
+# plan_policy does — so a free-trial account is judged on its plan, never as
+# "no plan" for lacking a subscription.
+_PLAN_ORDER = {"starter": 0, "growth": 1, "scale": 2}
+_CRM_MIN_PLAN = "growth"
+
+
+def _plan_allows_crm(conn, account_id: int) -> bool:
+    row = conn.execute(
+        "SELECT plan, is_platform_owner FROM accounts WHERE id = ?", (account_id,)
+    ).fetchone()
+    if not row:
+        return False
+    if row["is_platform_owner"]:
+        return True
+    plan = str(row["plan"] or "").lower()
+    return plan in _PLAN_ORDER and _PLAN_ORDER[plan] >= _PLAN_ORDER[_CRM_MIN_PLAN]
+
+
+def get_delivery_integrations(account_id: int | None, allowed_keys: list[str] | None = None) -> list[dict]:
     """This tenant's connected lead-delivery integrations (Slack/Sheets/
-    WhatsApp/CRM/ArthaLeads), account-scoped, as [{key, config}]. Empty on any
-    error — integration delivery is best-effort and must never break a live
-    call."""
+    WhatsApp/CRM/ArthaLeads/Zoho), account-scoped, as [{key, config}]. Empty
+    when the plan lacks the crm feature, and on any error — integration
+    delivery is best-effort and must never break a live call. Mirror of
+    agent/db.py get_delivery_integrations.
+
+    allowed_keys, when non-empty, restricts delivery to those integration
+    keys (the agent's crm_integration_keys); empty/None = all connected."""
     if account_id is None:
         return []
     conn = dbconn.connect()
     try:
+        if not _plan_allows_crm(conn, account_id):
+            logger.info("get_delivery_integrations: account_id=%s plan blocks crm feature", account_id)
+            return []
         rows = conn.execute(
             "SELECT key, config_json FROM integrations "
             "WHERE account_id = ? AND status = 'connected' "
-            "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads')",
+            "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads', 'zoho_crm')",
             (account_id,),
         ).fetchall()
+        if allowed_keys:
+            allowed = set(allowed_keys)
+            rows = [r for r in rows if r["key"] in allowed]
         return [{"key": r["key"], "config": integration_crypto.decode_config(r["config_json"])} for r in rows]
-    except psycopg.Error:
+    except Exception:
+        logger.warning("get_delivery_integrations failed for account_id=%s", account_id, exc_info=True)
         return []
+    finally:
+        conn.close()
+
+
+def get_arthaleads_plan_status(account_id: int | None) -> dict:
+    """Whether ArthaLeads is connected and whether the plan allows automatic
+    delivery — so a call whose delivery the plan skipped can say so on its
+    own row. Mirror of agent/db.py get_arthaleads_plan_status."""
+    if account_id is None:
+        return {"connected": False, "plan_allows_crm": False}
+    conn = dbconn.connect()
+    try:
+        plan_allows = _plan_allows_crm(conn, account_id)
+        row = conn.execute(
+            "SELECT status FROM integrations WHERE account_id = ? AND key = 'arthaleads'",
+            (account_id,),
+        ).fetchone()
+        connected = bool(row) and row["status"] == "connected"
+        return {"connected": connected, "plan_allows_crm": plan_allows}
+    except Exception:
+        return {"connected": False, "plan_allows_crm": False}
+    finally:
+        conn.close()
+
+
+def record_integration_delivery(
+    account_id: int | None, key: str, event_type: str, status: str,
+    detail: str = "", lead_name: str = "", call_id: int | None = None,
+) -> None:
+    """One Activity row for the dashboard's integration page (status: sent,
+    failed or skipped). Mirror of agent/db.py record_integration_delivery.
+    Best-effort - never raises into a live call."""
+    if account_id is None:
+        return
+    try:
+        conn = dbconn.connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO integration_deliveries (account_id, key, event_type, status, detail, lead_name, call_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (account_id, key, (event_type or "")[:40], status, (detail or "")[:500],
+                     str(lead_name or "")[:200], call_id),
+                )
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("could not record integration delivery for %s", key, exc_info=True)
+
+
+def update_integration_config(account_id: int | None, key: str, config: dict) -> None:
+    """Persist a refreshed OAuth config (Zoho / Google Sheets rotated
+    access_token, a new agent tab) without touching status/last_sync/
+    last_error. Mirror of agent/db.py update_integration_config."""
+    if account_id is None:
+        return
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE integrations SET config_json = ? WHERE key = ? AND account_id = ?",
+                (integration_crypto.encode_config(config), key, account_id),
+            )
+    except Exception:
+        logger.exception("could not persist refreshed integration config")
     finally:
         conn.close()
 
