@@ -24,7 +24,11 @@ Every line is tagged:
 | F5 | One outbound line limit (`OUTBOUND_CHANNEL_LIMIT`, default 2) for ALL workspaces together | VERIFIED | `livekit_sip._OUTBOUND_CHANNELS`, counts every outbound room |
 | F6 | Inbound: one LiveKit inbound trunk lists both numbers; the agent finds the owner from the dialled number (`sip.trunkPhoneNumber`) and declines if no owner | VERIFIED (code + `lk sip inbound list`) |
 | F7 | Inbound to ws 2's +917713128715 works | VERIFIED | inbound calls 1160, 1161, 1211 |
-| F8 | Inbound to ws 1's +917935466148 has **never** happened; EnableX's Event URL for it is empty; the portal shows no SIP forwarding setting | VERIFIED (DB + portal) — so inbound for Prophunt is **UNVERIFIED and probably not set up at EnableX** |
+| F8 | Inbound is tenant self-serve: the number's **Event URL** in the tenant's EnableX portal points at our `/telephony/enablex/inbound-event`; we then accept and bridge the call to LiveKit SIP using the **tenant's own App ID/key** (`enablex_accept_call`, `enablex_connect_to_sip`) | VERIFIED (code; +917713128715's Event URL = `https://voice-production-2950.up.railway.app/telephony/enablex/inbound-event`) |
+| F8b | +917935466148 (bought 16 Oct) has an **empty** Event URL and has never received a call | VERIFIED (portal, per-number view; DB) |
+| F8c | How EnableX authenticates when it bridges into our LiveKit SIP host (user `vistrow-4xfxv26j`) is configured on EnableX's side for our login; whether a customer's SEPARATE EnableX account gets this automatically | UNVERIFIED — EnableX question |
+| F8d | Webhook authenticity check is off in production (`ENABLEX_WEBHOOK_USER/PASS` not set), so anyone can POST to the inbound-event URL | VERIFIED (env var names) |
+| F13 | The EnableX login has 3 numbers: +917713128715 ("Vistrow voice"), +917935466148 ("Prophunt - Vistrow Voice"), +917713128717 ("Prophunt LLP Arthaleads" — ArthaLeads' own CRM calling line, owner confirmed; stays out of Vistrow) | VERIFIED (portal) |
 | F9 | The workspace's EnableX App ID/key are NOT used on the LiveKit call path; only by the old REST path and the orchestrator | VERIFIED | grep: only `server/calls_db.py`, `orchestrator/db.py` |
 | F10 | Adding a number never checks with EnableX that the tenant owns it | VERIFIED | `add_phone_number` |
 | F11 | **All four EnableX projects sit in ONE EnableX login with ONE wallet (₹580.38)**: "Prophunt - Vistrow Voice", "Prophunt LLP Arthaleads", "Vistrow voice", "Arthaleads WebRTC". Tenants today are projects, not separate EnableX accounts | VERIFIED | EnableX portal, project selector |
@@ -63,6 +67,15 @@ Consequence: my first draft (one trunk per number) is long-lived config, not per
 
 ---
 
+## 2b. How other voice-AI platforms do "bring your own telephony" (from their docs)
+
+Two patterns, both strictly per customer:
+
+1. **Provider API keys.** The customer pastes their provider account keys; the platform dials and answers with those keys, so calls are billed to the customer and carry their number. Bolna (India): Plivo, Exotel, Twilio "bring your own account", keys entered in the dashboard (https://www.bolna.ai/docs/supported-telephony-providers, https://www.bolna.ai/docs/plivo).
+2. **Per-customer SIP trunk credential.** The customer creates a SIP trunk at their carrier and gives the platform its termination address plus a username/password (or allowlists the platform's IPs); inbound points at the platform's SIP host. Vapi: a `byo-sip-trunk` credential per customer, numbers imported against it (https://docs.vapi.ai/advanced/sip/twilio). Retell: number import takes termination URI + SIP username/password (https://docs.retellai.com/deploy/custom-telephony.md).
+
+In both, the platform never sends one customer's calls through another customer's account. Ours today: inbound = pattern 1 (correct, tenant keys); outbound = one shared IP-authorised SIP trunk (neither pattern — the leak).
+
 ## 3. Target design (needs owner decision on 3.1)
 
 Rule: **the number is the tenant key.** Five invariants:
@@ -93,7 +106,7 @@ Recommendation: **B**, because a bug in our code then still cannot ring as anoth
 | T3 | Number ownership check against EnableX on Add number | Claude | blocked on EnableX Q3 |
 | T4 | Line limit per workspace | Claude | blocked on EnableX Q4 (are lines per project?) |
 | T5 | Create trunks for existing numbers after deploy | Claude | after T1 |
-| T6 | Prophunt inbound: get EnableX to forward +917935466148 to our LiveKit SIP host, then test | Owner + EnableX | not set up (F8) |
+| T6 | Prophunt inbound: set +917935466148's Event URL in the Prophunt EnableX project to our inbound-event URL (self-serve, same as +917713128715), then test | Owner approves the portal change | not set (F8b) |
 | T7 | Per-tenant inbound SIP login | later | not started |
 | A1 | ArthaLeads: one org-wide ad list in WhatsApp and Facebook pickers, note when a CTWA ad is picked under Facebook | Agent A | ready to dispatch; premises VERIFIED |
 | A2 | Vistrow contact page: hide internal ArthaLeads keys, show "From ArthaLeads · Facebook Ad lead" + link | Agent B | ready to dispatch; premise VERIFIED |
@@ -122,5 +135,5 @@ ship to staging / a PR only; nothing merges to production without review.
 2. Those IP ranges are shared by every LiveKit customer. What stops another LiveKit user sending calls with our numbers as caller ID? Can we have a per-project secret or SIP digest auth on outbound?
 3. Which API lists the numbers mapped to a project, using that project's App ID and key?
 4. Are channel (simultaneous call) limits per project or per account?
-5. Please forward inbound calls on +917935466148 (project "Prophunt - Vistrow Voice") to our LiveKit SIP host, the same way +917713128715 is set up.
+5. When a customer uses their OWN EnableX account, does your bridge into our LiveKit SIP host (`connect` to a sip: URI) work with no setup on your side, or do you have to add our SIP login to their account like you did for ours?
 6. When a customer brings their OWN EnableX account, what do they configure so their numbers reach us and our outbound calls are billed to them?
