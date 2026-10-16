@@ -181,6 +181,8 @@ export interface CustomVoiceQuote {
   reason: string
   balance: number
   consentSentence: string
+  // Long English and Hindi reading passages. The clone dialog ships its own
+  // short script for each of the 12 languages (lib/voiceClone CLONE_SCRIPTS).
   script: string
   scriptHi: string
 }
@@ -238,12 +240,25 @@ export async function fetchCustomVoicePreview(id: string, text?: string, languag
 /** Uploads the sample and spoken consent. XHR rather than fetch so the
  * upload can report progress (0..1). Rejects with the server's `detail`. */
 export function createCustomVoice(
-  body: { name: string; language: string; sample: Blob; sampleName: string; consent: Blob; consentName: string },
+  body: {
+    name: string
+    // The language spoken in the recording.
+    language: string
+    gender: 'male' | 'female'
+    // 'record' (in the browser, up to 60 s) or 'upload' (a file, up to 5 min).
+    source: 'record' | 'upload'
+    sample: Blob
+    sampleName: string
+    consent: Blob
+    consentName: string
+  },
   onProgress?: (fraction: number) => void,
 ): Promise<CustomVoice & { creditsCharged: number }> {
   const form = new FormData()
   form.append('name', body.name)
   form.append('language', body.language)
+  form.append('gender', body.gender)
+  form.append('source', body.source)
   form.append('sample', body.sample, body.sampleName)
   form.append('consent', body.consent, body.consentName)
   return new Promise((resolve, reject) => {
