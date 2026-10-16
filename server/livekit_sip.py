@@ -112,6 +112,71 @@ async def ensure_outbound_trunk(address: str, caller_id: str) -> str:
             return trunk_id
 
 
+def _digits(number: str) -> str:
+    return "".join(c for c in (number or "") if c.isdigit())
+
+
+async def _sbc_address(lkapi) -> str:
+    """EnableX's outbound SBC host, shared by every number's trunk (EnableX
+    authorises by LiveKit's source IP, and tells projects apart by the
+    caller number). Read from the platform setting, else from the original
+    shared trunk, which production has had since Sep 2026."""
+    address = calls_db.get_setting(OUTBOUND_TRUNK_ADDRESS_SETTING, calls_db.PLATFORM_ACCOUNT_ID) or ""
+    if address:
+        return address
+    platform_trunk = calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
+    if platform_trunk:
+        found = await lkapi.sip.list_outbound_trunk(ListSIPOutboundTrunkRequest(trunk_ids=[platform_trunk]))
+        for trunk in found.items:
+            if trunk.address:
+                return trunk.address
+    return ""
+
+
+async def _dedicated_trunk(lkapi, digits: str) -> str:
+    """The outbound trunk whose ONLY number is this one, or ''."""
+    found = await lkapi.sip.list_outbound_trunk(ListSIPOutboundTrunkRequest(numbers=[digits]))
+    for trunk in found.items:
+        if [_digits(n) for n in trunk.numbers] == [digits]:
+            return trunk.sip_trunk_id
+    return ""
+
+
+async def ensure_number_outbound_trunk(number: str) -> str:
+    """Outbound trunk dedicated to one phone number, created on first use.
+
+    One trunk per number, its numbers list holding only that number, so the
+    From/caller ID of every call is the number that placed it and EnableX
+    bills that number's own project. Returns the trunk id, or '' when the
+    SBC address is not known yet."""
+    digits = _digits(number)
+    if not digits:
+        return ""
+    async with api.LiveKitAPI() as lkapi:
+        trunk_id = await _dedicated_trunk(lkapi, digits)
+        if trunk_id:
+            return trunk_id
+        address = await _sbc_address(lkapi)
+        if not address:
+            return ""
+        info = SIPOutboundTrunkInfo(name=f"{OUTBOUND_TRUNK_NAME} {digits}", address=address, numbers=[digits])
+        trunk = await lkapi.sip.create_outbound_trunk(CreateSIPOutboundTrunkRequest(trunk=info))
+        logger.info("created outbound trunk %s for %s", trunk.sip_trunk_id, digits)
+        return trunk.sip_trunk_id
+
+
+async def delete_number_outbound_trunk(number: str) -> None:
+    """Remove a number's dedicated outbound trunk when the number is deleted.
+    The original platform trunk is never removed here."""
+    digits = _digits(number)
+    if not digits:
+        return
+    async with api.LiveKitAPI() as lkapi:
+        trunk_id = await _dedicated_trunk(lkapi, digits)
+        if trunk_id and trunk_id != calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID):
+            await lkapi.sip.delete_trunk(DeleteSIPTrunkRequest(sip_trunk_id=trunk_id))
+
+
 # How long an empty outbound room is kept alive before LiveKit reclaims it -
 # only matters if create_sip_participant fails after the room is already
 # created (the normal case deletes the room itself, see below). Same value
@@ -213,15 +278,25 @@ async def place_outbound_call(
                 "error": "All outbound lines are in use right now. Try again when a call ends.",
             }
 
-    trunk_id = calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
+    # The caller ID must be a number this workspace owns. Each number dials
+    # through its own outbound trunk (number_outbound_trunk), so one tenant
+    # can never ring a callee from another tenant's number - which is exactly
+    # what the single shared trunk did until 16 Oct 2026: its numbers list
+    # held only +917713128715, so a test call from account 1's own
+    # +917935466148 rang the callee as account 2's number.
+    owner = calls_db.get_phone_number_by_number(from_number)
+    if not owner or owner.get("accountId") != account_id:
+        return {"ok": False, "blocked": True, "error": "That caller number isn't registered to this workspace."}
+    try:
+        trunk_id = await ensure_number_outbound_trunk(from_number)
+    except Exception:
+        logger.exception("could not resolve the outbound trunk for %s", from_number)
+        trunk_id = ""
     if not trunk_id:
-        # Not a bug - the trunk hasn't been provisioned yet (needs EnableX's
-        # confirmed outbound SBC address; see ensure_outbound_trunk). Fails
-        # loudly rather than silently falling through to the old flow, so a
-        # half-migrated deploy can't accidentally run both paths at once.
+        # Fails loudly; never falls back to another number's trunk.
         return {
             "ok": False,
-            "error": "Outbound SIP trunk is not configured yet (ensure_outbound_trunk has not been run).",
+            "error": "This number's outbound line isn't set up yet. Remove and re-add the number, or contact support.",
         }
 
     # "test-phone-" marks an operator dialling their own agent from the

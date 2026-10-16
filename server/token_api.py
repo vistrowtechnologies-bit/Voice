@@ -5490,10 +5490,16 @@ async def _sync_dispatch_rule(number_id: int, account_id: int) -> str | None:
         return None
     try:
         await livekit_sip.upsert_dispatch_rule(row)
-        return None
     except Exception as exc:
         logger.exception("failed to sync LiveKit dispatch rule for number %s", row["number"])
         return f"Number saved, but LiveKit call routing wasn't updated: {exc}"
+    # Its own outbound line, so calls from this number carry this number.
+    # A miss here is retried on the first dial (place_outbound_call).
+    try:
+        await livekit_sip.ensure_number_outbound_trunk(row["number"])
+    except Exception:
+        logger.exception("failed to set up the outbound trunk for number %s", row["number"])
+    return None
 
 
 @app.get("/telephony/sip-auth")
@@ -5539,6 +5545,11 @@ async def delete_phone_number(number_id: int, user: dict = Depends(require_role(
             await livekit_sip.delete_dispatch_rule(row)
         except Exception:
             logger.exception("failed to delete LiveKit dispatch rule for number %s", row["number"])
+    if row is not None:
+        try:
+            await livekit_sip.delete_number_outbound_trunk(row["number"])
+        except Exception:
+            logger.exception("failed to delete the outbound trunk for number %s", row["number"])
     calls_db.delete_phone_number(number_id, user["account_id"])
     if calls_db.get_setting(livekit_sip.TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID):
         try:
