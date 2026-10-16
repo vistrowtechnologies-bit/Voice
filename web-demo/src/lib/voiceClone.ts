@@ -11,7 +11,7 @@ export const CONSENT_MAX_SECONDS = 30
 export const UPLOAD_MAX_BYTES = 20 * 1024 * 1024
 
 // The languages a cloned voice can be made for. Same names as the agent's
-// language list, but Odia is or-IN here (the clone API's code).
+// language list and codes as the server accepts (Odia is od-IN).
 export const CLONE_LANGUAGES: readonly (readonly [string, string])[] = [
   ['hi-IN', 'Hindi'],
   ['en-IN', 'English'],
@@ -23,11 +23,11 @@ export const CLONE_LANGUAGES: readonly (readonly [string, string])[] = [
   ['gu-IN', 'Gujarati'],
   ['bn-IN', 'Bengali'],
   ['pa-IN', 'Punjabi'],
-  ['or-IN', 'Odia'],
+  ['od-IN', 'Odia'],
 ]
 
 export function cloneLanguageLabel(code: string): string {
-  const norm = code === 'od-IN' ? 'or-IN' : code
+  const norm = code === 'or-IN' ? 'od-IN' : code
   return CLONE_LANGUAGES.find(([c]) => c === norm)?.[1] ?? code
 }
 
