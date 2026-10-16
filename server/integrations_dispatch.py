@@ -704,6 +704,9 @@ def deliver_widget_chat(call: dict) -> dict:
     call_id, account_id = int(call["id"]), int(call["account_id"])
     if not calls_db.claim_widget_chat_delivery(call_id, account_id):
         return {}
+    # Read before the transcript, so it never claims more turns than were
+    # sent; resync_widget_chat_arthaleads re-sends anything newer.
+    up_to = calls_db.widget_chat_ended_at(call_id, account_id)
     saved = calls_db.get_call(call_id, account_id)
     if saved is None:
         return {}
@@ -736,7 +739,26 @@ def deliver_widget_chat(call: dict) -> dict:
                 account_id, key, "call_completed", "sent" if outcome == "ok" else "failed",
                 "" if outcome == "ok" else outcome, saved.get("name") or "", call_id,
             )
-    calls_db.mark_widget_chat_delivered(call_id, account_id, results)
+    calls_db.mark_widget_chat_delivered(call_id, account_id, {**results, "upTo": up_to})
+    return results
+
+
+def resync_widget_chat_arthaleads(call: dict) -> dict:
+    """Re-send a chat whose later turns ArthaLeads never got (from
+    calls_db.stale_delivered_widget_chats). Only ArthaLeads: it updates the
+    same call in place by call_id, while Sheets, webhooks and other CRMs would
+    add a second row for the same chat. Recorded either way, so a failing
+    re-send is not retried every tick (the manual Send button is the retry)."""
+    call_id, account_id = int(call["id"]), int(call["account_id"])
+    up_to = calls_db.widget_chat_ended_at(call_id, account_id)
+    ok, detail = push_call_to_arthaleads(account_id, call_id)
+    saved = calls_db.get_call(call_id, account_id) or {}
+    calls_db.record_integration_delivery(
+        account_id, "arthaleads", "call_updated", "sent" if ok else "failed",
+        "" if ok else detail, saved.get("name") or "", call_id,
+    )
+    results = {"arthaleads": "ok" if ok else detail, "upTo": up_to, "resent": True}
+    calls_db.restamp_widget_chat_delivery(call_id, account_id, results)
     return results
 
 

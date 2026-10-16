@@ -46,6 +46,8 @@ const EVENTS: Array<{ id: string; label: string; hint: string }> = [
 ]
 const EVENT_LABELS: Record<string, string> = {
   call_completed: 'End of call',
+  // A website chat re-sent with the turns typed after its first delivery.
+  call_updated: 'Chat updated',
   lead_update: 'Lead details',
   platform_lead_update: 'Lead details',
   appointment_booked: 'Appointment',
