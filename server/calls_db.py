@@ -38,6 +38,7 @@ import billing_documents
 import storage_usage
 from storage import b2_client
 import campaign_window
+import lead_quality
 import retry_rules
 from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
@@ -1296,6 +1297,15 @@ def init_tables() -> None:
                 ("llm_prompt_tokens", "INTEGER"),
                 ("llm_cached_tokens", "INTEGER"),
                 ("llm_completion_tokens", "INTEGER"),
+                # Automatic conversation intelligence (campaign_dialer's
+                # auto-analysis sweep): how many times the sweep has tried
+                # this call, when it last claimed it, and the last error or
+                # skip reason. Lets a call that keeps failing stop after
+                # AUTO_ANALYSIS_MAX_ATTEMPTS instead of being paid for every
+                # tick. NULL/0 = never tried (every call before this column).
+                ("intelligence_attempts", "INTEGER DEFAULT 0"),
+                ("intelligence_attempted_at", "TEXT"),
+                ("intelligence_error", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # 1 = a recording link issued before link expiry existed: it keeps
@@ -2848,7 +2858,9 @@ def _lead_status(row: dict) -> str:
     # site visits. Computed per request, never stored, so no migration.
     if row["site_visit_json"]:
         return "Appointment Booked"
-    if row["lead_name"]:
+    # A real name and a way to reach them - not "Website visitor" with no
+    # contact (lead_quality.QUALIFIED_SQL is the same rule for the counts).
+    if lead_quality.is_qualified(row["lead_name"], _row_get(row, "lead_phone"), _row_get(row, "lead_email")):
         return "Qualified"
     return "New"
 
@@ -3430,6 +3442,79 @@ def save_call_intelligence(call_id: int, account_id: int, data: dict) -> None:
         conn.close()
 
 
+AUTO_ANALYSIS_MAX_ATTEMPTS = 3
+# A failed attempt is retried no sooner than this, so a model outage does not
+# burn all three attempts in three consecutive 15 s ticks.
+_AUTO_ANALYSIS_RETRY_SECONDS = 600
+
+
+def auto_analysis_candidates(min_age_seconds: int = 120, max_age_hours: int = 24, limit: int = 50) -> list[dict]:
+    """Finished calls the automatic analysis sweep may analyze: ended more
+    than min_age_seconds and less than max_age_hours ago, no intelligence
+    yet, fewer than AUTO_ANALYSIS_MAX_ATTEMPTS tries, not a Testing Lab run
+    (test_run_id) nor a dashboard Test Call (room 'test-agent-'/'test-phone-',
+    the same prefixes isDashboardTest uses). A widget text chat counts as
+    finished only once the idle sweep delivered it (integrations_delivered_at),
+    since its ended_at moves with every typed turn. Oldest first.
+    Transcripts are returned for the caller's turn-count check; calls removed
+    by a retention purge are simply gone, so they never appear here."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, account_id, room_name, transcript_json FROM calls "
+            "WHERE account_id IS NOT NULL "
+            "AND COALESCE(intelligence_json, '') = '' "
+            "AND COALESCE(intelligence_attempts, 0) < ? "
+            "AND (intelligence_attempted_at IS NULL OR intelligence_attempted_at::timestamp < (now() AT TIME ZONE 'UTC') - make_interval(secs => ?)) "
+            "AND COALESCE(test_run_id, '') = '' "
+            "AND room_name NOT LIKE 'test-agent-%%' AND room_name NOT LIKE 'test-phone-%%' "
+            "AND (room_name NOT LIKE 'widget-chat-%%' OR integrations_delivered_at IS NOT NULL) "
+            "AND ended_at::timestamptz < now() - make_interval(secs => ?) "
+            "AND ended_at::timestamptz > now() - make_interval(hours => ?) "
+            "ORDER BY id LIMIT ?",
+            (AUTO_ANALYSIS_MAX_ATTEMPTS, _AUTO_ANALYSIS_RETRY_SECONDS, min_age_seconds, max_age_hours, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def claim_auto_analysis(call_id: int, account_id: int) -> bool:
+    """Counts one attempt and stamps it, only if the call is still unanalyzed
+    and under the attempt cap. The conditional UPDATE is the single-runner
+    guard: when two server replicas sweep at once, exactly one gets True."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                f"UPDATE calls SET intelligence_attempts = COALESCE(intelligence_attempts, 0) + 1, "
+                f"intelligence_attempted_at = {_NOW} "
+                "WHERE id = ? AND account_id = ? AND COALESCE(intelligence_json, '') = '' "
+                "AND COALESCE(intelligence_attempts, 0) < ? "
+                "AND (intelligence_attempted_at IS NULL OR intelligence_attempted_at::timestamp < (now() AT TIME ZONE 'UTC') - make_interval(secs => ?))",
+                (call_id, account_id, AUTO_ANALYSIS_MAX_ATTEMPTS, _AUTO_ANALYSIS_RETRY_SECONDS),
+            )
+            return cur.rowcount == 1
+    finally:
+        conn.close()
+
+
+def record_auto_analysis_error(call_id: int, account_id: int, error: str, give_up: bool = False) -> None:
+    """Keeps the last failure on the row. give_up=True (a transcript too short
+    to analyze) spends every remaining attempt so the sweep stops looking."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE calls SET intelligence_error = ?, "
+                "intelligence_attempts = CASE WHEN ? THEN ? ELSE intelligence_attempts END "
+                "WHERE id = ? AND account_id = ?",
+                (str(error)[:300], give_up, AUTO_ANALYSIS_MAX_ATTEMPTS, call_id, account_id),
+            )
+    finally:
+        conn.close()
+
+
 def intelligence_summary(account_id: int, days: int = 30) -> dict:
     """Aggregate the cached per-call intelligence into the ROI view: how many
     calls have been analyzed, sentiment/outcome distributions, average agent QA
@@ -3501,9 +3586,9 @@ def summary(account_id: int) -> dict:
     conn = _connect()
     try:
         row = conn.execute(
-            """
+            f"""
             SELECT COUNT(*) AS total,
-                   SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) AS qualified,
+                   SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
                    SUM(CASE WHEN site_visit_json IS NOT NULL THEN 1 ELSE 0 END) AS visits,
                    COALESCE(SUM(duration_seconds), 0) AS total_seconds,
                    COALESCE(AVG(duration_seconds), 0) AS avg_seconds
@@ -3672,10 +3757,10 @@ def usage_trends(account_id: int, days: int = 14) -> dict:
     conn = _connect()
     try:
         rows = conn.execute(
-            """
+            f"""
             SELECT started_at::date::text AS day,
                    COUNT(*) AS total,
-                   SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) AS qualified,
+                   SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
                    COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
             FROM calls
             WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date
@@ -3701,14 +3786,14 @@ def period_comparison(account_id: int, days: int = 14) -> dict:
     conn = _connect()
     try:
         row = conn.execute(
-            """
+            f"""
             SELECT
               COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval) current_calls,
-              COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval AND lead_name IS NOT NULL) current_qualified,
+              COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval AND {lead_quality.QUALIFIED_SQL}) current_qualified,
               COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval AND site_visit_json IS NOT NULL) current_booked,
               COALESCE(SUM(duration_seconds) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval), 0) current_seconds,
               COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval) previous_calls,
-              COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval AND lead_name IS NOT NULL) previous_qualified,
+              COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval AND {lead_quality.QUALIFIED_SQL}) previous_qualified,
               COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval AND site_visit_json IS NOT NULL) previous_booked,
               COALESCE(SUM(duration_seconds) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval), 0) previous_seconds
             FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = ''
@@ -3804,9 +3889,9 @@ def analytics(account_id: int) -> dict:
                 "minutes": round(r["s"] / 60, 1),
             }
             for r in conn.execute(
-                """
+                f"""
                 SELECT COALESCE(call_type, 'browser') t, COUNT(*) c,
-                       SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) q,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) q,
                        COALESCE(SUM(duration_seconds), 0) s
                 FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = '' GROUP BY t ORDER BY c DESC
                 """,
@@ -3820,9 +3905,9 @@ def analytics(account_id: int) -> dict:
         # and should count as that agent, not as a second phantom bar.
         by_agent_map: dict[str, dict] = {}
         for r in conn.execute(
-            """
+            f"""
             SELECT agent_id, COUNT(*) c,
-                   SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) q,
+                   SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) q,
                    COALESCE(SUM(duration_seconds), 0) s
             FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = '' GROUP BY agent_id
             """,
@@ -6586,6 +6671,7 @@ def ingest_inbound_lead(
                     campaign_id = None
             contact_id = None
             deduped = False
+            delay_seconds = 0
             if campaign_id:
                 dup = conn.execute(
                     "SELECT id, status, name, custom_fields FROM campaign_contacts WHERE campaign_id = ? AND phone_norm = ? "
@@ -6613,14 +6699,28 @@ def ingest_inbound_lead(
                     # Inherit the campaign's declared basis, so a contact added after
                     # launch is as answerable as one queued at creation.
                     basis_row = conn.execute(
-                        "SELECT consent_basis FROM campaigns WHERE id = ?", (campaign_id,)
+                        "SELECT c.consent_basis, a.follow_up_policy FROM campaigns c "
+                        "LEFT JOIN agents a ON a.id = c.agent_id WHERE c.id = ?", (campaign_id,)
                     ).fetchone()
+                    # The calling agent's "call new leads after" setting. A
+                    # "Call now" request from the CRM is never delayed. The
+                    # dialer already skips a pending row until next_attempt_at.
+                    if str(fields.get("call_request") or "").lower() not in ("true", "1"):
+                        delay_seconds = retry_rules.follow_up_policy(
+                            _row_get(basis_row, "follow_up_policy", "")
+                        )["firstCallDelaySeconds"]
+                    dial_after = None
+                    if delay_seconds:
+                        dial_after = (
+                            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=delay_seconds)
+                        ).strftime("%Y-%m-%d %H:%M:%S")
                     cur = conn.execute(
                         "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
-                        "company, custom_fields, consent_basis) VALUES (?, ?, ?, ?, ?, '', ?, ?) RETURNING id",
+                        "company, custom_fields, consent_basis, next_attempt_at) "
+                        "VALUES (?, ?, ?, ?, ?, '', ?, ?, ?) RETURNING id",
                         (campaign_id, account_id, (name or "").strip(),
                          canonical_contact_phone(phone, account_id) or phone.strip(), norm,
-                         json.dumps(fields), _row_get(basis_row, "consent_basis", "") or ""),
+                         json.dumps(fields), _row_get(basis_row, "consent_basis", "") or "", dial_after),
                     )
                     contact_id = cur.fetchone()["id"]
             if external_id and contact_id:
@@ -6677,7 +6777,8 @@ def ingest_inbound_lead(
                     "contactId": contact_row["id"], "queued": False}
         return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id,
                 "contactId": contact_row["id"] if source == "arthaleads" else None,
-                "queued": queued, "deduped": deduped}
+                "queued": queued, "deduped": deduped,
+                **({"delay_seconds": delay_seconds} if queued and delay_seconds and not deduped else {})}
     finally:
         conn.close()
 

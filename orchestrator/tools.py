@@ -23,6 +23,7 @@ import logging
 
 import aiohttp
 
+import crm_delivery
 import db
 from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES
 
@@ -194,59 +195,170 @@ def _apply_field_choice(key: str, config: dict, lead: dict) -> dict:
     return out
 
 
-async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: int | None = None) -> None:
+def _log_delivery(
+    account_id: int | None, key: str, lead: dict, status: str, detail: str = "", call_id: int | None = None,
+) -> None:
+    """Activity row for the dashboard's integration page. Mirror of
+    agent/tools.py _log_delivery."""
+    try:
+        db.record_integration_delivery(
+            account_id, key, str(lead.get("type") or ""), status,
+            detail, str(lead.get("name") or ""), lead.get("call_id") or call_id,
+        )
+    except Exception:
+        logger.warning("could not log %s delivery", key, exc_info=True)
+
+
+def _record_outcome(account_id, key: str, lead: dict, ok: bool, detail: str, call_id) -> None:
+    """The bookkeeping every delivery attempt does: integration last_sync /
+    last_error, an Activity row, and for ArthaLeads this call's own status."""
+    if ok:
+        logger.info("delivered lead to %s integration", key)
+        db.touch_integration_sync(account_id, key)
+        _log_delivery(account_id, key, lead, "sent", "", call_id)
+        if key == "arthaleads":
+            db.set_call_arthaleads_status(call_id, "sent")
+    else:
+        logger.warning("integration %s delivery failed: %s", key, detail)
+        db.mark_integration_error(account_id, key, detail)
+        _log_delivery(account_id, key, lead, "failed", detail, call_id)
+        if key == "arthaleads":
+            db.set_call_arthaleads_status(call_id, "failed", detail)
+
+
+async def _deliver_to_integrations(
+    account_id: int | None,
+    lead: dict,
+    call_id: int | None = None,
+    allowed_keys: list[str] | None = None,
+    agent_webhook_url: str = "",
+) -> None:
     """Deliver an event to every connected integration for this tenant,
     once each, honouring each integration's chosen events and fields. Same
-    shape as agent/tools.py's version — callable both mid-call (via
-    _fan_out_integrations) and at call-end from session.py's log_call
-    equivalent. This is the only path to the account's webhook: the old
-    separate _post_webhook looked the URL up platform-wide (any account's)
-    and also sent every event a second time."""
+    logic as agent/tools.py's version (Zoho CRM, Google sign-in sheets, the
+    plan's crm gate via db.get_delivery_integrations, Activity rows) —
+    callable both mid-call (via _fan_out_integrations) and at call-end from
+    session.py's finalize_call.
+
+    allowed_keys restricts delivery to the agent's crm_integration_keys
+    (empty/None = every connected integration). agent_webhook_url is the
+    agent's own webhook (Agents → Webhook): it gets the raw event, like
+    agent/tools.py's _post_webhook — not plan-gated and not restricted by
+    allowed_keys — unless the account webhook already received it at the
+    same URL."""
     try:
-        integrations = db.get_delivery_integrations(account_id)
+        integrations = db.get_delivery_integrations(account_id, allowed_keys)
     except Exception:
+        logger.warning("get_delivery_integrations raised for account_id=%s", account_id, exc_info=True)
+        integrations = []
+    if not integrations and call_id is not None and account_id is not None:
+        # Say why on the call's own row when the plan skipped a connected
+        # ArthaLeads (agent/tools.py does the same).
+        try:
+            status = db.get_arthaleads_plan_status(account_id)
+        except Exception:
+            status = {"connected": False, "plan_allows_crm": False}
+        if status["connected"] and not status["plan_allows_crm"]:
+            db.set_call_arthaleads_status(
+                call_id,
+                "skipped",
+                "Automatic CRM sync needs the Growth plan or higher — use Re-send, or upgrade to enable it automatically.",
+            )
+    agent_webhook_url = (agent_webhook_url or "").strip()
+    if not agent_webhook_url.startswith(("https://", "http://")):
+        agent_webhook_url = ""
+    if not integrations and not agent_webhook_url:
         return
-    if not integrations:
-        return
+    posted_urls: set[str] = set()
     try:
         timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as http:
             for integ in integrations:
+                key = integ["key"]
                 config = integ.get("config") or {}
-                if not _integration_wants_event(integ["key"], config, lead):
-                    logger.info("%s: skipped %s event (not chosen on its integration page)", integ["key"], lead.get("type"))
+                if not _integration_wants_event(key, config, lead):
+                    logger.info("%s: skipped %s event (not chosen on its integration page)", key, lead.get("type"))
                     continue
-                shaped = _integration_body(integ["key"], config, _apply_field_choice(integ["key"], config, lead))
+                shaped_lead = _apply_field_choice(key, config, lead)
+                if key == "zoho_crm":
+                    if not crm_delivery._zoho_should_send(shaped_lead):
+                        logger.info("zoho_crm: skipped %s event (one lead per reachable caller)", lead.get("type"))
+                        if lead.get("type") == "call_completed":
+                            _log_delivery(account_id, key, lead, "skipped", "No phone or email from the caller", call_id)
+                        continue
+                    try:
+                        ok = await crm_delivery._deliver_zoho_crm_lead(http, account_id, config, shaped_lead)
+                    except Exception:
+                        logger.warning("zoho_crm delivery failed", exc_info=True)
+                        ok = False
+                    _record_outcome(account_id, key, lead, ok, "Delivery failed — check connection", call_id)
+                    continue
+                if key == "sheets" and config.get("mode") == "oauth":
+                    # Judged on the full lead: the owner may have left phone
+                    # or email out of the sheet.
+                    if not crm_delivery._zoho_should_send(lead):
+                        logger.info("sheets: skipped %s event (one row per reachable caller)", lead.get("type"))
+                        if lead.get("type") == "call_completed":
+                            _log_delivery(account_id, key, lead, "skipped", "No phone or email from the caller", call_id)
+                        continue
+                    try:
+                        ok, detail = await crm_delivery._deliver_google_sheet_row(
+                            http, account_id, config, shaped_lead, agent_name=lead.get("agent_name"),
+                        )
+                    except Exception:
+                        logger.warning("sheets delivery failed", exc_info=True)
+                        ok, detail = False, "Network error — delivery failed"
+                    _record_outcome(account_id, key, lead, ok, detail, call_id)
+                    continue
+                shaped = _integration_body(key, config, shaped_lead)
                 if shaped is None:
+                    if key == "arthaleads" and call_id is not None:
+                        missing = []
+                        if not config.get("token"):
+                            missing.append("token")
+                        if not shaped_lead.get("name"):
+                            missing.append("name")
+                        if not shaped_lead.get("phone"):
+                            missing.append("phone")
+                        reason = "Automatic delivery skipped: missing " + ", ".join(missing or ["required data"])
+                        logger.warning("arthaleads %s", reason.lower())
+                        db.set_call_arthaleads_status(call_id, "failed", reason)
+                        _log_delivery(account_id, key, lead, "skipped", reason, call_id)
                     continue
                 url, body = shaped
                 try:
                     async with http.post(url, json=body) as resp:
                         if 200 <= resp.status < 300:
-                            logger.info("delivered lead to %s integration", integ["key"])
-                            db.touch_integration_sync(account_id, integ["key"])
-                            if integ["key"] == "arthaleads":
-                                db.set_call_arthaleads_status(call_id, "sent")
+                            _record_outcome(account_id, key, lead, True, "", call_id)
+                            if key == "webhook":
+                                posted_urls.add(url)
                         elif resp.status == 401:
-                            db.mark_integration_error(account_id, integ["key"], "Invalid token — reconnect")
-                            if integ["key"] == "arthaleads":
-                                db.set_call_arthaleads_status(call_id, "failed", "Invalid token — reconnect")
+                            _record_outcome(account_id, key, lead, False, "Invalid token — reconnect", call_id)
                         else:
                             text = (await resp.text())[:200]
-                            db.mark_integration_error(account_id, integ["key"], f"HTTP {resp.status}: {text}")
-                            if integ["key"] == "arthaleads":
-                                db.set_call_arthaleads_status(call_id, "failed", f"HTTP {resp.status}: {text}")
+                            _record_outcome(account_id, key, lead, False, f"HTTP {resp.status}: {text}", call_id)
                 except Exception:
-                    logger.warning("integration %s delivery failed", integ["key"], exc_info=True)
-                    db.mark_integration_error(account_id, integ["key"], "Network error — delivery failed")
-                    if integ["key"] == "arthaleads":
-                        db.set_call_arthaleads_status(call_id, "failed", "Network error — delivery failed")
+                    logger.warning("integration %s delivery failed", key, exc_info=True)
+                    _record_outcome(account_id, key, lead, False, "Network error — delivery failed", call_id)
+            if agent_webhook_url and agent_webhook_url not in posted_urls:
+                try:
+                    async with http.post(agent_webhook_url, json=lead):
+                        logger.info("posted %s event to the agent's webhook", lead.get("type"))
+                except Exception:
+                    logger.warning("agent webhook post failed", exc_info=True)
     except Exception:
         logger.warning("integration fan-out failed", exc_info=True)
 
 
 async def _fan_out_integrations(session, event: dict) -> None:
-    await _deliver_to_integrations(session.account_id, event)
+    # crm_integration_keys / agent_webhook_url are Session attributes added on
+    # branch claude/orch-agent-settings; getattr keeps this working either way.
+    await _deliver_to_integrations(
+        session.account_id,
+        event,
+        allowed_keys=getattr(session, "crm_integration_keys", None) or None,
+        agent_webhook_url=getattr(session, "agent_webhook_url", "") or "",
+    )
 
 
 # --------------------------------------------------------------- appointments

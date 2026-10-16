@@ -30,6 +30,7 @@ import time
 import urllib.error
 import urllib.request
 
+import call_intelligence
 import calls_db
 import campaign_window
 import integrations_dispatch
@@ -188,6 +189,14 @@ _INSTANT_CAMPAIGN_NAMES = ("ArthaLeads Instant Follow-up", "Instant Lead Follow-
 def notify() -> None:
     """Wake the dialer for an immediate pass. Safe from any thread."""
     _wake.set()
+
+
+def notify_after(seconds: float) -> None:
+    """Wake the dialer when a delayed lead becomes due (agent's "call new
+    leads after" setting), instead of waiting for the next tick."""
+    timer = threading.Timer(max(0.0, float(seconds)) + 0.5, notify)
+    timer.daemon = True
+    timer.start()
 
 
 def _on_orchestrator_pipeline(account_id: int) -> bool:
@@ -412,6 +421,93 @@ def _deliver_idle_widget_chats() -> None:
             logger.exception("widget chat %s delivery failed", chat["id"])
 
 
+# Automatic conversation intelligence (owner decision 2026-10-16): every real
+# call gets the same analysis the call page's Analyze button runs. One paid
+# model request per call (call_intelligence.INTEL_MODEL), so it is capped per
+# pass and switchable off with AUTO_CALL_ANALYSIS=0 without a code change.
+# It runs in its own thread: a pass can take minutes (60 s model timeout per
+# call) and must never delay a campaign dial or an instant lead.
+_AUTO_ANALYSIS_PER_PASS = 5
+_AUTO_ANALYSIS_EVERY_SECONDS = 60
+_auto_analysis_thread: threading.Thread | None = None
+_auto_analysis_last_start = 0.0
+
+
+def auto_analysis_enabled() -> bool:
+    return os.environ.get("AUTO_CALL_ANALYSIS", "1").strip().lower() not in ("0", "false", "off", "no")
+
+
+def _transcript_turns(transcript_json: str | None) -> list[dict]:
+    try:
+        turns = json.loads(transcript_json or "[]")
+    except ValueError:
+        return []
+    if not isinstance(turns, list):
+        return []
+    return [t for t in turns
+            if isinstance(t, dict) and str(t.get("text") or t.get("content") or "").strip()]
+
+
+def run_auto_analysis_once(limit: int = _AUTO_ANALYSIS_PER_PASS) -> int:
+    """Analyze up to `limit` finished, unanalyzed real calls (eligibility in
+    calls_db.auto_analysis_candidates). Returns how many were saved. A call
+    under 2 turns is marked done without a model request; a failed request
+    is recorded and retried later, at most AUTO_ANALYSIS_MAX_ATTEMPTS times
+    in all. Only calls this replica claimed are sent to the model."""
+    if not auto_analysis_enabled():
+        return 0
+    claimed = saved = 0
+    for call in calls_db.auto_analysis_candidates():
+        if claimed >= limit:
+            break
+        call_id, account_id = call["id"], call["account_id"]
+        turns = _transcript_turns(call.get("transcript_json"))
+        if len(turns) < 2:
+            calls_db.record_auto_analysis_error(call_id, account_id, "too few turns to analyze", give_up=True)
+            continue
+        if not calls_db.claim_auto_analysis(call_id, account_id):
+            continue  # another replica took it
+        claimed += 1
+        usage: dict = {}
+        try:
+            data = call_intelligence.analyze_transcript(turns, usage_out=usage)
+        except Exception as exc:
+            logger.warning("auto-analysis of call %s (account %s) failed: %s", call_id, account_id, exc)
+            calls_db.record_auto_analysis_error(call_id, account_id, str(exc) or type(exc).__name__)
+            continue
+        calls_db.save_call_intelligence(call_id, account_id, data)
+        saved += 1
+        logger.info(
+            "auto-analysis call %s (account %s): outcome=%s model=%s prompt_tokens=%s cached_tokens=%s completion_tokens=%s",
+            call_id, account_id, data.get("outcome"), usage.get("model"),
+            usage.get("prompt_tokens"), usage.get("cached_tokens"), usage.get("completion_tokens"),
+        )
+    return saved
+
+
+def _auto_analysis_pass() -> None:
+    try:
+        run_auto_analysis_once()
+    except Exception:
+        logger.exception("auto-analysis pass failed")
+
+
+def _kick_auto_analysis() -> None:
+    """Start an analysis pass in the background at most once a minute, and
+    never while the previous pass is still running."""
+    global _auto_analysis_thread, _auto_analysis_last_start
+    if not auto_analysis_enabled():
+        return
+    if _auto_analysis_thread is not None and _auto_analysis_thread.is_alive():
+        return
+    now = time.monotonic()
+    if _auto_analysis_last_start and now - _auto_analysis_last_start < _AUTO_ANALYSIS_EVERY_SECONDS:
+        return
+    _auto_analysis_last_start = now
+    _auto_analysis_thread = threading.Thread(target=_auto_analysis_pass, name="call-auto-analysis", daemon=True)
+    _auto_analysis_thread.start()
+
+
 def _loop() -> None:
     logger.info("campaign dialer started (tick=%ss)", _TICK_SECONDS)
     while True:
@@ -421,6 +517,11 @@ def _loop() -> None:
                 logger.info("promoted %s scheduled campaign(s) to running", promoted)
             _report_exhausted_contacts()
             _deliver_idle_widget_chats()
+            # Own guard: analysis is optional, dialing is not.
+            try:
+                _kick_auto_analysis()
+            except Exception:
+                logger.exception("auto-analysis kick failed")
             campaigns = calls_db.running_campaigns()
             # Stable sort: instant-lead campaigns first, the rest unchanged.
             campaigns.sort(key=lambda c: c.get("name") not in _INSTANT_CAMPAIGN_NAMES)

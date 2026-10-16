@@ -78,6 +78,11 @@ CREATE TABLE agents (
     name TEXT NOT NULL,
     is_platform_demo INTEGER DEFAULT 0
 );
+CREATE TABLE accounts (
+    id INTEGER PRIMARY KEY,
+    plan TEXT,
+    is_platform_owner INTEGER DEFAULT 0
+);
 CREATE TABLE integrations (
     account_id INTEGER NOT NULL,
     key TEXT NOT NULL,
@@ -121,9 +126,12 @@ class PostgresTenantScopeTests(unittest.IsolatedAsyncioTestCase):
             with conn:
                 conn.execute("DROP TABLE IF EXISTS agents")
                 conn.execute("DROP TABLE IF EXISTS integrations")
+                conn.execute("DROP TABLE IF EXISTS accounts")
                 for stmt in _SCHEMA.split(";"):
                     if stmt.strip():
                         conn.execute(stmt)
+                # Both on a plan with the crm feature, so delivery is on.
+                conn.execute("INSERT INTO accounts (id, plan) VALUES (1, 'growth'), (2, 'growth')")
                 # B's webhook goes in first, so a platform-wide
                 # "any connected webhook" lookup finds B's.
                 for account_id, url in ((2, B_URL), (1, A_URL)):
@@ -177,7 +185,8 @@ class DeliverySettingsTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(db, "get_delivery_integrations", return_value=integrations), \
                 patch.object(db, "touch_integration_sync"), \
                 patch.object(db, "mark_integration_error"), \
-                patch.object(db, "set_call_arthaleads_status"):
+                patch.object(db, "set_call_arthaleads_status"), \
+                patch.object(db, "record_integration_delivery"):
             await tools._deliver_to_integrations(1, lead)
         return posts
 

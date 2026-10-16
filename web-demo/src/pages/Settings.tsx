@@ -674,7 +674,7 @@ function PreferencesTab() {
     void save({ ...prefs, desktop_popups: on })
   }
   if (!prefs) return <SettingsCard title="Preferences" subtitle="Personal dashboard settings."><p className="text-xs text-text-muted">Loading…</p></SettingsCard>
-  const Toggle = ({ field, label, description }: { field: 'notify_leads' | 'notify_calls' | 'notify_billing' | 'notify_product' | 'bell_calls' | 'bell_appointments' | 'notify_sound'; label: string; description: string }) => (
+  const Toggle = ({ field, label, description }: { field: 'notify_leads' | 'notify_calls' | 'notify_billing' | 'bell_calls' | 'bell_appointments' | 'notify_sound'; label: string; description: string }) => (
     <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border px-3 py-2.5">
       <span><span className="block text-sm font-semibold">{label}</span><span className="block text-xs text-text-muted">{description}</span></span>
       <input type="checkbox" checked={prefs[field]} disabled={saving} onChange={(e) => save({ ...prefs, [field]: e.target.checked })} className="h-4 w-4 accent-primary disabled:opacity-50" />

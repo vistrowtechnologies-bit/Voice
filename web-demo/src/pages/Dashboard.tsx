@@ -412,6 +412,7 @@ export function Dashboard() {
                       <Link
                         key={call.id}
                         to={`/dashboard/calls/${call.id}`}
+                        aria-label={`Open call from ${call.name || call.phone || 'unknown caller'}, ${call.callStatus}`}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-surface-high/20 sm:px-5"
                       >
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
@@ -470,7 +471,7 @@ export function Dashboard() {
                 <SectionCard title="Follow-up queue" subtitle={`${followUps.length} recent leads awaiting the next action`} action={<Link to="/dashboard/contacts" className="text-xs font-bold text-cyan hover:underline">View contacts →</Link>}>
                   {followUps.length === 0 ? <EmptyState icon="task_alt" text="No qualified or new leads are waiting for follow-up." /> : (
                     <div className="divide-y divide-border">
-                      {followUps.map((contact) => <Link key={contact.id} to={`/dashboard/contacts/${contact.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-high/20"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{contact.name.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{contact.name}</p><p className="truncate text-[11px] text-text-muted">{contact.phone || contact.email || 'No contact details'} · {contact.source}</p></div><span className="rounded-full bg-cyan/10 px-2 py-1 text-[10px] font-bold capitalize text-cyan">{contact.status}</span></Link>)}
+                      {followUps.map((contact) => <Link key={contact.id} to={`/dashboard/contacts/${contact.id}`} aria-label={`Open contact ${contact.name || contact.phone || contact.email || ''}`.trim()} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-high/20"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{contact.name.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{contact.name}</p><p className="truncate text-[11px] text-text-muted">{contact.phone || contact.email || 'No contact details'} · {contact.source}</p></div><span className="rounded-full bg-cyan/10 px-2 py-1 text-[10px] font-bold capitalize text-cyan">{contact.status}</span></Link>)}
                     </div>
                   )}
                 </SectionCard>
@@ -869,7 +870,7 @@ function AttentionLink({ to, icon, label, detail, tone }: { to: string; icon: st
   // bg-surface is intentional: without an owned background, the global
   // outline-button selector mistakes this Link card for a CTA, paints the
   // whole card purple, and forces the semantic icon to inherit white.
-  return <Link to={to} className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3 transition-colors hover:border-primary"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}><Icon name={icon} className="text-[19px]" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-[11px] text-text-muted">{detail} →</span></span></Link>
+  return <Link to={to} aria-label={`${label}: ${detail}`} className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3 transition-colors hover:border-primary"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}><Icon name={icon} className="text-[19px]" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-[11px] text-text-muted">{detail} →</span></span></Link>
 }
 
 function ComparisonTile({ label, value, change, icon }: { label: string; value: number; change: number | null; icon: string }) {

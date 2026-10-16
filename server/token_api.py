@@ -10,6 +10,7 @@ import os
 import re
 import secrets
 import subprocess
+import datetime
 import threading
 import time
 import urllib.error
@@ -2442,7 +2443,6 @@ class PreferencesRequest(BaseModel):
     notify_leads: bool | None = None
     notify_calls: bool | None = None
     notify_billing: bool | None = None
-    notify_product: bool | None = None
     dashboard_checklist_dismissed: bool | None = None
     dashboard_hidden_cards: str | None = None
     bell_calls: bool | None = None
@@ -2451,9 +2451,19 @@ class PreferencesRequest(BaseModel):
     notify_sound: bool | None = None
 
 
+# notify_product ("Product updates") is a legacy column with no toggle and no
+# email that reads it, so it is kept out of the API rather than offered as a
+# preference that does nothing.
+_HIDDEN_PREFERENCES = ("notify_product",)
+
+
+def _public_preferences(prefs: dict) -> dict:
+    return {k: v for k, v in prefs.items() if k not in _HIDDEN_PREFERENCES}
+
+
 @app.get("/profile/preferences")
 def get_profile_preferences(user: dict = Depends(current_user)) -> dict:
-    return calls_db.get_user_preferences(user["user_id"])
+    return _public_preferences(calls_db.get_user_preferences(user["user_id"]))
 
 
 @app.patch("/profile/preferences")
@@ -2472,7 +2482,7 @@ def update_profile_preferences(req: PreferencesRequest, user: dict = Depends(cur
         if not isinstance(hidden_cards, list) or len(hidden_cards) > len(allowed_cards) or any(card not in allowed_cards for card in hidden_cards):
             raise HTTPException(400, "Unknown dashboard card preference")
         values["dashboard_hidden_cards"] = json.dumps(list(dict.fromkeys(hidden_cards)))
-    return calls_db.update_user_preferences(user["user_id"], values)
+    return _public_preferences(calls_db.update_user_preferences(user["user_id"], values))
 
 
 @app.get("/profile/security-events")
@@ -5510,10 +5520,16 @@ async def _sync_dispatch_rule(number_id: int, account_id: int) -> str | None:
         return None
     try:
         await livekit_sip.upsert_dispatch_rule(row)
-        return None
     except Exception as exc:
         logger.exception("failed to sync LiveKit dispatch rule for number %s", row["number"])
         return f"Number saved, but LiveKit call routing wasn't updated: {exc}"
+    # Its own outbound line, so calls from this number carry this number.
+    # A miss here is retried on the first dial (place_outbound_call).
+    try:
+        await livekit_sip.ensure_number_outbound_trunk(row["number"])
+    except Exception:
+        logger.exception("failed to set up the outbound trunk for number %s", row["number"])
+    return None
 
 
 @app.get("/telephony/sip-auth")
@@ -5559,6 +5575,11 @@ async def delete_phone_number(number_id: int, user: dict = Depends(require_role(
             await livekit_sip.delete_dispatch_rule(row)
         except Exception:
             logger.exception("failed to delete LiveKit dispatch rule for number %s", row["number"])
+    if row is not None:
+        try:
+            await livekit_sip.delete_number_outbound_trunk(row["number"])
+        except Exception:
+            logger.exception("failed to delete the outbound trunk for number %s", row["number"])
     calls_db.delete_phone_number(number_id, user["account_id"])
     if calls_db.get_setting(livekit_sip.TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID):
         try:
@@ -6693,13 +6714,29 @@ def _lead_form_fields(extra: dict) -> dict:
 
 
 def _queued_until(account_id: int, result: dict) -> dict:
-    """Adds when a queued lead will be dialled if the calling window is shut
-    now, so the sender can say "call scheduled for 9:00" (account timezone)."""
+    """Adds when a queued lead will be dialled if that is not right now: the
+    calling window is shut, or the agent waits before a first call ("call new
+    leads after"). The later of the two wins, so the sender can say "call
+    scheduled for 9:00" (account timezone)."""
     if result.get("queued"):
         opens = calls_db.next_calling_window_open(account_id)
+        if result.get("delay_seconds"):
+            due = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=result["delay_seconds"])
+            if opens is None or due > opens:
+                opens = due
         if opens is not None:
             return {**result, "queued_until": opens.isoformat()}
     return result
+
+
+def _wake_dialer(result: dict) -> None:
+    """Dial a queued lead now, or when its first-call delay is over."""
+    if not result.get("queued"):
+        return
+    if result.get("delay_seconds"):
+        campaign_dialer.notify_after(result["delay_seconds"])
+    else:
+        campaign_dialer.notify()
 
 
 @app.post("/leads/inbound/{account_id}")
@@ -6801,8 +6838,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         if not result.get("ok"):
             logger.warning("leads_inbound: ArthaLeads lead not queued for account %s: %s",
                            account_id, result.get("reason"))
-        if result.get("queued"):
-            campaign_dialer.notify()
+        _wake_dialer(result)
         return await asyncio.to_thread(_queued_until, account_id, result)
     name = str(body.get("name") or body.get("full_name") or "").strip()
     phone = str(body.get("phone") or body.get("phone_number") or "").strip()
@@ -6820,8 +6856,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
     )
     if not result.get("ok"):
         logger.warning("leads_inbound: could not queue lead for account %s: %s", account_id, result.get("reason"))
-    if result.get("queued"):
-        campaign_dialer.notify()
+    _wake_dialer(result)
     return await asyncio.to_thread(_queued_until, account_id, result)
 
 
@@ -6914,8 +6949,7 @@ async def webhooks_meta_event(request: Request) -> dict:
             )
             if not result.get("ok"):
                 logger.warning("webhooks_meta_event: could not queue lead %s: %s", leadgen_id, result.get("reason"))
-            if result.get("queued"):
-                campaign_dialer.notify()
+            _wake_dialer(result)
     return {"ok": True}
 
 
@@ -7215,6 +7249,9 @@ def widget_site_config(siteKey: str, path: str = "") -> dict:
         "greeting": resolved["greeting"],
         "mode": site["widgetMode"],
         "position": site["widgetPosition"],
+        # Button text: lets an already-installed snippet pick up a label
+        # changed on the dashboard (the snippet's data-label is only a fallback).
+        "label": site["widgetLabel"],
         "askName": site["widgetAskName"],
         "requireName": site["widgetRequireName"],
         "askPhone": site["widgetAskPhone"],

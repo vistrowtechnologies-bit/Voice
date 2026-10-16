@@ -61,6 +61,7 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 # construct EarlyFlushTTS until that completeness test passes reliably.
 
 import db
+from lead_placeholders import is_placeholder
 import follow_ups
 import plan_policy
 import retry_rules
@@ -1414,6 +1415,19 @@ _CARRIER_BUSY_PATTERN = re.compile(
     r"பிஸி|బిజీ|మరో\s+కాల్|ಕಾರ್ಯನಿರತ",
     re.IGNORECASE,
 )
+
+
+def _campaign_end_outcome(call_facts: dict) -> str:
+    """How a dialled campaign/lead call ended, for retries.
+
+    Nobody on the line ever spoke = not reached, retried like a no-answer.
+    Ringback is not required: some networks answer an unanswered call
+    silently (SIP 200, no ring tone, no voice) while the person sees a missed
+    call - call 1390 on 16 Oct 2026 was recorded "connected" that way and
+    never retried, although the CRM correctly got "Not Reachable". Voicemail
+    and carrier-announcement outcomes are resolved earlier and still win
+    (finish_campaign_contact only changes a contact still 'calling')."""
+    return "connected" if call_facts.get("caller_spoke") else "no_answer"
 
 
 def _carrier_outcome(text: str) -> str:
@@ -3288,6 +3302,22 @@ def _prompt_safe_name(name: str | None) -> str:
     text = "".join(" " if unicodedata.category(ch)[0] == "C" else ch for ch in str(name or ""))
     text = re.sub(r"\s+", " ", text.replace('"', "'")).strip()
     return text[:_MAX_VISITOR_NAME].strip()
+
+
+def _seed_lead_from_visitor(call_context: dict) -> dict:
+    """The lead as typed into the widget's pre-call form, before the agent's
+    own log_lead runs. /widget/token sends "Website visitor" for a blank
+    name; that placeholder is not a name, so it is not seeded (it made
+    contact-less widget calls show as "Qualified" leads)."""
+    lead: dict = {}
+    name = call_context.get("visitor_name")
+    if name and not is_placeholder(name):
+        lead["name"] = name
+    if call_context.get("visitor_phone"):
+        lead["phone"] = call_context["visitor_phone"]
+    if call_context.get("visitor_email"):
+        lead["email"] = call_context["visitor_email"]
+    return lead
 
 
 class RealEstateAgent(Agent):
@@ -6355,6 +6385,36 @@ def _turn_shape_instruction(last_reply: str) -> str:
     return " ".join(parts)
 
 
+class _CallEndClock:
+    """When the call ended for the caller — the end of the billed window.
+
+    log_call is a job shutdown callback, and the job only shuts down when the
+    room goes away. When the agent hangs up, _hang_up deletes the room and
+    that is immediate. When the CALLER hangs up, nothing deletes it: the
+    session closes (close_on_disconnect) but delete_room_on_close is off, so
+    the job waits for LiveKit to close the now-empty room (its departure
+    timeout, ~20 s). Stamping the end inside log_call billed that wait —
+    calls 1369-1380 (2026-10-16) were 17-29 s longer than their own "Call
+    ended" event. So the end is stamped when the caller's leg drops, and only
+    falls back to "now" for endings that shut the job down at once.
+    """
+
+    def __init__(self, now=lambda: datetime.now(timezone.utc)) -> None:
+        self._now = now
+        self._ended_at: datetime | None = None
+
+    def caller_left(self) -> None:
+        if self._ended_at is None:
+            self._ended_at = self._now()
+
+    def caller_rejoined(self) -> None:
+        # A full reconnect of the same identity: the call is still going.
+        self._ended_at = None
+
+    def ended_at(self) -> datetime:
+        return self._ended_at or self._now()
+
+
 async def _hang_up(room_name: str) -> None:
     """Ends the call for both sides once the agent's goodbye has finished
     playing. room.disconnect() would only drop the agent's own participant,
@@ -6818,13 +6878,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # own log_lead tool never runs (call ends early, visitor hangs up, etc).
     # The agent's own log_lead call later still overwrites these if it
     # captures something more specific during the conversation.
-    lead_data: dict = {}
-    if call_context["visitor_name"]:
-        lead_data["name"] = call_context["visitor_name"]
-    if call_context["visitor_phone"]:
-        lead_data["phone"] = call_context["visitor_phone"]
-    if call_context["visitor_email"]:
-        lead_data["email"] = call_context["visitor_email"]
+    lead_data = _seed_lead_from_visitor(call_context)
     cfg = config or {}
     # Per-account concurrent-call cap (starter/growth/scale) — claims a slot
     # now, before any STT/LLM/TTS spend, and releases it in log_call's
@@ -6865,11 +6919,7 @@ async def entrypoint(ctx: JobContext) -> None:
         contact_id = call_context.get("campaign_contact_id")
         campaign_id = call_context.get("campaign_id")
         if contact_id and campaign_id:
-            outcome = (
-                "no_answer"
-                if _call_facts["ringback_seen"] and not _call_facts["caller_spoke"]
-                else "connected"
-            )
+            outcome = _campaign_end_outcome(_call_facts)
             await asyncio.to_thread(
                 db.finish_campaign_contact,
                 int(contact_id),
@@ -7192,6 +7242,9 @@ async def entrypoint(ctx: JobContext) -> None:
     # the SIP leg. Persist the participant's transport-level reason as well,
     # otherwise LiveKit can report MEDIA_FAILURE while the CRM calls the row
     # "Completed" merely because a greeting reached the transcript.
+    # Read by log_call for the billed end; see _CallEndClock.
+    call_end_clock = _CallEndClock()
+
     _FAILED_SIP_DISCONNECT_REASONS = {
         "agent_error",
         "connection_timeout",
@@ -7205,6 +7258,7 @@ async def entrypoint(ctx: JobContext) -> None:
     def _on_participant_disconnected(participant) -> None:
         if participant.identity != first_participant.identity:
             return
+        call_end_clock.caller_left()
         try:
             reason_value = getattr(participant, "disconnect_reason", None)
             reason = rtc.DisconnectReason.Name(reason_value).lower() if reason_value is not None else "unknown_reason"
@@ -7251,6 +7305,12 @@ async def entrypoint(ctx: JobContext) -> None:
             userdata["failure_reason"] = f"sip_{reason}"
 
     ctx.room.on("participant_disconnected", _on_participant_disconnected)
+
+    def _on_caller_rejoined(participant) -> None:
+        if participant.identity == first_participant.identity:
+            call_end_clock.caller_rejoined()
+
+    ctx.room.on("participant_connected", _on_caller_rejoined)
 
     # interruption_sensitivity 0-1 → how LONG the caller must speak to take the
     # floor. It used to scale min_words instead, and that combination silently
@@ -8345,7 +8405,7 @@ async def entrypoint(ctx: JobContext) -> None:
     background_audio_holder: dict[str, BackgroundAudioPlayer | None] = {"player": None}
 
     async def log_call() -> None:
-        ended_at = datetime.now(timezone.utc)
+        ended_at = call_end_clock.ended_at()
         # The caller-directed gender guard runs as a TTS text transform, so
         # the AUDIO has always been correct — but the stored transcript is the
         # model's raw text, which still reads "आप ... बता सकती हैं" to a male

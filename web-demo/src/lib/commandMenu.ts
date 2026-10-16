@@ -90,6 +90,27 @@ export function rankItems<T extends MenuItem>(items: T[], query: string, limit =
   return scored.slice(0, limit).map((s) => s.item)
 }
 
+/** Phone match on digits only, either way round, so "+91 80801 97945",
+ * "8080197945" and "080801-97945" all find the same caller. Needs 4+ digits
+ * in the query so a short number does not match half the list. */
+export function phoneMatches(phone: string, query: string): boolean {
+  const q = query.replace(/\D/g, '')
+  const p = phone.replace(/\D/g, '')
+  if (q.length < 4 || !p) return false
+  return p.includes(q) || q.includes(p)
+}
+
+/** Show at most `cap` items from each named group, keeping order. */
+export function capGroups<T extends { group: string }>(items: T[], caps: Record<string, number>): T[] {
+  const seen: Record<string, number> = {}
+  return items.filter((i) => {
+    const cap = caps[i.group]
+    if (cap === undefined) return true
+    seen[i.group] = (seen[i.group] ?? 0) + 1
+    return seen[i.group] <= cap
+  })
+}
+
 /** Keep items together by group, in the order each group first appears. */
 export function groupInOrder<T extends { group: string }>(items: T[]): { group: string; items: T[] }[] {
   const out: { group: string; items: T[] }[] = []

@@ -34,7 +34,7 @@ import {
   voicePickerGroups,
 } from '../lib/agentOptions'
 import type { AgentConfig, AgentVariable, CustomFunction, FollowUpPolicy, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
-import { FOLLOW_UP_DEFAULTS } from '../lib/types'
+import { FIRST_CALL_DELAY_CHOICES, FOLLOW_UP_DEFAULTS } from '../lib/types'
 import { InfoTip } from '../components/ui/Tooltip'
 
 // Must match agent/main.py's template_vars keys exactly (the substitution
@@ -1278,6 +1278,21 @@ function FollowUpEditor({
         Applies to leads this agent calls automatically (ArthaLeads auto-calls and the follow-up calls below).
         Bulk campaigns keep the retry settings from their own wizard.
       </p>
+      <Field label="Call a new lead">
+        <select
+          value={value.firstCallDelaySeconds ?? 0}
+          onChange={(e) => patch({ firstCallDelaySeconds: Number(e.target.value) })}
+          className={`${inputCls} sm:w-60`}
+        >
+          {FIRST_CALL_DELAY_CHOICES.map((c) => (
+            <option key={c.seconds} value={c.seconds}>{c.label}</option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-text-muted">
+          Time between a lead arriving and the first automatic call. "Call now" from your CRM always dials at once,
+          and calls still wait for your calling hours.
+        </p>
+      </Field>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <NumberField
           label="Max tries per lead"

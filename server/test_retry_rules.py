@@ -106,6 +106,7 @@ class FollowUpPolicy(unittest.TestCase):
                 "maxAttempts": 3, "busyMinutes": 10, "switchedOffMinutes": 120, "noAnswerMinutes": 30,
                 "voicemailMinutes": 120, "callbackEnabled": True, "visitReminderEnabled": True,
                 "visitReminderTime": "11:00", "nurtureEnabled": True, "nurtureDays": 3,
+                "firstCallDelaySeconds": 0,
             }, empty)
 
     def test_stored_values_are_read_and_clamped(self):

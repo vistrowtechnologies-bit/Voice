@@ -87,7 +87,7 @@ class WidgetSiteConfig(unittest.TestCase):
     def _route(self, record_calls):
         db = MagicMock()
         db.get_site_by_key.return_value = {
-            "id": 3, "accountId": 9, "widgetMode": "voice", "widgetPosition": "bottom-right",
+            "id": 3, "accountId": 9, "widgetMode": "voice", "widgetPosition": "bottom-right", "widgetLabel": "Talk to us",
             "widgetAskName": True, "widgetRequireName": True, "widgetAskPhone": True,
             "widgetRequirePhone": True, "widgetAskEmail": True, "widgetRequireEmail": False,
         }

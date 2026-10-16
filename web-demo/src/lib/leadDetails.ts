@@ -62,3 +62,43 @@ export function leadSummary(custom: Record<string, string> | undefined | null): 
 export function leadSearchText(custom: Record<string, string> | undefined | null): string {
   return Object.values(custom ?? {}).map(clean).filter(Boolean).join(' ').toLowerCase()
 }
+
+// Leads sent over by ArthaLeads carry bookkeeping keys the bridge and the
+// agent rely on (lead/org ids, dedupe key, routing category). They stay in
+// the stored custom fields; the contact page just doesn't show them.
+const ARTHALEADS_INTERNAL = new Set([
+  'arthaleads_org_id', 'arthaleads_lead_id', 'arthaleads_source', 'external_id', 'channel_source', 'source',
+])
+
+// ArthaLeads opens a single lead only through in-app navigation state, not a
+// URL, so the best link from here is its Leads page.
+export const ARTHALEADS_LEADS_URL = 'https://app.arthaleads.com/leads'
+
+/** Set when the contact came from ArthaLeads; `source` is e.g. "Facebook Ad" (may be empty). */
+export function arthaleadsOrigin(custom: Record<string, string> | undefined | null): { source: string } | null {
+  const c = custom ?? {}
+  if (!clean(c.arthaleads_lead_id)) return null
+  return { source: clean(c.lead_source) || clean(c.arthaleads_source) }
+}
+
+/** leadEntries for the contact page: an ArthaLeads lead loses its internal keys and its created_at is labelled. */
+export function visibleLeadEntries(custom: Record<string, string> | undefined | null): LeadEntry[] {
+  const entries = leadEntries(custom)
+  if (!arthaleadsOrigin(custom)) return entries
+  return entries
+    .filter((e) => !ARTHALEADS_INTERNAL.has(e.key))
+    .map((e) => (e.key === 'created_at' ? { ...e, label: 'Lead created' } : e))
+}
+
+/** Tag chips for the contact page: an ArthaLeads lead drops its "arthaleads" and
+ *  "channel:" tags, and any "label:value" tag whose value the card already shows. */
+export function visibleTags(tags: string[], custom: Record<string, string> | undefined | null): string[] {
+  if (!arthaleadsOrigin(custom)) return tags
+  const shown = new Set(visibleLeadEntries(custom).map((e) => e.value.slice(0, 60).toLowerCase()))
+  return tags.filter((t) => {
+    const tag = t.trim().toLowerCase()
+    if (tag === 'arthaleads' || tag.startsWith('channel:')) return false
+    const i = tag.indexOf(':')
+    return i === -1 || !shown.has(tag.slice(i + 1).trim())
+  })
+}
