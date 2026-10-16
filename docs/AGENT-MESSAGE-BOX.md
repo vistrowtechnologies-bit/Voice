@@ -1010,3 +1010,12 @@ Branch `claude/qa-phase1-orchestrator` (PR pending). Files: orchestrator/db.py, 
 - Not ported to orchestrator: Zoho CRM + Google-sign-in Sheets delivery, plan CRM gate, per-agent crm_integration_keys / agent webhook (phase 2).
 - QA false alarm: Testing Lab already forces LiveKit for Lab runs (AgentTestCall.tsx forceLiveKit).
 - Next: merge + Railway deploy of orchestrator, read-only live probe; phase 2 = ignored agent settings + inbound rules on orchestrator.
+
+### Claude — 2026-10-16 — end-to-end test of PR #116 + #131 together (real server, throwaway DB)
+
+Ran main + both branches merged, real `token_api` on a throwaway local Postgres 16 (UTF-8) with a local STARTTLS mail catcher; server copied outside the repo so no production `.env` could load (log confirmed no OpenAI key). Verified in the DB after each step:
+- Onboarding sets up only the untouched starter; re-applies to the same agent when an answer changes; no-op after onboarding (`agentId: null`); owner's agent untouched by the customer's; first-touch attribution not overwritten.
+- Admin mapping table correct; a customer edit (language) flags only that row. Fixed on #116: the row now shows "Now: English / Onboarding set: Hindi" (was ambiguous "Set to").
+- Two-step reset: customer locked out (password alone → mfaRequired); admin Reset clears secret+recovery codes, writes audit `reset_two_step` with reason, security event `mfa_reset_by_support`, email delivered; customer then signs in with password only. Refused correctly: customer session 404, anonymous 401, user of another account 404, already off 400, short reason 400 (and button disabled), unknown account 404 — none changed data.
+- Code screen support link verified (mailto with subject); owner TOTP sign-in still works.
+Both branches had a message-box conflict with main; merged main into each (now MERGEABLE). Not verified: real Resend email delivery, production data.
