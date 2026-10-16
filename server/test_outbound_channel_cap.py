@@ -42,7 +42,8 @@ class RefusesWhenFull(unittest.TestCase):
                 mock.patch.object(livekit_sip.calls_db, "check_call_allowed", return_value=(True, "")), \
                 mock.patch.object(livekit_sip, "outbound_rooms_in_use", mock.AsyncMock(return_value=in_use)), \
                 mock.patch.object(livekit_sip, "_OUTBOUND_CHANNELS", 2), \
-                mock.patch.object(livekit_sip.calls_db, "get_setting", return_value=None):
+                mock.patch.object(livekit_sip.calls_db, "get_phone_number_by_number", return_value={"accountId": 7}), \
+                mock.patch.object(livekit_sip, "ensure_number_outbound_trunk", mock.AsyncMock(return_value="")):
             return asyncio.run(livekit_sip.place_outbound_call("+919876543210", "+911", 7, 3, **kwargs))
 
     def test_contact_or_test_call_is_refused_when_lines_are_full(self):
@@ -50,14 +51,14 @@ class RefusesWhenFull(unittest.TestCase):
         self.assertTrue(result.get("busy"))
 
     def test_free_line_proceeds_to_the_dial(self):
-        # get_setting returning no trunk stops it just after the channel check.
-        self.assertIn("trunk is not configured", self.dial(1)["error"])
+        # No trunk for the number stops it just after the channel check.
+        self.assertIn("outbound line isn't set up", self.dial(1)["error"])
 
     def test_campaign_dials_are_left_to_the_dialer(self):
-        self.assertIn("trunk is not configured", self.dial(5, campaign_contact_id=11)["error"])
+        self.assertIn("outbound line isn't set up", self.dial(5, campaign_contact_id=11)["error"])
 
     def test_unknown_count_does_not_block(self):
-        self.assertIn("trunk is not configured", self.dial(None)["error"])
+        self.assertIn("outbound line isn't set up", self.dial(None)["error"])
 
 
 if __name__ == "__main__":

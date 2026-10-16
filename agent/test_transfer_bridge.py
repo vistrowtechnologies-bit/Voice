@@ -29,6 +29,8 @@ class FakeRoom:
     def __init__(self):
         p = MagicMock()
         p.identity, p.kind = "sip-918080197945", 3
+        # The tenant number this call is on: a transfer dials from it.
+        p.attributes = {"sip.trunkPhoneNumber": "+917713128715"}
         self.remote_participants = {"sip-918080197945": p}
 
 
@@ -48,6 +50,7 @@ def fake_api(refer_fails=True, bridge_fails=False, trunk_id="ST_8YX6YkEkTymg"):
     )
     trunk = MagicMock()
     trunk.address, trunk.sip_trunk_id = "35.234.209.8", trunk_id
+    trunk.numbers = ["917713128715"]  # that number's own outbound line
     result = MagicMock()
     result.items = [trunk] if trunk_id else []
     api.sip.list_sip_outbound_trunk = AsyncMock(return_value=result)

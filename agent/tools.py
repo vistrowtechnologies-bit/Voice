@@ -3280,6 +3280,45 @@ async def _outbound_trunk(lkapi) -> tuple[str, str]:
     return trunk_id, address
 
 
+def _own_number(room) -> str:
+    """The tenant number this call is on. A room we dialled from carries it
+    in its metadata (set by server/livekit_sip.place_outbound_call). An
+    inbound room's metadata comes from the shared dispatch rule and names
+    whichever number was saved last, so there the caller's SIP participant
+    is asked instead (sip.trunkPhoneNumber = the number that was dialled)."""
+    try:
+        meta = json.loads(getattr(room, "metadata", "") or "{}")
+    except ValueError:
+        meta = {}
+    if isinstance(meta, dict) and meta.get("direction") == "outbound" and meta.get("phone_number"):
+        return str(meta["phone_number"])
+    for participant in (getattr(room, "remote_participants", None) or {}).values():
+        if str(getattr(participant, "identity", "")).startswith("human-"):
+            continue
+        number = (getattr(participant, "attributes", None) or {}).get("sip.trunkPhoneNumber")
+        if number:
+            return str(number)
+    return ""
+
+
+async def _number_trunk(lkapi, number: str) -> str:
+    """Outbound trunk whose only number is `number`, or '' (never another's)."""
+    digits = "".join(c for c in (number or "") if c.isdigit())
+    if not digits:
+        return ""
+    try:
+        from livekit import api
+
+        trunks = await lkapi.sip.list_sip_outbound_trunk(api.ListSIPOutboundTrunkRequest(numbers=[digits]))
+    except Exception:
+        logger.warning("could not look up the outbound trunk for %s", digits, exc_info=True)
+        return ""
+    for trunk in getattr(trunks, "items", []) or []:
+        if ["".join(c for c in n if c.isdigit()) for n in trunk.numbers] == [digits]:
+            return trunk.sip_trunk_id
+    return ""
+
+
 async def _trunk_address(lkapi) -> str:
     """Host of our outbound SIP trunk, or '' if it cannot be determined."""
     return (await _outbound_trunk(lkapi))[1]
@@ -3329,9 +3368,14 @@ async def _bridge_in_human(lkapi, room, dest: str) -> bool:
     """
     from livekit import api
 
-    trunk_id, _address = await _outbound_trunk(lkapi)
+    # The colleague's phone must show THIS call's number, so dial through the
+    # trunk dedicated to it (server/livekit_sip.ensure_number_outbound_trunk).
+    # Never the first trunk LiveKit lists: with one trunk per number that
+    # would ring the colleague from another tenant's number.
+    own_number = _own_number(room)
+    trunk_id = await _number_trunk(lkapi, own_number)
     if not trunk_id:
-        logger.warning("no outbound trunk available to bridge a colleague in")
+        logger.warning("no outbound trunk for this call's number; cannot bridge a colleague in")
         return False
     digits = "".join(c for c in (dest or "") if c.isdigit())
     if not digits:
@@ -3339,6 +3383,7 @@ async def _bridge_in_human(lkapi, room, dest: str) -> bool:
     await lkapi.sip.create_sip_participant(
         api.CreateSIPParticipantRequest(
             sip_trunk_id=trunk_id,
+            sip_number="".join(c for c in own_number if c.isdigit()),
             sip_call_to=f"+{digits}",
             room_name=room.name,
             participant_identity=f"human-{digits}",
