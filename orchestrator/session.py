@@ -863,8 +863,9 @@ async def _post_call_summary(transcript: list[dict]) -> str:
 
 
 async def finalize_call(session: Session, room_name: str) -> int | None:
-    """Persists the call, fires the call_completed integration event and
-    per-agent webhook — same call-end contract as agent/main.py's log_call.
+    """Persists the call and fires the call_completed event to this
+    account's integrations (its webhook included) — same call-end contract
+    as agent/main.py's log_call.
     """
     record = build_save_call_record(session, room_name)
     call_id = await asyncio.to_thread(db.save_call, record)
@@ -880,7 +881,6 @@ async def finalize_call(session: Session, room_name: str) -> int | None:
         "agent_name": session.agent_name,
         "extracted_data": {},
     }
-    await tools._post_webhook(event)
     await tools._deliver_to_integrations(session.account_id, event, call_id=call_id)
 
     if session.memory_enabled and session.visitor_phone and session.agent_id:
