@@ -138,6 +138,7 @@ _PUBLIC_PATHS = {
     "/widget.js",                      # embedded widget script
     "/widget/token",                   # widget call token (runs on customers' sites)
     "/widget/chat",                    # widget text-chat turn (runs on customers' sites)
+    "/widget/chat/end",                # widget text-chat ended (sendBeacon on close/pagehide)
     "/widget/feedback",                # widget post-conversation rating
     "/widget/telemetry",               # widget latency/failure diagnostics
     "/widget/site-config",             # public avatar/greeting/mode lookup by site key
@@ -7844,3 +7845,36 @@ def widget_chat_route(req: WidgetChatRequest) -> StreamingResponse:
                 logger.exception("failed to log widget chat call for site=%s", site["name"])
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.post("/widget/chat/end")
+async def widget_chat_end(request: Request) -> dict:
+    """The visitor closed the chat panel or left the page: deliver this chat
+    to the account's integrations now instead of waiting for the dialer
+    tick's 3-minute idle sweep (campaign_dialer._deliver_idle_widget_chats).
+    Same site_key-is-the-auth model as /widget/chat, no session. The body
+    is read raw because the widget sends it with navigator.sendBeacon,
+    whose Content-Type is text/plain (a JSON type would force a CORS
+    preflight the unloading page never completes). ended_at is left as the
+    chat's last turn — stretching it to "now" would bill minutes the
+    visitor spent with the tab open but idle."""
+    if _limited("widget-chat-end", _client_ip(request), 60, 3600):
+        raise HTTPException(429, "Too many requests")
+    try:
+        data = json.loads(await request.body() or b"{}")
+    except ValueError:
+        raise HTTPException(400, "Invalid body")
+    site_key, session_id = str(data.get("siteKey") or ""), str(data.get("sessionId") or "")
+    if not session_id or len(session_id) > 200:
+        raise HTTPException(400, "Invalid conversation session")
+    site = calls_db.get_site_by_key(site_key)
+    if site is None:
+        raise HTTPException(404, "Unknown site key")
+    chat = calls_db.widget_chat_call(site["id"], session_id)
+    if chat is None:
+        # First turn still streaming (or never sent): the idle sweep covers it.
+        return {"ok": False}
+    threading.Thread(
+        target=integrations_dispatch.deliver_widget_chat, args=(chat,), name="widget-chat-end", daemon=True,
+    ).start()
+    return {"ok": True}

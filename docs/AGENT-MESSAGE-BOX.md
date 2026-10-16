@@ -16,6 +16,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-15): PR #128 `claude/follow-up-calls` MERGED (main a4d64313) and DEPLOYED: Railway SUCCESS (columns follow_up_policy, crm_notified_at present), phone worker `4pVPHHbYCoC8`, platform-demo `cKDf7Q96GgmR`, both Running/registered, 44 INFO / 0 warnings.
 - Claude (2026-10-14): branch `claude/security-tokens-mfa` (PR open, NOT merged): integration tokens encrypted at rest (server + agent + orchestrator). Inert until the owner sets INTEGRATION_ENCRYPTION_KEY everywhere, then INTEGRATION_ENCRYPTION_WRITE=on; see docs/SECURITY-AUDIT-2026-10-12.md.
 - Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
+- Claude (2026-10-16): PR #132 `claude/chat-lead-delivery` MERGED with PR #130 (one push): widget text chats delivered to the integrations (idle sweep from the dialer tick + /widget/chat/end beacon); Railway deploy, widget bundle in server/static.
 
 ## Takeover checklist
 
@@ -972,3 +973,23 @@ Changed (Railway server + dashboard only; no agent code, no DB migration):
 Verified: all 9 new tests fail on origin/main's server files and pass on the branch; full server suite 753 passed / 0 failed against a throwaway local Postgres; `tsc -b` clean; `vite build` clean. Not verified: no request has been made to the real ArthaLeads (its route does not exist until the ArthaLeads PR ships); the dashboard was not opened in a browser; the "917 passed" baseline figure could not be reproduced here (753 collected in `server/`).
 
 Left: merge only after the ArthaLeads side is deployed (otherwise every key save lands as "pending" — harmless, the key is still saved and Send test retries). Then: owner re-saves the key on account 2 and checks ArthaLeads → Auto-call step 1 reads "Connected to Vistrow account 2".
+
+### Claude — 2026-10-16 — Widget text chats delivered to integrations (branch `claude/chat-lead-delivery`, PR open, NOT merged)
+
+Problem (verified 2026-10-16): a widget text chat is logged by `calls_db.upsert_widget_chat_call` (call_type `widget`, room `widget-chat-{session}`) but nothing ever delivered it to the account's integrations — voice calls fan out from the agent at call end, a text chat has no agent. A visitor chatted 49 s with name+phone+email and ArthaLeads only got it when the owner pressed "Send to ArthaLeads" 1.5 h later.
+
+Changed (Railway server + widget bundle; no agent code):
+- `server/calls_db.py`: migration columns `calls.integrations_delivered_at TEXT`, `calls.integrations_delivery_json TEXT` (same list as `arthaleads_status`); `idle_widget_chats(idle_seconds=180, max_age_days=7)`; `widget_chat_call(site_id, session_id)`; `claim_widget_chat_delivery` (atomic NULL→now stamp, so sweep and beacon never double-deliver); `mark_widget_chat_delivered` (result JSON).
+- `server/integrations_dispatch.py`: `deliver_widget_chat(call)` builds the call-end-shaped lead (type `call_completed`, channel "Website chat", transcript as {speaker: Caller|Agent, text}, agent name/public id, language, duration, page_path, call_id, message; no recording), sends via `deliver_lead` to webhook/slack/whatsapp/sheets/zoho_crm and via `push_call_to_arthaleads` to ArthaLeads (stamps `arthaleads_status` like a manual send), writes Activity rows, and stamps the markers even on failure or skip (`{"skipped": "no_contact"}` when no phone and no email). `deliver_lead` now honours the owner's event and field choices (`_wants_event`, `apply_field_choice`) and takes `skip_keys`; it had no other callers. `_saved_turns` normalises both saved transcript shapes — before this, a manual "Send to ArthaLeads" for a text chat sent an EMPTY transcript/message because `{role, content}` turns were not recognised (only `{speaker, text}`); fixed for the manual button too.
+- `server/campaign_dialer.py`: `_deliver_idle_widget_chats()` runs every tick next to `_report_exhausted_contacts()` (per-row try/except). `DISABLE_CAMPAIGN_DIALER=1` (local runs) disables this sweep too.
+- `server/token_api.py`: `POST /widget/chat/end` (public, `siteKey` + `sessionId`, raw JSON body so `sendBeacon`'s text/plain needs no CORS preflight, rate-limited 60/h per IP) → delivery in a background thread, idle rule bypassed. `ended_at` is deliberately NOT moved to "now": it already equals the last turn, and stretching it would bill idle tab time.
+- `widget/src/widget.ts`: `endChatSession()` (once per chat session, only if the visitor sent a message) on the X button (chat branch), "End chat", `pagehide` and `visibilitychange→hidden`; `navigator.sendBeacon` with `fetch keepalive` fallback. Rebuilt with `npm run build` in `widget/` and copied to `server/static/widget.js` (the only deploy path: Railway serves `/widget.js` from that file; no automated build step).
+- Tests: new `server/test_widget_chat_delivery.py` (7 tests, HTTP faked at `integrations_dispatch._post_json`, `/widget/chat/end` lifted via ast with the thread run inline).
+
+Verified: all 7 new tests FAIL on origin/main's server+agent files (`campaign_dialer has no attribute _deliver_idle_widget_chats`, no `widget_chat_end` route) and pass on the branch; full server suite 760 passed / 0 failed (753 baseline + 7) on a throwaway local Postgres; widget `tsc --noEmit` clean; `vite build` clean, bundle 530,488 B vs 530,054 B committed (diff is only the new code).
+
+First tick after deploy: chats from the last 7 days with phone or email that were never delivered WILL be sent to every connected integration (and ArthaLeads) once; older chats are left alone forever. Expect a one-off burst on accounts with chat traffic.
+
+Unverified: no real browser has exercised the beacon (sendBeacon behaviour on pagehide is from the spec, not observed here); no request to the real ArthaLeads; dashboard not opened. `graphify update .` not run (no `graphify-out/` in this worktree).
+
+Left for Codex/owner: merge + Railway deploy (migration runs on startup); watch the first tick's log lines `widget chat N delivered: {...}`; confirm ArthaLeads receives a chat lead with a non-empty transcript.

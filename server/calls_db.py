@@ -1210,6 +1210,14 @@ def init_tables() -> None:
                 ("arthaleads_status", "TEXT"),
                 ("arthaleads_synced_at", "TEXT"),
                 ("arthaleads_error", "TEXT"),
+                # Widget text chats only (voice calls fan out from the agent
+                # at call end): when the server's sweep delivered this chat
+                # to the account's integrations, and the per-integration
+                # result map (or {"skipped": reason}). NULL = not yet; set
+                # even on failure so a broken integration is not retried
+                # every tick — the manual Send button stays the retry.
+                ("integrations_delivered_at", "TEXT"),
+                ("integrations_delivery_json", "TEXT"),
                 # Backblaze B2 object key for this call's recording (see
                 # agent/recording.py), set after the fact once the agent's
                 # post-call upload finishes. Never returned to the frontend
@@ -8349,6 +8357,72 @@ def upsert_widget_chat_call(
                     agent["id"] if agent else None,
                     site.get("accountId"),
                 ),
+            )
+    finally:
+        conn.close()
+
+
+def idle_widget_chats(idle_seconds: int = 180, max_age_days: int = 7) -> list[dict]:
+    """Widget text chats whose last turn is older than idle_seconds and that
+    were never delivered to the account's integrations (see
+    integrations_dispatch.deliver_widget_chat). ended_at is rewritten on
+    every turn by upsert_widget_chat_call, so "idle" means the visitor has
+    stopped typing. max_age_days bounds the first sweep after deploy: chats
+    older than that are left alone forever."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, account_id, started_at, ended_at FROM calls "
+            "WHERE call_type = 'widget' AND room_name LIKE ? "
+            "AND integrations_delivered_at IS NULL AND account_id IS NOT NULL "
+            "AND ended_at::timestamp < (now() AT TIME ZONE 'UTC') - make_interval(secs => ?) "
+            "AND started_at::timestamp > (now() AT TIME ZONE 'UTC') - make_interval(days => ?) "
+            "ORDER BY id",
+            ("widget-chat-%", idle_seconds, max_age_days),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def widget_chat_call(site_id: int, session_id: str) -> dict | None:
+    """{id, account_id} of the chat row the widget identifies by its session
+    id, scoped to the site whose key the widget presented."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id, account_id FROM calls WHERE site_id = ? AND room_name = ? AND call_type = 'widget'",
+            (site_id, f"widget-chat-{session_id}"),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def claim_widget_chat_delivery(call_id: int, account_id: int) -> bool:
+    """Stamps integrations_delivered_at if it is still NULL; False when
+    another path (the idle sweep, a second close/pagehide beacon) got there
+    first, so a chat is never delivered twice."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                f"UPDATE calls SET integrations_delivered_at = {_NOW} "
+                "WHERE id = ? AND account_id = ? AND integrations_delivered_at IS NULL",
+                (call_id, account_id),
+            )
+            return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
+def mark_widget_chat_delivered(call_id: int, account_id: int, results: dict) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE calls SET integrations_delivery_json = ? WHERE id = ? AND account_id = ?",
+                (json.dumps(results), call_id, account_id),
             )
     finally:
         conn.close()

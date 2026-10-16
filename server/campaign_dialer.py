@@ -398,6 +398,20 @@ def _report_exhausted_contacts() -> None:
         calls_db.mark_contact_crm_notified(contact["id"])
 
 
+def _deliver_idle_widget_chats() -> None:
+    """Fan out widget text chats the visitor stopped typing in 3 minutes ago
+    (voice calls deliver from the agent at call end; a text chat has no
+    agent and no end signal the visitor is guaranteed to send). Done from
+    the tick for the same reason as _report_exhausted_contacts: DB rows,
+    survives restarts. deliver_widget_chat stamps the row either way."""
+    for chat in calls_db.idle_widget_chats():
+        try:
+            results = integrations_dispatch.deliver_widget_chat(chat)
+            logger.info("widget chat %s delivered: %s", chat["id"], results)
+        except Exception:
+            logger.exception("widget chat %s delivery failed", chat["id"])
+
+
 def _loop() -> None:
     logger.info("campaign dialer started (tick=%ss)", _TICK_SECONDS)
     while True:
@@ -406,6 +420,7 @@ def _loop() -> None:
             if promoted:
                 logger.info("promoted %s scheduled campaign(s) to running", promoted)
             _report_exhausted_contacts()
+            _deliver_idle_widget_chats()
             campaigns = calls_db.running_campaigns()
             # Stable sort: instant-lead campaigns first, the rest unchanged.
             campaigns.sort(key=lambda c: c.get("name") not in _INSTANT_CAMPAIGN_NAMES)
