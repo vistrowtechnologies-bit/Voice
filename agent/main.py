@@ -816,6 +816,87 @@ def _facts_reminder(lead_data: dict, fact_status: dict | None = None) -> str:
     return "\n\n".join(blocks)
 
 
+# History window for each LLM request (llm_node). The persisted chat context
+# and the saved transcript are never touched; only the copy sent to the model.
+# Trimmed in STEPS, not one turn at a time: a window sliding by one turn every
+# turn would change the request right after the system prompt on every turn,
+# so no history would ever be a cache hit again. Stepped, the request is
+# append-only for STEP turns between trims. LLM_HISTORY_KEEP_TURNS=0 disables.
+_HISTORY_KEEP_TURNS = int(os.environ.get("LLM_HISTORY_KEEP_TURNS", "12"))
+_HISTORY_TRIM_STEP = 6
+# Tool rounds dropped with their turn: log_lead's result is superseded by the
+# facts reminder in the per-turn directive (built from the same lead_data).
+# Every other tool round (bookings, calendar slots, catalog, consent, language
+# switch, do-not-call, transfer) stays, call and result together.
+_HISTORY_DROPPABLE_TOOLS = frozenset({"log_lead"})
+
+
+def _window_history(chat_ctx, keep_turns: int = None, step: int = _HISTORY_TRIM_STEP):
+    """(chat_ctx to send, number of caller turns left out).
+
+    Keeps: everything after the cut, every system message, the first
+    assistant message (the greeting the caller heard), non-message items,
+    and each kept tool call with its result. Drops: older user/assistant
+    messages and log_lead rounds. Deterministic in the context alone, so the
+    preemptive and confirmed generations of a turn send the same request."""
+    keep_turns = _HISTORY_KEEP_TURNS if keep_turns is None else keep_turns
+    items = chat_ctx.items
+    user_idx = [i for i, it in enumerate(items)
+                if getattr(it, "type", None) == "message" and it.role == "user"]
+    if keep_turns <= 0 or len(user_idx) < keep_turns + step:
+        return chat_ctx, 0
+    dropped = ((len(user_idx) - keep_turns) // step) * step
+    cut = user_idx[dropped]
+    kept_calls = {it.call_id for it in items[:cut]
+                  if getattr(it, "type", None) == "function_call"
+                  and it.name not in _HISTORY_DROPPABLE_TOOLS}
+    head, greeting_kept = [], False
+    for it in items[:cut]:
+        kind = getattr(it, "type", None)
+        if kind == "message":
+            if it.role == "assistant" and not greeting_kept:
+                greeting_kept = True
+                head.append(it)
+            elif it.role in ("system", "developer"):
+                head.append(it)
+        elif kind in ("function_call", "function_call_output"):
+            if it.call_id in kept_calls:
+                head.append(it)
+        else:
+            head.append(it)
+    return llm.ChatContext(items=head + list(items[cut:])), dropped
+
+
+def _without_turn_copies(chat_ctx, directive: str):
+    """Drop copies of this turn's directive already in the context.
+
+    On a corrected fact on_user_turn_completed also adds the directive to the
+    turn context (that is what throws the stale preemptive run away), and
+    llm_node then attached it a second time: ~1.3k identical tokens twice in
+    one request. The copy llm_node appends LAST is the one kept, so the model
+    still reads it in the same final position as before."""
+    if not directive:
+        return chat_ctx
+    last_user = max((i for i, it in enumerate(chat_ctx.items)
+                     if getattr(it, "type", None) == "message" and it.role == "user"), default=-1)
+    chat_ctx.items = [
+        it for i, it in enumerate(chat_ctx.items)
+        if not (i > last_user and getattr(it, "type", None) == "message" and it.role == "system"
+                and it.text_content == directive)
+    ]
+    return chat_ctx
+
+
+def _trimmed_history_note(dropped_turns: int) -> str:
+    return (
+        f"# Earlier in this call\nThe first {dropped_turns} caller turns are no longer shown above, "
+        "only to keep this request short. Their results are not lost: captured caller details are "
+        "in the facts list below and tool results (bookings, slots, lookups) are kept above. Never "
+        "ask again for something the caller may already have told you; if you are unsure, ask "
+        "whether they mentioned it."
+    )
+
+
 # A label + one line of guidance per funnel stage. Deliberately advisory,
 # not enforced — nothing blocks a tool call or a reply based on this; it's
 # read the same way _appointment_instruction/_intake_instruction etc. are,
@@ -3714,6 +3795,11 @@ class RealEstateAgent(Agent):
                     "back verbatim:\n" + prior
                 )
 
+        if config.get("_contact_notes"):
+            # Own heading so realtime_prompt.compact keeps it as a section
+            # instead of folding it into whichever section precedes it.
+            caller_tail += "\n\n# This contact\n" + config["_contact_notes"]
+
         reply_language = config.get("language") or "hi-IN"
         language_name = LANGUAGE_NAMES.get(reply_language, "Hindi")
         instructions += (
@@ -4154,7 +4240,11 @@ class RealEstateAgent(Agent):
                 # not the completion, so keep the generation as small as the
                 # API allows.
                 ctx.add_message(role="user", content="hi")
-                stream = agent_llm.chat(chat_ctx=ctx)
+                # With the agent's tools: every real request carries them, and
+                # an OpenAI-style chat template renders the tool block into
+                # the prompt (commonly ahead of the system text), so a warm-up
+                # without them is a different prefix and warms nothing.
+                stream = agent_llm.chat(chat_ctx=ctx, tools=list(self.tools))
                 try:
                     async for _ in stream:
                         break  # first token is enough - prefix is now cached
@@ -4780,12 +4870,22 @@ class RealEstateAgent(Agent):
         which switch_reply_language updates directly, so those are current
         here regardless of which run this is.
         """
-        directive = self._pending_turn_directive
-        if directive:
-            chat_ctx = chat_ctx.copy()
-            chat_ctx.add_message(role="system", content=directive)
+        chat_ctx = self._llm_request_ctx(chat_ctx)
         async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
             yield chunk
+
+    def _llm_request_ctx(self, chat_ctx):
+        """The context one LLM request is sent: history window, then this
+        turn's directive last. Never mutates the context it is given."""
+        directive = self._pending_turn_directive
+        chat_ctx, dropped_turns = _window_history(chat_ctx)
+        parts = [_trimmed_history_note(dropped_turns)] if dropped_turns else []
+        if directive:
+            parts.append(directive)
+        if parts:
+            chat_ctx = _without_turn_copies(chat_ctx.copy(), directive)
+            chat_ctx.add_message(role="system", content="\n\n".join(parts))
+        return chat_ctx
 
     async def tts_node(self, text, model_settings=None):
         """Timestamp text arriving at TTS, to find where streaming is lost.
@@ -6980,10 +7080,16 @@ async def entrypoint(ctx: JobContext) -> None:
         }
         cfg = config
     if config and contact_notes:
-        config = {**config, "system_prompt": (config.get("system_prompt") or "").rstrip() + "\n\n" + contact_notes}
+        # Carried separately and placed in the per-call tail by
+        # RealEstateAgent, not glued onto system_prompt: the tenant prompt sits
+        # near the START of the instructions, so per-contact text there made
+        # the KB and every platform layer after it a fresh, uncached prefix on
+        # each call — and on an agent with no system_prompt it replaced the
+        # whole built-in persona with just these notes.
+        config = {**config, "_contact_notes": contact_notes}
         cfg = config
         logger.info(
-            "contact notes appended to prompt: %d line(s) (room=%s)", contact_notes.count("\n"), ctx.room.name
+            "contact notes added to prompt tail: %d line(s) (room=%s)", contact_notes.count("\n"), ctx.room.name
         )
     if config:
         config = _apply_lead_context(config, call_context, ctx.room.name)

@@ -18,6 +18,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
 - Claude (2026-10-16): PR #132 `claude/chat-lead-delivery` MERGED with PR #130 (one push): widget text chats delivered to the integrations (idle sweep from the dialer tick + /widget/chat/end beacon); Railway deploy, widget bundle in server/static.
 - Claude (2026-10-16): branch `claude/contact-arthaleads-details` (PR open, NOT merged): contact page Lead details card hides ArthaLeads internal keys/tags, shows "From ArthaLeads" line + link; display only, web-demo only, Vercel deploy only.
+- Claude (2026-10-16): branch `claude/llm-token-diet` (committed locally, NOT pushed/PR'd/deployed): LLM request harness + history window, contact notes moved to the prompt tail, warm-up sends tools, orchestrator VOICE_STYLE_PROMPT before per-call text. Needs both workers deployed after merge.
 
 ## Takeover checklist
 
@@ -1045,4 +1046,23 @@ Files: web-demo/src/lib/leadDetails.ts (new arthaleadsOrigin / visibleLeadEntrie
 - Tags: drops "arthaleads", "channel:*", and any "label:value" tag whose value the card already shows. Non-ArthaLeads contacts untouched.
 - Evidence: npm run test:leads passes (new cases), tsc -b --noEmit, lint (exit 0, nothing in touched files), full npm run build pass.
 - Not verified: the page in a real browser against a real ArthaLeads contact. Next: review + merge (Vercel only), then open contact 9 of workspace 1 and check the card.
+
+### Claude — 2026-10-16 — LLM token diet (branch `claude/llm-token-diet`, local commit, NOT pushed)
+
+Problem: Sarvam pipeline LLM ≈ ₹2.0/call-minute (Oct 1–16 bill: ~12M tokens / ~117 min, ~45% cached).
+
+Measured offline (new `agent/scripts/measure_prompt_tokens.py`, fixtures `agent/scripts/token_fixtures.py`; tiktoken o200k proxy; rebuilds the exact chat-completions request per turn):
+- A request is ~11.5k tokens at turn 1, ~12.4k at turn 10, ~13.4k at turn 20 (custom-prompt tenant, strict 8k KB). Static system prompt + KB + tool schemas ≈ 10.2k of it; per-turn directive ≈ 1.2–1.5k; history only 0.5k (turn 5) to 1.7k (turn 20).
+- Within a call, 86–88% of each request already repeats the previous request byte-for-byte from the start. The billed 45% cache rate is therefore NOT explained by our request order; it is on Sarvam's side, or the bill includes non-call traffic. Hypothesis, unverified.
+- The bill reconciles with ~8 requests per call-minute: harness predicts ₹1.78–2.03/min at 45% cached, ₹1.29–1.45/min if Sarvam cached the whole repeated prefix.
+
+Changed:
+- agent/main.py `_window_history`, `_trimmed_history_note`, `_without_turn_copies`, `RealEstateAgent._llm_request_ctx` (used by llm_node): keep the last 12 caller turns, trimmed in steps of 6 so the request stays append-only between trims; greeting, system messages and every non-log_lead tool call+result kept; a short note says older turns are gone (facts stay in the directive's facts list). Only the request copy is trimmed; history and transcript untouched. `LLM_HISTORY_KEEP_TURNS=0` disables. The directive is now sent once on corrected-fact turns (was twice).
+- agent/main.py entrypoint + `__init__`: contact notes go in the per-call tail (`# This contact`), no longer glued onto system_prompt. Before: every call with lead custom fields made the KB and all platform layers an uncached prefix (shared prefix between two calls 4.4k → 10.4k tokens), and on a built-in-persona agent the notes REPLACED the whole persona.
+- agent/main.py `_warm_llm_prompt_cache`: the warm-up request now carries the agent's tools, like every real request.
+- orchestrator/session.py: VOICE_STYLE_PROMPT placed before caller memory and the date line.
+
+Savings, honestly: tokens −0.7% over a 20-turn call, −4.5% at turn 20. The 50% target is NOT reached without cutting prompt content. Ranked content options (each needs a Testing Lab A/B, none done): per-turn directive 1.2–1.5k tokens uncached on every request (gender block ~600); the two "how you talk" layers 775 + 783; strict-KB rules ~600; the second full request after a log_lead tool call.
+
+Verified: agent and orchestrator suites (counts in the commit message); 11 new tests in agent/test_llm_token_diet.py, 10 fail on origin/main. Not verified: any live call; Sarvam cache behaviour. Next: merge, deploy both workers, then compare per-request promptTokens/cachedTokens in diagnostics and the Sarvam dashboard cache share for a day.
 
