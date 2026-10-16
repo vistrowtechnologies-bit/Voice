@@ -161,3 +161,15 @@ Plan: run that test (owner answers the phone), ask EnableX Q1/Q5 in parallel. A1
 
 Per agent (or per ArthaLeads source): "Call new leads: immediately / after 30 s / 1 min / 5 min". Vistrow stores it next to the agent's follow-up rules; on lead arrival the contact row gets `next_attempt_at = arrival + delay`; the dialer already skips pending rows until `next_attempt_at`. Calling window and line limits still apply. Today's behaviour (immediately, typically under 30 s) is the default.
 
+
+## 8. A1 live test results, 16 Oct 10:35-10:38 UTC (owner's phone)
+
+EnableX's official Voice API reference (developer.enablex.io/voice/api-reference.html) VERIFIED: an API call's `from` "must exactly match a number you have provisioned in your EnableX project"; `action_on_connect.connect` bridges "to another phone number or SIP URI"; `custom_data` is echoed in every webhook; webhook HTTP Basic auth is supported.
+
+| Test | Result |
+|---|---|
+| Call 1: Prophunt keys (ws 1), from 917935466148, `action_on_connect.connect` to `sip:917935466148@4an9t157nkc.sip.livekit.cloud` | Placed (201), rang, answered by a human 10:35:52, `custom_data` echoed. Bridge leg: `bridge_disconnected` "User alerting, no answer" (cause 19) at 10:36:17. No LiveKit room, no phone-worker job, no calls row. Owner heard ringing/beeps. |
+| Same call, runtime `PUT /call/{id}/connect` (the call inbound uses) at 10:36:27 | Accepted (200, initiated); leg cleared when the owner hung up at 10:36:36. No room. |
+| Call 2 (control): ws 2 keys, from 917713128715, same bridge | `disconnected` at 10:38:22 with duration 0, "User alerting, no answer"; never rang. Inconclusive. |
+
+VERIFIED: dialling with a tenant's own keys works and is attributed to that tenant's number. NOT WORKING: EnableX → our LiveKit SIP host on an outbound API call; LiveKit never created a room. Cause UNVERIFIED. Next evidence: LiveKit Cloud SIP call log for 10:35-10:38 UTC (needs a logged-in LiveKit Cloud session), and EnableX's answer on whether our SIP login is configured for the Prophunt project.
