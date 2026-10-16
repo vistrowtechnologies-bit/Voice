@@ -34,10 +34,10 @@ SRC = inspect.getsource(main)
 
 class TheCrmGetsTheAnalysis(unittest.TestCase):
     def test_delivery_sends_the_merged_extracted_data(self):
-        # The calls row is written as {**_extra_lead_facts, **extracted}. The
-        # CRM payload must not be the poorer half of that.
+        # The calls row is written as _call_extracted_data(lead_data,
+        # extracted). The CRM payload must not be the poorer half of that.
         self.assertIn(
-            '"extracted_data": {**_extra_lead_facts(lead_data), **extracted}', SRC,
+            '"extracted_data": _call_extracted_data(lead_data, extracted)', SRC,
         )
 
     def test_the_crm_payload_is_not_built_before_the_analysis(self):
