@@ -18,6 +18,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
 - Claude (2026-10-16): PR #132 `claude/chat-lead-delivery` MERGED with PR #130 (one push): widget text chats delivered to the integrations (idle sweep from the dialer tick + /widget/chat/end beacon); Railway deploy, widget bundle in server/static.
 - Claude (2026-10-16): branch `claude/contact-arthaleads-details` (PR open, NOT merged): contact page Lead details card hides ArthaLeads internal keys/tags, shows "From ArthaLeads" line + link; display only, web-demo only, Vercel deploy only.
+- Claude (2026-10-16): branch `claude/voice-clone-backend` (committed, NOT pushed/merged): "Clone your voice" backend (server/custom_voices.py, /voices/custom API, Sarvam-only clones, first clone free / 25 credits after, billed like Bharat) + call runtime (agent/custom_voice.py, agent/sarvam_clone_tts.py); stock ElevenLabs voices owner-only. UI is `claude/voice-clone-ui`. Needs Railway + BOTH LiveKit workers + orchestrator after merge. See message below.
 
 ## Takeover checklist
 
@@ -1027,4 +1028,13 @@ Files: web-demo/src/lib/leadDetails.ts (new arthaleadsOrigin / visibleLeadEntrie
 - Tags: drops "arthaleads", "channel:*", and any "label:value" tag whose value the card already shows. Non-ArthaLeads contacts untouched.
 - Evidence: npm run test:leads passes (new cases), tsc -b --noEmit, lint (exit 0, nothing in touched files), full npm run build pass.
 - Not verified: the page in a real browser against a real ArthaLeads contact. Next: review + merge (Vercel only), then open contact 9 of workspace 1 and check the card.
+
+### Claude — 2026-10-16 — Clone your voice, backend + call runtime (branch `claude/voice-clone-backend`, not pushed)
+
+Owner decisions applied: clones are Sarvam Instant Voice Cloning only (ElevenLabs IVC behind VOICE_CLONE_ELEVENLABS=1, default off: ~Rs 3.5-3.8/min and not on our PAYG plan); first clone free on Growth/Scale/owner, then CLONE_EXTRA_CREDITS=25 each, refunded on failure; plan limits Starter 0 / Growth 1 / Scale 3 (plan_policy PLANS.cloned_voices); calls billed like Bharat (voice_tier("custom:...") = standard, 2 credits/min on the Bharat model); stock "elevenlabs:" voices owner-only (preview flag), agents already on one keep saving and taking calls.
+- Server: new server/custom_voices.py (API router /voices/custom, quote, list, create multipart -> 201 status "processing" then background clone, preview proxy cached per (id,text), rename, delete refused while an agent uses it). Tables custom_voices + custom_voice_previews in calls_db _SCHEMA. Audio in B2 under custom-voices/<account>/<id>/; 15 s reference clip cut with ffmpeg (in the image). Consent clip stored, consent_verified=false (no server STT path). token_api: router mounted, _guard_voice_tier validates custom voices per account, support sessions blocked from /voices/custom.
+- Agent: agent/custom_voice.py resolves "custom:vv_<id>" (db.get_custom_voice by id AND account_id) -> SarvamCloneTTS (agent/sarvam_clone_tts.py, POST /voices/clone/stream, linear16 24 kHz, StreamAdapter + stock Sarvam backup); any problem -> google:chirp3:Achernar + warning. Call record keeps custom: value. AI disclosure forced on (call_disclosure cloned_voice/force; AI-only line when not recording). plan_policy.validate_agent no longer refuses custom or grandfathered ElevenLabs voices.
+- Orchestrator: speaks only ElevenLabs clones, so Sarvam clones fall back to "shubh" there (logged); billed voice and forced disclosure mirrored.
+- Evidence: server 817 passed (pgserver), agent 867 passed / 16 skipped / 1 xfailed full run + the one source-count test updated afterwards (59 targeted passed), orchestrator 63 passed / 20 skipped. No vendor, B2 or Railway contact in tests.
+- Not verified: a real clone (needs the text_to_speech_voice_cloning capability on our Sarvam account), real call latency of the clone stream, 20 MB uploads through the Vercel /api rewrite. Deploy after merge: Railway (table + API), BOTH LiveKit workers, orchestrator. Env: SARVAM_API_KEY + B2_* on Railway Voice.
 

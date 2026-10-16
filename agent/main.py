@@ -80,6 +80,8 @@ import realtime_config
 import realtime_timing
 import sarvam_realtime_stt
 import call_disclosure
+import custom_voice
+from sarvam_clone_tts import SarvamCloneTTS
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
@@ -2686,6 +2688,15 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
 _TELEPHONY_SAMPLE_RATE = 8000
 
 
+class _CloneFallbackAdapter(TtsFallbackAdapter):
+    """FallbackAdapter has no update_options; a mid-call language switch
+    (on_user_turn_completed / tools.switch_reply_language) reaches the cloned
+    voice through this instead of being dropped."""
+
+    def update_options(self, **kwargs) -> None:
+        self._vistrow_clone.update_options(**kwargs)
+
+
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str,
                is_phone: bool = False, sarvam_latency_lab: bool = False):
     """Same fallback pattern as _build_stt, for TTS. Returns (tts, provider)
@@ -2757,6 +2768,23 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         "output_audio_codec": "linear16",
         "speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000,
     }
+    if speaker.startswith(custom_voice.SARVAM_CLONE_PREFIX):
+        # A customer's Sarvam cloned voice (custom_voice.resolve). One HTTP
+        # streaming request per sentence; a stock Sarvam voice backs it up so
+        # a clone failure mid-call changes the voice instead of going silent.
+        clone = SarvamCloneTTS(
+            voice_id=speaker[len(custom_voice.SARVAM_CLONE_PREFIX):], language=reply_language,
+        )
+        adapted = StreamAdapter(tts=clone, sentence_tokenizer=tokenize.blingfire.SentenceTokenizer(retain_format=True))
+        backup = _sarvam_v4_tts(
+            voice_catalog.sarvam_v4_speaker("", None), None,
+            target_language_code=reply_language,
+            **{**tone, "temperature": min(float(tone.get("temperature", 0.6)), 1.0)},
+            **sarvam_stream_options,
+        )
+        adapter = _CloneFallbackAdapter([adapted, backup], **_rate)
+        adapter._vistrow_clone = clone
+        return adapter, "sarvam-clone"
     if speaker.startswith(_ELEVENLABS_V3_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
         voice_id = speaker[len(_ELEVENLABS_V3_VOICE_PREFIX) :]
         base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
@@ -3147,9 +3175,17 @@ def _disclosure_first_reply_instructions(config: dict) -> str:
         compliance = db.get_compliance_config(config.get("account_id"))
     disclosure = call_disclosure.recording_disclosure(
         compliance, config.get("language") or "hi-IN", bool(config.get("is_platform_demo")),
+        cloned_voice=custom_voice.is_custom(config.get("voice")),
     )
     if not disclosure:
         return ""
+    if disclosure in call_disclosure.AI_ONLY_NOTICES.values():
+        return (
+            "\n\n# AI notice\n"
+            "In your very first reply, before anything else, tell the caller in a few words, in their "
+            f"language, that they are speaking with an AI assistant, for example: \"{disclosure}\". "
+            "Say it once only."
+        )
     return (
         "\n\n# Recording notice\n"
         "In your very first reply, before anything else, tell the caller in a few words, in their "
@@ -3350,6 +3386,13 @@ class RealEstateAgent(Agent):
         config = config or {}
         agent_name = config.get("name") or "Artha"
         voice_value = config.get("voice") or "shubh"
+        # A customer's cloned voice: voice_value stays "custom:vv_..." (call
+        # record, billing, greeting cache); _tts_speaker is what speaks.
+        self._is_cloned_voice = custom_voice.is_custom(voice_value)
+        self._tts_speaker = (
+            custom_voice.resolve(voice_value, config.get("account_id"), db.get_custom_voice)
+            if self._is_cloned_voice else voice_value
+        )
         tone_name = config.get("tone") or DEFAULT_TONE
         # Kept for the greeting audio cache's key — a cached clip is only ever
         # replayed for the exact voice it was synthesized with.
@@ -3929,7 +3972,7 @@ class RealEstateAgent(Agent):
             )
         else:
             tts, tts_provider = _build_tts(
-                reply_language, voice_value, base_tone, tone_name,
+                reply_language, self._tts_speaker, base_tone, tone_name,
                 is_phone=(call_type or "") == "phone",
                 sarvam_latency_lab=self._sarvam_latency_lab,
             )
@@ -4106,12 +4149,15 @@ class RealEstateAgent(Agent):
         _compliance = config.get("_compliance_config")
         if _compliance is None:
             _compliance = db.get_compliance_config(config.get("account_id"))
+        # A cloned (real person's) voice always says it is an AI, whatever
+        # the Compliance toggles say.
         self._recording_disclosure = call_disclosure.recording_disclosure(
             _compliance, self._reply_language, self._is_platform_demo,
+            cloned_voice=self._is_cloned_voice,
         )
         if self._welcome_message:
             self._welcome_message = call_disclosure.with_disclosure(
-                self._welcome_message, self._recording_disclosure,
+                self._welcome_message, self._recording_disclosure, force=self._is_cloned_voice,
             )
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
@@ -4739,7 +4785,7 @@ class RealEstateAgent(Agent):
                     greeting = f"Hi {self._visitor_first_name}, " if self._visitor_first_name else "Hi, "
                     template = _DEFAULT_OPENER_EN_BUSINESS
                 await self.session.say(call_disclosure.with_disclosure(
-                    template.format(greeting=greeting, business_name=business_name), getattr(self, "_recording_disclosure", ""),
+                    template.format(greeting=greeting, business_name=business_name), getattr(self, "_recording_disclosure", ""), force=getattr(self, "_is_cloned_voice", False),
                 ))
             else:
                 # No real business name to say (e.g. resolved to the
@@ -4748,7 +4794,7 @@ class RealEstateAgent(Agent):
                 greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
                 template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
                 await self.session.say(call_disclosure.with_disclosure(
-                    template.format(greeting=greeting, agent_name=self._agent_name), getattr(self, "_recording_disclosure", ""),
+                    template.format(greeting=greeting, agent_name=self._agent_name), getattr(self, "_recording_disclosure", ""), force=getattr(self, "_is_cloned_voice", False),
                 ))
         finally:
             # Cold starts / slow TTS providers (Google) can push the opening

@@ -935,6 +935,41 @@ CREATE TABLE IF NOT EXISTS voice_samples (
     PRIMARY KEY (voice_string, lang)
 );
 
+-- A customer's own cloned voice ("Clone your voice", custom_voices.py).
+-- Agents select one as agents.voice = 'custom:<id>'. Vendor ids and storage
+-- keys never leave the server. deleted_at set = gone (row kept for audit).
+CREATE TABLE IF NOT EXISTS custom_voices (
+    id TEXT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    language TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'processing',
+    error TEXT NOT NULL DEFAULT '',
+    sample_key TEXT,
+    consent_key TEXT,
+    consent_transcript TEXT NOT NULL DEFAULT '',
+    consent_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    elevenlabs_voice_id TEXT,
+    sarvam_voice_id TEXT,
+    sarvam_ref_key TEXT,
+    engine_default TEXT,
+    setup_credits_charged INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT {_NOW},
+    deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_custom_voices_account ON custom_voices(account_id);
+
+-- Preview audio for a cloned voice, cached per (voice, text).
+CREATE TABLE IF NOT EXISTS custom_voice_previews (
+    voice_id TEXT NOT NULL,
+    text_sha TEXT NOT NULL,
+    audio BYTEA NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'audio/mpeg',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (voice_id, text_sha)
+);
+
 -- One row per "Build with AI" LLM request (agent_builder.py). Only counted,
 -- for the per-account daily cap; the drafts themselves are never stored.
 CREATE TABLE IF NOT EXISTS agent_drafts (
@@ -9320,6 +9355,12 @@ def voice_tier(voice: str | None) -> str:
     the same "don't guess, use the safe default" reasoning as agent/main.py's
     own unconfigured-provider fallback."""
     if not voice:
+        return "standard"
+    # A customer's cloned voice ("custom:vv_<id>", custom_voices.py) has no
+    # per-minute premium (owner, 2026-10-16): it bills exactly like a standard
+    # voice, so a Vistrow Bharat call costs Bharat's rate. Its cost to us
+    # (~Rs 1.1-1.6/min) is recovered by the plan, not a voice multiplier.
+    if voice.startswith("custom:"):
         return "standard"
     if voice in _PREMIUM_VOICES or voice.startswith(_PREMIUM_VOICE_PREFIXES):
         return "premium"
