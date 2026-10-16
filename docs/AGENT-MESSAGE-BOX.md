@@ -841,6 +841,11 @@ At the owner's request; same branch and same PR.
 
 **Deploy:** the Vercel build carries the site changes. `help_articles.py` also feeds the dashboard help chat on the server side, so Railway picks up the new wording on its next deploy.
 
+### Claude — 2026-10-15 — onboarding answers set up the first agent (branch `claude/onboarding-first-agent`, PR open, NOT merged)
+
+Changes: new `server/onboarding_agent.py` builds the starter agent's instructions, language, welcome line (Hindi/English only) and after-call fields from the onboarding answers, deterministically (no model call). `calls_db.apply_onboarding_agent` writes them only before onboarding is finished and only onto the untouched starter "Artha" (or the agent a previous run set up; settings key `onboarding_agent_id`). New `POST /onboarding/agent` (finish step, so "Talk to Artha" is tailored); `/onboarding/complete` applies it once more. Admin account "Signup & onboarding" tab gets a "First agent, set up from onboarding" table: answer → setting → value → "As set up" / "Changed by customer" (rebuilt from the stored answers).
+
+Verified: 14 server tests (`test_onboarding_agent.py`, `test_onboarding_profile.py`), tsc, localhost walk-through against a mock that runs the real module (finish step and admin table in both states). Not verified: against a real database; existing accounts are already onboarded so nothing changes for them. Server-only + dashboard: no LiveKit agent deploy needed.
 ### Claude — 2026-10-15 — native sample lines regenerated with Sarvam (PR pending, NOT merged)
 
 Branch `claude/seo-native-samples`. Owner asked for the Indian-language sample conversation lines on public marketing pages to be rewritten by Sarvam so they read as native speech.
@@ -975,6 +980,11 @@ Verified: all 9 new tests fail on origin/main's server files and pass on the bra
 
 Left: merge only after the ArthaLeads side is deployed (otherwise every key save lands as "pending" — harmless, the key is still saved and Send test retries). Then: owner re-saves the key on account 2 and checks ArthaLeads → Auto-call step 1 reads "Connected to Vistrow account 2".
 
+### Claude — 2026-10-16 — admin reset for two-step login (branch `claude/mfa-admin-reset`, PR open, NOT merged)
+
+Changes: new `POST /admin/accounts/{id}/users/{uid}/reset-two-step` (platform owner only; reason required; user must belong to the account and have two-step on; clears it via `calls_db.disable_mfa`, records security event `mfa_reset_by_support`, writes audit `reset_two_step`, emails the user). Admin account Users tab gets a "Two-step login" column with Reset (reason dialog; ReasonModal now shows helper text without a field). Login code step links to support@vistrowvoice.com for users who lost both phone and recovery codes. Customers could already turn it off themselves in Settings → Sign-in & security; the platform owner account can't (required for the admin panel).
+
+Verified: `server/test_admin_reset_two_step.py` (3 tests, route loaded via AST like test_admin_impersonation, no DB), tsc, localhost run against a mock (code screen link; admin Reset dialog → column flips to Off with banner). Not verified: against a real DB or real email send. Server + dashboard only; no agent deploy.
 ### Claude — 2026-10-16 — Widget text chats delivered to integrations (branch `claude/chat-lead-delivery`, PR open, NOT merged)
 
 Problem (verified 2026-10-16): a widget text chat is logged by `calls_db.upsert_widget_chat_call` (call_type `widget`, room `widget-chat-{session}`) but nothing ever delivered it to the account's integrations — voice calls fan out from the agent at call end, a text chat has no agent. A visitor chatted 49 s with name+phone+email and ArthaLeads only got it when the owner pressed "Send to ArthaLeads" 1.5 h later.
@@ -1007,6 +1017,14 @@ Branch `claude/qa-phase1-orchestrator` (PR pending). Files: orchestrator/db.py, 
 - QA false alarm: Testing Lab already forces LiveKit for Lab runs (AgentTestCall.tsx forceLiveKit).
 - Next: merge + Railway deploy of orchestrator, read-only live probe; phase 2 = ignored agent settings + inbound rules on orchestrator.
 
+### Claude — 2026-10-16 — end-to-end test of PR #116 + #131 together (real server, throwaway DB)
+
+Ran main + both branches merged, real `token_api` on a throwaway local Postgres 16 (UTF-8) with a local STARTTLS mail catcher; server copied outside the repo so no production `.env` could load (log confirmed no OpenAI key). Verified in the DB after each step:
+- Onboarding sets up only the untouched starter; re-applies to the same agent when an answer changes; no-op after onboarding (`agentId: null`); owner's agent untouched by the customer's; first-touch attribution not overwritten.
+- Admin mapping table correct; a customer edit (language) flags only that row. Fixed on #116: the row now shows "Now: English / Onboarding set: Hindi" (was ambiguous "Set to").
+- Two-step reset: customer locked out (password alone → mfaRequired); admin Reset clears secret+recovery codes, writes audit `reset_two_step` with reason, security event `mfa_reset_by_support`, email delivered; customer then signs in with password only. Refused correctly: customer session 404, anonymous 401, user of another account 404, already off 400, short reason 400 (and button disabled), unknown account 404 — none changed data.
+- Code screen support link verified (mailto with subject); owner TOTP sign-in still works.
+Both branches had a message-box conflict with main; merged main into each (now MERGEABLE). Not verified: real Resend email delivery, production data.
 ### Claude — 2026-10-16 — QA release (phases 2-4 + billing + auto analysis)
 
 Release branch `claude/qa-release-oct16` merges PRs #125, #134, #135, #136, #137 and `claude/lead-qualified-rule`.
