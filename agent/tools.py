@@ -726,6 +726,11 @@ def crm_outcome(lead: dict) -> dict:
     note = callback.get("purpose") or visit.get("purpose") or ""
     if note:
         out["note"] = str(note)[:300]
+    # The caller asked for the brochure (send_brochure, or the post-call
+    # read). Nothing is sent from here: ArthaLeads turns this into a task for
+    # the sales team.
+    if (lead.get("extracted_data") or {}).get("brochure_requested") is True:
+        out["brochure_requested"] = True
     return out
 
 
@@ -817,6 +822,9 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
             "direction": lead.get("direction") or "",
             # What happened on the call, in ArthaLeads' own vocabulary.
             "crm_outcome": crm_outcome(lead),
+            # The post-call read, for the call note. Only when it produced one.
+            **({"summary": lead["summary"]} if lead.get("summary") else {}),
+            **({"key_points": list(lead["key_points"])} if lead.get("key_points") else {}),
         }
     url = (config.get("url") or "").strip()
     if not url:
@@ -1447,7 +1455,7 @@ _INTEGRATION_FIELDS = {
     "agent": ("agent_name", "agent_id"),
     "language": ("language",),
     "duration": ("duration_seconds",),
-    "details": ("extracted_data", "summary", "use_case", "message"),
+    "details": ("extracted_data", "summary", "key_points", "use_case", "message"),
     "transcript": ("transcript",),
     "page": ("page_path",),
     "recording": ("recording_url", "recording_mime_type"),
@@ -2091,6 +2099,33 @@ async def do_not_call(context: RunContext, reason: str = "") -> str:
         "Done — they will not be called again. Apologise briefly for the interruption, thank "
         "them for their time, and end the call. Do not pitch, do not ask why, and do not offer "
         "to call back."
+    )
+
+
+@function_tool
+async def send_brochure(context: RunContext, project: str = "") -> str:
+    """Note that the caller wants the brochure / details on WhatsApp.
+
+    Call this only when the caller clearly asks for a brochure, details,
+    photos or a price list to be sent. If what they said was unclear, ask
+    them to repeat it instead of calling this.
+
+    Args:
+        project: The project they want it for, if they named one.
+    """
+    lead_data = (context.userdata or {}).get("lead_data")
+    if lead_data is not None:
+        lead_data["brochure_requested"] = True
+        if (project or "").strip():
+            lead_data["brochure_project"] = project.strip()
+    logger.info("brochure requested mid-call")
+    # Nothing is sent from the call: the request reaches the CRM at call end
+    # (crm_outcome.brochure_requested) and the sales team shares it.
+    return (
+        "Noted for the team. Tell the caller, in their language: you have noted it and our "
+        "team will share the brochure with them on WhatsApp shortly. Never say it is being "
+        "sent now, that you have sent it, or that it will arrive right after this call. "
+        "Then carry on with the conversation."
     )
 
 

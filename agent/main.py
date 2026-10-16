@@ -71,6 +71,7 @@ import numpy as np
 import recording
 import storage_gate
 import inbound_rules
+import lead_facts
 import transfer_intent
 import jev_intent
 import ringback
@@ -130,6 +131,7 @@ from tools import (
     log_lead,
     do_not_call,
     record_consent,
+    send_brochure,
     request_callback,
     switch_reply_language,
     transfer_call,
@@ -763,15 +765,12 @@ def _transcript_looks_misrecognized(text: str, reply_language: str) -> bool:
     return _transcript_script_anomaly(text, reply_language) == "garbled"
 
 
-# Only name/phone/email/budget/location/timeline/company/use_case/team_size
-# have real `calls` columns (see db.save_call). The property fields log_lead
-# now captures ride along in extracted_data rather than growing the schema
-# for one vertical.
-_EXTRA_LEAD_FACT_KEYS = ("property_type", "configuration", "purpose")
-
-
-def _extra_lead_facts(lead_data: dict) -> dict:
-    return {k: lead_data[k] for k in _EXTRA_LEAD_FACT_KEYS if lead_data.get(k)}
+# The call's extracted_data: what log_lead/send_brochure captured mid-call,
+# in the standard lead-facts shape (lead_facts.py), with the post-call read
+# layered over it. Stored on the calls row AND sent to the CRM, so the
+# Vistrow call page and ArthaLeads show the same details.
+def _call_extracted_data(lead_data: dict, extracted: dict) -> dict:
+    return lead_facts.merge_facts(lead_facts.mid_call_facts(lead_data), extracted)
 
 
 def _facts_reminder(lead_data: dict, fact_status: dict | None = None) -> str:
@@ -3226,6 +3225,9 @@ def _build_tools(config: dict) -> list:
             # again. An opt-out an operator can switch off is not an opt-out.
             do_not_call,
             log_lead,
+            # Records a brochure request for the sales team (nothing is sent
+            # from the call). On for every tenant agent, like log_lead.
+            send_brochure,
             # No capture_platform_lead: it records a lead for Vistrow Voice
             # itself, so only the platform demos above can use it. Sending it
             # to tenants cost ~900 chars of schema on every LLM request
@@ -3839,7 +3841,8 @@ class RealEstateAgent(Agent):
             "1. Never say you have noted, saved, sent, shared, booked or arranged anything "
             "unless a tool returned success for it in THIS call. Say what you WILL do, not "
             "what you have done. If no tool exists for it, do not offer it — never promise a "
-            "brochure or details over WhatsApp, SMS or email unless a tool actually sent it.\n"
+            "brochure or details over WhatsApp, SMS or email unless a tool actually sent it "
+            "(or send_brochure noted it for the team — then say only what it tells you to).\n"
             "2. Never ask again for anything listed under what you already know. If the caller "
             "says they already told you, they are right — acknowledge once, briefly, and move "
             "on to something you genuinely do not know.\n"
@@ -8437,6 +8440,9 @@ async def entrypoint(ctx: JobContext) -> None:
         # it saved fine. Write the durable record first; enrich it afterwards.
         extracted: dict = {}
         memory_summary = ""
+        # Call summary + key points from the standard post-call pass, for the
+        # CRM note (ArthaLeads "summary"/"key_points").
+        call_notes: dict = {}
         saved_call_id: int | None = None
         delivery_task: asyncio.Task | None = None
         # A high-entropy bearer token for the permanent CRM recording link.
@@ -8473,7 +8479,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "account_id": cfg.get("account_id"),
                     # Seeded with what log_lead captured during the call, so the
                     # property fields survive even if post-call analysis times out.
-                    "extracted_data": {**_extra_lead_facts(lead_data), **extracted},
+                    "extracted_data": _call_extracted_data(lead_data, extracted),
                     "latency_metrics": userdata["latency_metrics"],
                     "diagnostic_events": userdata.get("diagnostic_events") or [],
                     "failure_reason": userdata.get("failure_reason") or "",
@@ -8529,7 +8535,7 @@ async def entrypoint(ctx: JobContext) -> None:
         #
         # It waits for ONE of those three - the analysis - and runs in parallel
         # with the other two. Starting before the analysis instead meant the
-        # CRM received _extra_lead_facts only and never the post-call read
+        # CRM received the mid-call facts only and never the post-call read
         # (interest_level, confirmed_requirement, business_summary), because
         # `extracted` is still empty at this point. That read is the
         # qualitative half a salesperson acts on, so the fix is to wait for
@@ -8565,7 +8571,9 @@ async def entrypoint(ctx: JobContext) -> None:
                     "transcript": transcript,
                     # Same merge the calls row gets - in-call facts seeded
                     # first, the post-call read layered over them.
-                    "extracted_data": {**_extra_lead_facts(lead_data), **extracted},
+                    "extracted_data": _call_extracted_data(lead_data, extracted),
+                    "summary": call_notes.get("summary") or "",
+                    "key_points": call_notes.get("key_points") or [],
                     "language": agent._reply_language,
                     "agent_name": cfg.get("name"),
                     # The 10-digit Agent ID from the dashboard, for CRM mapping.
@@ -8599,18 +8607,45 @@ async def entrypoint(ctx: JobContext) -> None:
             # No analysis will run, so nothing for the delivery to wait on.
             analysis_done.set()
         if transcript:
-            try:
-                extracted, memory_summary = await asyncio.wait_for(
-                    _post_call_analysis(transcript, agent._post_call_fields, want_memory),
-                    timeout=_POST_CALL_ANALYSIS_TIMEOUT_S,
-                )
-            except asyncio.TimeoutError:
+            # Two passes in parallel under the same bound: the operator's
+            # post_call_fields (+ memory summary), and the standard lead facts
+            # every call gets (lead_facts.py: budget, purpose, property, the
+            # call summary and key points). Each keeps its own result if the
+            # other is slow — a timeout only costs the pass that missed it.
+            fields_task = asyncio.create_task(
+                _post_call_analysis(transcript, agent._post_call_fields, want_memory)
+            )
+            facts_task = asyncio.create_task(lead_facts.extract_lead_facts(transcript))
+            _, pending = await asyncio.wait(
+                {fields_task, facts_task}, timeout=_POST_CALL_ANALYSIS_TIMEOUT_S
+            )
+            for task in pending:
+                task.cancel()
+            if pending:
                 logger.warning(
                     "post-call analysis timed out after %ss for room %s — call already saved",
                     _POST_CALL_ANALYSIS_TIMEOUT_S, ctx.room.name,
                 )
-            except Exception:
-                logger.exception("post-call analysis failed for room %s — call already saved", ctx.room.name)
+            fields: dict = {}
+            standard_facts: dict = {}
+            for task in (fields_task, facts_task):
+                if task in pending:
+                    continue
+                if task.exception() is not None:
+                    logger.error(
+                        "post-call analysis failed for room %s — call already saved",
+                        ctx.room.name, exc_info=task.exception(),
+                    )
+                elif task is fields_task:
+                    fields, memory_summary = task.result()
+                else:
+                    standard_facts, call_notes = task.result()
+            # The operator's own field wins on a shared key, but a null there
+            # does not erase a fact the standard pass did find.
+            extracted = {
+                **standard_facts,
+                **{k: v for k, v in (fields or {}).items() if v is not None or k not in standard_facts},
+            }
             # Released whatever happened above — success, timeout or error —
             # so the CRM delivery is never left waiting on a step that already
             # gave up. Set BEFORE the DB write so a slow write cannot delay it.
@@ -8620,7 +8655,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 # in-call facts here would silently undo the seed above.
                 await asyncio.to_thread(
                     db.set_call_extracted_data,
-                    saved_call_id, {**_extra_lead_facts(lead_data), **extracted},
+                    saved_call_id, _call_extracted_data(lead_data, extracted),
                 )
 
         # The follow-up call this one earns, if any (callback at the asked
