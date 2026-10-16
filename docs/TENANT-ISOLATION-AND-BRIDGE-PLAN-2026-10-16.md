@@ -173,3 +173,11 @@ EnableX's official Voice API reference (developer.enablex.io/voice/api-reference
 | Call 2 (control): ws 2 keys, from 917713128715, same bridge | `disconnected` at 10:38:22 with duration 0, "User alerting, no answer"; never rang. Inconclusive. |
 
 VERIFIED: dialling with a tenant's own keys works and is attributed to that tenant's number. NOT WORKING: EnableX → our LiveKit SIP host on an outbound API call; LiveKit never created a room. Cause UNVERIFIED. Next evidence: LiveKit Cloud SIP call log for 10:35-10:38 UTC (needs a logged-in LiveKit Cloud session), and EnableX's answer on whether our SIP login is configured for the Prophunt project.
+
+### 8b. LiveKit Cloud SIP call log (Telephony page, read 16 Oct ~16:20 IST) — VERIFIED
+
+- Owner confirmed: call 1 showed **7935466148** on the handset. Dialling with the tenant's own keys shows the tenant's own number.
+- Past 24 h: ONE SIP call only, `SCL_RNmZBgfnJrh5`, outbound 13:34 IST, **FROM +917713128715** TO +918080197945, session `test-phone-918080197945_vistrow-afb1244e` = Prophunt's call 1383. Vendor-side proof of the leak.
+- The two EnableX handovers at 16:05-16:08 IST are **absent** from LiveKit's log: EnableX never delivered them to LiveKit. The "User alerting, no answer" was inside EnableX.
+- Every working EnableX → LiveKit handover in 7 days (Oct 9, 10, 13) shows **FROM `vistrow-4xfxv26j`** (our SIP username) TO +917713128715, all from the "Vistrow voice" project. EnableX presents our SIP login only where it has been set up for us.
+- Conclusion (strong, not yet confirmed by EnableX): EnableX's handover into our SIP host needs per-project (or per-account) setup on EnableX's side. The Prophunt project does not have it. A customer's own EnableX account would not either.
