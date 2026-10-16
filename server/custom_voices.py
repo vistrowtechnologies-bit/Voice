@@ -966,12 +966,23 @@ def validate_agent_voice(account_id: int, value: str) -> None:
         raise CloneError(400, "That cloned voice isn't ready yet.")
 
 
-def display_name(account_id: int | None, value: str | None) -> str:
+def display_name(account_id: int | None, value: str | None, conn=None) -> str:
     """What to show for an agent's "custom:vv_<id>" voice: the clone's own
     name when it is this account's (not deleted) voice, else a generic
     label - never the raw id. Used by calls_db._agent_dict (dashboard and
-    help chat)."""
-    row = get_row(account_id, str(value or "")[len(VOICE_PREFIX):]) if account_id is not None else None
+    help chat), which passes its own open connection: taking a second pooled
+    connection per agent while the caller holds one can exhaust the pool."""
+    voice_id = str(value or "")[len(VOICE_PREFIX):]
+    if account_id is None or not _ID_RE.match(voice_id):
+        return "Cloned voice"
+    own = conn is None
+    conn = conn or calls_db._connect()
+    try:
+        row = conn.execute("SELECT name FROM custom_voices WHERE id = ? AND account_id = ? AND deleted_at IS NULL",
+                           (voice_id, account_id)).fetchone()
+    finally:
+        if own:
+            conn.close()
     return (row["name"] if row else "") or "Cloned voice"
 
 

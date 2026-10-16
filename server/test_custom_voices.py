@@ -879,6 +879,27 @@ class CustomVoiceTests(unittest.TestCase):
         self.assertEqual(self.cv.display_name(self.accounts["other"]["account_id"], value), "Cloned voice")
         self.assertEqual(self.cv.display_name(aid, "custom:vv_nope"), "Cloned voice")
 
+    def test_listing_agents_with_clones_uses_one_connection(self):
+        aid = self.accounts["scale"]["account_id"]
+        _s, v = self.create("scale", name="Abhi voice")
+        for i in range(15):
+            self.sql("INSERT INTO agents (account_id, name, voice) VALUES (?, ?, ?)",
+                     (aid, f"Clone agent {i}", "custom:" + v["id"]))
+        real, opened = self.db._connect, []
+
+        def counting():
+            opened.append(1)
+            return real()
+
+        with mock.patch.object(self.db, "_connect", counting):
+            agents = [a for a in self.db.list_agents(aid) if a["name"].startswith("Clone agent")]
+            self.assertEqual(len(opened), 1)
+            opened.clear()
+            one = self.db.get_agent_by_id_unscoped(agents[0]["id"])
+            self.assertEqual(len(opened), 1)
+        self.assertEqual(len(agents), 15)
+        self.assertEqual({a["voiceName"] for a in agents} | {one["voiceName"]}, {"Abhi voice"})
+
     # Build with AI ------------------------------------------------------
     def test_build_with_ai_offers_ready_clones_and_plays_them_through_preview(self):
         import agent_builder

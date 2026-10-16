@@ -4025,7 +4025,7 @@ def _row_get(row, key, default=None):
         return default
 
 
-def _agent_dict(row: dict) -> dict:
+def _agent_dict(row: dict, conn=None) -> dict:
     return {
         "id": row["id"],
         "publicId": _row_get(row, "public_id") or "",
@@ -4041,7 +4041,7 @@ def _agent_dict(row: dict) -> dict:
         # "gpt-4.1-mini"). Resolved here rather than in the frontend because
         # the catalog lives on this side; falls back to the raw string only
         # for a voice no longer in the catalog, which the UI then softens.
-        "voiceName": __import__("custom_voices").display_name(_row_get(row, "account_id"), row["voice"]) if str(row["voice"] or "").startswith("custom:") else (voice_catalog.get_voice(row["voice"]) or {}).get("name") or row["voice"],
+        "voiceName": __import__("custom_voices").display_name(_row_get(row, "account_id"), row["voice"], conn) if str(row["voice"] or "").startswith("custom:") else (voice_catalog.get_voice(row["voice"]) or {}).get("name") or row["voice"],
         "sttProvider": _row_get(row, "stt_provider") or "sarvam",
         "language": row["language"],
         "status": row["status"],
@@ -4187,7 +4187,7 @@ def list_agents(account_id: int) -> list[dict]:
     conn = _connect()
     try:
         return [
-            _agent_dict(r)
+            _agent_dict(r, conn)
             for r in conn.execute("SELECT * FROM agents WHERE account_id = ? ORDER BY id", (account_id,)).fetchall()
         ]
     finally:
@@ -4248,7 +4248,7 @@ def create_agent(data: dict, account_id: int) -> dict:
                 ),
             )
         row = conn.execute("SELECT * FROM agents WHERE id = ?", (cur.lastrowid,)).fetchone()
-        return _agent_dict(row)
+        return _agent_dict(row, conn)
     finally:
         conn.close()
 
@@ -4309,7 +4309,7 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
                 (str(agent_id),),
             )
         row = conn.execute("SELECT * FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id)).fetchone()
-        return _agent_dict(row) if row else None
+        return _agent_dict(row, conn) if row else None
     finally:
         conn.close()
 
@@ -8425,7 +8425,7 @@ def get_agent_by_id_unscoped(agent_id: int) -> dict | None:
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
-        return _agent_dict(row) if row else None
+        return _agent_dict(row, conn) if row else None
     finally:
         conn.close()
 
