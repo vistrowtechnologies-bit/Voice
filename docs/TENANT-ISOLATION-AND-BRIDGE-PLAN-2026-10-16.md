@@ -208,3 +208,9 @@ Customer flow this enables (one paste, nothing technical):
 5. Outbound: Voice API `POST /call` with that project's keys + `action_on_connect.connect` to our SIP host (caller ID = their number, billed to their wallet). Inbound: their number → our event URL → accept + connect with their keys.
 
 UNVERIFIED hypothesis this also explains the failed handover: "Vistrow voice" has `sip` set to our LiveKit login (EnableX set it in Aug), "Prophunt - Vistrow Voice" does not. Proof: `GET /cpaas/projects/{APP_ID}` for both, compare `voice.sip.server_url` / `username`. Needs the account's API Access credentials.
+
+### 9b. Reality check on the self-serve API (16 Oct ~17:05 IST) — VERIFIED
+
+The owner's EnableX portal has NO "Developers → API Access" page: not in the menu, profile (`/account-settings/profile/`), user management or settings. So the Service Administration API credentials the docs describe are not self-serve on this account (possibly not enabled for regular accounts). Zero-touch onboarding depends on EnableX confirming how a customer gets API Access credentials. Until then, the fallback is the customer pasting the project App ID + App Key (already supported) and setting the Event URL themselves.
+
+Also VERIFIED: ArthaLeads org-wide ad list is live in production (`ads.all`, 9 ads with lead counts and routed AI agent names; staging cd9f98b, main 24f6d2d).
