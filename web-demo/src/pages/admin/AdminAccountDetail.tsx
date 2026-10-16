@@ -6,6 +6,7 @@ import {
   adminImpersonate,
   rememberSupportReturn,
   adminResetPassword,
+  adminResetTwoStep,
   adminSetCredits,
   adminSetNotes,
   adminSetPlan,
@@ -54,6 +55,7 @@ export function AdminAccountDetail() {
       return next
     })
   const [modal, setModal] = useState<null | 'credits' | 'plan' | 'status' | 'reset'>(null)
+  const [twoStepUser, setTwoStepUser] = useState<Detail['users'][number] | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [impersonating, setImpersonating] = useState(false)
@@ -177,7 +179,7 @@ export function AdminAccountDetail() {
       <div className="mt-4">
         {tab === 'signup' && <SignupTab d={d} />}
         {tab === 'health' && <HealthTab d={d} />}
-        {tab === 'users' && <UsersTab d={d} />}
+        {tab === 'users' && <UsersTab d={d} onResetTwoStep={setTwoStepUser} />}
         {tab === 'agents' && <AgentsTab d={d} />}
         {tab === 'calls' && <CallsTab d={d} navigate={navigate} />}
         {tab === 'knowledge' && <KnowledgeTab d={d} />}
@@ -237,6 +239,21 @@ export function AdminAccountDetail() {
             setD(updated)
             setModal(null)
             setBanner(suspended ? 'Account reactivated.' : 'Account suspended.')
+          }}
+        />
+      )}
+      {twoStepUser && (
+        <ReasonModal
+          title={`Reset two-step login for ${twoStepUser.name || twoStepUser.email}`}
+          danger
+          helperText={`Only for someone who lost both their authenticator app and their recovery codes. Check it's really them first (from ${twoStepUser.email}, or on a call). They can then sign in with just their password, and they get an email saying it was reset.`}
+          confirmLabel="Reset two-step login"
+          onClose={() => setTwoStepUser(null)}
+          onConfirm={async (_v, reason) => {
+            const updated = await adminResetTwoStep(accountId, twoStepUser.id, reason)
+            setD(updated)
+            setBanner(`Two-step login reset for ${twoStepUser.email}.`)
+            setTwoStepUser(null)
           }}
         />
       )}
@@ -567,9 +584,9 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function UsersTab({ d }: { d: Detail }) {
+function UsersTab({ d, onResetTwoStep }: { d: Detail; onResetTwoStep: (u: Detail['users'][number]) => void }) {
   return (
-    <TabTable head={['User', 'Role', 'Auth', 'Last login', 'Joined']} empty={d.users.length === 0}>
+    <TabTable head={['User', 'Role', 'Auth', 'Two-step login', 'Last login', 'Joined']} empty={d.users.length === 0}>
       {d.users.map((u) => (
         <tr key={u.id} className="border-b border-border/60 last:border-0">
           <td className="px-4 py-3">
@@ -580,6 +597,22 @@ function UsersTab({ d }: { d: Detail }) {
             <Pill tone={u.role === 'owner' ? 'primary' : 'neutral'}>{u.role}</Pill>
           </td>
           <td className="px-4 py-3 capitalize text-text-muted">{u.auth_provider || 'password'}</td>
+          <td className="px-4 py-3">
+            {u.mfa_enabled_at ? (
+              <div className="flex items-center gap-2">
+                <Pill tone="active">On</Pill>
+                <button
+                  type="button"
+                  onClick={() => onResetTwoStep(u)}
+                  className="bg-transparent text-xs font-semibold text-destructive hover:underline"
+                >
+                  Reset
+                </button>
+              </div>
+            ) : (
+              <span className="text-text-muted">Off</span>
+            )}
+          </td>
           <td className="px-4 py-3 text-text-muted">{timeAgo(u.last_login_at)}</td>
           <td className="px-4 py-3 text-text-muted">{fmtDate(u.created_at)}</td>
         </tr>
@@ -820,6 +853,7 @@ function ReasonModal({
           </button>
         </div>
         <div className="flex flex-col gap-3">
+          {!field && helperText && <p className="text-xs text-text-muted">{helperText}</p>}
           {field && (
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-text-muted">{field.label}</span>
