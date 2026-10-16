@@ -3374,7 +3374,8 @@ async def _bridge_in_human(lkapi, room, dest: str) -> bool:
     # trunk dedicated to it (server/livekit_sip.ensure_number_outbound_trunk).
     # Never the first trunk LiveKit lists: with one trunk per number that
     # would ring the colleague from another tenant's number.
-    trunk_id = await _number_trunk(lkapi, _own_number(room))
+    own_number = _own_number(room)
+    trunk_id = await _number_trunk(lkapi, own_number)
     if not trunk_id:
         logger.warning("no outbound trunk for this call's number; cannot bridge a colleague in")
         return False
@@ -3384,6 +3385,7 @@ async def _bridge_in_human(lkapi, room, dest: str) -> bool:
     await lkapi.sip.create_sip_participant(
         api.CreateSIPParticipantRequest(
             sip_trunk_id=trunk_id,
+            sip_number="".join(c for c in own_number if c.isdigit()),
             sip_call_to=f"+{digits}",
             room_name=room.name,
             participant_identity=f"human-{digits}",

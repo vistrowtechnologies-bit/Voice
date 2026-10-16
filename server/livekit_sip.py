@@ -335,6 +335,9 @@ async def place_outbound_call(
             await lkapi.sip.create_sip_participant(
                 CreateSIPParticipantRequest(
                     sip_trunk_id=trunk_id,
+                    # Caller ID stated on every call, never left to the
+                    # trunk's default: the number that owns this dial.
+                    sip_number=_digits(from_number),
                     # Bare digits, NOT +E.164. Verified live against EnableX
                     # on 2026-09-03: "+918080197945" as the called number is
                     # what produced every outbound failure we saw that day -

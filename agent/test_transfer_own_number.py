@@ -29,6 +29,7 @@ class FakeSip:
     def __init__(self, trunks):
         self.trunks = trunks
         self.dialled = []
+        self.caller_ids = []
 
     async def list_sip_outbound_trunk(self, req):
         items = [types.SimpleNamespace(sip_trunk_id=t, numbers=n) for t, n in self.trunks.items()
@@ -37,6 +38,7 @@ class FakeSip:
 
     async def create_sip_participant(self, req):
         self.dialled.append(req.sip_trunk_id)
+        self.caller_ids.append(req.sip_number)
 
 
 TRUNKS = {"ST_acct2": ["917713128715"], "ST_acct1": ["917935466148"]}
@@ -62,6 +64,7 @@ class Bridge(unittest.TestCase):
         sip = FakeSip(trunks)
         lkapi = types.SimpleNamespace(sip=sip)
         ok = asyncio.run(tools._bridge_in_human(lkapi, r, "+919000000001"))
+        self.caller_ids = sip.caller_ids
         return ok, sip.dialled
 
     def test_colleague_is_dialled_through_this_numbers_trunk(self):
@@ -69,6 +72,7 @@ class Bridge(unittest.TestCase):
         ok, dialled = self.bridge(r, TRUNKS)
         self.assertTrue(ok)
         self.assertEqual(dialled, ["ST_acct1"])
+        self.assertEqual(self.caller_ids, ["917935466148"])
 
     def test_no_trunk_for_this_number_means_no_bridge_rather_than_another_tenants(self):
         r = room({}, [participant("sip-91808", "+917935466148")])

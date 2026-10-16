@@ -19,7 +19,7 @@ class FakeSip:
 
     def __init__(self, trunks):
         self.trunks = {t["id"]: dict(t) for t in trunks}
-        self.created, self.deleted, self.dialled = [], [], []
+        self.created, self.deleted, self.dialled, self.caller_ids = [], [], [], []
 
     async def list_outbound_trunk(self, req):
         items = []
@@ -43,6 +43,7 @@ class FakeSip:
 
     async def create_sip_participant(self, req):
         self.dialled.append(req.sip_trunk_id)
+        self.caller_ids.append(req.sip_number)
         return types.SimpleNamespace()
 
 
@@ -95,6 +96,7 @@ class PerNumberTrunk(unittest.TestCase):
         self.assertEqual(trunk["numbers"], ["917935466148"])
         self.assertEqual(trunk["address"], SBC)
         self.assertNotEqual(self.sip.dialled[0], PLATFORM_TRUNK)
+        self.assertEqual(self.sip.caller_ids, ["917935466148"], "caller ID is stated on the dial")
 
     def test_account_2_keeps_its_existing_trunk(self):
         self.dial("+917713128715", 2)
