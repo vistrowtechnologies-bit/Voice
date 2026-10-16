@@ -1296,6 +1296,15 @@ def init_tables() -> None:
                 ("llm_prompt_tokens", "INTEGER"),
                 ("llm_cached_tokens", "INTEGER"),
                 ("llm_completion_tokens", "INTEGER"),
+                # Automatic conversation intelligence (campaign_dialer's
+                # auto-analysis sweep): how many times the sweep has tried
+                # this call, when it last claimed it, and the last error or
+                # skip reason. Lets a call that keeps failing stop after
+                # AUTO_ANALYSIS_MAX_ATTEMPTS instead of being paid for every
+                # tick. NULL/0 = never tried (every call before this column).
+                ("intelligence_attempts", "INTEGER DEFAULT 0"),
+                ("intelligence_attempted_at", "TEXT"),
+                ("intelligence_error", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # 1 = a recording link issued before link expiry existed: it keeps
@@ -3390,6 +3399,79 @@ def save_call_intelligence(call_id: int, account_id: int, data: dict) -> None:
             conn.execute(
                 "UPDATE calls SET intelligence_json = ? WHERE id = ? AND account_id = ?",
                 (json.dumps(data), call_id, account_id),
+            )
+    finally:
+        conn.close()
+
+
+AUTO_ANALYSIS_MAX_ATTEMPTS = 3
+# A failed attempt is retried no sooner than this, so a model outage does not
+# burn all three attempts in three consecutive 15 s ticks.
+_AUTO_ANALYSIS_RETRY_SECONDS = 600
+
+
+def auto_analysis_candidates(min_age_seconds: int = 120, max_age_hours: int = 24, limit: int = 50) -> list[dict]:
+    """Finished calls the automatic analysis sweep may analyze: ended more
+    than min_age_seconds and less than max_age_hours ago, no intelligence
+    yet, fewer than AUTO_ANALYSIS_MAX_ATTEMPTS tries, not a Testing Lab run
+    (test_run_id) nor a dashboard Test Call (room 'test-agent-'/'test-phone-',
+    the same prefixes isDashboardTest uses). A widget text chat counts as
+    finished only once the idle sweep delivered it (integrations_delivered_at),
+    since its ended_at moves with every typed turn. Oldest first.
+    Transcripts are returned for the caller's turn-count check; calls removed
+    by a retention purge are simply gone, so they never appear here."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, account_id, room_name, transcript_json FROM calls "
+            "WHERE account_id IS NOT NULL "
+            "AND COALESCE(intelligence_json, '') = '' "
+            "AND COALESCE(intelligence_attempts, 0) < ? "
+            "AND (intelligence_attempted_at IS NULL OR intelligence_attempted_at::timestamp < (now() AT TIME ZONE 'UTC') - make_interval(secs => ?)) "
+            "AND COALESCE(test_run_id, '') = '' "
+            "AND room_name NOT LIKE 'test-agent-%%' AND room_name NOT LIKE 'test-phone-%%' "
+            "AND (room_name NOT LIKE 'widget-chat-%%' OR integrations_delivered_at IS NOT NULL) "
+            "AND ended_at::timestamptz < now() - make_interval(secs => ?) "
+            "AND ended_at::timestamptz > now() - make_interval(hours => ?) "
+            "ORDER BY id LIMIT ?",
+            (AUTO_ANALYSIS_MAX_ATTEMPTS, _AUTO_ANALYSIS_RETRY_SECONDS, min_age_seconds, max_age_hours, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def claim_auto_analysis(call_id: int, account_id: int) -> bool:
+    """Counts one attempt and stamps it, only if the call is still unanalyzed
+    and under the attempt cap. The conditional UPDATE is the single-runner
+    guard: when two server replicas sweep at once, exactly one gets True."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                f"UPDATE calls SET intelligence_attempts = COALESCE(intelligence_attempts, 0) + 1, "
+                f"intelligence_attempted_at = {_NOW} "
+                "WHERE id = ? AND account_id = ? AND COALESCE(intelligence_json, '') = '' "
+                "AND COALESCE(intelligence_attempts, 0) < ? "
+                "AND (intelligence_attempted_at IS NULL OR intelligence_attempted_at::timestamp < (now() AT TIME ZONE 'UTC') - make_interval(secs => ?))",
+                (call_id, account_id, AUTO_ANALYSIS_MAX_ATTEMPTS, _AUTO_ANALYSIS_RETRY_SECONDS),
+            )
+            return cur.rowcount == 1
+    finally:
+        conn.close()
+
+
+def record_auto_analysis_error(call_id: int, account_id: int, error: str, give_up: bool = False) -> None:
+    """Keeps the last failure on the row. give_up=True (a transcript too short
+    to analyze) spends every remaining attempt so the sweep stops looking."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE calls SET intelligence_error = ?, "
+                "intelligence_attempts = CASE WHEN ? THEN ? ELSE intelligence_attempts END "
+                "WHERE id = ? AND account_id = ?",
+                (str(error)[:300], give_up, AUTO_ANALYSIS_MAX_ATTEMPTS, call_id, account_id),
             )
     finally:
         conn.close()

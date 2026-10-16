@@ -4,7 +4,9 @@ Turns the raw transcript we already store into the things an operator actually
 wants: a short summary, sentiment, a normalized outcome, an agent QA score, why
 a lead didn't qualify, and follow-up actions. Same stdlib-urllib OpenAI call as
 kb_extract (no openai package in the image), same cheap mini model — one call
-per conversation, run on demand and cached on the calls row.
+per conversation, cached on the calls row. Runs on demand (POST
+/calls/{id}/analyze) and, since 2026-10-16, automatically for every finished
+call (campaign_dialer's auto-analysis sweep, AUTO_CALL_ANALYSIS).
 """
 
 import json
@@ -75,9 +77,11 @@ def _transcript_text(transcript: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def analyze_transcript(transcript: list[dict]) -> dict:
+def analyze_transcript(transcript: list[dict], usage_out: dict | None = None) -> dict:
     """Returns the intelligence dict. Raises RuntimeError (human-readable) on
-    any failure so the route can surface it — callers treat it as best-effort."""
+    any failure so the route can surface it — callers treat it as best-effort.
+    usage_out, if given, receives the model's token usage (prompt_tokens,
+    completion_tokens, cached_tokens) for cost logging."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured on the server")
@@ -117,6 +121,15 @@ def analyze_transcript(transcript: list[dict]) -> dict:
     except urllib.error.URLError as exc:
         logger.error("intelligence unreachable: %s", exc)
         raise RuntimeError("Could not reach the analysis model") from exc
+
+    if usage_out is not None:
+        usage = payload.get("usage") or {}
+        usage_out.update({
+            "model": INTEL_MODEL,
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "cached_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+        })
 
     try:
         parsed = json.loads(payload["choices"][0]["message"]["content"])
