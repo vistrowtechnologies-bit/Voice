@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BrowserTestModal } from '../components/AgentTestCall'
+import { ClonedVoiceOptions, clonedVoiceFallbackName, useClonedVoices } from '../components/ClonedVoiceOptions'
 import { AgentIdChip } from '../components/AgentIdChip'
 import { AmbiencePreviewButton } from '../components/AmbiencePreviewButton'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
@@ -218,6 +219,9 @@ function AgentEditorForm({
   // The account's curated voice menu - the only voices this picker offers.
   const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
   const [catalog, setCatalog] = useState<VoiceEntry[]>([])
+  // Cloned voices ("custom:..."): offered in their own "Your voices" group when ready.
+  const clonedVoices = useClonedVoices()
+  const clonedReady = clonedVoices.some((v) => v.voiceValue === form.voice && v.status === 'ready')
   // The realtime-capable voices the account has added to its menu, labelled
   // with gender, Google's style word and the Gemini voice a Live call uses.
   const realtimeVoices = useMemo(() => {
@@ -407,7 +411,7 @@ function AgentEditorForm({
                   <>
                     {!realtimeVoices.some((v) => v.value === form.voice) && (
                       <option value={form.voice}>
-                        {catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)}
+                        {clonedVoiceFallbackName(form.voice, clonedVoices) ?? catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)}
                         {geminiLiveVoiceName(form.voice)
                           ? ' → Live voice'
                           : ' (not available on realtime, calls use Kirti)'}
@@ -443,12 +447,15 @@ function AgentEditorForm({
                 {isRealtimeModel(form.model) && !geminiLiveVoiceName(form.voice) ? (
                   <option value={form.voice}>{voiceLabel(form.voice)} (not available on realtime, calls use Kore)</option>
                 ) : (
-                  !myVoices.some((v) => v.value === form.voice) && (
+                  !myVoices.some((v) => v.value === form.voice) &&
+                  !clonedReady && (
                     <option value={form.voice}>
-                      {catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)} (not in your voices)
+                      {clonedVoiceFallbackName(form.voice, clonedVoices) ??
+                        `${catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)} (not in your voices)`}
                     </option>
                   )
                 )}
+                <ClonedVoiceOptions voices={clonedVoices} />
                 {voicePickerGroups(
                   isRealtimeModel(form.model) ? myVoices.filter((v) => geminiLiveVoiceName(v.value)) : myVoices,
                 ).map((group) => {

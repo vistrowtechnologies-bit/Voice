@@ -165,6 +165,96 @@ export const removeVoice = (voice: string) =>
 export const voicePreviewUrl = (voice: string, lang: string) =>
   `/api/voices/preview?voice=${encodeURIComponent(voice)}&lang=${encodeURIComponent(lang)}`
 
+// ------------------------------------------------- cloned voices ("Your voices")
+
+export interface CustomVoiceQuote {
+  // True when the next clone costs nothing (first clone on some plans); setupCredits is then 0.
+  firstCloneFree: boolean
+  setupCredits: number
+  creditsPerMinute: number
+  limit: number
+  used: number
+  canCreate: boolean
+  reason: string
+  balance: number
+  consentSentence: string
+  script: string
+  scriptHi: string
+}
+
+export interface CustomVoice {
+  id: string
+  name: string
+  language: string
+  status: 'processing' | 'ready' | 'failed'
+  error: string
+  createdAt: string
+  creditsPerMinute: number
+  // What an agent stores as its voice: "custom:vv_...".
+  voiceValue: string
+}
+
+async function errorDetail(res: Response, fallback: string): Promise<string> {
+  const detail = await res
+    .json()
+    .then((j) => (typeof j?.detail === 'string' ? j.detail : null))
+    .catch(() => null)
+  return detail || fallback
+}
+
+export const fetchCustomVoiceQuote = () => get<CustomVoiceQuote>('/voices/custom/quote')
+export const fetchCustomVoices = () => get<CustomVoice[]>('/voices/custom')
+export const renameCustomVoice = (id: string, name: string) =>
+  send<CustomVoice>('PATCH', `/voices/custom/${encodeURIComponent(id)}`, { name })
+// 409 carries the server's reason (e.g. the agents still using it) as the error message.
+export const deleteCustomVoice = (id: string) => send<{ ok: boolean }>('DELETE', `/voices/custom/${encodeURIComponent(id)}`)
+
+export async function fetchCustomVoicePreview(id: string, text?: string): Promise<Blob> {
+  const qs = text ? `?text=${encodeURIComponent(text)}` : ''
+  const res = await fetch(`/api/voices/custom/${encodeURIComponent(id)}/preview${qs}`, { credentials: 'include', cache: 'no-store' })
+  if (res.status === 401) onUnauthorized()
+  if (!res.ok) throw new Error(await errorDetail(res, 'Could not play this voice. Try again.'))
+  return res.blob()
+}
+
+/** Uploads the sample and spoken consent. XHR rather than fetch so the
+ * upload can report progress (0..1). Rejects with the server's `detail`. */
+export function createCustomVoice(
+  body: { name: string; language: string; sample: Blob; sampleName: string; consent: Blob; consentName: string },
+  onProgress?: (fraction: number) => void,
+): Promise<CustomVoice & { creditsCharged: number }> {
+  const form = new FormData()
+  form.append('name', body.name)
+  form.append('language', body.language)
+  form.append('sample', body.sample, body.sampleName)
+  form.append('consent', body.consent, body.consentName)
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/voices/custom')
+    xhr.withCredentials = true
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
+    }
+    xhr.onerror = () => reject(new Error('Upload failed. Check your connection and try again.'))
+    xhr.onload = () => {
+      if (xhr.status === 401) onUnauthorized()
+      let json: unknown = null
+      try {
+        json = JSON.parse(xhr.responseText)
+      } catch {
+        json = null
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && json) {
+        resolve(json as CustomVoice & { creditsCharged: number })
+        return
+      }
+      const detail = (json as { detail?: unknown } | null)?.detail
+      reject(new Error(typeof detail === 'string' && detail ? detail : 'Could not create the voice. Please try again.'))
+    }
+    xhr.send(form)
+  })
+}
+
 export async function fetchLead(id: string): Promise<CallRecord | undefined> {
   const res = await fetch(`/api/calls/${id}`, { credentials: 'include' })
   if (res.status === 404) return undefined
