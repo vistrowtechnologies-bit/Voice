@@ -6355,6 +6355,36 @@ def _turn_shape_instruction(last_reply: str) -> str:
     return " ".join(parts)
 
 
+class _CallEndClock:
+    """When the call ended for the caller — the end of the billed window.
+
+    log_call is a job shutdown callback, and the job only shuts down when the
+    room goes away. When the agent hangs up, _hang_up deletes the room and
+    that is immediate. When the CALLER hangs up, nothing deletes it: the
+    session closes (close_on_disconnect) but delete_room_on_close is off, so
+    the job waits for LiveKit to close the now-empty room (its departure
+    timeout, ~20 s). Stamping the end inside log_call billed that wait —
+    calls 1369-1380 (2026-10-16) were 17-29 s longer than their own "Call
+    ended" event. So the end is stamped when the caller's leg drops, and only
+    falls back to "now" for endings that shut the job down at once.
+    """
+
+    def __init__(self, now=lambda: datetime.now(timezone.utc)) -> None:
+        self._now = now
+        self._ended_at: datetime | None = None
+
+    def caller_left(self) -> None:
+        if self._ended_at is None:
+            self._ended_at = self._now()
+
+    def caller_rejoined(self) -> None:
+        # A full reconnect of the same identity: the call is still going.
+        self._ended_at = None
+
+    def ended_at(self) -> datetime:
+        return self._ended_at or self._now()
+
+
 async def _hang_up(room_name: str) -> None:
     """Ends the call for both sides once the agent's goodbye has finished
     playing. room.disconnect() would only drop the agent's own participant,
@@ -7192,6 +7222,9 @@ async def entrypoint(ctx: JobContext) -> None:
     # the SIP leg. Persist the participant's transport-level reason as well,
     # otherwise LiveKit can report MEDIA_FAILURE while the CRM calls the row
     # "Completed" merely because a greeting reached the transcript.
+    # Read by log_call for the billed end; see _CallEndClock.
+    call_end_clock = _CallEndClock()
+
     _FAILED_SIP_DISCONNECT_REASONS = {
         "agent_error",
         "connection_timeout",
@@ -7205,6 +7238,7 @@ async def entrypoint(ctx: JobContext) -> None:
     def _on_participant_disconnected(participant) -> None:
         if participant.identity != first_participant.identity:
             return
+        call_end_clock.caller_left()
         try:
             reason_value = getattr(participant, "disconnect_reason", None)
             reason = rtc.DisconnectReason.Name(reason_value).lower() if reason_value is not None else "unknown_reason"
@@ -7251,6 +7285,12 @@ async def entrypoint(ctx: JobContext) -> None:
             userdata["failure_reason"] = f"sip_{reason}"
 
     ctx.room.on("participant_disconnected", _on_participant_disconnected)
+
+    def _on_caller_rejoined(participant) -> None:
+        if participant.identity == first_participant.identity:
+            call_end_clock.caller_rejoined()
+
+    ctx.room.on("participant_connected", _on_caller_rejoined)
 
     # interruption_sensitivity 0-1 → how LONG the caller must speak to take the
     # floor. It used to scale min_words instead, and that combination silently
@@ -8345,7 +8385,7 @@ async def entrypoint(ctx: JobContext) -> None:
     background_audio_holder: dict[str, BackgroundAudioPlayer | None] = {"player": None}
 
     async def log_call() -> None:
-        ended_at = datetime.now(timezone.utc)
+        ended_at = call_end_clock.ended_at()
         # The caller-directed gender guard runs as a TTS text transform, so
         # the AUDIO has always been correct — but the stored transcript is the
         # model's raw text, which still reads "आप ... बता सकती हैं" to a male
