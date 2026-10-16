@@ -15,7 +15,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-15): branch `claude/seo-keyword-placement` (PR open, NOT merged): keyword placement fixes + new /ai-calling-agent page; web-demo only, Vercel deploy only.
 - Claude (2026-10-15): PR #128 `claude/follow-up-calls` MERGED (main a4d64313) and DEPLOYED: Railway SUCCESS (columns follow_up_policy, crm_notified_at present), phone worker `4pVPHHbYCoC8`, platform-demo `cKDf7Q96GgmR`, both Running/registered, 44 INFO / 0 warnings.
 - Claude (2026-10-14): branch `claude/security-tokens-mfa` (PR open, NOT merged): integration tokens encrypted at rest (server + agent + orchestrator). Inert until the owner sets INTEGRATION_ENCRYPTION_KEY everywhere, then INTEGRATION_ENCRYPTION_WRITE=on; see docs/SECURITY-AUDIT-2026-10-12.md.
-- Claude (2026-10-16): branch `claude/arthaleads-single-token` (PR open, NOT merged): ArthaLeads single-token handshake — saving the ArthaLeads key links the account at ArthaLeads and the same key authenticates ArthaLeads → Voice on `/leads/inbound/*`. Needs the ArthaLeads half (`/webhook/vistrow/link|unlink`, built in parallel) deployed before merging; Railway deploy only (no agent code).
+- Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
 
 ## Takeover checklist
 
@@ -958,7 +958,7 @@ Deploy needs: Railway FIRST (adds the two columns), then BOTH LiveKit workers (a
 - Unverified: no real call has exercised the new retry/call-back/visit-reminder/nurture paths yet (outbound hold; account 1 has no phone number). Telugu never run on a real call.
 - Left: owner adds a number to account 1 or points ArthaLeads at account 2; enable "Auto-call new leads" in ArthaLeads; live outbound test (transfer / no-answer / busy) before the hold is lifted.
 
-### Claude — 2026-10-16 — ArthaLeads single-token handshake (branch `claude/arthaleads-single-token`, PR open, NOT merged)
+### Claude — 2026-10-16 — ArthaLeads single-token handshake (PR #129, merged c74f5d08, live)
 
 Contract: the customer pastes the ArthaLeads connection key once in Voice; Voice tells ArthaLeads which account it belongs to, and the same key then authenticates ArthaLeads → Voice (`POST /leads/inbound/{id}`, `GET /leads/inbound/{id}/agents`) alongside the existing lead-webhook token. The ArthaLeads half (`POST /webhook/vistrow/link` and `/unlink`) is being built in parallel in prophuntllp-bit/arthaleads against the same contract.
 
