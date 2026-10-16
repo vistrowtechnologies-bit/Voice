@@ -6636,6 +6636,7 @@ def ingest_inbound_lead(
                     campaign_id = None
             contact_id = None
             deduped = False
+            delay_seconds = 0
             if campaign_id:
                 dup = conn.execute(
                     "SELECT id, status, name, custom_fields FROM campaign_contacts WHERE campaign_id = ? AND phone_norm = ? "
@@ -6663,14 +6664,28 @@ def ingest_inbound_lead(
                     # Inherit the campaign's declared basis, so a contact added after
                     # launch is as answerable as one queued at creation.
                     basis_row = conn.execute(
-                        "SELECT consent_basis FROM campaigns WHERE id = ?", (campaign_id,)
+                        "SELECT c.consent_basis, a.follow_up_policy FROM campaigns c "
+                        "LEFT JOIN agents a ON a.id = c.agent_id WHERE c.id = ?", (campaign_id,)
                     ).fetchone()
+                    # The calling agent's "call new leads after" setting. A
+                    # "Call now" request from the CRM is never delayed. The
+                    # dialer already skips a pending row until next_attempt_at.
+                    if str(fields.get("call_request") or "").lower() not in ("true", "1"):
+                        delay_seconds = retry_rules.follow_up_policy(
+                            _row_get(basis_row, "follow_up_policy", "")
+                        )["firstCallDelaySeconds"]
+                    dial_after = None
+                    if delay_seconds:
+                        dial_after = (
+                            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=delay_seconds)
+                        ).strftime("%Y-%m-%d %H:%M:%S")
                     cur = conn.execute(
                         "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
-                        "company, custom_fields, consent_basis) VALUES (?, ?, ?, ?, ?, '', ?, ?) RETURNING id",
+                        "company, custom_fields, consent_basis, next_attempt_at) "
+                        "VALUES (?, ?, ?, ?, ?, '', ?, ?, ?) RETURNING id",
                         (campaign_id, account_id, (name or "").strip(),
                          canonical_contact_phone(phone, account_id) or phone.strip(), norm,
-                         json.dumps(fields), _row_get(basis_row, "consent_basis", "") or ""),
+                         json.dumps(fields), _row_get(basis_row, "consent_basis", "") or "", dial_after),
                     )
                     contact_id = cur.fetchone()["id"]
             if external_id and contact_id:
@@ -6727,7 +6742,8 @@ def ingest_inbound_lead(
                     "contactId": contact_row["id"], "queued": False}
         return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id,
                 "contactId": contact_row["id"] if source == "arthaleads" else None,
-                "queued": queued, "deduped": deduped}
+                "queued": queued, "deduped": deduped,
+                **({"delay_seconds": delay_seconds} if queued and delay_seconds and not deduped else {})}
     finally:
         conn.close()
 

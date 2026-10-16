@@ -191,6 +191,14 @@ def notify() -> None:
     _wake.set()
 
 
+def notify_after(seconds: float) -> None:
+    """Wake the dialer when a delayed lead becomes due (agent's "call new
+    leads after" setting), instead of waiting for the next tick."""
+    timer = threading.Timer(max(0.0, float(seconds)) + 0.5, notify)
+    timer.daemon = True
+    timer.start()
+
+
 def _on_orchestrator_pipeline(account_id: int) -> bool:
     return bool(os.environ.get("ORCHESTRATOR_URL")) and calls_db.is_on_orchestrator_pipeline(account_id)
 
