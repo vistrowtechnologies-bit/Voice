@@ -823,7 +823,7 @@ function SettingsTab({
             className="inline-flex w-fit items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text"
           >
             Open auto-call settings in ArthaLeads
-            <Icon name="open_in_new" className="text-[15px]" />
+            <Icon name="north_east" className="text-[15px]" />
           </a>
         </Panel>
       )}
