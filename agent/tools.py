@@ -249,6 +249,11 @@ _SPOKEN_LANGUAGE_ALIASES = frozenset({
     "अंग्रेजी", "अंग्रेज़ी", "तमिल", "तेलुगु", "कन्नड़", "मलयालम", "गुजराती",
     "पंजाबी", "उड़िया", "ଓଡ଼ିଆ", "ਪੰਜਾਬੀ", "বাংলা", "தமிழ்", "తెలుగు", "ಕನ್ನಡ",
     "മലയാളം", "ગુજરાતી", "स्पेनिश", "जर्मन", "अरबी", "रूसी", "चीनी",
+    # "English" as STT spells it in Indian scripts. Bake-off #11 (call 1160):
+    # "कुड यू प्लीज स्पीक इन इंग्लिश?" named no language this set knew.
+    # इंग्रजी is the Marathi word for English.
+    "इंग्लिश", "इंगलिश", "इंग्लीश", "इंग्रजी", "ইংরেজি", "ইংলিশ", "અંગ્રેજી",
+    "ஆங்கிலம்", "ఇంగ్లీష్", "ಇಂಗ್ಲಿಷ್", "ഇംഗ്ലീഷ്",
     "angrezi", "angreji", "angrezee", "inglish", "ingles",
     "nihongo", "francais", "français", "deutsch", "espanol", "español",
     "italiano", "portugues", "português", "mandarin", "putonghua",
@@ -726,6 +731,11 @@ def crm_outcome(lead: dict) -> dict:
     note = callback.get("purpose") or visit.get("purpose") or ""
     if note:
         out["note"] = str(note)[:300]
+    # The caller asked for the brochure (send_brochure, or the post-call
+    # read). Nothing is sent from here: ArthaLeads turns this into a task for
+    # the sales team.
+    if (lead.get("extracted_data") or {}).get("brochure_requested") is True:
+        out["brochure_requested"] = True
     return out
 
 
@@ -817,6 +827,9 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
             "direction": lead.get("direction") or "",
             # What happened on the call, in ArthaLeads' own vocabulary.
             "crm_outcome": crm_outcome(lead),
+            # The post-call read, for the call note. Only when it produced one.
+            **({"summary": lead["summary"]} if lead.get("summary") else {}),
+            **({"key_points": list(lead["key_points"])} if lead.get("key_points") else {}),
         }
     url = (config.get("url") or "").strip()
     if not url:
@@ -1447,7 +1460,7 @@ _INTEGRATION_FIELDS = {
     "agent": ("agent_name", "agent_id"),
     "language": ("language",),
     "duration": ("duration_seconds",),
-    "details": ("extracted_data", "summary", "use_case", "message"),
+    "details": ("extracted_data", "summary", "key_points", "use_case", "message"),
     "transcript": ("transcript",),
     "page": ("page_path",),
     "recording": ("recording_url", "recording_mime_type"),
@@ -2095,6 +2108,33 @@ async def do_not_call(context: RunContext, reason: str = "") -> str:
 
 
 @function_tool
+async def send_brochure(context: RunContext, project: str = "") -> str:
+    """Note that the caller wants the brochure / details on WhatsApp.
+
+    Call this only when the caller clearly asks for a brochure, details,
+    photos or a price list to be sent. If what they said was unclear, ask
+    them to repeat it instead of calling this.
+
+    Args:
+        project: The project they want it for, if they named one.
+    """
+    lead_data = (context.userdata or {}).get("lead_data")
+    if lead_data is not None:
+        lead_data["brochure_requested"] = True
+        if (project or "").strip():
+            lead_data["brochure_project"] = project.strip()
+    logger.info("brochure requested mid-call")
+    # Nothing is sent from the call: the request reaches the CRM at call end
+    # (crm_outcome.brochure_requested) and the sales team shares it.
+    return (
+        "Noted for the team. Tell the caller, in their language: you have noted it and our "
+        "team will share the brochure with them on WhatsApp shortly. Never say it is being "
+        "sent now, that you have sent it, or that it will arrive right after this call. "
+        "Then carry on with the conversation."
+    )
+
+
+@function_tool
 async def request_callback(
     context: RunContext,
     name: str,
@@ -2649,6 +2689,59 @@ def _looks_like_goodbye(text: str) -> bool:
     return any(marker.lower() in lowered for marker in _GOODBYE_MARKERS)
 
 
+# A caller asking to be SENT something (details, a brochure, a WhatsApp, an
+# SMS, an e-mail) or to be called back. That is a next step they have chosen,
+# not a goodbye. LLM bake-off 2026-10-16, case #22 (call 959): "आप details
+# मुझे WhatsApp पे भेज दीजिए" got end_call with no acknowledgement, both runs,
+# and the follow-up round called end_call again with no words at all.
+# Both a channel/thing and a send verb must appear, so "WhatsApp button
+# chahiye website mein" (a requirement) does not count.
+_INFO_THING_PATTERN = re.compile(
+    r"whats\s?app|व्हाट्सएप|व्हाट्सऐप|वॉट्सएप|व्हॉट्सॲप|वॉट्सॲप|व्हाट्सअप|"
+    r"\bsms\b|एसएमएस|\bmessage\b|मैसेज|मेसेज|\be-?mail\b|\bmail\b|ईमेल|इमेल|मेल|"
+    r"\bdetails?\b|डिटेल|डीटेल|तपशील|माहिती|जानकारी|\binfo\b|\binformation\b|इन्फो|"
+    r"\bbrochure\b|ब्रोशर|ब्रॉशर|ब्रोशर|\bcatalogue\b|\bcatalog\b|कैटलॉग|"
+    r"\blocation\b|लोकेशन|\bquotation\b|कोटेशन|price\s*list|प्राइस\s*लिस्ट",
+    re.IGNORECASE,
+)
+_SEND_VERB_PATTERN = re.compile(
+    r"\b(send|share|forward|bhej\w*|de\s*do|de\s*dijiye|de\s*dena)\b|"
+    r"भेज|शेयर|पाठव|दे\s*दो|दे\s*दीजिए|दे\s*दीजिये|दे\s*देना|द्या",
+    re.IGNORECASE,
+)
+# "Call me back" as a REQUEST. "वापस कॉल करता हूं" (I'll call you back) is
+# the caller deferring, so it is deliberately not here.
+_CALLBACK_REQUEST_PATTERN = re.compile(
+    r"\bcall\s*me\s*back\b|\bcall\s*back\s*(karo|kar\s*do|kijiye|karna|chahiye)\b|"
+    r"\bcallback\s*(chahiye|karo|kar\s*do|kijiye|please)\b|\bplease\s*callback\b|"
+    # up to two words in between: "मुझे कल कॉल कीजिए", "mujhe shaam ko call karna"
+    r"\b(mujhe|muje)\s+(\S+\s+){0,2}(call|phone)\s*(karna|karo|kijiye|kariye|kar\s*dena|kar\s*do)\b|"
+    r"कॉल\s*बैक|मुझे\s+(\S+\s+){0,2}(कॉल|फोन|फ़ोन)\s*(करना|करें|कीजिए|कीजिये|करिए|करो|कर\s*देना|कर\s*दीजिए)|"
+    r"मला\s+(\S+\s+){0,2}(कॉल|फोन)\s*(करा|कराल|कर)",
+    re.IGNORECASE,
+)
+# Words that close the call outright even when a request rides along with
+# them ("WhatsApp पे भेज दो, bye"). "Thank you" is not one: "details भेज
+# दीजिए, thank you" is politeness on a request, not a goodbye.
+_EXPLICIT_BYE_MARKERS = ("bye", "बाय", "अलविदा", "रखता हूँ", "रखती हूँ", "रखता हूं", "रखती हूं", "ठेवतो", "ठेवते")
+
+
+def _asks_for_information(text: str | None) -> bool:
+    """True when the caller asks to be sent details/brochure/WhatsApp/SMS/
+    e-mail, or to be called back."""
+    t = text or ""
+    if not t.strip():
+        return False
+    if _CALLBACK_REQUEST_PATTERN.search(t):
+        return True
+    return bool(_INFO_THING_PATTERN.search(t) and _SEND_VERB_PATTERN.search(t))
+
+
+def _says_explicit_bye(text: str | None) -> bool:
+    lowered = (text or "").lower()
+    return any(marker in lowered for marker in _EXPLICIT_BYE_MARKERS)
+
+
 def _agent_awaiting_reply(context: RunContext) -> bool:
     """True when the agent's own most recent line asked something and no
     substantive caller turn has followed it.
@@ -2676,8 +2769,11 @@ async def end_call(context: RunContext) -> str:
     over — they thank you with nothing further to ask, say goodbye, or
     otherwise signal they're done. Do NOT call this for a mere pause, a
     one-word "okay", or mid-conversation small talk — only on a clear
-    end-of-call signal. main.py watches for the agent's speech to finish
-    after this tool returns, then actually ends the call for both sides.
+    end-of-call signal. A caller asking you to send details, a brochure,
+    a WhatsApp/SMS/e-mail, or to call them back is NOT saying goodbye:
+    acknowledge that request out loud first (confirm the team will send it
+    or call back) and only end after that. main.py watches for the agent's
+    speech to finish after this tool returns, then ends the call.
     """
     # Never hang up on an unanswered question. Call 844 ended while the caller
     # was mid-enquiry: "क्या आप मुझे कल्पतरु में बता सकते हैं? आर्या के बारे
@@ -2713,6 +2809,30 @@ async def end_call(context: RunContext) -> str:
             "waiting on an answer to. Answer it. Only call this once they have actually "
             "signalled they are finished."
         )
+
+    # Asked to be sent details / called back: acknowledge before hanging up.
+    # Refused once per caller utterance — the model then speaks the
+    # confirmation, and a second end_call on the same utterance goes through,
+    # so a wrap-up that main.py asks for ("confirm WhatsApp, then end") still
+    # ends, just never silently. An explicit "bye" in the same breath ends now.
+    _info_request = bool(_last) and _asks_for_information(_last)
+    if _info_request and not _says_explicit_bye(_last):
+        _already_refused = (
+            context.userdata is not None
+            and context.userdata.get("end_call_info_request_refused") == _last
+        )
+        if not _already_refused:
+            if context.userdata is not None:
+                context.userdata["end_call_info_request_refused"] = _last
+            return (
+                "NOT ending the call yet — the caller asked for details to be sent (WhatsApp, "
+                "brochure, SMS, e-mail) or to be called back. That is a next step, not a "
+                "goodbye. Reply out loud now, in the caller's language: confirm you will share "
+                "exactly what they asked for on this number (or that the team will call back). "
+                "Use the brochure/details tool if you have one, otherwise note the request with "
+                "the lead or callback tool. Then ask if there is anything else. Do not say "
+                "goodbye in that reply and do not end the call silently."
+            )
 
     # Replaying every hangup this system has actually performed showed the
     # question guard above catches only two of seven. The two it misses are
@@ -2788,6 +2908,12 @@ async def end_call(context: RunContext) -> str:
     if context.userdata is not None:
         context.userdata["ending_call"] = True
         context.userdata["ending_call_from_tool"] = True
+    if _info_request:
+        return (
+            "The caller is done. In one short, warm goodbye line, confirm the team will send "
+            "them what they asked for (or call them back), thank them, and then stop — no "
+            "further questions."
+        )
     return (
         "The caller is done. Give one short, warm goodbye line right now (thank them, wish them well) "
         "and then stop — do not ask any further questions or add anything after the goodbye."
@@ -2833,17 +2959,33 @@ def _last_user_utterance(context: RunContext) -> str | None:
     return None
 
 
+def _script_family(code: str | None) -> str | None:
+    """The script a reply-language code is written in, for the codes
+    detect_reply_language() can report; None when we cannot judge."""
+    if code in ("hi-IN", "mr-IN"):
+        return "deva"
+    if code == "en-IN":
+        return "latin"
+    if code in ("bn-IN", "pa-IN", "gu-IN", "ta-IN", "te-IN", "kn-IN", "ml-IN", "od-IN"):
+        return code
+    return None
+
+
 @function_tool
 async def switch_reply_language(context: RunContext, language: str) -> str:
-    """Call this the INSTANT the caller asks you to switch what language you
-    speak in — in any phrasing, in any language ("let's speak in Marathi",
-    "मराठीत बोलूया", "can you do Tamil instead", "angrezi mein baat karo").
+    """Change the language you speak. Call it ONLY when (1) the caller asks
+    you to speak a different language — any phrasing, any language ("let's
+    speak in Marathi", "मराठीत बोलूया", "angrezi mein baat karo") — or (2)
+    the caller has clearly switched themselves: their whole message is in
+    another language, not a few borrowed words. Call it before your first
+    reply in the new language (Hindi and Marathi share a script, so only
+    this tool moves your voice's pronunciation).
 
-    This is the only reliable way to change your spoken language mid-call
-    (Hindi and Marathi share a script, so the switch cannot be auto-detected).
-    Without it your VOICE keeps the old language's pronunciation and sounds
-    foreign to the caller — so always call this before your first reply in
-    the new language, not after.
+    Do NOT call it to answer a question, acknowledgement or reply given in
+    the language you are already speaking, when the caller asks ABOUT
+    languages ("how many languages do you speak?" — just answer), for English
+    words inside a Hindi/Marathi sentence, or with the language already
+    active.
 
     NEVER tell a caller you cannot speak a language without calling this
     tool first. THIS TOOL is what knows which languages are available — you
@@ -2881,7 +3023,13 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
             "the current language and don't mention this limitation to the caller."
         )
     if getattr(agent, "_reply_language", None) == code:
-        return f"Already replying in {language} — just continue."
+        # Bake-off 2026-10-16 #16/#19: called with the active language on a
+        # plain question. Nothing changes; the reply must still be the answer.
+        return (
+            f"No switch needed — you are already speaking {language}, so nothing changed. "
+            f"Do not announce or mention the language. Answer what the caller just said, "
+            f"in {language}, right now."
+        )
 
     # Confirmed live in production (2026-08-22): a caller saying a Hindi
     # place name ("बानेर") got mis-transcribed by STT as ~4 characters of
@@ -2925,6 +3073,25 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
             "was a stray fragment inside a sentence that was otherwise in the current "
             "language, which is what a mis-transcription looks like, not a request. Stay in "
             "the current language. If you genuinely think they asked, let them say it again."
+        )
+
+    # Bake-off 2026-10-16 #10/#19: "आप कितनी भाषाओं में बात कर सकते हो?" and
+    # "नाही आहे." each got a switch to English. The caller neither named a
+    # language nor spoke the target's script. Judged on script family, so a
+    # Hindi->Marathi move (same script) and any switch the caller names stay
+    # allowed; targets whose script we cannot judge are left alone.
+    _target_script = _script_family(code)
+    _heard = detect_reply_language(_last)
+    if (
+        _target_script is not None
+        and _heard is not None
+        and _script_family(_heard) != _target_script
+        and not _mentions_a_language(_last)
+    ):
+        return (
+            f"Not switching to {language} — the caller did not ask to change language and is "
+            f"not speaking {language}. Nothing changed. Do not mention languages; answer what "
+            "they just said, in the language you were already using, right now."
         )
 
     voice_unsupported = False

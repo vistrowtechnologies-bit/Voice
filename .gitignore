@@ -19,3 +19,6 @@ graphify-out/
 .vercel
 .env*
 tts_latency_samples/
+
+# Per-session lane declaration for scripts/hooks/pre_edit_guard.py
+.claude/lane.local
