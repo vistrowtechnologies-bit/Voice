@@ -134,26 +134,74 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
     return url, body
 
 
-async def _post_webhook(payload: dict) -> None:
-    """Push the event to the per-agent CRM webhook configured on the
-    Integrations page. Best-effort — must never stall the live call."""
-    url = db.get_webhook_url()
-    if not url:
-        return
-    try:
-        timeout = aiohttp.ClientTimeout(total=5)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
-            await http.post(url, json=payload)
-        logger.info("posted %s event to CRM webhook", payload.get("type"))
-    except Exception:
-        logger.warning("CRM webhook post failed", exc_info=True)
+# Same lists and rules as agent/tools.py's _integration_wants_event /
+# _apply_field_choice (and server/calls_db.py's INTEGRATION_EVENTS /
+# INTEGRATION_FIELDS): the owner picks, per integration, which events
+# Webhook, Slack, WhatsApp and Apps Script sheets get (config["events"]) and
+# which fields Webhook, Slack and Sheets receive (config["fields"]).
+_INTEGRATION_EVENTS = ("call_completed", "lead_update", "appointment_booked", "callback_requested")
+_EVENT_CONFIGURABLE_KEYS = frozenset({"webhook", "slack", "whatsapp", "sheets"})
+
+
+def _integration_wants_event(key: str, config: dict, lead: dict) -> bool:
+    """Whether this integration's owner wants this event. With nothing
+    chosen yet, everything goes - except WhatsApp, which messages the caller
+    and so only fires once, at the end of the call. An event type outside
+    the known list (or none) is never filtered."""
+    if key not in _EVENT_CONFIGURABLE_KEYS or (key == "sheets" and config.get("mode") == "oauth"):
+        return True
+    event = lead.get("type")
+    if event == "platform_lead_update":
+        event = "lead_update"
+    if event not in _INTEGRATION_EVENTS:
+        return True
+    chosen = config.get("events")
+    if not isinstance(chosen, list) or not chosen:
+        chosen = ["call_completed"] if key == "whatsapp" else list(_INTEGRATION_EVENTS)
+    return event in chosen
+
+
+_INTEGRATION_FIELDS = {
+    "name": ("name",),
+    "phone": ("phone",),
+    "email": ("email",),
+    "company": ("company",),
+    "channel": ("channel",),
+    "agent": ("agent_name", "agent_id"),
+    "language": ("language",),
+    "duration": ("duration_seconds",),
+    "details": ("extracted_data", "summary", "use_case", "message"),
+    "transcript": ("transcript",),
+    "page": ("page_path",),
+    "recording": ("recording_url", "recording_mime_type"),
+    "call_id": ("call_id",),
+}
+_FIELD_CONFIGURABLE_KEYS = frozenset({"webhook", "slack", "sheets"})
+
+
+def _apply_field_choice(key: str, config: dict, lead: dict) -> dict:
+    """The lead minus the fields this integration's owner left out."""
+    chosen = config.get("fields")
+    if key not in _FIELD_CONFIGURABLE_KEYS or not isinstance(chosen, list) or not chosen:
+        return lead
+    out = dict(lead)
+    for field, lead_keys in _INTEGRATION_FIELDS.items():
+        if field not in chosen:
+            for lead_key in lead_keys:
+                out.pop(lead_key, None)
+    if "company" not in chosen and isinstance(out.get("extracted_data"), dict):
+        out["extracted_data"] = {k: v for k, v in out["extracted_data"].items() if k != "company"}
+    return out
 
 
 async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: int | None = None) -> None:
-    """Deliver an event to every connected integration for this tenant.
-    Same shape as agent/tools.py's version — callable both mid-call (via
+    """Deliver an event to every connected integration for this tenant,
+    once each, honouring each integration's chosen events and fields. Same
+    shape as agent/tools.py's version — callable both mid-call (via
     _fan_out_integrations) and at call-end from session.py's log_call
-    equivalent."""
+    equivalent. This is the only path to the account's webhook: the old
+    separate _post_webhook looked the URL up platform-wide (any account's)
+    and also sent every event a second time."""
     try:
         integrations = db.get_delivery_integrations(account_id)
     except Exception:
@@ -164,7 +212,11 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: 
         timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as http:
             for integ in integrations:
-                shaped = _integration_body(integ["key"], integ.get("config") or {}, lead)
+                config = integ.get("config") or {}
+                if not _integration_wants_event(integ["key"], config, lead):
+                    logger.info("%s: skipped %s event (not chosen on its integration page)", integ["key"], lead.get("type"))
+                    continue
+                shaped = _integration_body(integ["key"], config, _apply_field_choice(integ["key"], config, lead))
                 if shaped is None:
                     continue
                 url, body = shaped
@@ -266,7 +318,6 @@ async def book_appointment(
     result = db.book_native_appointment(session.account_id, session.agent_id, date, time, duration_minutes, name, phone, purpose)
     event = {"type": "appointment_booked", "date": date, "time": time, "purpose": purpose, "name": name, "phone": phone}
     session.emit_event(event)
-    await _post_webhook(event)
     await _fan_out_integrations(session, event)
     if result is None:
         return f"Noted the appointment request for {name} on {date} at {time}. Tell the caller the team will confirm it shortly."
@@ -300,7 +351,6 @@ async def log_lead(session, name: str, phone: str, budget: str = "", location: s
     session.lead_data.update(name=name, phone=phone, budget=budget, location=location, timeline=timeline)
     event = {"type": "lead_update", "name": name, "phone": phone, "budget": budget, "location": location, "timeline": timeline}
     session.emit_event(event)
-    await _post_webhook(event)
     await _fan_out_integrations(session, event)
     return "Lead details recorded."
 
@@ -334,7 +384,6 @@ async def capture_platform_lead(session, name: str, contact: str, company: str =
         "contact": contact, "phone": contact, "use_case": use_case, "team_size": team_size,
     }
     session.emit_event(event)
-    await _post_webhook(event)
     await _fan_out_integrations(session, event)
     return "Lead details recorded."
 
