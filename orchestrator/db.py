@@ -174,22 +174,31 @@ def get_agent_config(agent_id: int | None = None, account_id: int | None = None)
         conn.close()
 
 
-def custom_voice_tts(voice: str, account_id: int | None) -> str | None:
-    """TTS voice string for a customer's cloned voice ("custom:vv_<id>").
-    This pipeline only speaks ElevenLabs clones ("elevenlabs:<id>"); a
-    Sarvam-only clone, another account's id, a deleted/unready clone or a DB
-    error gives None and the caller uses the default voice."""
+def custom_voice(voice: str, account_id: int | None) -> dict | None:
+    """The account's own ready, not-deleted clone behind an agent voice
+    "custom:vv_<id>", as {"elevenlabs_voice_id", "sarvam_voice_id", "gender",
+    "status"} (gender "male"|"female", or "" when unknown). Another account's
+    id, a deleted/unready clone, a non-custom voice, no account or a DB error
+    gives None; the caller then picks a fallback voice, never fails the call."""
     if not voice.startswith("custom:") or account_id is None:
         return None
     conn = None
     try:
         conn = dbconn.connect()
         row = conn.execute(
-            "SELECT elevenlabs_voice_id FROM custom_voices WHERE id = ? AND account_id = ? "
-            "AND deleted_at IS NULL AND status = 'ready'",
+            "SELECT elevenlabs_voice_id, sarvam_voice_id, gender, status FROM custom_voices "
+            "WHERE id = ? AND account_id = ? AND deleted_at IS NULL AND status = 'ready'",
             (voice[len("custom:"):], account_id),
         ).fetchone()
-        return f"elevenlabs:{row['elevenlabs_voice_id']}" if row and row["elevenlabs_voice_id"] else None
+        if not row:
+            return None
+        gender = (row["gender"] or "").strip().lower()
+        return {
+            "elevenlabs_voice_id": row["elevenlabs_voice_id"] or "",
+            "sarvam_voice_id": row["sarvam_voice_id"] or "",
+            "gender": gender if gender in ("male", "female") else "",
+            "status": row["status"],
+        }
     except psycopg.Error:
         logger.exception("could not read cloned voice for account %s", account_id)
         return None
