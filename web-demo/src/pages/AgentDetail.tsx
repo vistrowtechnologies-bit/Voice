@@ -480,10 +480,17 @@ function AgentEditorForm({
                 )}
               </select>
               {(() => {
-                const current = myVoices.find((v) => v.value === form.voice)
                 // The preview plays the pipeline TTS voice, not the Gemini Live
                 // voice a realtime call actually speaks with - so don't offer it.
-                if (!current || isRealtimeModel(form.model)) return null
+                if (isRealtimeModel(form.model)) return null
+                const cloned = clonedVoices.find((v) => v.voiceValue === form.voice && v.status === 'ready')
+                if (cloned) {
+                  // In the agent's language when the cloned voice speaks it, else its own.
+                  const language = cloned.speaksLanguages?.includes(form.language) ? form.language : ''
+                  return <VoicePreviewButton voice={form.voice} lang={language} />
+                }
+                const current = myVoices.find((v) => v.value === form.voice)
+                if (!current) return null
                 return (
                   <VoicePreviewButton
                     voice={form.voice}

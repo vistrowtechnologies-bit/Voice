@@ -163,7 +163,10 @@ export const removeVoice = (voice: string) =>
 // Direct URL for the cached audition audio (same-origin, cookie-authed). First
 // hit for a (voice, lang) synthesizes + caches server-side; later hits are free.
 export const voicePreviewUrl = (voice: string, lang: string) =>
-  `/api/voices/preview?voice=${encodeURIComponent(voice)}&lang=${encodeURIComponent(lang)}`
+  voice.startsWith(CUSTOM_VOICE_PREFIX)
+    ? // Cloned voices take a full code ("hi-IN"); a short one ("hi") falls back to the voice's own language.
+      customVoicePreviewUrl(voice.slice(CUSTOM_VOICE_PREFIX.length), undefined, lang.includes('-') ? lang : undefined)
+    : `/api/voices/preview?voice=${encodeURIComponent(voice)}&lang=${encodeURIComponent(lang)}`
 
 // ------------------------------------------------- cloned voices ("Your voices")
 
@@ -187,6 +190,10 @@ export interface CustomVoice {
   name: string
   language: string
   status: 'processing' | 'ready' | 'failed'
+  // Speaker's gender from the clone form; "" for voices made before it was asked.
+  gender?: 'male' | 'female' | ''
+  // Language codes this voice can speak ("hi-IN", ...); one recording speaks all of them.
+  speaksLanguages?: string[]
   error: string
   createdAt: string
   creditsPerMinute: number
@@ -209,9 +216,20 @@ export const renameCustomVoice = (id: string, name: string) =>
 // 409 carries the server's reason (e.g. the agents still using it) as the error message.
 export const deleteCustomVoice = (id: string) => send<{ ok: boolean }>('DELETE', `/voices/custom/${encodeURIComponent(id)}`)
 
-export async function fetchCustomVoicePreview(id: string, text?: string): Promise<Blob> {
-  const qs = text ? `?text=${encodeURIComponent(text)}` : ''
-  const res = await fetch(`/api/voices/custom/${encodeURIComponent(id)}/preview${qs}`, { credentials: 'include', cache: 'no-store' })
+const CUSTOM_VOICE_PREFIX = 'custom:'
+
+/** Preview of a cloned voice; `language` ("hi-IN") picks the sample's
+ * language, otherwise the server uses the voice's own. */
+function customVoicePreviewUrl(id: string, text?: string, language?: string): string {
+  const params = new URLSearchParams()
+  if (text) params.set('text', text)
+  if (language) params.set('language', language)
+  const qs = params.toString()
+  return `/api/voices/custom/${encodeURIComponent(id)}/preview${qs ? `?${qs}` : ''}`
+}
+
+export async function fetchCustomVoicePreview(id: string, text?: string, language?: string): Promise<Blob> {
+  const res = await fetch(customVoicePreviewUrl(id, text, language), { credentials: 'include', cache: 'no-store' })
   if (res.status === 401) onUnauthorized()
   if (!res.ok) throw new Error(await errorDetail(res, 'Could not play this voice. Try again.'))
   return res.blob()

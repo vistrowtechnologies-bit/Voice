@@ -19,6 +19,7 @@ import {
 import type { AgentConfig, KnowledgeBase, PhoneNumber, LaunchReadiness } from '../lib/types'
 import { modelLabel, voiceLabel } from '../lib/agentOptions'
 import { Tooltip } from '../components/ui/Tooltip'
+import { useClonedVoices } from '../components/ClonedVoiceOptions'
 
 type AgentFilter = 'all' | 'live' | 'needs-setup' | 'paused' | 'draft'
 
@@ -71,6 +72,7 @@ export function Agents() {
   const navigate = useNavigate()
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
+  const clonedVoices = useClonedVoices()
   const [numbers, setNumbers] = useState<PhoneNumber[]>([])
   const [dialTestAgent, setDialTestAgent] = useState<AgentConfig | null>(null)
   const [browserTestAgent, setBrowserTestAgent] = useState<AgentConfig | null>(null)
@@ -275,7 +277,21 @@ export function Agents() {
 
               <dl className="mb-4 flex flex-col gap-1.5 rounded-lg border border-border bg-surface-high/40 p-3 text-xs">
                 <InfoRow icon="memory" label="Model" value={modelLabel(agent.model)} />
-                <InfoRow icon="record_voice_over" label="Voice" value={agent.voiceName || voiceLabel(agent.voice)} />
+                <InfoRow
+                  icon="record_voice_over"
+                  label="Voice"
+                  value={
+                    agent.voice.startsWith('custom:') ? (
+                      // The server's voiceName is the raw "custom:vv_..." id for a cloned voice.
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate">{clonedVoices.find((v) => v.voiceValue === agent.voice)?.name ?? 'Cloned voice'}</span>
+                        <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">Cloned</span>
+                      </span>
+                    ) : (
+                      agent.voiceName || voiceLabel(agent.voice)
+                    )
+                  }
+                />
                 <InfoRow icon="language" label="Language" value={agent.language} />
                 <InfoRow icon="menu_book" label="Knowledge" value={kbs.find((k) => k.id === agent.kbId)?.name ?? 'none'} />
                 <InfoRow icon="update" label="Updated" value={formatDateTime(agent.updatedAt)} />
@@ -381,7 +397,7 @@ export function Agents() {
   )
 }
 
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+function InfoRow({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="flex items-center gap-1.5 text-text-muted">
