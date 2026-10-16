@@ -290,6 +290,12 @@ async def _ensure_pending_call_context(event: dict) -> int | None:
             return None
     else:
         account_id, agent_id = number_row["account_id"], number_row["agent_id"]
+        if not agent_id:
+            # A number with no agent assigned is not answered, as agent/ does:
+            # it must never fall back to another account's (or the platform
+            # demo) agent.
+            logger.warning("no agent assigned to %s (account %s); not answering", matched_number, account_id)
+            return None
 
     if not account_id:
         return None
@@ -359,7 +365,8 @@ async def _build_session(
     here would otherwise freeze every other concurrent call, not just
     this one.
     """
-    cfg = await asyncio.to_thread(db.get_agent_config, agent_id) or {}
+    # Scoped to the account so an agent_id never loads another tenant's agent.
+    cfg = await asyncio.to_thread(db.get_agent_config, agent_id, account_id or None) or {}
     if str(cfg.get("model") or "").startswith("gemini-live"):
         raise ValueError("Native Google Live audio requires the LiveKit realtime route, not the STT/LLM/TTS orchestrator")
     try:
@@ -1032,7 +1039,8 @@ async def browser_token(
     agent_id = agent_id or TEST_AGENT_ID or None
     if not account_id or not agent_id:
         return {"ok": False, "error": "account_id/agent_id not provided and TEST_ACCOUNT_ID/TEST_AGENT_ID not configured."}
-    cfg = await asyncio.to_thread(db.get_agent_config, agent_id) or {}
+    # Scoped to the account so an agent_id never loads another tenant's agent.
+    cfg = await asyncio.to_thread(db.get_agent_config, agent_id, account_id or None) or {}
     if str(cfg.get("model") or "").startswith("gemini-live"):
         return {"ok": False, "error": "This agent requires the LiveKit native realtime connection."}
     wss_base = enablex.public_wss_host()

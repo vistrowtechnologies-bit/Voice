@@ -37,6 +37,22 @@ class EnableXEventRoutingTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["ok"])
         issue.assert_not_called()
 
+    async def test_number_without_agent_is_not_answered(self):
+        with patch.object(server.db, "get_phone_number_by_number", return_value={"account_id": 7, "agent_id": None}), \
+                patch.object(server.db, "is_on_orchestrator_pipeline", return_value=True) as gate:
+            result = await server._ensure_pending_call_context(
+                {"voice_id": "v-noagent", "direction": "inbound", "from": "+919999999999", "to": "+911111111111"}
+            )
+        self.assertIsNone(result)
+        self.assertNotIn("v-noagent", server._PENDING_ACCOUNT_BY_VOICE_ID)
+        gate.assert_not_called()
+
+    async def test_session_agent_lookup_is_scoped_to_the_account(self):
+        with patch.object(server.db, "get_agent_config", return_value={"model": "gemini-live"}) as get_cfg:
+            with self.assertRaises(ValueError):
+                await server._build_session(2, 26, "browser")
+        get_cfg.assert_called_once_with(26, 2)
+
     def setUp(self) -> None:
         server._PENDING_ACCOUNT_BY_VOICE_ID.clear()
         server._PENDING_AGENT_BY_VOICE_ID.clear()
