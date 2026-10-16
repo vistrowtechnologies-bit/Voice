@@ -34,33 +34,37 @@ def lookup_for(row, owner=7):
     return lookup
 
 
+def speaker(*args):
+    return custom_voice.resolve(*args, acquire_slot=lambda: True).speaker
+
+
 class Resolve(unittest.TestCase):
     def test_sarvam_engine(self):
         lk = lookup_for(READY)
-        self.assertEqual(custom_voice.resolve(VALUE, 7, lk, "e", "s"), custom_voice.SARVAM_CLONE_PREFIX + "SV456")
+        self.assertEqual(speaker(VALUE, 7, lk, "e", "s"), custom_voice.SARVAM_CLONE_PREFIX + "SV456")
         self.assertEqual(lk.calls, [("vv_abcdefghijklmnop", 7)])
 
     def test_elevenlabs_engine(self):
         lk = lookup_for({**READY, "engine_default": "elevenlabs"})
-        self.assertEqual(custom_voice.resolve(VALUE, 7, lk, "e", "s"), "elevenlabs:EL123")
+        self.assertEqual(speaker(VALUE, 7, lk, "e", "s"), "elevenlabs:EL123")
 
     def test_other_engine_when_default_key_missing(self):
         lk = lookup_for(READY)
-        self.assertEqual(custom_voice.resolve(VALUE, 7, lk, "e", ""), "elevenlabs:EL123")
+        self.assertEqual(speaker(VALUE, 7, lk, "e", ""), "elevenlabs:EL123")
 
     def test_other_account_falls_back(self):
         lk = lookup_for(READY, owner=7)
-        self.assertEqual(custom_voice.resolve(VALUE, 8, lk, "e", "s"), custom_voice.FALLBACK_VOICE)
+        self.assertEqual(speaker(VALUE, 8, lk, "e", "s"), custom_voice.FALLBACK_VOICE)
 
     def test_not_ready_deleted_error_and_no_keys_fall_back(self):
         for row in ({**READY, "status": "processing"}, {**READY, "status": "failed"}, None):
-            self.assertEqual(custom_voice.resolve(VALUE, 7, lookup_for(row), "e", "s"), custom_voice.FALLBACK_VOICE)
+            self.assertEqual(speaker(VALUE, 7, lookup_for(row), "e", "s"), custom_voice.FALLBACK_VOICE)
 
         def boom(*_a):
             raise RuntimeError("db down")
 
-        self.assertEqual(custom_voice.resolve(VALUE, 7, boom, "e", "s"), custom_voice.FALLBACK_VOICE)
-        self.assertEqual(custom_voice.resolve(VALUE, 7, lookup_for(READY), "", ""), custom_voice.FALLBACK_VOICE)
+        self.assertEqual(speaker(VALUE, 7, boom, "e", "s"), custom_voice.FALLBACK_VOICE)
+        self.assertEqual(speaker(VALUE, 7, lookup_for(READY), "", ""), custom_voice.FALLBACK_VOICE)
 
     def test_fallback_voice_is_a_real_catalog_voice(self):
         self.assertIsNotNone(voice_catalog.get_voice(custom_voice.FALLBACK_VOICE))
@@ -118,6 +122,7 @@ class AgentRuntime(unittest.TestCase):
                 "language": "hi-IN", "tone": "balanced", "system_prompt": "x",
                 "enabled_functions": "end_call", "_compliance_config": {}}
         with patch.object(self.main.db, "get_custom_voice", lookup_for(row)), \
+             patch.object(custom_voice, "acquire_clone_slot", return_value=True), \
              patch.dict(os.environ, {"ELEVEN_API_KEY": "e", "SARVAM_API_KEY": "s"}), \
              patch.object(self.main, "_build_tts", return_value=(None, "sarvam")) as build:
             agent = self.main.RealEstateAgent(base, call_type="phone")
@@ -144,12 +149,13 @@ class AgentRuntime(unittest.TestCase):
         self.assertEqual(tts._vistrow_clone._language, "ta-IN")
 
 
-class CloneRequestShape(unittest.TestCase):
-    def test_form_fields(self):
+class CloneConfigShape(unittest.TestCase):
+    def test_ws_config(self):
         import sarvam_clone_tts
-        f = sarvam_clone_tts.form_fields("SV1", "x" * 1200, "hi-IN")
+        f = sarvam_clone_tts.clone_config("SV1", "hi-IN", pace=1.0, sample_rate=8000)
         self.assertEqual(f["voice_id"], "SV1")
-        self.assertEqual(len(f["text"]), 1000)
+        self.assertEqual(f["target_language_code"], "hi-IN")
+        self.assertNotIn("language_code", f)
         self.assertEqual(f["output_audio_codec"], "linear16")
         self.assertNotIn("ref_audio", f)
 

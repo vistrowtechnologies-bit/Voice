@@ -96,6 +96,31 @@ def require(conn, account_id: int, feature: str) -> dict:
     return policy
 
 
+# Mirrors server/custom_voices.OWNER_CLONE_LIMIT.
+OWNER_CLONE_LIMIT = 100
+
+
+def cloned_voice_limit(plan: str, owner: bool) -> int:
+    if owner:
+        return OWNER_CLONE_LIMIT
+    return int(PLANS.get(str(plan or "").lower(), {}).get("cloned_voices", 0))
+
+
+def clones_allowed(conn, account_id: int) -> bool:
+    """Call-time mirror of server/custom_voices.clone_allowed_for_account:
+    the plan includes cloned voices and the account holds no more of them
+    than it allows (e.g. after a downgrade). A missing account reads as
+    starter, as server/calls_db._account_plan_and_owner does."""
+    row = conn.execute("SELECT plan, is_platform_owner FROM accounts WHERE id = ?", (account_id,)).fetchone()
+    plan, owner = ((row["plan"] or "starter"), bool(row["is_platform_owner"])) if row else ("starter", False)
+    used = conn.execute(
+        "SELECT COUNT(*) c FROM custom_voices WHERE account_id = ? AND deleted_at IS NULL AND status <> 'failed'",
+        (account_id,),
+    ).fetchone()
+    limit = cloned_voice_limit(plan, owner)
+    return limit > 0 and int(used["c"] or 0) <= limit
+
+
 def validate_agent(conn, account_id: int, config: dict, catalog) -> None:
     """Recheck retained configurations at admission, not just when edited."""
     policy = account_policy(conn, account_id)
@@ -107,8 +132,9 @@ def validate_agent(conn, account_id: int, config: dict, catalog) -> None:
         require(conn, account_id, "live_catalog")
     voice = config.get("voice") or "shubh"
     # A customer's cloned voice ("custom:vv_<id>") is checked at agent save
-    # (owned, ready) and resolved at call time with a default-voice fallback,
-    # so it never refuses a call here.
+    # (owned, ready, plan) and resolved at call time with a gender-matched
+    # stock-voice fallback (custom_voice.resolve_row, clones_allowed above
+    # for a downgraded plan), so it never refuses a call here.
     if str(voice).startswith("custom:"):
         voice = ""
     entry = catalog.get_voice(voice) if voice else None
