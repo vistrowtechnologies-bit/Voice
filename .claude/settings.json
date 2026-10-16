@@ -18,6 +18,17 @@
             "command": "/Users/mac15/.local/bin/graphify hook-guard read"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/scripts/hooks/pre_edit_guard.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\"",
+            "timeout": 30,
+            "statusMessage": "Checking file ownership"
+          }
+        ]
       }
     ]
   }
