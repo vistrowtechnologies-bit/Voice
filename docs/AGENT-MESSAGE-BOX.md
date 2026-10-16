@@ -972,3 +972,9 @@ Changed (Railway server + dashboard only; no agent code, no DB migration):
 Verified: all 9 new tests fail on origin/main's server files and pass on the branch; full server suite 753 passed / 0 failed against a throwaway local Postgres; `tsc -b` clean; `vite build` clean. Not verified: no request has been made to the real ArthaLeads (its route does not exist until the ArthaLeads PR ships); the dashboard was not opened in a browser; the "917 passed" baseline figure could not be reproduced here (753 collected in `server/`).
 
 Left: merge only after the ArthaLeads side is deployed (otherwise every key save lands as "pending" — harmless, the key is still saved and Send test retries). Then: owner re-saves the key on account 2 and checks ArthaLeads → Auto-call step 1 reads "Connected to Vistrow account 2".
+
+### Claude — 2026-10-16 — admin reset for two-step login (branch `claude/mfa-admin-reset`, PR open, NOT merged)
+
+Changes: new `POST /admin/accounts/{id}/users/{uid}/reset-two-step` (platform owner only; reason required; user must belong to the account and have two-step on; clears it via `calls_db.disable_mfa`, records security event `mfa_reset_by_support`, writes audit `reset_two_step`, emails the user). Admin account Users tab gets a "Two-step login" column with Reset (reason dialog; ReasonModal now shows helper text without a field). Login code step links to support@vistrowvoice.com for users who lost both phone and recovery codes. Customers could already turn it off themselves in Settings → Sign-in & security; the platform owner account can't (required for the admin panel).
+
+Verified: `server/test_admin_reset_two_step.py` (3 tests, route loaded via AST like test_admin_impersonation, no DB), tsc, localhost run against a mock (code screen link; admin Reset dialog → column flips to Off with banner). Not verified: against a real DB or real email send. Server + dashboard only; no agent deploy.

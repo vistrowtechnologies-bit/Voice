@@ -552,7 +552,7 @@ def account_detail(account_id: int) -> dict | None:
         users = [
             dict(r)
             for r in conn.execute(
-                "SELECT id, name, email, role, auth_provider, last_login_at, created_at FROM users WHERE account_id = ? ORDER BY id",
+                "SELECT id, name, email, role, auth_provider, last_login_at, created_at, mfa_enabled_at FROM users WHERE account_id = ? ORDER BY id",
                 (account_id,),
             ).fetchall()
         ]

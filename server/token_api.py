@@ -3411,6 +3411,35 @@ def admin_set_notes(account_id: int, req: AdminNotesRequest, admin: dict = Depen
     return admin_db.account_detail(account_id)
 
 
+class AdminReasonRequest(BaseModel):
+    reason: str = ""
+
+
+@app.post("/admin/accounts/{account_id}/users/{user_id}/reset-two-step")
+def admin_reset_two_step(account_id: int, user_id: int, req: AdminReasonRequest, request: Request,
+                         admin: dict = Depends(require_platform_owner)) -> dict:
+    """For a user who lost both their authenticator and their recovery codes:
+    turns two-step login off so they can sign in with their password and set
+    it up again. Audited, and the user is emailed so a reset they didn't ask
+    for is noticed."""
+    reason = _admin_reason(req.reason)
+    _admin_account_or_404(account_id)
+    target = calls_db.get_user_by_id(user_id)
+    if target is None or target.get("account_id") != account_id:
+        raise HTTPException(404, "User not found in this account")
+    if not (calls_db.get_user_mfa(user_id) or {}).get("enabled_at"):
+        raise HTTPException(400, "Two-step login is already off for this user")
+    calls_db.disable_mfa(user_id)
+    calls_db.record_security_event(user_id, "mfa_reset_by_support", user_agent=request.headers.get("user-agent", ""))
+    admin_db.write_audit(admin["user_id"], admin["email"], "reset_two_step", account_id,
+                         detail=f"user {user_id} ({target.get('email') or ''}). {reason}")
+    _email_security_notice(user_id, "Two-step login was reset",
+                           "Vistrow Voice support turned off two-step login on your account at your request, so you "
+                           "can sign in with your password. Turn it back on in Settings, Sign-in & security. If you "
+                           "didn't ask for this, reset your password now and contact support.")
+    return admin_db.account_detail(account_id)
+
+
 @app.post("/admin/accounts/{account_id}/reset-password")
 def admin_reset_password(account_id: int, request: Request, admin: dict = Depends(require_platform_owner)) -> dict:
     owner_uid = calls_db.account_owner_user_id(account_id)
