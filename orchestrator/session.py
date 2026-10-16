@@ -1173,7 +1173,10 @@ async def finalize_call(session: Session, room_name: str) -> int | None:
         "agent_name": session.agent_name,
         "extracted_data": extracted,
     }
-    await tools._deliver_to_integrations(session.account_id, event, call_id=call_id)
+    await tools._deliver_to_integrations(
+        session.account_id, event, call_id=call_id,
+        allowed_keys=getattr(session, "crm_integration_keys", None) or None,
+    )
 
     if want_memory and summary:
         await asyncio.to_thread(

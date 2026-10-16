@@ -295,7 +295,7 @@ class PostCallFieldsTests(unittest.IsolatedAsyncioTestCase):
         fake_client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
         saved, delivered = [], []
 
-        async def deliver(account_id, event, call_id=None):
+        async def deliver(account_id, event, call_id=None, allowed_keys=None):
             delivered.append(event)
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test"}), \
