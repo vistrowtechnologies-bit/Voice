@@ -1046,3 +1046,10 @@ Verified: `npm run build` (icons, tsc, SEO gates) passes; test:voice-clone (new)
 
 Not verified: a real microphone, Safari (mp4 recording), the file-upload path in a real browser, and anything against the real server API. Next step: after the server half merges, run the browser checklist in the handoff on staging.
 
+
+### Claude - 2026-10-16 - voice clone v2 (branch claude/voice-clone-v2, WIP, PAUSED for architecture review)
+
+Paused by the owner before more building. Branch is off origin/claude/voice-clone (PR #143). Not pushed, not merged.
+Done (WIP commit, untested): server/custom_voices.py only. SAMPLE_MIN_S 30 -> 10; RECORDING_MAX_S 60 for `source=record` (new optional form field, default "upload", uploads still up to 5 min / 20 MB); reference clip now chosen by choose_reference() (50 ms RMS frames, silence trimmed, best 12-15 s window by speech fraction / long-pause / clipping score, cut at pauses; refuses under 10 s of speech) and computed before any charge; "flac" accepted; preview takes `?language=` (validated, default = voice language, cache key = sha(language + text)), default preview line for all 11 languages (non-hi/en lines need a native-speaker check); voice object gains `speaksLanguages`.
+Known broken until continued: server/test_custom_voices.py still expects "30 seconds" and its decode_pcm mock returns digital silence, which choose_reference now refuses. No new tests yet. Frontend redesign (hero, stepper, 11 scripts, mic check, quality hints, cross-lingual preview) not started.
+Next step: after architecture approval, update tests (synthetic PCM for trim/window), run with pgserver, then the web-demo work.

@@ -6,7 +6,7 @@ all languages, server-side only:
     needs the text_to_speech_voice_cloning capability on our Sarvam account).
     About Rs 1.4 per minute of agent speech (Rs 30 per 10K chars; stock Bulbul
     v4 is ~Rs 0.37/min). Created from a 10-15 s reference clip cut from the
-    sample; the clip is kept in storage (sarvam_ref_key) so the voice can be
+    sample (silence trimmed, best window chosen: choose_reference); the clip is kept in storage (sarvam_ref_key) so the voice can be
     re-created. If Sarvam cloning fails (capability missing, 503, ...) the
     clone fails and any credits are refunded - there is no other vendor.
   - ElevenLabs Instant Voice Cloning is OFF: it costs ~Rs 3.5-3.8/min and our
@@ -37,14 +37,18 @@ import hashlib
 import io
 import json
 import logging
+import math
+import operator
 import os
 import re
 import secrets
 import shutil
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 import wave
+from array import array
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, Response, UploadFile
 
@@ -75,7 +79,12 @@ BHARAT_CREDITS_PER_MINUTE = round(
 # ---------------------------------------------------------------- limits
 VOICE_PREFIX = "custom:"
 _ID_RE = re.compile(r"^vv_[a-z0-9]{16}$")
-SAMPLE_MIN_S = 30.0
+# Sarvam's docs (read 2026-10-16): 10-15 s of reference is what the model is
+# tuned for; longer rarely helps and can drift. So 10 s of speech is enough,
+# an in-browser recording is capped at 60 s, and an uploaded file may be up
+# to 5 min (we pick the best 12-15 s from it).
+SAMPLE_MIN_S = 10.0
+RECORDING_MAX_S = 60.0
 SAMPLE_MAX_S = 300.0
 SAMPLE_MAX_BYTES = 20 * 1024 * 1024
 CONSENT_MAX_BYTES = 2 * 1024 * 1024
@@ -86,11 +95,18 @@ PREVIEW_DAILY_LIMIT = 40
 # A clone still "processing" after this long was lost (server restart).
 STALE_PROCESSING_MIN = 20
 NAME_MAX = 60
-# The reference clip Sarvam clones from: skip the first second (mic click,
-# breath), keep 15 s - Sarvam recommends 10-15 s and caps inline refs at 15.
-_REF_START_S = 1.0
-_REF_LEN_S = 15.0
+# The reference clip Sarvam clones from: silence trimmed off both ends, then
+# the best contiguous 12-15 s of speech (see choose_reference).
 _PCM_RATE = 24000
+REF_MIN_S = 12.0
+REF_MAX_S = 15.0
+SPEECH_MIN_S = 10.0
+_FRAME_S = 0.05                 # analysis frame: 50 ms
+_FRAME = int(_PCM_RATE * _FRAME_S)
+_ABS_SPEECH_RMS = 150.0         # ~ -47 dBFS: quieter than this is never speech
+_CLIP_PEAK = 32000              # a frame whose peak reaches this is clipped
+_LONG_PAUSE_S = 1.0             # pauses longer than this count against a window
+_EDGE_PAD_S = 0.1               # kept around speech so word onsets aren't cut
 
 # Sarvam voice cloning languages (docs, 2026-10-12). A clone speaks any of
 # them on calls (cross-lingual); the voice's own language is what it was
@@ -99,7 +115,7 @@ _SARVAM_CLONE_LANGS = {"as-IN", "bn-IN", "en-IN", "gu-IN", "hi-IN", "kn-IN", "ml
 LANGUAGES = {code: label for code, label in __import__("voice_catalog").LANGUAGE_LABELS.items()
              if code in _SARVAM_CLONE_LANGS}
 
-_ALLOWED_EXT = {"webm", "ogg", "oga", "opus", "wav", "mp3", "mpeg", "m4a", "mp4", "aac"}
+_ALLOWED_EXT = {"webm", "ogg", "oga", "opus", "wav", "mp3", "mpeg", "m4a", "mp4", "aac", "flac"}
 
 _UNAVAILABLE = "Voice cloning is not available right now. Please try again later."
 _CREATE_FAILED = "We couldn't create this voice from the recording. Any credits charged have been returned. Please try again with a clearer recording."
@@ -109,9 +125,20 @@ _ELEVEN_BASE = "https://api.elevenlabs.io"
 _SARVAM_BASE = "https://api.sarvam.ai"
 ELEVEN_MODEL = "eleven_flash_v2_5"
 
+# Default preview line per language: a clone speaks every language in
+# LANGUAGES, so the owner can hear it in each one.
 _DEFAULT_PREVIEW = {
-    "hi": "नमस्ते! आपके ग्राहकों से कॉल पर आपकी आवाज़ कुछ ऐसी सुनाई देगी।",
-    "en": "Hello! This is how your voice will sound on calls with your customers.",
+    "hi-IN": "नमस्ते! आपके ग्राहकों से कॉल पर आपकी आवाज़ कुछ ऐसी सुनाई देगी।",
+    "en-IN": "Hello! This is how your voice will sound on calls with your customers.",
+    "mr-IN": "नमस्कार! तुमच्या ग्राहकांशी कॉलवर तुमचा आवाज असा ऐकू येईल.",
+    "ta-IN": "வணக்கம்! உங்கள் வாடிக்கையாளர்களுடன் பேசும்போது உங்கள் குரல் இப்படித்தான் கேட்கும்.",
+    "te-IN": "నమస్కారం! మీ కస్టమర్లతో కాల్స్‌లో మీ గొంతు ఇలా వినిపిస్తుంది.",
+    "kn-IN": "ನಮಸ್ಕಾರ! ನಿಮ್ಮ ಗ್ರಾಹಕರ ಜೊತೆ ಕರೆಗಳಲ್ಲಿ ನಿಮ್ಮ ಧ್ವನಿ ಹೀಗೆ ಕೇಳಿಸುತ್ತದೆ.",
+    "ml-IN": "നമസ്കാരം! നിങ്ങളുടെ ഉപഭോക്താക്കളുമായുള്ള കോളുകളിൽ നിങ്ങളുടെ ശബ്ദം ഇങ്ങനെയാണ് കേൾക്കുക.",
+    "gu-IN": "નમસ્તે! તમારા ગ્રાહકો સાથેના કૉલ પર તમારો અવાજ આવો સંભળાશે.",
+    "bn-IN": "নমস্কার! আপনার গ্রাহকদের সঙ্গে কলে আপনার গলা এরকমই শোনাবে।",
+    "pa-IN": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਤੁਹਾਡੇ ਗਾਹਕਾਂ ਨਾਲ ਕਾਲ 'ਤੇ ਤੁਹਾਡੀ ਆਵਾਜ਼ ਕੁਝ ਇਸ ਤਰ੍ਹਾਂ ਸੁਣਾਈ ਦੇਵੇਗੀ।",
+    "od-IN": "ନମସ୍କାର! ଆପଣଙ୍କ ଗ୍ରାହକଙ୍କ ସହ କଲରେ ଆପଣଙ୍କ ସ୍ୱର ଏମିତି ଶୁଣାଯିବ।",
 }
 
 SCRIPT_EN = (
@@ -322,11 +349,101 @@ def pcm_seconds(pcm: bytes) -> float:
     return len(pcm) / (2 * _PCM_RATE)
 
 
+_TOO_LITTLE_SPEECH = ("We could only hear about {secs} seconds of you speaking. Please record at least "
+                      "10 seconds of yourself talking, in a quiet room.")
+
+
+def _frame_stats(pcm: bytes) -> list[tuple[float, int]]:
+    """(RMS, peak) of each 50 ms frame of 24 kHz mono s16le PCM."""
+    samples = array("h")
+    samples.frombytes(pcm[: len(pcm) // 2 * 2])
+    if sys.byteorder == "big":
+        samples.byteswap()
+    out = []
+    for i in range(0, len(samples) - _FRAME + 1, _FRAME):
+        f = samples[i:i + _FRAME]
+        out.append((math.sqrt(sum(map(operator.mul, f, f)) / _FRAME), max(max(f), -min(f))))
+    return out
+
+
+def _speech_threshold(rms: list[float]) -> float:
+    """RMS above which a frame counts as speech: 3x the noise floor (the
+    quietest 10% of frames), but never above 30% of the loud frames (so a
+    noisy room still finds the speech) nor below an absolute floor."""
+    ordered = sorted(rms)
+    noise = ordered[len(ordered) // 10]
+    loud = ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))]
+    return max(_ABS_SPEECH_RMS, min(noise * 3, loud * 0.3))
+
+
+def _window_score(voiced: list[bool], clipped: list[bool]) -> float:
+    """Higher is better: mostly speech, no long pauses, nothing clipped."""
+    n = len(voiced)
+    excess_pause, run = 0.0, 0
+    for v in voiced + [True]:
+        if v:
+            excess_pause += max(0.0, run * _FRAME_S - _LONG_PAUSE_S)
+            run = 0
+        else:
+            run += 1
+    return sum(voiced) / n - 2.0 * (sum(clipped) / n) - 0.1 * excess_pause
+
+
+def choose_reference(pcm: bytes) -> tuple[int, int]:
+    """(start, end) sample offsets of the reference clip: leading and
+    trailing silence trimmed, then - if more than 15 s is left - the
+    contiguous 12-15 s window with the most speech, fewest long pauses and
+    no clipping, cut at pauses rather than mid-word. Raises CloneError when
+    less than 10 s of speech remains after trimming."""
+    frames = _frame_stats(pcm)
+    if not frames:
+        raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=0))
+    rms = [r for r, _p in frames]
+    thr = _speech_threshold(rms)
+    voiced = [r >= thr for r in rms]
+    clipped = [p >= _CLIP_PEAK for _r, p in frames]
+    if not any(voiced):
+        raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=0))
+    first = voiced.index(True)
+    last = len(voiced) - 1 - voiced[::-1].index(True)
+    span = last - first + 1
+    if span * _FRAME_S < SPEECH_MIN_S:
+        raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=f"{span * _FRAME_S:.0f}"))
+    max_n, min_n = round(REF_MAX_S / _FRAME_S), round(REF_MIN_S / _FRAME_S)
+    if span <= max_n:
+        start, end = first, last + 1
+    else:
+        best_score, start = None, first
+        for s in range(first, last + 2 - max_n, 5):  # 0.25 s steps
+            score = _window_score(voiced[s:s + max_n], clipped[s:s + max_n])
+            if best_score is None or score > best_score + 1e-9:
+                best_score, start = score, s
+        # Start just after a pause (up to 0.3 s earlier), not mid-word.
+        for j in range(start, max(first, start - 6) - 1, -1):
+            if j == first or not voiced[j - 1]:
+                start = j
+                break
+        # End where a pause starts, as late as possible but at least 12 s in.
+        end = min(start + max_n, last + 1)
+        for i in range(end, start + min_n - 1, -1):
+            if i >= len(voiced) or not voiced[i]:
+                end = i
+                break
+        while end - start > min_n and not voiced[end - 1]:
+            end -= 1
+    # A little room around the speech, without going past 15 s.
+    pad = round(_EDGE_PAD_S / _FRAME_S)
+    room = max(0, max_n - (end - start))
+    lead = min(pad, start, room)
+    start -= lead
+    end = min(len(frames), end + min(pad, room - lead))
+    return start * _FRAME, end * _FRAME
+
+
 def reference_clip(pcm: bytes) -> bytes:
-    """15 s WAV (after the first second) for Sarvam's reference."""
-    start = int(_REF_START_S * _PCM_RATE) * 2
-    end = start + int(_REF_LEN_S * _PCM_RATE) * 2
-    chunk = pcm[start:end] if len(pcm) >= end else pcm[-int(_REF_LEN_S * _PCM_RATE) * 2:]
+    """The 10-15 s WAV Sarvam clones from (choose_reference)."""
+    start, end = choose_reference(pcm)
+    chunk = pcm[start * 2:end * 2]
     out = io.BytesIO()
     with wave.open(out, "wb") as w:
         w.setnchannels(1)
@@ -376,6 +493,8 @@ def public(row) -> dict:
         "createdAt": _iso(row["created_at"]),
         "creditsPerMinute": BHARAT_CREDITS_PER_MINUTE,
         "voiceValue": VOICE_PREFIX + row["id"],
+        # One recording speaks every supported language (cross-lingual).
+        "speaksLanguages": list(LANGUAGES),
     }
 
 
@@ -575,7 +694,8 @@ def _audio_type_ok(content_type: str | None, filename: str | None) -> bool:
 
 def start_create(account_id: int, user_id: int | None, name: str, language: str,
                  sample: bytes, sample_type: str, sample_name: str,
-                 consent: bytes, consent_type: str, consent_name: str) -> tuple[dict, int, dict]:
+                 consent: bytes, consent_type: str, consent_name: str,
+                 source: str = "upload") -> tuple[dict, int, dict]:
     """Validate, charge (if not free), store the audio, insert the row as
     'processing'. Returns (voice, credits_charged, job) - the job is handed
     to finish_create() in the background."""
@@ -611,9 +731,12 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
         raise CloneError(400, "We couldn't read that recording. Please record again.")
     seconds = pcm_seconds(pcm)
     if seconds < SAMPLE_MIN_S:
-        raise CloneError(400, f"The recording is {seconds:.0f} seconds long. Please record at least 30 seconds.")
+        raise CloneError(400, f"The recording is {seconds:.0f} seconds long. Please record at least 10 seconds.")
+    if source == "record" and seconds > RECORDING_MAX_S + 1:
+        raise CloneError(400, "Recordings can be up to 60 seconds. 15 seconds is plenty, so please record again.")
     if seconds > SAMPLE_MAX_S:
         raise CloneError(400, "The recording is longer than 5 minutes. Please keep it shorter.")
+    ref_wav = reference_clip(pcm)  # refuses when there is too little speech
     try:
         consent_s = pcm_seconds(decode_pcm(consent))
     except (AudioError, subprocess.TimeoutExpired, OSError):
@@ -626,7 +749,6 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
     sample_key = f"{prefix}/sample.{_ext(sample_name)}"
     consent_key = f"{prefix}/consent.{_ext(consent_name)}"
     ref_key = f"{prefix}/reference.wav"
-    ref_wav = reference_clip(pcm)
 
     conn = calls_db._connect()
     try:
@@ -789,16 +911,23 @@ def delete(account_id: int, voice_id: str) -> None:
     _unstore([k for k in (row.get("sample_key"), row.get("consent_key"), row.get("sarvam_ref_key")) if k])
 
 
-def preview(account_id: int, voice_id: str, text: str | None) -> tuple[bytes, str]:
+def preview(account_id: int, voice_id: str, text: str | None, language: str | None = None) -> tuple[bytes, str]:
     row = _require(account_id, voice_id)
     if row["status"] != "ready":
         raise CloneError(409, "This voice isn't ready yet.")
+    language = language or row["language"]
+    if language == "or-IN":
+        language = "od-IN"
+    if language not in LANGUAGES:
+        raise CloneError(400, "Choose a supported language for the preview.")
     text = " ".join((text or "").split())
     if len(text) > PREVIEW_MAX_CHARS:
         raise CloneError(400, f"Preview text can be at most {PREVIEW_MAX_CHARS} characters.")
     if not text:
-        text = _DEFAULT_PREVIEW["hi" if row["language"].startswith("hi") else "en"]
-    sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        text = _DEFAULT_PREVIEW.get(language) or _DEFAULT_PREVIEW["en-IN"]
+    # Cached per (voice, language, text): the same words in another
+    # language are a different recording.
+    sha = hashlib.sha256(f"{language}\n{text}".encode("utf-8")).hexdigest()
     conn = calls_db._connect()
     try:
         cached = conn.execute(
@@ -818,11 +947,11 @@ def preview(account_id: int, voice_id: str, text: str | None) -> tuple[bytes, st
         raise CloneError(429, "You've reached today's preview limit. Please try again tomorrow.")
     try:
         if row["engine_default"] == "sarvam" and row["sarvam_voice_id"] and _sarvam_key():
-            audio, ctype = sarvam_tts(row["sarvam_voice_id"], text, row["language"])
+            audio, ctype = sarvam_tts(row["sarvam_voice_id"], text, language)
         elif row["elevenlabs_voice_id"] and _eleven_key():
             audio, ctype = eleven_tts(row["elevenlabs_voice_id"], text)
         elif row["sarvam_voice_id"] and _sarvam_key():
-            audio, ctype = sarvam_tts(row["sarvam_voice_id"], text, row["language"])
+            audio, ctype = sarvam_tts(row["sarvam_voice_id"], text, language)
         else:
             raise VendorError("no engine available for preview")
     except Exception:
@@ -873,6 +1002,8 @@ def build_router(require_role) -> APIRouter:
         language: str = Form(...),
         sample: UploadFile = File(...),
         consent: UploadFile = File(...),
+        # "record" (in-browser, up to 60 s) or "upload" (a file, up to 5 min).
+        source: str = Form("upload"),
         user: dict = Depends(require_role("admin")),
     ) -> dict:
         sample_bytes = await _read_capped(sample, SAMPLE_MAX_BYTES, "The recording is too large. Keep it under 20 MB.")
@@ -882,6 +1013,7 @@ def build_router(require_role) -> APIRouter:
                 start_create, user["account_id"], user.get("user_id"), name, language,
                 sample_bytes, sample.content_type, sample.filename,
                 consent_bytes, consent.content_type, consent.filename,
+                "record" if source == "record" else "upload",
             )
         except CloneError as e:
             raise _http_error(e)
@@ -889,9 +1021,10 @@ def build_router(require_role) -> APIRouter:
         return {**voice, "creditsCharged": charged}
 
     @router.get("/voices/custom/{voice_id}/preview")
-    def custom_voice_preview(voice_id: str, text: str = "", user: dict = Depends(require_role("member"))) -> Response:
+    def custom_voice_preview(voice_id: str, text: str = "", language: str = "",
+                             user: dict = Depends(require_role("member"))) -> Response:
         try:
-            audio, ctype = preview(user["account_id"], voice_id, text)
+            audio, ctype = preview(user["account_id"], voice_id, text, language or None)
         except CloneError as e:
             raise _http_error(e)
         return Response(content=audio, media_type=ctype, headers={"Cache-Control": "private, max-age=86400"})
