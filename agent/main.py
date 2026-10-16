@@ -1417,6 +1417,19 @@ _CARRIER_BUSY_PATTERN = re.compile(
 )
 
 
+def _campaign_end_outcome(call_facts: dict) -> str:
+    """How a dialled campaign/lead call ended, for retries.
+
+    Nobody on the line ever spoke = not reached, retried like a no-answer.
+    Ringback is not required: some networks answer an unanswered call
+    silently (SIP 200, no ring tone, no voice) while the person sees a missed
+    call - call 1390 on 16 Oct 2026 was recorded "connected" that way and
+    never retried, although the CRM correctly got "Not Reachable". Voicemail
+    and carrier-announcement outcomes are resolved earlier and still win
+    (finish_campaign_contact only changes a contact still 'calling')."""
+    return "connected" if call_facts.get("caller_spoke") else "no_answer"
+
+
 def _carrier_outcome(text: str) -> str:
     """'' when `text` is not a carrier announcement, else 'busy' or
     'switched_off' (what the campaign contact is recorded as)."""
@@ -6906,11 +6919,7 @@ async def entrypoint(ctx: JobContext) -> None:
         contact_id = call_context.get("campaign_contact_id")
         campaign_id = call_context.get("campaign_id")
         if contact_id and campaign_id:
-            outcome = (
-                "no_answer"
-                if _call_facts["ringback_seen"] and not _call_facts["caller_spoke"]
-                else "connected"
-            )
+            outcome = _campaign_end_outcome(_call_facts)
             await asyncio.to_thread(
                 db.finish_campaign_contact,
                 int(contact_id),
