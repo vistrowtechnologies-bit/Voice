@@ -993,3 +993,15 @@ First tick after deploy: chats from the last 7 days with phone or email that wer
 Unverified: no real browser has exercised the beacon (sendBeacon behaviour on pagehide is from the spec, not observed here); no request to the real ArthaLeads; dashboard not opened. `graphify update .` not run (no `graphify-out/` in this worktree).
 
 Left for Codex/owner: merge + Railway deploy (migration runs on startup); watch the first tick's log lines `widget chat N delivered: {...}`; confirm ArthaLeads receives a chat lead with a non-empty transcript.
+
+### Claude — 2026-10-16 — QA fix programme, phase 1 (orchestrator security/compliance)
+
+Branch `claude/qa-phase1-orchestrator` (PR pending). Files: orchestrator/db.py, tools.py, session.py, server.py, new compliance.py, tests.
+- Verified bug, fixed: cross-account webhook (unscoped get_webhook_url + duplicate _post_webhook) removed; delivery only via account-scoped get_delivery_integrations, honouring per-integration events/fields, once each.
+- Fixed: no cross-account agent fallback (get_agent_config scoped by account; unassigned number not answered; platform demo only via is_platform_demo flag).
+- Fixed: DNC + calling window enforced at /telephony/enablex/outbound-test-call (covers Call now, test call, campaign dials); DB failure refuses without marking blocked.
+- Fixed: orchestrator honours record_calls/require_consent/announce_recording. Default record_calls is False (same as agent/), so orchestrator tenants stop recording until they turn it on.
+- Evidence: orchestrator suite 34 passed (placeholder DATABASE_URL); new tests fail before / pass after; SQL checked on throwaway pgserver Postgres. Not verified: a live EnableX call.
+- Not ported to orchestrator: Zoho CRM + Google-sign-in Sheets delivery, plan CRM gate, per-agent crm_integration_keys / agent webhook (phase 2).
+- QA false alarm: Testing Lab already forces LiveKit for Lab runs (AgentTestCall.tsx forceLiveKit).
+- Next: merge + Railway deploy of orchestrator, read-only live probe; phase 2 = ignored agent settings + inbound rules on orchestrator.
