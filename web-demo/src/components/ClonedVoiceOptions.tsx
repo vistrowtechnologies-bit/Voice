@@ -14,9 +14,11 @@ export function useClonedVoices() {
   return voices
 }
 
-/** Picker label for a cloned voice, e.g. "Priya (Cloned) - 3 credits/min". */
+const GENDER_LABEL: Record<string, string> = { male: 'Male', female: 'Female' }
+
+/** Picker label for a cloned voice, e.g. "Priya · Female (Cloned) - 3 credits/min". */
 export const clonedVoiceLabel = (v: CustomVoice) =>
-  `${v.name} (Cloned) - ${v.creditsPerMinute.toLocaleString('en-IN', { maximumFractionDigits: 2 })} credits/min`
+  `${v.name}${v.gender && GENDER_LABEL[v.gender] ? ` · ${GENDER_LABEL[v.gender]}` : ''} (Cloned) - ${v.creditsPerMinute.toLocaleString('en-IN', { maximumFractionDigits: 2 })} credits/min`
 
 /** Name for an agent's stored "custom:..." voice that the picker cannot offer
  * (still being made, failed, or deleted). Undefined for any other voice. */
