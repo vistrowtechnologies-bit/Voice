@@ -11,7 +11,12 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Tenant worker `CA_TGdpVhSdxDyS`, version `hWzSh4i6QxBJ`; platform `CA_53d8HgBktjZ7`, version `QsqG4DhoSeuy`. Both had Running/registered startup verification; this does not establish live quality.
 - User authorizes merging completed PRs and deployment. Automated verification must not initiate real phone calls or Google requests.
 - Claude (2026-10-10, later): branch `claude/integration-detail-pages`, claim posted on issue #2 (comment 6097967369). Integration detail pages + Sheets styling/per-agent tabs/field choice; touches `agent/tools.py` delivery fan-out and `agent/db.py`, so BOTH workers need a deploy after merge. Codex's 2.5 claim is untouched.
+- Claude (2026-10-15): branch `claude/marketing-header-v2` (PR open, NOT merged): new marketing-site header (language strip, mega-menus, Hear a live call, mobile sheet); web-demo only, Vercel deploy only.
+- Claude (2026-10-15): branch `claude/seo-keyword-placement` (PR open, NOT merged): keyword placement fixes + new /ai-calling-agent page; web-demo only, Vercel deploy only.
+- Claude (2026-10-15): PR #128 `claude/follow-up-calls` MERGED (main a4d64313) and DEPLOYED: Railway SUCCESS (columns follow_up_policy, crm_notified_at present), phone worker `4pVPHHbYCoC8`, platform-demo `cKDf7Q96GgmR`, both Running/registered, 44 INFO / 0 warnings.
 - Claude (2026-10-14): branch `claude/security-tokens-mfa` (PR open, NOT merged): integration tokens encrypted at rest (server + agent + orchestrator). Inert until the owner sets INTEGRATION_ENCRYPTION_KEY everywhere, then INTEGRATION_ENCRYPTION_WRITE=on; see docs/SECURITY-AUDIT-2026-10-12.md.
+- Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
+- Claude (2026-10-16): PR #132 `claude/chat-lead-delivery` MERGED with PR #130 (one push): widget text chats delivered to the integrations (idle sweep from the dialer tick + /widget/chat/end beacon); Railway deploy, widget bundle in server/static.
 
 ## Takeover checklist
 
@@ -840,3 +845,168 @@ At the owner's request; same branch and same PR.
 Changes: new `server/onboarding_agent.py` builds the starter agent's instructions, language, welcome line (Hindi/English only) and after-call fields from the onboarding answers, deterministically (no model call). `calls_db.apply_onboarding_agent` writes them only before onboarding is finished and only onto the untouched starter "Artha" (or the agent a previous run set up; settings key `onboarding_agent_id`). New `POST /onboarding/agent` (finish step, so "Talk to Artha" is tailored); `/onboarding/complete` applies it once more. Admin account "Signup & onboarding" tab gets a "First agent, set up from onboarding" table: answer → setting → value → "As set up" / "Changed by customer" (rebuilt from the stored answers).
 
 Verified: 14 server tests (`test_onboarding_agent.py`, `test_onboarding_profile.py`), tsc, localhost walk-through against a mock that runs the real module (finish step and admin table in both states). Not verified: against a real database; existing accounts are already onboarded so nothing changes for them. Server-only + dashboard: no LiveKit agent deploy needed.
+### Claude — 2026-10-15 — native sample lines regenerated with Sarvam (PR pending, NOT merged)
+
+Branch `claude/seo-native-samples`. Owner asked for the Indian-language sample conversation lines on public marketing pages to be rewritten by Sarvam so they read as native speech.
+
+- Model `sarvam-105b-conversations`, temperature 0.3, JSON output. 32 requests, about 30k tokens total.
+- 116 lines sent across 10 languages. 57 were regenerated, 58 came back unchanged because Sarvam judged them already natural, and 1 was flagged (Kannada demo-call caller line; Sarvam added a greeting and mixed scripts). The original is kept for the flagged line.
+- Files: `web-demo/src/lib/marketingContent.ts`, `seoExpansionContent.ts`, `pages/marketing/AiTelecaller.tsx`, `AiReceptionist.tsx`, `VoiceBot.tsx`. Report: `docs/SEO-NATIVE-SAMPLES-2026-10-15.md`.
+- Verified: build (SEO audit and em-dash check), `test:seo` (no expected-phrase changes needed), `check-blog-seo`.
+- Unverified: native-speaker review per language.
+- Next step: review and merge the PR. The change is web only, so Vercel is the only deploy. No agent or server deploy is needed.
+
+### Claude: 2026-10-15, language-switch voice samples and language-page redesign (PR pending, NOT merged)
+
+Branch `claude/seo-voice-samples`. This is web-only work.
+
+**What changed**
+- **Voice samples:** each of the 10 /languages pages now has a two-speaker sample call in the hero. The caller starts in Hindi and switches to the page's language; on the Hindi page the switch is to English. The agent follows the switch.
+- **Player:** an orb and waveform that follow the audio, a live transcript, a "Switched to X" chip, tap-to-seek, and the label "Scripted sample... Not a real customer call". The page JSON-LD has an `AudioObject`.
+- **Hero:** "Talk to Artha live" was removed from the language heroes.
+- **Layout:** the template now uses varied sections. All copy, headings and links are kept.
+
+**Files**
+- `web-demo/public/media/samples/*-switch.m4a`
+- `web-demo/src/lib/voiceSamples.ts`
+- `web-demo/src/components/VoiceSamplePlayer.tsx`
+- `web-demo/src/pages/marketing/LanguageDetail.tsx`
+- `web-demo/src/index.css`
+- `web-demo/scripts/test-language-seo.mjs`
+- `docs/SEO-VOICE-SAMPLES-2026-10-15.md`
+
+**Audio**
+- Sarvam `bulbul:v4-flash`, voices `kavya_hi_conversational` (agent) and `aditya_hi_conversational` (caller).
+- Pace 1.2, temperature 0.7, gaps 200 ms. Each file is 27 to 31 s and 220 to 251 KB.
+- The owner approved the Marathi take before the rest were made.
+- Usage: 15,817 TTS characters across both takes, 33 LLM requests and about 175 STT requests.
+
+**Verified**
+- Every line was round-tripped through Sarvam STT; the content is intact, and the language matched for 78 of 80 lines (the 2 mismatches are expected).
+- Each m4a decodes back to its source.
+- Build and SEO audit, `test:seo` and `check-blog-seo` pass.
+- At 375 px there is no horizontal scroll.
+- Dark mode looks right.
+- Playback works: play, pause, resume, replay and seek.
+
+**Unverified**
+- Native-speaker review.
+- iOS Safari.
+- A single self-pause seen once in the preview pane. It could not be reproduced in 3 later runs.
+
+**Next step:** review and merge the PR. Only Vercel deploys; no server or agent deploy is needed.
+
+### Claude — 2026-10-15 — SEO keyword placement (branch `claude/seo-keyword-placement`)
+
+**What changed (web-demo only)**
+- New page `/ai-calling-agent` (`src/pages/marketing/AiCallingAgent.tsx`): umbrella page for "AI calling agent", "AI calling" and "automated calling software". Inbound and outbound, lead follow-ups, languages, DND / calling window / retries / phone-only transfer, FAQPage schema. Links to /ai-telecaller and /product/outbound to keep the three pages distinct. Registered in App.tsx, seoPages.ts (+ OG card, `public/og/ai-calling-agent.png`), nav, footer, related links; linked from home, /product/outbound, /ai-telecaller, /voice-bot and /ai-call-center.
+- Titles, descriptions, opening copy and H2s updated for: home, /ai-ivr, /ai-call-center, /vs-ivr, /product/inbound, the buyer guide, /voice-bot (H2), /languages/{hindi,kannada,telugu} (new optional `intro` and `regionalHeading` fields on LanguagePage; the overview cards keep the short blurb), and 3 IVR articles (excerpt + one heading).
+- `test-language-seo.mjs`: the Hindi phrase changed from "Hinglish AI voice calling agent" to "AI calling agent in Hindi", because the Hindi description changed.
+- New `web-demo/scripts/check-keyword-placement.py`. It checks the local dist (or `--live`); `--strict` exits 1 on any gap.
+
+**Verified:** `npm run build` (SEO audit of 125 routes and the em-dash check), `test:seo`, `check-blog-seo` and `check-keyword-placement.py --strict` (33 of 33) all pass. I also looked at the new page in the browser.
+
+**Facts checked in code:** transfer refuses web calls (`agent/tools.py` transfer_call), the DND check is `calls_db.is_dnc` with honor_dnc on by default, the calling window uses the account timezone (`within_calling_window`), a campaign schedule only narrows the window (`campaign_dialer.py`), and the agent adds DND numbers itself (`tools.do_not_call`).
+
+**Unverified / notes**
+- The existing /product/outbound copy says the calling window is enforced "in the callee's timezone", but the code uses the account timezone. I did not change it; it is flagged for a separate fix.
+- Titles and H1s were kept on purpose for the language pages, the AI IVR H1 and the home title ("ivr call", "ai voice calling agent" and the language keywords). The checker marks these as kept.
+
+**Next step:** review and merge the PR. Only Vercel deploys; no server or agent deploy is needed. After the deploy, run `python3 web-demo/scripts/check-keyword-placement.py --live` and request indexing for /ai-calling-agent in GSC.
+
+### Claude - 2026-10-15 - new marketing header (branch claude/marketing-header-v2, PR open, NOT merged)
+
+Owner-approved mix of mockup options 5 and 4. Files: `web-demo/src/components/MarketingLayout.tsx` (header only; footer and layout untouched), `web-demo/src/components/MarketingBits.tsx` (live-demo click logic extracted to `useGoToLiveDemo`, TalkToArthaButton unchanged in behaviour), `web-demo/src/lib/marketingContent.ts` (AI receptionist and AI IVR moved from Resources into Product in NAV), `web-demo/src/index.css` (header-only `.mh-*` rules appended). The logged-in dashboard header was not touched.
+
+What it does: utility strip (all 10 language scripts from LANGUAGES, each linking to /languages/<slug>; "Answers 24/7 on phone and web"; Talk to sales -> /contact) scrolls away; the main bar is sticky with blur and a shadow after scroll. Product mega-menu (3 columns + featured "Hear it first" card -> /languages/tamil, a 30 s Hindi-to-Tamil sample), Solutions (industries + language column), Resources (3 columns), Company (narrow list). Panels are always in the prerendered HTML and only hidden, so every menu link is a crawlable <a href>. Hover intent (120 ms open, 180 ms close), click, ArrowDown/Up/Left/Right/Home/End roving, Escape returns focus to the trigger, outside click closes. "Hear a live call" reuses the Talk to Artha live path (scroll to #live-demo or go to /#live-demo).
+
+Deviation: the desktop/mobile switch is at 1024 px (lg), not 900 px; between 900 and 1023 the five menus plus both buttons do not fit. Between 1024 and 1279 the pill reads "Live call" and Sign in moves to the utility strip.
+
+Verified: `npm --prefix web-demo run build` (icons, em-dash, SEO route audit: 125 routes pass), `npm --prefix web-demo run test:seo`, `npx tsx scripts/check-blog-seo.ts` all pass. Browser (local `vite preview` of the build): hover and keyboard on the mega-menus, Escape/outside click, Hear a live call from /pricing lands on the home demo orb, 1024 px fits with no overflow, 375 px has no horizontal scroll, the sheet opens, locks scroll, Escape closes and focus returns, light and dark both checked.
+
+Not verified: real phones/Safari; the live site after deploy.
+
+**Next step:** owner review of the PR screenshots, then merge. Vercel only; no server or agent deploy.
+
+### Claude - 2026-10-15 - ArthaLeads leads called within 30 s with full context (branch claude/instant-lead-calls, pushed, NO PR, NOT deployed)
+
+Files: `server/campaign_dialer.py`, `server/token_api.py` (leads_inbound, Meta webhook notify), `server/calls_db.py` (next_calling_window_open), `agent/contact_notes.py`, `agent/language.py`, `agent/main.py`; tests `server/test_instant_lead_calls.py`, `agent/test_lead_call_context.py`, `agent/test_contact_notes.py`.
+
+- Dial on arrival: `campaign_dialer.notify()` (threading.Event) wakes `_loop` for an immediate pass; the loop waits on the event with the 15 s tick as timeout. Instant-lead campaigns (by name) go first in a pass. All gates unchanged (window, concurrency, channel cap, stagger, breaker).
+- leads_inbound: `custom_fields.form_responses` -> `form_answers` ("Label: value · ...", 1200 cap) plus `form_<slug>` keys; `tags` -> comma string; control chars stripped; a form answer about language fills `language` when none is given. `ingest_inbound_lead` runs via `asyncio.to_thread`; queued -> notify(); window closed -> `queued_until` (ISO, account timezone).
+- Agent notes: tracking noise skipped (ids, arthaleads_*, page/source URLs, consent, budget_min/max, channel...); new labelled lines Came via / Ad they responded to / Ad text / Form answers / First WhatsApp message / Tags, not counted against _MAX_EXTRA.
+- Outbound to an ArthaLeads lead with no operator opener: a generate_reply instruction naming the person, project/ad and channel, in the call language (held-opening release, first live turn, realtime greeting). Operator openers untouched.
+- Lead language (preferred_language/language, names or codes) becomes that call's language when the voice can speak it (voice_catalog.languages_for; ElevenLabs limited to hi/en/ta); otherwise the agent language is kept and the reason logged.
+
+Verified: server suite 728 passed / 0 failed (715 + 13 new); agent suite 802 passed (784 + 18 new) in a LiveKit 1.8.6 venv; local throwaway Postgres only. Unverified: a live call; the wake in production assumes one API replica (notify only wakes the dialer in the same process).
+
+**Next step:** owner review -> PR -> merge; needs the Railway deploy AND both LiveKit agents (`lk agent deploy`) for the agent half. The outbound hold still applies.
+
+### Claude - 2026-10-15 - follow-up calling (PR #128, merged a4d64313, deployed; see entry below)
+
+Owner decisions of 2026-10-15 as per-agent settings (new "Follow-ups" panel on the agent page, `agents.follow_up_policy` JSON, defaults applied when absent): max tries 3; retry after busy 10 min / switched off 2 h / no answer 30 min / voicemail 2 h; auto call-back at the asked time (on); site-visit reminder the day before at 11:00, or 2 h before when the visit is under 24 h away (on); nurture call 3 days after an interested call at 11:00 (on). After the last try an ArthaLeads lead is reported as `crm_outcome: {booking: "Not Reachable", attempts: N}`.
+
+Files: `server/retry_rules.py` + `agent/retry_rules.py` (identical: `switched_off` outcome, `follow_up_policy`, `follow_up_retry_policy`, `effective_policy`, `AGENT_POLICY_CAMPAIGNS`, `FOLLOW_UP_CAMPAIGN_NAME`), `server/calls_db.py` (agents.follow_up_policy column + save/read; campaign_contacts.crm_notified_at; record_campaign_dial_result uses the agent's rules for instant/follow-up campaigns; claim_next_campaign_contact honours next_attempt_at on pending rows; exhausted_arthaleads_contacts / mark_contact_crm_notified), `server/integrations_dispatch.py` (report_contact_not_reachable, on the last saved call or a minimal lead entry), `server/campaign_dialer.py` (reports exhausted leads every tick), `agent/db.py` (_campaign_retry_rules; record_campaign_voicemail takes busy/switched_off; schedule_follow_up_call -> per-agent "Follow-up calls" campaign), `agent/follow_ups.py` (new: which follow-up a call earns and when), `agent/main.py` (carrier announcement split busy vs switched_off incl. Telugu, Telugu voicemail phrases, _schedule_follow_up after the post-call analysis, follow-up calls take the lead context and open on why we are calling back), `agent/contact_notes.py` (opener per follow-up kind), `web-demo/src/lib/types.ts`, `web-demo/src/pages/AgentDetail.tsx`.
+
+Scheduler = campaign_contacts rows (pending + next_attempt_at) drained by the existing dialer: survives restarts, calling window and channel caps apply, DNC checked at dial time. A time outside the window is dialled when the window next opens (the same moment next_calling_window_open gives). Bulk campaigns keep their own retry_policy.
+
+Verified: server suite 917 passed / 0 failed; agent suite 1066 passed (16 skipped) / 0 failed, LiveKit 1.8.6 venv; throwaway local Postgres only. New: `server/test_follow_up_calls.py` (9), `server/test_retry_rules.py` (+6), `agent/test_follow_up_scheduling.py` (33), `agent/test_carrier_announcement.py` (+4). `npx tsc -b --noEmit` and `npm run build` pass. Unverified: a live call; ArthaLeads' handling of the extra `crm_outcome.attempts` key; real Telugu carrier audio through STT.
+
+Deploy needs: Railway FIRST (adds the two columns), then BOTH LiveKit workers (agent/db.py reads agents.follow_up_policy in every retry decision; a new worker against the old schema logs an exception per retry resolution and the reaper then resolves the contact as failed). Outbound hold still applies: the "Follow-up calls" campaign places real outbound calls once deployed.
+
+**Next step:** owner review -> PR -> merge; Railway, then `cd agent && lk agent deploy` for both workers; then `graphify update .` on main (no graph in this worktree).
+
+### Claude - 2026-10-15 - PR #128 follow-up calls merged and deployed
+
+- Merge a4d64313 (3a35b47c follow-up calls + 3a28ce44 numeric call_id for the Not Reachable report). Railway deploy SUCCESS, healthz 200; `information_schema` on production confirms `agents.follow_up_policy` and `campaign_contacts.crm_notified_at`.
+- Workers deployed from `git archive origin/main agent` at a4d64313: phone `CA_TGdpVhSdxDyS` version `4pVPHHbYCoC8` (registered 17:31:37Z), platform-demo `CA_53d8HgBktjZ7` version `cKDf7Q96GgmR` (registered 17:34:03Z). 40 s of logs each: 44 INFO, 0 warnings, 0 exceptions. Rollback: `lk agent rollback` to the previous versions.
+- `graphify update .` run on main.
+- Unverified: no real call has exercised the new retry/call-back/visit-reminder/nurture paths yet (outbound hold; account 1 has no phone number). Telugu never run on a real call.
+- Left: owner adds a number to account 1 or points ArthaLeads at account 2; enable "Auto-call new leads" in ArthaLeads; live outbound test (transfer / no-answer / busy) before the hold is lifted.
+
+### Claude — 2026-10-16 — ArthaLeads single-token handshake (PR #129, merged c74f5d08, live)
+
+Contract: the customer pastes the ArthaLeads connection key once in Voice; Voice tells ArthaLeads which account it belongs to, and the same key then authenticates ArthaLeads → Voice (`POST /leads/inbound/{id}`, `GET /leads/inbound/{id}/agents`) alongside the existing lead-webhook token. The ArthaLeads half (`POST /webhook/vistrow/link` and `/unlink`) is being built in parallel in prophuntllp-bit/arthaleads against the same contract.
+
+Changed (Railway server + dashboard only; no agent code, no DB migration):
+- `server/integrations_dispatch.py`: `_ARTHALEADS_API_BASE` (env `ARTHALEADS_API_BASE`, else derived from `_ARTHALEADS_URL`), `_arthaleads_api_post` (8 s, never raises), `link_arthaleads` (401/403 → "rejected", 200 → "linked" with org_name/linked_at, anything else → "pending"), `unlink_arthaleads`, `relink_arthaleads` (Test button).
+- `server/token_api.py`: `PATCH /integrations/arthaleads` runs the handshake before saving; a rejection is HTTP 400 and nothing is saved; `config.link` added to `_SERVER_MANAGED_INTEGRATION_KEYS` (browser-sent `link` is dropped); disconnect unlinks best-effort with the old key; `POST /integrations/arthaleads/test` re-links first and then sends the sample lead; both inbound routes use `calls_db.account_id_for_inbound_token`.
+- `server/calls_db.py`: `account_id_for_inbound_token` (lead-webhook token OR the key on a *connected* arthaleads row, constant-time), `account_name`.
+- `web-demo/src/pages/IntegrationDetail.tsx`, `web-demo/src/lib/types.ts`: new field hint; green "Verified with ArthaLeads · org · Vistrow account N" / amber pending / red rejected line under the key; `Integration.config.link` type.
+- Tests: new `server/test_arthaleads_link.py` (9 tests, ArthaLeads HTTP faked at `_arthaleads_api_post`); `test_arthaleads_agent_picker.py` and `test_instant_lead_calls.py` mock the renamed lookup.
+
+Verified: all 9 new tests fail on origin/main's server files and pass on the branch; full server suite 753 passed / 0 failed against a throwaway local Postgres; `tsc -b` clean; `vite build` clean. Not verified: no request has been made to the real ArthaLeads (its route does not exist until the ArthaLeads PR ships); the dashboard was not opened in a browser; the "917 passed" baseline figure could not be reproduced here (753 collected in `server/`).
+
+Left: merge only after the ArthaLeads side is deployed (otherwise every key save lands as "pending" — harmless, the key is still saved and Send test retries). Then: owner re-saves the key on account 2 and checks ArthaLeads → Auto-call step 1 reads "Connected to Vistrow account 2".
+
+### Claude — 2026-10-16 — Widget text chats delivered to integrations (branch `claude/chat-lead-delivery`, PR open, NOT merged)
+
+Problem (verified 2026-10-16): a widget text chat is logged by `calls_db.upsert_widget_chat_call` (call_type `widget`, room `widget-chat-{session}`) but nothing ever delivered it to the account's integrations — voice calls fan out from the agent at call end, a text chat has no agent. A visitor chatted 49 s with name+phone+email and ArthaLeads only got it when the owner pressed "Send to ArthaLeads" 1.5 h later.
+
+Changed (Railway server + widget bundle; no agent code):
+- `server/calls_db.py`: migration columns `calls.integrations_delivered_at TEXT`, `calls.integrations_delivery_json TEXT` (same list as `arthaleads_status`); `idle_widget_chats(idle_seconds=180, max_age_days=7)`; `widget_chat_call(site_id, session_id)`; `claim_widget_chat_delivery` (atomic NULL→now stamp, so sweep and beacon never double-deliver); `mark_widget_chat_delivered` (result JSON).
+- `server/integrations_dispatch.py`: `deliver_widget_chat(call)` builds the call-end-shaped lead (type `call_completed`, channel "Website chat", transcript as {speaker: Caller|Agent, text}, agent name/public id, language, duration, page_path, call_id, message; no recording), sends via `deliver_lead` to webhook/slack/whatsapp/sheets/zoho_crm and via `push_call_to_arthaleads` to ArthaLeads (stamps `arthaleads_status` like a manual send), writes Activity rows, and stamps the markers even on failure or skip (`{"skipped": "no_contact"}` when no phone and no email). `deliver_lead` now honours the owner's event and field choices (`_wants_event`, `apply_field_choice`) and takes `skip_keys`; it had no other callers. `_saved_turns` normalises both saved transcript shapes — before this, a manual "Send to ArthaLeads" for a text chat sent an EMPTY transcript/message because `{role, content}` turns were not recognised (only `{speaker, text}`); fixed for the manual button too.
+- `server/campaign_dialer.py`: `_deliver_idle_widget_chats()` runs every tick next to `_report_exhausted_contacts()` (per-row try/except). `DISABLE_CAMPAIGN_DIALER=1` (local runs) disables this sweep too.
+- `server/token_api.py`: `POST /widget/chat/end` (public, `siteKey` + `sessionId`, raw JSON body so `sendBeacon`'s text/plain needs no CORS preflight, rate-limited 60/h per IP) → delivery in a background thread, idle rule bypassed. `ended_at` is deliberately NOT moved to "now": it already equals the last turn, and stretching it would bill idle tab time.
+- `widget/src/widget.ts`: `endChatSession()` (once per chat session, only if the visitor sent a message) on the X button (chat branch), "End chat", `pagehide` and `visibilitychange→hidden`; `navigator.sendBeacon` with `fetch keepalive` fallback. Rebuilt with `npm run build` in `widget/` and copied to `server/static/widget.js` (the only deploy path: Railway serves `/widget.js` from that file; no automated build step).
+- Tests: new `server/test_widget_chat_delivery.py` (7 tests, HTTP faked at `integrations_dispatch._post_json`, `/widget/chat/end` lifted via ast with the thread run inline).
+
+Verified: all 7 new tests FAIL on origin/main's server+agent files (`campaign_dialer has no attribute _deliver_idle_widget_chats`, no `widget_chat_end` route) and pass on the branch; full server suite 760 passed / 0 failed (753 baseline + 7) on a throwaway local Postgres; widget `tsc --noEmit` clean; `vite build` clean, bundle 530,488 B vs 530,054 B committed (diff is only the new code).
+
+First tick after deploy: chats from the last 7 days with phone or email that were never delivered WILL be sent to every connected integration (and ArthaLeads) once; older chats are left alone forever. Expect a one-off burst on accounts with chat traffic.
+
+Unverified: no real browser has exercised the beacon (sendBeacon behaviour on pagehide is from the spec, not observed here); no request to the real ArthaLeads; dashboard not opened. `graphify update .` not run (no `graphify-out/` in this worktree).
+
+Left for Codex/owner: merge + Railway deploy (migration runs on startup); watch the first tick's log lines `widget chat N delivered: {...}`; confirm ArthaLeads receives a chat lead with a non-empty transcript.
+
+### Claude — 2026-10-16 — QA fix programme, phase 1 (orchestrator security/compliance)
+
+Branch `claude/qa-phase1-orchestrator` (PR pending). Files: orchestrator/db.py, tools.py, session.py, server.py, new compliance.py, tests.
+- Verified bug, fixed: cross-account webhook (unscoped get_webhook_url + duplicate _post_webhook) removed; delivery only via account-scoped get_delivery_integrations, honouring per-integration events/fields, once each.
+- Fixed: no cross-account agent fallback (get_agent_config scoped by account; unassigned number not answered; platform demo only via is_platform_demo flag).
+- Fixed: DNC + calling window enforced at /telephony/enablex/outbound-test-call (covers Call now, test call, campaign dials); DB failure refuses without marking blocked.
+- Fixed: orchestrator honours record_calls/require_consent/announce_recording. Default record_calls is False (same as agent/), so orchestrator tenants stop recording until they turn it on.
+- Evidence: orchestrator suite 34 passed (placeholder DATABASE_URL); new tests fail before / pass after; SQL checked on throwaway pgserver Postgres. Not verified: a live EnableX call.
+- Not ported to orchestrator: Zoho CRM + Google-sign-in Sheets delivery, plan CRM gate, per-agent crm_integration_keys / agent webhook (phase 2).
+- QA false alarm: Testing Lab already forces LiveKit for Lab runs (AgentTestCall.tsx forceLiveKit).
+- Next: merge + Railway deploy of orchestrator, read-only live probe; phase 2 = ignored agent settings + inbound rules on orchestrator.

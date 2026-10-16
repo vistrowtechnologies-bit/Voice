@@ -157,8 +157,8 @@ export function AiIvr() {
   return (
     <MarketingLayout>
       <Seo
-        title="AI IVR for India: Replace Press-1 Menus | Vistrow Voice"
-        description="An AI-based IVR: callers say what they need in Hindi, English or 9 other Indian languages and get an answer, a booking or a transfer. Keep your number."
+        title="AI IVR System and Cloud IVR for India | Vistrow Voice"
+        description="An AI IVR system for India: callers say what they need on an IVR call and get an answer, a booking or a transfer. A cloud IVR in 11 languages."
         path="/ai-ivr"
         jsonLd={FAQ_JSONLD}
       />
@@ -166,7 +166,7 @@ export function AiIvr() {
       <PageHero
         eyebrow="AI IVR"
         title="An AI IVR that lets callers speak instead of pressing 1."
-        subhead="Replace the phone menu on your business line with an AI voice agent that understands the caller, answers in their language, and books or transfers the call."
+        subhead="Replace the menu on your IVR system with an AI voice agent that understands the caller on every IVR call, answers in their language, and books or transfers the call. It runs as a cloud IVR on your existing business number."
       />
 
       {/* The plain answer comes first: that's what someone searching

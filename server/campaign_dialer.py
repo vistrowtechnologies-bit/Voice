@@ -32,6 +32,7 @@ import urllib.request
 
 import calls_db
 import campaign_window
+import integrations_dispatch
 import plan_policy
 
 logger = logging.getLogger("vistrow-dialer")
@@ -170,6 +171,23 @@ def _campaign_gap_seconds(campaign: dict) -> float:
 
 _started = False
 _lock = threading.Lock()
+
+# Set by notify() when a new lead is queued, so the dialer runs a pass now
+# instead of up to _TICK_SECONDS later. The owner's promise is a call within
+# 30s of an ArthaLeads lead arriving; a 15s sleep spent half of it waiting.
+# Waking only starts a normal pass: the window, concurrency, channel, stagger
+# and breaker gates in _dial_one all still apply.
+_wake = threading.Event()
+
+# Instant-lead campaigns (see calls_db.get_or_create_instant_campaign) go
+# first in a pass, so a fresh lead is not dialled after a long list's batch
+# has used the trunk's channels.
+_INSTANT_CAMPAIGN_NAMES = ("ArthaLeads Instant Follow-up", "Instant Lead Follow-up")
+
+
+def notify() -> None:
+    """Wake the dialer for an immediate pass. Safe from any thread."""
+    _wake.set()
 
 
 def _on_orchestrator_pipeline(account_id: int) -> bool:
@@ -363,6 +381,37 @@ def _dial_one(campaign: dict) -> None:
         logger.info("campaign %s completed", cid)
 
 
+def _report_exhausted_contacts() -> None:
+    """Tell ArthaLeads about leads whose auto-call attempts ran out, once
+    each. The agent and the server both resolve a contact's final attempt,
+    so this is done from the dialer's tick (DB rows, survives restarts)
+    rather than at either write site."""
+    for contact in calls_db.exhausted_arthaleads_contacts():
+        try:
+            ok, detail = integrations_dispatch.report_contact_not_reachable(contact["account_id"], contact)
+            if not ok:
+                logger.warning("not-reachable report for contact %s failed: %s", contact["id"], detail)
+        except Exception:
+            logger.exception("not-reachable report for contact %s failed", contact["id"])
+        # Stamped either way: a report that keeps failing must not be
+        # retried every 15 s forever.
+        calls_db.mark_contact_crm_notified(contact["id"])
+
+
+def _deliver_idle_widget_chats() -> None:
+    """Fan out widget text chats the visitor stopped typing in 3 minutes ago
+    (voice calls deliver from the agent at call end; a text chat has no
+    agent and no end signal the visitor is guaranteed to send). Done from
+    the tick for the same reason as _report_exhausted_contacts: DB rows,
+    survives restarts. deliver_widget_chat stamps the row either way."""
+    for chat in calls_db.idle_widget_chats():
+        try:
+            results = integrations_dispatch.deliver_widget_chat(chat)
+            logger.info("widget chat %s delivered: %s", chat["id"], results)
+        except Exception:
+            logger.exception("widget chat %s delivery failed", chat["id"])
+
+
 def _loop() -> None:
     logger.info("campaign dialer started (tick=%ss)", _TICK_SECONDS)
     while True:
@@ -370,11 +419,19 @@ def _loop() -> None:
             promoted = calls_db.promote_due_scheduled_campaigns()
             if promoted:
                 logger.info("promoted %s scheduled campaign(s) to running", promoted)
-            for campaign in calls_db.running_campaigns():
+            _report_exhausted_contacts()
+            _deliver_idle_widget_chats()
+            campaigns = calls_db.running_campaigns()
+            # Stable sort: instant-lead campaigns first, the rest unchanged.
+            campaigns.sort(key=lambda c: c.get("name") not in _INSTANT_CAMPAIGN_NAMES)
+            for campaign in campaigns:
                 _dial_one(campaign)
         except Exception:
             logger.exception("dialer tick failed")
-        time.sleep(_TICK_SECONDS)
+        # A notify() during the pass above leaves the event set, so the next
+        # pass starts at once rather than losing that lead to a full tick.
+        _wake.wait(_TICK_SECONDS)
+        _wake.clear()
 
 
 def start_dialer() -> None:

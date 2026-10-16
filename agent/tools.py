@@ -660,6 +660,103 @@ def _transcript_message(lead: dict) -> str:
 
 _ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"
 
+# What a post-call interest_level field may say (agents define their own
+# post-call fields, so this is optional and matched loosely).
+_NOT_INTERESTED = ("not interested", "not_interested", "no interest", "none", "uninterested")
+_INTERESTED = ("high", "hot", "interested", "very interested", "medium", "warm")
+
+
+def _local_iso(date: str, time: str, tz_name: str) -> str:
+    """'2026-10-17' + '11:00' in the account's timezone -> ISO 8601 with
+    offset; '' when the date is missing or malformed (a time alone is
+    dropped: no date, no follow-up)."""
+    import datetime
+    from zoneinfo import ZoneInfo
+
+    date = str(date or "").strip()
+    time = str(time or "").strip() or "10:00"
+    try:
+        tz = ZoneInfo(tz_name or "Asia/Kolkata")
+    except Exception:
+        tz = ZoneInfo("Asia/Kolkata")
+    try:
+        moment = datetime.datetime.strptime(f"{date} {time[:5]}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+    except ValueError:
+        return ""
+    return moment.isoformat()
+
+
+def crm_outcome(lead: dict) -> dict:
+    """The call's outcome in ArthaLeads' vocabulary (constants/leadOptions.js):
+    booking = Site Visit Booked / Call Back / Not Interested / Not Reachable /
+    Interested, a forward-only status hint (Contacted / Site Visit), and the
+    follow-up / site-visit moments as ISO datetimes. Only facts the call
+    actually produced: an empty dict when nothing is known."""
+    tz = lead.get("timezone") or "Asia/Kolkata"
+    out: dict = {}
+    visit = lead.get("site_visit") or {}
+    callback = lead.get("callback") or {}
+    interest = str((lead.get("extracted_data") or {}).get("interest_level") or "").strip().casefold()
+    caller_spoke = any(
+        (t.get("role") == "user" and (t.get("text") or "").strip()) for t in (lead.get("transcript") or [])
+    )
+    if visit.get("date"):
+        out["booking"] = "Site Visit Booked"
+        out["status"] = "Site Visit"
+        if (when := _local_iso(visit.get("date"), visit.get("time"), tz)):
+            out["site_visit_at"] = when
+    elif lead.get("opted_out"):
+        out["booking"] = "Not Interested"
+        out["status"] = "Contacted"
+    elif callback.get("date") or callback.get("time"):
+        out["booking"] = "Call Back"
+        out["status"] = "Contacted"
+        if (when := _local_iso(callback.get("date"), callback.get("time"), tz)):
+            out["follow_up_at"] = when
+    elif not caller_spoke:
+        if lead.get("direction") == "outbound":
+            out["booking"] = "Not Reachable"
+    else:
+        out["status"] = "Contacted"
+        if any(word == interest or word in interest for word in _NOT_INTERESTED):
+            out["booking"] = "Not Interested"
+        elif interest and any(word == interest or interest.startswith(word) for word in _INTERESTED):
+            out["booking"] = "Interested"
+    note = callback.get("purpose") or visit.get("purpose") or ""
+    if note:
+        out["note"] = str(note)[:300]
+    return out
+
+
+def _json_message(text: str) -> str:
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        return ""
+    return str(data.get("message") or data.get("detail") or "")[:200] if isinstance(data, dict) else ""
+
+
+_RETRY_DELAYS_S = (1.0, 3.0)
+
+
+async def _post_json_with_retry(http, url: str, body: dict, retries: int = 0) -> tuple[int, str]:
+    """POST body; (status, response text). Retries `retries` times on 5xx,
+    408, 429 or a network error/timeout; raises the last network error when
+    every attempt failed that way."""
+    attempt = 0
+    while True:
+        try:
+            async with http.post(url, json=body) as resp:
+                status, text = resp.status, await resp.text()
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            if attempt >= retries:
+                raise
+        else:
+            if not (status >= 500 or status in (408, 429)) or attempt >= retries:
+                return status, text
+        await asyncio.sleep(_RETRY_DELAYS_S[min(attempt, len(_RETRY_DELAYS_S) - 1)])
+        attempt += 1
+
 
 def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | None:
     """(url, json_body) for one delivery integration, or None to skip. Mirrors
@@ -712,6 +809,13 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
             "recording_url": lead.get("recording_url") or "",
             "recording_mime_type": lead.get("recording_mime_type") or "audio/wav",
             "extracted_data": lead.get("extracted_data") or {},
+            # The ArthaLeads lead this call was placed for (auto-call of a
+            # lead.created), so ArthaLeads updates that exact lead instead of
+            # matching by phone. Empty for inbound/web calls.
+            "arthaleads_lead_id": lead.get("arthaleads_lead_id") or "",
+            "direction": lead.get("direction") or "",
+            # What happened on the call, in ArthaLeads' own vocabulary.
+            "crm_outcome": crm_outcome(lead),
         }
     url = (config.get("url") or "").strip()
     if not url:
@@ -1508,35 +1612,45 @@ async def _deliver_to_integrations(
                     continue
                 url, body = shaped
                 try:
-                    async with http.post(url, json=body) as resp:
-                        if 200 <= resp.status < 300:
-                            logger.info("delivered lead to %s integration", integ["key"])
-                            await asyncio.to_thread(db.touch_integration_sync, account_id, integ["key"])
-                            await _log_delivery(account_id, integ["key"], all_fields_lead, "sent", "", call_id)
-                            if integ["key"] == "arthaleads":
-                                await asyncio.to_thread(db.set_call_arthaleads_status, call_id, "sent")
-                        elif resp.status == 401:
-                            logger.warning("integration %s delivery failed: invalid token", integ["key"])
+                    # ArthaLeads gets two retries on a temporary failure
+                    # (5xx / 408 / 429 / network): one blip used to lose the
+                    # call's CRM record for good (calls 820, 841, 1090).
+                    status, resp_text = await _post_json_with_retry(
+                        http, url, body, retries=2 if integ["key"] == "arthaleads" else 0
+                    )
+                    if 200 <= status < 300:
+                        logger.info("delivered lead to %s integration", integ["key"])
+                        await asyncio.to_thread(db.touch_integration_sync, account_id, integ["key"])
+                        await _log_delivery(account_id, integ["key"], all_fields_lead, "sent", "", call_id)
+                        if integ["key"] == "arthaleads":
+                            await asyncio.to_thread(db.set_call_arthaleads_status, call_id, "sent")
+                    elif status == 401:
+                        logger.warning("integration %s delivery failed: invalid token", integ["key"])
+                        await asyncio.to_thread(
+                            db.mark_integration_error, account_id, integ["key"], "Invalid token — reconnect"
+                        )
+                        await _log_delivery(account_id, integ["key"], all_fields_lead, "failed", "Invalid token — reconnect", call_id)
+                        if integ["key"] == "arthaleads":
                             await asyncio.to_thread(
-                                db.mark_integration_error, account_id, integ["key"], "Invalid token — reconnect"
+                                db.set_call_arthaleads_status, call_id, "failed", "Invalid token — reconnect"
                             )
-                            await _log_delivery(account_id, integ["key"], all_fields_lead, "failed", "Invalid token — reconnect", call_id)
-                            if integ["key"] == "arthaleads":
-                                await asyncio.to_thread(
-                                    db.set_call_arthaleads_status, call_id, "failed", "Invalid token — reconnect"
-                                )
-                        else:
-                            text = (await resp.text())[:200]
-                            logger.warning("integration %s delivery failed: HTTP %s", integ["key"], resp.status)
+                    else:
+                        text = resp_text[:200]
+                        reason = f"HTTP {status}: {text}"
+                        if integ["key"] == "arthaleads" and status == 403:
+                            # ArthaLeads refuses Vistrow deliveries for
+                            # orgs below its Enterprise plan; say so.
+                            reason = "ArthaLeads refused it: " + (_json_message(resp_text) or text)
+                        logger.warning("integration %s delivery failed: HTTP %s", integ["key"], status)
+                        await asyncio.to_thread(
+                            db.mark_integration_error, account_id, integ["key"], reason
+                        )
+                        await _log_delivery(account_id, integ["key"], all_fields_lead, "failed", reason, call_id)
+                        if integ["key"] == "arthaleads":
                             await asyncio.to_thread(
-                                db.mark_integration_error, account_id, integ["key"], f"HTTP {resp.status}: {text}"
+                                db.set_call_arthaleads_status,
+                                call_id, "failed", reason,
                             )
-                            await _log_delivery(account_id, integ["key"], all_fields_lead, "failed", f"HTTP {resp.status}: {text}", call_id)
-                            if integ["key"] == "arthaleads":
-                                await asyncio.to_thread(
-                                    db.set_call_arthaleads_status,
-                                    call_id, "failed", f"HTTP {resp.status}: {text}",
-                                )
                 except Exception:
                     logger.warning("integration %s delivery failed", integ["key"], exc_info=True)
                     await asyncio.to_thread(
@@ -1968,6 +2082,10 @@ async def do_not_call(context: RunContext, reason: str = "") -> str:
         )
     await _publish_event(context, {"type": "do_not_call", "phone": phone, "reason": reason})
     logger.info("do-not-call recorded mid-call for %s (new: %s)", _mask_phone(phone), added)
+    # The CRM gets this as "Not Interested" at call end (crm_outcome).
+    lead_data = userdata.get("lead_data")
+    if lead_data is not None:
+        lead_data["opted_out"] = True
     return (
         "Done — they will not be called again. Apologise briefly for the interruption, thank "
         "them for their time, and end the call. Do not pitch, do not ask why, and do not offer "
@@ -2013,6 +2131,13 @@ async def request_callback(
             (context.userdata or {}).get("agent_id"),
             name, phone, preferred_date, preferred_time, reason,
         )
+    # Kept for the call-end CRM delivery (follow-up date in ArthaLeads), the
+    # same way book_appointment keeps lead_data["site_visit"].
+    lead_data = (context.userdata or {}).get("lead_data")
+    if lead_data is not None:
+        lead_data.setdefault("name", name)
+        lead_data.setdefault("phone", phone)
+        lead_data["callback"] = {"date": preferred_date, "time": preferred_time, "purpose": reason}
     event = {
         "type": "callback_requested",
         "name": name,

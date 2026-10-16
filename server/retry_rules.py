@@ -24,8 +24,10 @@ import json
 
 # Outcomes a policy can carry a rule for. 'short_call' is not a dial result:
 # it is a call that connected but ended almost immediately, which the agent
-# classifies at call end.
-OUTCOMES = ("no_answer", "busy", "failed", "voicemail", "short_call")
+# classifies at call end. 'switched_off' is the carrier's "switched off / not
+# reachable / out of coverage" announcement, split from 'busy' because they
+# are worth retrying on very different timescales (minutes vs hours).
+OUTCOMES = ("no_answer", "busy", "switched_off", "failed", "voicemail", "short_call")
 
 # Sarvam's wizard allows 0-20 retries; the same ceiling applies here, and a
 # gap is clamped to a week so a typo cannot park a contact for a decade.
@@ -105,3 +107,91 @@ def short_call_seconds(policy) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, min(seconds, 120))
+
+
+# ---------------------------------------------------------------- follow-ups
+#
+# Per-AGENT follow-up rules (agents.follow_up_policy, the dashboard's
+# "Follow-ups" panel). They drive the instant ArthaLeads campaigns and the
+# agent's own "Follow-up calls" campaign; a bulk campaign keeps the
+# retry_policy its wizard saved.
+
+FOLLOW_UP_CAMPAIGN_NAME = "Follow-up calls"
+# Campaigns whose retries follow the agent's follow_up_policy rather than
+# their own row (the two instant-lead names live in server/calls_db.py).
+AGENT_POLICY_CAMPAIGNS = ("ArthaLeads Instant Follow-up", "Instant Lead Follow-up", FOLLOW_UP_CAMPAIGN_NAME)
+
+FOLLOW_UP_DEFAULTS = {
+    "maxAttempts": 3,
+    "busyMinutes": 10,
+    "switchedOffMinutes": 120,
+    "noAnswerMinutes": 30,
+    "voicemailMinutes": 120,
+    "callbackEnabled": True,
+    "visitReminderEnabled": True,
+    "visitReminderTime": "11:00",
+    "nurtureEnabled": True,
+    "nurtureDays": 3,
+}
+FOLLOW_UP_MAX_ATTEMPTS_CEILING = 10
+FOLLOW_UP_MAX_NURTURE_DAYS = 30
+
+# Which follow-up setting supplies the gap for each dial outcome. 'failed'
+# (dial rejected, or a stale call the reaper gave up on) has no setting of
+# its own and waits the no-answer gap.
+_FOLLOW_UP_GAP_KEYS = {
+    "busy": "busyMinutes",
+    "switched_off": "switchedOffMinutes",
+    "no_answer": "noAnswerMinutes",
+    "failed": "noAnswerMinutes",
+    "voicemail": "voicemailMinutes",
+}
+
+
+def _hhmm(value, fallback: str) -> str:
+    parts = str(value or "").strip().split(":")
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        return fallback
+    hour, minute = int(parts[0]), int(parts[1])
+    if hour > 23 or minute > 59:
+        return fallback
+    return f"{hour:02d}:{minute:02d}"
+
+
+def follow_up_policy(raw) -> dict:
+    """agents.follow_up_policy as a complete, validated dict.
+
+    Every key is present and in range; anything missing or malformed takes
+    its default, so an agent saved before this existed behaves exactly as the
+    owner's defaults say. Never raises."""
+    stored = parse(raw)
+    out = dict(FOLLOW_UP_DEFAULTS)
+    out["maxAttempts"] = _positive_int(stored.get("maxAttempts"), out["maxAttempts"], FOLLOW_UP_MAX_ATTEMPTS_CEILING)
+    for key in ("busyMinutes", "switchedOffMinutes", "noAnswerMinutes", "voicemailMinutes"):
+        out[key] = _positive_int(stored.get(key), out[key], MAX_GAP_MINUTES)
+    out["nurtureDays"] = _positive_int(stored.get("nurtureDays"), out["nurtureDays"], FOLLOW_UP_MAX_NURTURE_DAYS)
+    for key in ("callbackEnabled", "visitReminderEnabled", "nurtureEnabled"):
+        if isinstance(stored.get(key), bool):
+            out[key] = stored[key]
+    out["visitReminderTime"] = _hhmm(stored.get("visitReminderTime"), out["visitReminderTime"])
+    return out
+
+
+def follow_up_retry_policy(raw) -> dict:
+    """The agent's follow-up rules in the per-outcome shape resolve() reads:
+    one shared attempt budget (maxAttempts counts every dial to the lead,
+    whatever each one came back as) and a gap per outcome."""
+    policy = follow_up_policy(raw)
+    return {
+        outcome: {"attempts": policy["maxAttempts"], "gapMinutes": policy[gap_key]}
+        for outcome, gap_key in _FOLLOW_UP_GAP_KEYS.items()
+    }
+
+
+def effective_policy(campaign_name, campaign_policy, agent_follow_up_raw):
+    """The retry_policy a contact of this campaign is resolved against: the
+    agent's follow-up rules for an instant/follow-up campaign, otherwise the
+    campaign's own. Bulk campaigns are untouched by the agent setting."""
+    if campaign_name in AGENT_POLICY_CAMPAIGNS:
+        return follow_up_retry_policy(agent_follow_up_raw)
+    return campaign_policy

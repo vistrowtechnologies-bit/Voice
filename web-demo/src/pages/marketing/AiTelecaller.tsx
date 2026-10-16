@@ -47,7 +47,7 @@ const RULES = [
   {
     icon: 'schedule',
     title: 'Calling window',
-    body: 'With the calling window enforced, dials outside your permitted hours and days are blocked automatically, in the contact’s timezone.',
+    body: 'With the calling window enforced, dials outside your permitted hours and days are blocked automatically, using your account’s timezone.',
   },
   {
     icon: 'history',
@@ -64,14 +64,14 @@ const RULES = [
 const SAMPLE: { speaker: 'Agent' | 'Lead'; native: string; gloss: string }[] = [
   {
     speaker: 'Agent',
-    native: 'नमस्ते प्रिया जी, मैं ABC Academy की तरफ़ से AI assistant बोल रही हूँ। आपने कल website पर weekend batch के बारे में enquiry की थी, दो मिनट बात हो सकती है?',
-    gloss: 'Hello Priya ji, I am an AI assistant calling for ABC Academy. You enquired about the weekend batch on our website yesterday; do you have two minutes?',
+    native: 'नमस्ते प्रिया जी, मैं ABC Academy से AI assistant बात कर रही हूँ। आपने कल website पर weekend batch के लिए enquiry की थी, दो मिनट बात हो सकती है?',
+    gloss: 'Hello Priya ji, I am an AI assistant from ABC Academy. You enquired about the weekend batch on the website yesterday; can we talk for two minutes?',
   },
-  { speaker: 'Lead', native: 'हाँ, बताइए। Fees कितनी है और classes कब से शुरू हैं?', gloss: 'Yes, go ahead. What are the fees and when do classes start?' },
+  { speaker: 'Lead', native: 'हाँ, बताइए। Fees कितनी हैं और classes कब से शुरू हैं?', gloss: 'Yes, tell me. How much are the fees and when do the classes start?' },
   {
     speaker: 'Agent',
-    native: 'Weekend batch अगले महीने की 5 तारीख़ से शुरू है। Fees के लिए हमारी counsellor आपको exact details देंगी। आप online classes चाहेंगी या centre पर?',
-    gloss: 'The weekend batch starts on the 5th of next month. Our counsellor will give you the exact fee details. Would you prefer online classes or at the centre?',
+    native: 'Weekend batch अगले महीने 5 तारीख़ से शुरू है। Fees की exact details हमारी counsellor आपको बता देंगी। आप online classes लेंगी या centre पर?',
+    gloss: 'The weekend batch starts on the 5th of next month. Our counsellor will give you the exact fee details. Will you take online classes or at the centre?',
   },
   { speaker: 'Lead', native: 'Centre पर। लेकिन अभी मैं office में हूँ, शाम को call कर सकते हैं?', gloss: 'At the centre. But I am at the office right now; can you call in the evening?' },
   {
@@ -171,6 +171,8 @@ export function AiTelecaller() {
           <Link to="/product/inbound" className={linkClass}>inbound call answering</Link>,{' '}
           <Link to="/product/outbound" className={linkClass}>outbound campaigns</Link> and{' '}
           <Link to="/help/integrations/instant-lead-follow-up" className={linkClass}>calling new leads within seconds</Link>.
+          For the same agent on every kind of business call, see the{' '}
+          <Link to="/ai-calling-agent" className={linkClass}>AI calling agent</Link> page.
         </p>
       </section>
 

@@ -11,6 +11,8 @@ import {
   fmtINR,
   PageHeader,
   PlanPill,
+  ROW_FOCUS,
+  rowLinkProps,
   StatCard,
   TimeRange,
   timeAgo,
@@ -74,7 +76,13 @@ export function AdminDashboard() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Accounts" value={n(k.accounts)} sub={`${n(k.suspended)} suspended`} icon="apartment" />
         <StatCard label="Active" value={n(k.activeAccounts)} sub={`in last ${days}d`} icon="bolt" />
-        <StatCard label="Live calls" value={n(k.liveCalls)} sub="in progress · refreshes every 30 s" live />
+        <StatCard
+          label="Live calls"
+          value={n(k.liveCalls)}
+          sub="in progress · refreshes every 30 s"
+          icon="phone_in_talk"
+          live={typeof k.liveCalls === 'number' && k.liveCalls > 0}
+        />
         <StatCard label="Contracted MRR" value={fmtINR(k.mrr)} sub="active subscriptions" icon="payments" />
         <StatCard label="Signups (7d)" value={n(k.signups7d)} sub={`${n(k.signupsToday)} today`} icon="person_add" />
         <StatCard label={`Calls (${days}d)`} value={n(k.callsWindow)} sub={`${n(k.callsTotal)} all-time`} icon="call" />
@@ -161,13 +169,13 @@ export function AdminDashboard() {
                 {data.recentSignups.map((s) => (
                   <tr
                     key={s.id}
-                    onClick={() => navigate(`/admin/accounts/${s.id}`)}
-                    className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
+                    {...rowLinkProps(() => navigate(`/admin/accounts/${s.id}`))}
+                    className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high ${ROW_FOCUS}`}
                   >
                     <td className="px-5 py-3 font-semibold">{s.name}</td>
                     <td className="px-5 py-3 text-text-muted">{s.owner_email || '-'}</td>
                     <td className="px-5 py-3">
-                      <PlanPill plan={s.plan} />
+                      <PlanPill plan={s.effectivePlan ?? s.plan} />
                     </td>
                     <td className="px-5 py-3 capitalize text-text-muted">{s.auth_provider || 'password'}</td>
                     <td className="px-5 py-3 text-text-muted" title={fmtDateTime(s.created_at)}>
@@ -198,12 +206,15 @@ function OperationsOverview({ data }: { data: AdminOverview }) {
   if (!ops && !rev) return null
 
   const unhealthyWorkers = ops ? Math.max(0, ops.workersExpected - ops.workersHealthy) : 0
+  // One low-credit account opens it directly; several jump to the list below.
+  const lowList = ops?.creditsLowList ?? []
+  const lowCreditTo = lowList.length === 1 ? `/admin/accounts/${lowList[0].accountId}` : lowList.length > 1 ? '#low-credits' : undefined
   const alerts: { count: number; text: string; to?: string; critical?: boolean }[] = ops
     ? [
         { count: unhealthyWorkers, text: `of ${n(ops.workersExpected)} LiveKit workers unhealthy`, to: '/admin/health', critical: true },
         { count: ops.failedCalls1h, text: 'failed calls in the last hour', to: '/admin/calls?outcome=failed&hours=1', critical: true },
-        { count: ops.zeroBalanceLiveAccounts, text: 'live accounts with zero credits', to: '/admin/finance', critical: true },
-        { count: ops.creditsLowAccounts, text: 'live accounts low on credits' },
+        { count: ops.zeroBalanceLiveAccounts, text: 'live accounts with zero credits', to: '/admin/accounts', critical: true },
+        { count: ops.creditsLowAccounts, text: 'live accounts low on credits', to: lowCreditTo },
         // No cross-tenant integrations view yet, so this one is informational.
         { count: ops.integrationFailures24h, text: 'integration delivery failures (24 h)' },
         { count: ops.awaitingUs, text: 'support tickets awaiting our reply', to: '/admin/support' },
@@ -224,7 +235,12 @@ function OperationsOverview({ data }: { data: AdminOverview }) {
                 <span className="tabular-nums">{n(a.count)}</span> {a.text}
               </>
             )
-            return a.to ? (
+            return a.to?.startsWith('#') ? (
+              <a key={a.text} href={a.to} className={`${cls} hover:underline`}>
+                {body}
+                <Icon name="chevron_right" className="text-[15px]" />
+              </a>
+            ) : a.to ? (
               <Link key={a.text} to={a.to} className={`${cls} hover:underline`}>
                 {body}
                 <Icon name="chevron_right" className="text-[15px]" />
@@ -248,10 +264,13 @@ function OperationsOverview({ data }: { data: AdminOverview }) {
               sub="LiveKit agent heartbeats"
               icon="dns"
             />
+            {/* TODO: link Trials ending / Cancellations once an admin page lists those accounts (none exists yet). */}
             <StatCard label="Trials ending" value={n(ops.trialsEnding7d)} sub="in the next 7 days" icon="hourglass_bottom" />
             <StatCard label="Cancellations" value={n(ops.cancellationsPending)} sub="pending at period end" icon="event_busy" />
             <StatCard label="Credits low" value={n(ops.creditsLowAccounts)} sub="live, under ~3 days left" icon="battery_alert" />
-            <StatCard label="Open tickets" value={n(ops.openTickets)} sub={`${n(ops.awaitingUs)} awaiting us`} icon="support_agent" />
+            <Link to="/admin/support" className="rounded-xl transition-colors hover:[&>div]:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              <StatCard label="Open tickets" value={n(ops.openTickets)} sub={`${n(ops.awaitingUs)} awaiting us`} icon="support_agent" />
+            </Link>
           </>
         )}
         {rev && (
@@ -266,7 +285,8 @@ function OperationsOverview({ data }: { data: AdminOverview }) {
 
       {ops?.creditsLowList && ops.creditsLowList.length > 0 && (
         <AdminCard className="mt-3 overflow-hidden">
-          <div className="border-b border-border px-5 py-3 text-sm font-semibold">Low on credits (live agent, under ~3 days of its own use or 50 credits)</div>
+          <div id="low-credits" className="scroll-mt-4 border-b border-border px-5 py-3 text-sm font-semibold">Low on credits
+ (live agent, under ~3 days of its own use or 50 credits)</div>
           <div className="divide-y divide-border/60">
             {ops.creditsLowList.map((p) => (
               <Link key={p.accountId} to={`/admin/accounts/${p.accountId}`} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-surface-high">

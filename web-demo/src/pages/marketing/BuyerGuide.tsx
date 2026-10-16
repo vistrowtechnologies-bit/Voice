@@ -77,7 +77,7 @@ export function BuyerGuide() {
         <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
           <div className="mb-8 max-w-2xl">
             <SectionEyebrow>Know the categories</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Five kinds of tool answer &ldquo;AI calling&rdquo; differently.</h2>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Five kinds of tool sold as AI calling software.</h2>
             <p className="mt-3 text-text-muted">Products from different categories are often shortlisted together. Knowing what each is built for avoids comparing a phone network with a finished agent.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

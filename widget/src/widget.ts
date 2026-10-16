@@ -1348,6 +1348,7 @@ function init(): void {
       chatOpened = true
       chatSessionId = generateId()
       chatStartedAt = new Date().toISOString()
+      chatEndSent = false
       chatLead.name = name
       chatLead.phone = phone
       chatLead.email = email
@@ -1370,6 +1371,25 @@ function init(): void {
   }
   const chatHistory: ChatTurn[] = []
   let chatSending = false
+  let chatEndSent = false
+
+  // Tells the server this chat is over so the lead reaches the site's CRM
+  // now rather than on the server's 3-minute idle sweep. Once per session:
+  // the visitor closing the panel, then leaving the page, is one end.
+  // sendBeacon survives page unload (a fetch there is cancelled) and its
+  // text/plain body needs no CORS preflight; the server parses it as JSON.
+  function endChatSession(): void {
+    if (!chatSessionId || chatEndSent || !chatHistory.some((turn) => turn.role === 'user')) return
+    chatEndSent = true
+    const url = `${apiBase}/widget/chat/end`
+    const body = JSON.stringify({ siteKey, sessionId: chatSessionId })
+    if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, body)) return
+    void fetch(url, { method: 'POST', body, keepalive: true }).catch(() => undefined)
+  }
+  window.addEventListener('pagehide', endChatSession)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') endChatSession()
+  })
 
   function appendChatBubble(text: string, role: 'user' | 'assistant'): HTMLDivElement {
     const emptyState = chatMessagesEl.querySelector('.av-transcript-empty')
@@ -2128,11 +2148,14 @@ function init(): void {
     // panel.
     if (completeEl.style.display === 'flex') resetToIdle()
     else if (room) endCall()
-    else if (chatHistory.length > 1) showComplete(`Thanks for chatting with ${agentName}.`, true)
-    else resetToIdle()
+    else if (chatHistory.length > 1) {
+      endChatSession()
+      showComplete(`Thanks for chatting with ${agentName}.`, true)
+    } else resetToIdle()
   })
   endChatBtn.addEventListener('click', () => {
     trackEvent('chat_ended')
+    endChatSession()
     showComplete(`Thanks for chatting with ${agentName}.`, true)
   })
   submitBtn.addEventListener('click', submitForm)

@@ -1,37 +1,53 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   adminHealth,
   adminOutboundTrunkStatus,
   adminSyncOutboundTrunk,
-  PLAN_PRICING_REF,
-  CREDIT_RATES_REF,
+  adminPricing,
   type AdminHealth,
+  type AdminPricing,
   type AdminOutboundTrunkStatus,
 } from '../../lib/adminApi'
-import { AdminCard, fmtINR, PageHeader } from '../../components/AdminUI'
+import { AdminCard, errMsg, ErrorState, fmtINR, PageHeader, useDialog } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
 export function AdminSettings() {
   const [health, setHealth] = useState<AdminHealth | null>(null)
+  const [pricing, setPricing] = useState<AdminPricing | null>(null)
+  const [pricingError, setPricingError] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const [trunk, setTrunk] = useState<AdminOutboundTrunkStatus | null>(null)
+  const [trunkError, setTrunkError] = useState<string | null>(null)
   const [trunkAddress, setTrunkAddress] = useState('')
   const [trunkCallerId, setTrunkCallerId] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState('')
 
-  const loadTrunk = () =>
-    adminOutboundTrunkStatus().then((s) => {
-      setTrunk(s)
-      setTrunkAddress((prev) => prev || s.address || '')
-      setTrunkCallerId((prev) => prev || s.callerId || '')
-    })
+  const loadPricing = () => {
+    setPricingError(null)
+    adminPricing().then(setPricing).catch((e: unknown) => setPricingError(errMsg(e)))
+  }
+
+  const loadTrunk = () => {
+    setTrunkError(null)
+    adminOutboundTrunkStatus()
+      .then((s) => {
+        setTrunk(s)
+        setTrunkAddress((prev) => prev || s.address || '')
+        setTrunkCallerId((prev) => prev || s.callerId || '')
+      })
+      .catch((e: unknown) => {
+        setTrunk(null)
+        setTrunkError(errMsg(e))
+      })
+  }
 
   useEffect(() => {
     adminHealth().then(setHealth).catch(() => setHealth(null))
-    loadTrunk().catch(() => setTrunk(null))
+    loadPricing()
+    loadTrunk()
   }, [])
 
   // Syncing mutates the production LiveKit outbound trunk, so it goes through
@@ -58,33 +74,55 @@ export function AdminSettings() {
       <PageHeader title="Settings" subtitle="Platform-wide configuration reference and integration status." />
 
       <div className="grid gap-4 lg:grid-cols-2">
+        {/* Read from the code that bills (GET /admin/pricing), so it can't drift. */}
         <AdminCard className="overflow-hidden">
           <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Plan pricing</div>
-          <div className="divide-y divide-border/60">
-            {Object.entries(PLAN_PRICING_REF).map(([plan, price]) => (
-              <div key={plan} className="flex items-center justify-between px-5 py-3 text-sm">
-                <span className="font-semibold capitalize">{plan}</span>
-                <span className="tabular-nums text-text-muted">{price ? `${fmtINR(price)}/mo` : 'Free'}</span>
-              </div>
-            ))}
-          </div>
+          {pricingError ? (
+            <ErrorState message={`Couldn't load pricing: ${pricingError}`} onRetry={loadPricing} />
+          ) : (
+            <div className="divide-y divide-border/60">
+              {(pricing?.plans || []).map((p) => (
+                <div key={p.plan} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <span className="font-semibold capitalize">{p.plan}</span>
+                  <span className="tabular-nums text-text-muted">
+                    {fmtINR(p.priceInr)}/mo · {p.credits.toLocaleString('en-IN')} credits
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="border-t border-border px-5 py-2 text-[11px] text-text-muted">
-            Edit prices in <code className="text-primary">admin_db.PLAN_PRICING</code> + the marketing pricing page.
+            Source: <code className="text-primary">plan_policy.PLANS</code> (server).
           </div>
         </AdminCard>
 
         <AdminCard className="overflow-hidden">
-          <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Default credit rates</div>
-          <div className="divide-y divide-border/60">
-            {Object.entries(CREDIT_RATES_REF).map(([channel, rate]) => (
-              <div key={channel} className="flex items-center justify-between px-5 py-3 text-sm">
-                <span className="font-semibold capitalize">{channel}</span>
-                <span className="tabular-nums text-text-muted">{rate}× per minute</span>
-              </div>
-            ))}
-          </div>
+          <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Credit rates per minute</div>
+          {pricingError ? (
+            <ErrorState message={`Couldn't load rates: ${pricingError}`} onRetry={loadPricing} />
+          ) : pricing ? (
+            <div className="divide-y divide-border/60 text-sm">
+              {([
+                ['Channel', pricing.channelRates],
+                ['Voice tier', pricing.voiceTiers],
+                ['AI model tier', pricing.modelTiers],
+              ] as const).map(([label, rates]) => (
+                <div key={label} className="px-5 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{label}</div>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                    {Object.entries(rates).map(([k, v]) => (
+                      <span key={k} className="tabular-nums">
+                        <span className="capitalize">{k.replace(/_/g, ' ')}</span> <span className="text-text-muted">{v}×</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="border-t border-border px-5 py-2 text-[11px] text-text-muted">
-            Per-account overrides live on each account's Billing settings.
+            A minute costs channel × voice × model credits, never under {pricing?.minCreditsPerMinute ?? '-'}. Overage bills at{' '}
+            {pricing?.overageMultiplier ?? '-'}× the plan's per-credit price.
           </div>
         </AdminCard>
       </div>
@@ -108,14 +146,22 @@ export function AdminSettings() {
       <AdminCard className="mt-4 overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div className="font-display text-base font-semibold">Outbound SIP trunk (EnableX)</div>
-          {trunk?.configured ? (
+          {trunkError ? (
+            <span className="text-xs font-semibold text-destructive">Status unavailable</span>
+          ) : trunk?.configured ? (
             <span className="flex items-center gap-1 text-xs font-semibold text-success">
               <Icon name="check_circle" className="text-[16px]" /> Configured
             </span>
-          ) : (
+          ) : trunk ? (
             <span className="text-xs font-semibold text-text-muted">Not configured</span>
-          )}
+          ) : null}
         </div>
+        {/* A failed status check must not look like "no trunk" - that would invite creating a second one. */}
+        {trunkError ? (
+          <ErrorState message={`Couldn't load the trunk status: ${trunkError}`} onRetry={loadTrunk} />
+        ) : !trunk ? (
+          <div className="m-5 h-24 animate-pulse rounded-lg bg-surface-high" />
+        ) : (
         <div className="flex flex-col gap-3 p-5">
           <p className="text-sm text-text-muted">
             The bare host/IP EnableX gives us for their SBC, plus the E.164 number we place outbound calls
@@ -156,6 +202,7 @@ export function AdminSettings() {
             {trunk?.trunkId && <span className="font-mono text-xs text-text-muted">{trunk.trunkId}</span>}
           </div>
         </div>
+        )}
       </AdminCard>
 
       <AdminCard className="mt-4 flex items-center justify-between p-5">
@@ -201,10 +248,13 @@ function TrunkConfirmModal({
 }) {
   const [reason, setReason] = useState('')
   const valid = reason.trim().length >= MIN_REASON
+  const dialogRef = useDialog(onClose)
+  const titleId = useId()
   return (
-    <div role="dialog" aria-modal="true" aria-label="Confirm trunk sync" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
-      <AdminCard className="w-full max-w-md p-6">
-        <h2 className="mb-2 font-display text-lg font-semibold">Sync the production outbound trunk?</h2>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-md">
+      <AdminCard className="p-6">
+        <h2 id={titleId} className="mb-2 font-display text-lg font-semibold">Sync the production outbound trunk?</h2>
         <p className="text-sm text-text-muted">
           This creates or updates the shared LiveKit outbound trunk used by every tenant's outbound calls, pointing it at{' '}
           <span className="font-mono text-text">{address}</span> with caller ID <span className="font-mono text-text">{callerId}</span>.
@@ -212,7 +262,6 @@ function TrunkConfirmModal({
         <label className="mt-4 flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-text-muted">Reason (logged to the audit trail)</span>
           <input
-            autoFocus
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Why are you changing the trunk?"
@@ -234,6 +283,8 @@ function TrunkConfirmModal({
           </button>
         </div>
       </AdminCard>
+      </div>
     </div>
+
   )
 }

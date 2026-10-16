@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AdminCard, EmptyState, PageHeader, Pill, timeAgo } from '../../components/AdminUI'
+import { AdminCard, errMsg, ErrorState, PageHeader, Pill, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 import { adminUpdateVendorCredit, adminVendorCredits, type AdminVendorCredit } from '../../lib/adminApi'
 
@@ -25,15 +25,20 @@ function fmtBalance(v: AdminVendorCredit): string {
 
 export function AdminVendorCredits() {
   const [vendors, setVendors] = useState<AdminVendorCredit[] | null>(null)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [editingKey, setEditingKey] = useState<string | null>(null)
 
-  const load = () => adminVendorCredits().then((r) => setVendors(r.vendors)).catch(() => setError(true))
+  const load = () => {
+    setError(null)
+    adminVendorCredits()
+      .then((r) => setVendors(r.vendors))
+      .catch((e: unknown) => setError(errMsg(e)))
+  }
   useEffect(() => {
     load()
   }, [])
 
-  if (error) return <EmptyState icon="error" message="Couldn't load vendor credits." />
+  if (error) return <ErrorState message={`Couldn't load vendor credits: ${error}`} onRetry={load} />
   if (!vendors) return <div className="h-40 animate-pulse rounded-xl border border-border bg-surface" />
 
   const lowCount = vendors.filter((v) => statusTone(v) === 'suspended' || statusTone(v) === 'warning').length
@@ -54,7 +59,9 @@ export function AdminVendorCredits() {
         }
       />
 
-      <AdminCard className="overflow-hidden">
+      <AdminCard className="overflow-x-auto">
+        {/* Fixed min width: on phones the table scrolls inside the card instead of squashing columns. */}
+        <div className="min-w-[640px]">
         <div className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_auto] gap-3 border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-text-muted">
           <span>Vendor</span>
           <span>Balance</span>
@@ -96,6 +103,7 @@ export function AdminVendorCredits() {
             ),
           )}
         </div>
+        </div>
       </AdminCard>
     </>
   )
@@ -115,9 +123,11 @@ function EditRow({
   const [threshold, setThreshold] = useState(vendor.threshold === null ? '' : String(vendor.threshold))
   const [notes, setNotes] = useState(vendor.notes)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const save = async () => {
     setSaving(true)
+    setSaveError(null)
     try {
       const result = await adminUpdateVendorCredit(vendor.key, {
         balance: balance.trim() === '' ? null : Number(balance),
@@ -126,6 +136,8 @@ function EditRow({
         notes,
       })
       onSaved(result.vendors)
+    } catch (e) {
+      setSaveError(`Couldn't save: ${errMsg(e)}`)
     } finally {
       setSaving(false)
     }
@@ -189,8 +201,14 @@ function EditRow({
           />
         </label>
       </div>
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {saveError && (
+          <p role="alert" className="mr-auto text-xs text-destructive">
+            {saveError}
+          </p>
+        )}
+        <button onClick={onCancel}
+ className="rounded-lg px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text">
           Cancel
         </button>
         <button

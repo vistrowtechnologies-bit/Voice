@@ -153,7 +153,7 @@ export const PRODUCT_DETAIL: Record<
     eyebrow: 'Product · Inbound Calling',
     headline: 'Answer every call, day or night.',
     subhead:
-      'Point your number at Vistrow and Artha picks up on the first ring - qualifying, answering, and routing without hold music.',
+      'Point your number at Vistrow and Artha picks up every inbound call on the first ring - qualifying, answering, and routing without hold music.',
     features: [
       { icon: 'schedule', title: '24/7 pickup', body: 'No missed calls, no voicemail - every caller reaches a helpful agent instantly.' },
       { icon: 'fact_check', title: 'Auto-qualification', body: 'Captures intent, budget, and contact details as lead fields, ready for your team.' },
@@ -163,7 +163,7 @@ export const PRODUCT_DETAIL: Record<
     guideSections: [
       {
         eyebrow: 'How it works',
-        title: 'What happens when a customer rings your number.',
+        title: 'What happens on an inbound call to your number.',
         items: [
           { icon: 'dialpad', title: '1. Connect a number', body: 'Provision the number with your telephony provider (EnableX today), connect it under Phone Numbers in full international format, and run a test call.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
           { icon: 'route', title: '2. Route it to an agent', body: 'On the Inbound page, pick the number and the agent and create the route. It is live immediately.', to: '/help/inbound/route-inbound-calls', link: 'Route incoming calls' },
@@ -234,7 +234,7 @@ export const PRODUCT_DETAIL: Record<
         items: [
           { icon: 'event_repeat', title: 'Retries', body: 'Set a maximum number of attempts and a gap between them, with separate rules for busy lines and voicemail if you want them.' },
           { icon: 'speed', title: 'Concurrency and pace', body: 'Choose how many calls run at once and an optional limit on attempts per minute. The channel limit on your telephony account is the real ceiling.' },
-          { icon: 'schedule', title: 'Calling window', body: 'TRAI norms limit unsolicited calls to 9am to 9pm, Monday to Saturday. With the calling window enforced, dials outside your hours and days are blocked in the callee’s timezone.' },
+          { icon: 'schedule', title: 'Calling window', body: 'TRAI norms limit unsolicited calls to 9am to 9pm, Monday to Saturday. With the calling window enforced, dials outside your hours and days are blocked, using your account’s timezone.' },
           { icon: 'data_object', title: 'Variables', body: 'Use {{name}}-style variables in the welcome message and prompt so each call carries the contact’s own details.' },
           { icon: 'block', title: 'Do-Not-Call', body: 'Add numbers by hand or in bulk. When a caller asks not to be called again, the agent adds them itself.' },
           { icon: 'bolt', title: 'Instant lead follow-up', body: 'A private webhook queues a call within about 15 to 30 seconds of a new lead arriving, still subject to your compliance rules.', to: '/help/integrations/instant-lead-follow-up', link: 'How it works' },
@@ -248,6 +248,7 @@ export const PRODUCT_DETAIL: Record<
           { icon: 'account_balance', title: 'EMI and payment reminders', body: 'Polite, consistent reminders to customers who already owe a payment, with every call logged.', to: '/solutions/finance', link: 'Finance and collections' },
           { icon: 'apartment', title: 'Follow-up on property enquiries', body: 'Call back brochure downloads and missed site visits.', to: '/solutions/real-estate', link: 'Real estate' },
           { icon: 'phone_callback', title: 'Lead calls and callbacks', body: 'Qualify new enquiries and ring back people who asked for a later call, the routine part of a telecaller’s day.', to: '/ai-telecaller', link: 'AI telecaller' },
+          { icon: 'call', title: 'Inbound and outbound on one agent', body: 'The agent that runs your campaigns can also answer your business number and website calls, with the same instructions and call records.', to: '/ai-calling-agent', link: 'AI calling agent' },
         ],
         note: 'Only call people you are permitted to call. Consent and regulatory obligations remain yours; Vistrow enforces the calling window and Do-Not-Call list you configure.',
       },
@@ -503,8 +504,8 @@ export const SOLUTIONS: Solution[] = [
     features: ['Budget, location & configuration qualification', 'Site visits booked on your calendar', 'Call-back to new leads within seconds', 'CRM, Slack & webhook delivery', '24/7 multilingual pickup'],
     scenarios: [
       { label: 'New buyer enquiry', callerLine: '“Baner में two BHK चाहिए, budget करीब one crore है.”', agentAction: 'Captures configuration, budget, preferred location and purchase timeline without turning the call into a form.', outcome: 'Qualified buyer lead, ready for the right sales advisor.' },
-      { label: 'Project comparison', callerLine: '“Aarohan Crest और nearby options में फर्क क्या है?”', agentAction: 'Answers only from approved project knowledge and records the exact comparison the buyer wants.', outcome: 'A focused follow-up request with no invented inventory or pricing.' },
-      { label: 'Book a site visit', callerLine: '“Saturday afternoon site visit हो सकती है?”', agentAction: 'Checks the live calendar, offers a few real times, collects contact details and confirms only after the booking succeeds.', outcome: 'Confirmed site visit with date, time and buyer context.' },
+      { label: 'Project comparison', callerLine: '“Aarohan Crest और आस-पास के options में क्या फर्क है?”', agentAction: 'Answers only from approved project knowledge and records the exact comparison the buyer wants.', outcome: 'A focused follow-up request with no invented inventory or pricing.' },
+      { label: 'Book a site visit', callerLine: '“Saturday afternoon site visit हो सकती है क्या?”', agentAction: 'Checks the live calendar, offers a few real times, collects contact details and confirms only after the booking succeeds.', outcome: 'Confirmed site visit with date, time and buyer context.' },
     ],
     workflow: [
       { icon: 'record_voice_over', title: 'Understand intent', body: 'New purchase, investment, project question or site-visit request.' },
@@ -615,7 +616,7 @@ export const SOLUTIONS: Solution[] = [
     ],
     features: ['Appointment booking', 'Reminder calls', 'FAQ answering', 'Call triage'],
     scenarios: [
-      { label: 'Patient with symptoms', callerLine: '“मेरे पेट में बहुत दर्द है, किस डॉक्टर को दिखाऊँ?”', agentAction: 'Acknowledges the concern, checks whether it sounds urgent and routes to the relevant clinic service without diagnosing.', outcome: 'Appropriate next step with safety kept ahead of scheduling.' },
+      { label: 'Patient with symptoms', callerLine: '“पेट में बहुत दर्द है, किस डॉक्टर को दिखाऊँ?”', agentAction: 'Acknowledges the concern, checks whether it sounds urgent and routes to the relevant clinic service without diagnosing.', outcome: 'Appropriate next step with safety kept ahead of scheduling.' },
       { label: 'Find a doctor', callerLine: '“General physician कब available हैं?”', agentAction: 'Uses verified clinic information, asks for the preferred day and checks live availability instead of reading a directory.', outcome: 'Two or three relevant appointment choices.' },
       { label: 'Book or reschedule', callerLine: '“कल दो बजे का appointment कर दीजिए.”', agentAction: 'Collects patient name, phone and visit reason, verifies the exact slot and confirms only after it is saved.', outcome: 'A traceable appointment instead of a verbal promise.' },
     ],
@@ -855,11 +856,11 @@ export const SOLUTIONS: Solution[] = [
       langCode: 'hi-IN',
       langLabel: 'Hindi and Hinglish',
       turns: [
-        { speaker: 'Agent', native: 'नमस्ते, क्या मेरी बात सुनीता शर्मा जी से हो रही है?', gloss: 'Hello, am I speaking with Sunita Sharma ji?' },
+        { speaker: 'Agent', native: 'नमस्ते, सुनीता शर्मा जी बात कर रही हैं?', gloss: 'Hello, is this Sunita Sharma ji speaking?' },
         { speaker: 'Caller', native: 'हाँ, बोलिए।', gloss: 'Yes, go ahead.' },
-        { speaker: 'Agent', native: 'मैं Saarthi Finance की तरफ़ से Artha बोल रही हूँ। आपकी 5 तारीख़ वाली EMI अभी pending दिख रही है।', gloss: 'This is Artha calling on behalf of Saarthi Finance. Your EMI due on the 5th still shows as pending.' },
-        { speaker: 'Caller', native: 'हाँ, इस महीने थोड़ी problem है। 20 तारीख़ तक कर दूँगी, पर late fee के बारे में किसी से बात करनी है।', gloss: 'Yes, there’s a bit of a problem this month. I’ll pay by the 20th, but I need to talk to someone about the late fee.' },
-        { speaker: 'Agent', native: 'ठीक है, मैंने 20 तारीख़ नोट कर ली है। late fee के लिए हमारी team आपको call करेगी, आपके लिए कौन सा समय ठीक रहेगा?', gloss: 'Okay, I’ve noted the 20th. Our team will call you about the late fee; what time suits you?' },
+        { speaker: 'Agent', native: 'मैं Saarthi Finance से Artha बोल रही हूँ। आपकी 5 तारीख की EMI अभी pending दिख रही है।', gloss: 'This is Artha calling from Saarthi Finance. Your EMI for the 5th is still showing as pending.' },
+        { speaker: 'Caller', native: 'हाँ, इस महीने थोड़ी problem है। 20 तारीख तक कर दूँगी, पर late fee के बारे में किसी से बात करनी है।', gloss: 'Yes, there is a slight issue this month. I will pay by the 20th, but I need to talk to someone about the late fee.' },
+        { speaker: 'Agent', native: 'ठीक है, मैंने 20 तारीख नोट कर ली है। late fee के लिए हमारी team आपको call करेगी, आपके लिए कौन सा time ठीक रहेगा?', gloss: 'Okay, I have noted the 20th. Our team will call you regarding the late fee, what time will work for you?' },
         { speaker: 'Caller', native: 'शाम 5 से 6 के बीच।', gloss: 'Between 5 and 6 in the evening.' },
       ],
       outcome: 'Saarthi Finance is the made-up demo business. With a post-call field set up for it, the promised date is saved on the call; the callback request reaches your team with her preferred time and the transcript.',
@@ -888,7 +889,7 @@ export const SOLUTIONS: Solution[] = [
     scenarios: [
       { label: 'Reset email missing', callerLine: '“Password reset email अभी तक नहीं आया.”', agentAction: 'Acknowledges the failed attempt, checks the simple causes one at a time and avoids making the caller repeat themselves.', outcome: 'Resolved step or a clean escalation with attempted actions.' },
       { label: 'Billing question', callerLine: '“मेरे invoice में extra charge क्यों है?”', agentAction: 'Uses approved billing information, explains what is known and escalates account-specific disputes safely.', outcome: 'A categorized billing case with exact caller concern.' },
-      { label: 'Escalate an issue', callerLine: '“मैं ये तीन बार try कर चुका हूँ, person से connect करो.”', agentAction: 'Stops repeating tier-one steps and hands off the full conversation and troubleshooting history.', outcome: 'Human escalation without restarting the story.' },
+      { label: 'Escalate an issue', callerLine: '“मैंने तीन बार try किया है, मुझे person से connect कर दो.”', agentAction: 'Stops repeating tier-one steps and hands off the full conversation and troubleshooting history.', outcome: 'Human escalation without restarting the story.' },
     ],
     workflow: [
       { icon: 'hearing', title: 'Understand the failure', body: 'Capture what is broken and what the caller already tried.' },
@@ -980,6 +981,9 @@ export const NAV: NavGroup[] = [
       { label: 'AI call center', to: '/ai-call-center', icon: 'support_agent', desc: 'First-line calls and follow-ups, with handoff.' },
       { label: 'AI voice bot', to: '/voice-bot', icon: 'record_voice_over', desc: 'What a voice bot is and how a call works.' },
       { label: 'AI telecaller', to: '/ai-telecaller', icon: 'phone_callback', desc: 'Lead calls, follow-ups and callbacks.' },
+      { label: 'AI calling agent', to: '/ai-calling-agent', icon: 'call', desc: 'Inbound and outbound calls on one agent.' },
+      { label: 'AI receptionist', to: '/ai-receptionist', icon: 'support_agent', desc: 'Answer, book and transfer calls at any hour.' },
+      { label: 'AI IVR', to: '/ai-ivr', icon: 'dialpad', desc: 'Replace a press-1 menu with a spoken conversation.' },
     ],
   },
   {
@@ -1002,8 +1006,6 @@ export const NAV: NavGroup[] = [
       { label: 'Vistrow vs Sarvam AI', to: '/compare/sarvam-ai', icon: 'compare_arrows', desc: 'Build-vs-buy comparison for voice agents.' },
       { label: 'Demo call examples', to: '/demo-calls/hindi-real-estate-lead-qualification', icon: 'record_voice_over', desc: 'Transcript and CRM-ready output examples.' },
       { label: 'Changelog', to: '/changelog', icon: 'history', desc: 'What shipped, and when.' },
-      { label: 'AI IVR', to: '/ai-ivr', icon: 'dialpad', desc: 'Replace a press-1 menu with a spoken conversation.' },
-      { label: 'AI receptionist', to: '/ai-receptionist', icon: 'support_agent', desc: 'Answer, book and transfer calls at any hour.' },
       { label: 'vs. traditional IVR', to: '/vs-ivr', icon: 'compare_arrows', desc: 'How this differs from a phone menu.' },
       { label: 'Blog', to: '/resources/blog', icon: 'article', desc: 'Product news and guides.' },
     ],
@@ -1031,6 +1033,7 @@ export const FOOTER_COLUMNS = [
       { label: 'AI call center', to: '/ai-call-center' },
       { label: 'AI voice bot', to: '/voice-bot' },
       { label: 'AI telecaller', to: '/ai-telecaller' },
+      { label: 'AI calling agent', to: '/ai-calling-agent' },
     ],
   },
   {
@@ -1131,6 +1134,11 @@ export interface LanguagePage {
   greeting: string
   /** One-line positioning for the landing page hero. */
   blurb: string
+  /** Longer hero paragraph for the language page; the blurb stays on the
+   * /languages overview cards. Falls back to the blurb. */
+  intro?: string
+  /** Heading for the regional-calls section; defaults to "Where X calls matter most." */
+  regionalHeading?: string
   /** Search-intent phrase this page should visibly answer. */
   /** Local business contexts where this language matters most. */
   localUseCases?: string[]
@@ -1175,6 +1183,8 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'North & Central India',
     greeting: 'नमस्ते',
     blurb: 'The default for most Indian call flows - including the everyday Hinglish your customers actually speak, not textbook Hindi.',
+    intro: 'The default for most Indian call flows: an AI voice agent in Hindi that speaks the everyday Hinglish your customers actually use, not textbook Hindi. Put it on inbound lines, reminders and follow-ups as an AI calling agent in Hindi.',
+    regionalHeading: 'Where an AI voice agent in Hindi helps most.',
     localUseCases: [
       'Real estate enquiries from Hindi and Hinglish-speaking buyers',
       'Support calls where customers switch between Hindi and English',
@@ -1186,15 +1196,15 @@ export const LANGUAGES: LanguagePage[] = [
       'Handles numbers, dates, names, and project details clearly for sales teams',
     ],
     seoFaq: {
-      q: 'Is this a Hindi voice bot or a real AI phone calling agent?',
+      q: 'Is this an AI calling agent in Hindi or just a Hindi voice bot?',
       a: 'It is a real AI phone calling agent: it speaks, listens, qualifies the caller, answers approved questions, and logs the conversation. That makes it different from a recorded Hindi IVR or a translated chatbot.',
     },
     sampleExchange: {
       context: 'An outbound EMI reminder call',
       turns: [
-        { speaker: 'Agent', native: 'नमस्ते राहुल जी, मैं Artha बोल रही हूँ। आपकी इस महीने की EMI 15 तारीख़ को due है, बस याद दिलाने के लिए कॉल किया।', gloss: 'Hello Rahul ji, this is Artha. Your EMI for this month is due on the 15th; I’m just calling to remind you.' },
+        { speaker: 'Agent', native: 'नमस्ते राहुल जी, मैं Artha बोल रही हूँ। आपकी इस महीने की EMI 15 तारीख़ को due है, बस याद दिलाने के लिए call किया।', gloss: 'Hello Rahul ji, I am Artha. Your EMI for this month is due on the 15th, I just called to remind you.' },
         { speaker: 'Caller', native: 'हाँ, पता है। Salary 12 को आएगी, तो 13 तक payment कर दूँगा।', gloss: 'Yes, I know. My salary comes on the 12th, so I’ll pay by the 13th.' },
-        { speaker: 'Agent', native: 'ठीक है, मैंने 13 तारीख़ नोट कर ली है। और कोई सवाल हो तो बताइए।', gloss: 'Okay, I’ve noted the 13th. Let me know if you have any other question.' },
+        { speaker: 'Agent', native: 'ठीक है, मैंने 13 तारीख़ note कर ली है। कोई और सवाल हो तो बताइए।', gloss: 'Okay, I have noted the 13th. Let me know if you have any other question.' },
       ],
       outcome: 'With a post-call field set up for it, the promised date is pulled from the transcript for your collections team.',
     },
@@ -1238,9 +1248,9 @@ export const LANGUAGES: LanguagePage[] = [
       context: 'An inbound call to a Pune diagnostic lab',
       turns: [
         { speaker: 'Caller', native: 'नमस्कार, उद्या सकाळी घरी blood test साठी sample collection होईल का?', gloss: 'Hello, can a sample be collected at home tomorrow morning for a blood test?' },
-        { speaker: 'Agent', native: 'नमस्कार! हो, उद्या सकाळी 7 ते 9 चा slot उपलब्ध आहे. तुमचा पत्ता आणि पिन कोड सांगाल का?', gloss: 'Hello! Yes, a 7 to 9 a.m. slot is free tomorrow. Could you tell me your address and pin code?' },
-        { speaker: 'Caller', native: 'कोथरूड, पिन कोड 411038. Fasting लागेल का?', gloss: 'Kothrud, pin code 411038. Is fasting needed?' },
-        { speaker: 'Agent', native: 'त्या test साठी लॅबच्या सूचनेनुसार fasting लागेल. मी उद्याचा 7 ते 9 चा slot बुक केला आहे.', gloss: 'For that test, fasting is needed as per the lab’s instructions. I have booked tomorrow’s 7 to 9 a.m. slot.' },
+        { speaker: 'Agent', native: 'नमस्कार! हो, उद्या सकाळी 7 ते 9 चा slot available आहे. तुमचा address आणि pin code सांगाल का?', gloss: 'Hello! Yes, a 7 to 9 a.m. slot is available tomorrow. Could you tell me your address and pin code?' },
+        { speaker: 'Caller', native: 'कोथरूड, pin code 411038. Fasting लागेल का?', gloss: 'Kothrud, pin code 411038. Is fasting needed?' },
+        { speaker: 'Agent', native: 'त्या test साठी lab च्या instructions नुसार fasting लागेल. मी उद्याचा 7 ते 9 चा slot book केला आहे.', gloss: 'For that test, fasting is needed as per the lab instructions. I have booked tomorrow’s 7 to 9 a.m. slot.' },
       ],
       outcome: 'The fasting instruction comes from the lab’s own knowledge base rather than being guessed. The address, pin code and slot are saved on the call for the collection team.',
     },
@@ -1292,7 +1302,7 @@ export const LANGUAGES: LanguagePage[] = [
     sampleExchange: {
       context: 'A follow-up call to a Chennai property enquiry',
       turns: [
-        { speaker: 'Agent', native: 'வணக்கம் கார்த்திக், நான் Artha பேசுறேன். நீங்க OMR project பத்தி enquiry பண்ணீங்க, அதுக்காக call பண்றேன்.', gloss: 'Hello Karthik, this is Artha. You made an enquiry about the OMR project, so I’m calling about it.' },
+        { speaker: 'Agent', native: 'வணக்கம் கார்த்திக், நான் Artha பேசுறேன். OMR project பத்தி enquiry பண்ணீங்க-ல, அத பத்தி பேசத்தான் call பண்ணிருக்கேன்.', gloss: 'Hello Karthik, I am Artha. You enquired about the OMR project, so I am calling to discuss it.' },
         { speaker: 'Caller', native: 'ஆமா, 2BHK price என்ன range-ல இருக்கு?', gloss: 'Yes, what range is the 2BHK price in?' },
         { speaker: 'Agent', native: '2BHK 75 lakh-ல இருந்து ஆரம்பிக்குது. நீங்க சொந்தமா இருக்கவா, investment-க்கா பாக்குறீங்க?', gloss: 'The 2BHK starts from 75 lakh. Are you looking to live in it yourself, or as an investment?' },
         { speaker: 'Caller', native: 'சொந்தமா இருக்க. Sunday site visit பண்ணலாமா?', gloss: 'To live in. Can I do a site visit on Sunday?' },
@@ -1318,6 +1328,8 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Andhra Pradesh & Telangana',
     greeting: 'నమస్కారం',
     blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.',
+    intro: 'An AI voice calling agent in Telugu that handles Hyderabad and coastal Andhra call volume around the clock, on your phone lines and your website.',
+    regionalHeading: 'Where an AI voice calling agent in Telugu helps most.',
     localUseCases: [
       'Hyderabad real estate, education, healthcare, and service enquiries',
       'Inbound calls from Andhra Pradesh and Telangana customers',
@@ -1332,14 +1344,14 @@ export const LANGUAGES: LanguagePage[] = [
     ],
     seoFaq: {
       q: 'Can Artha handle Telugu callers on both phone and website calls?',
-      a: 'Yes. The same Telugu AI voice agent can answer phone calls and website voice-widget conversations, then save the transcript, summary, and lead details for your team.',
+      a: 'Yes. The same Telugu AI voice calling agent can answer phone calls and website voice-widget conversations, then save the transcript, summary, and lead details for your team.',
     },
     sampleExchange: {
       context: 'An inbound call to a clinic’s appointment line',
       turns: [
         { speaker: 'Caller', native: 'హలో, రేపు డాక్టర్ గారి appointment దొరుకుతుందా?', gloss: 'Hello, can I get an appointment with the doctor tomorrow?' },
         { speaker: 'Agent', native: 'నమస్కారం! రేపు సాయంత్రం 5 గంటలకు slot ఖాళీగా ఉంది. మీ పేరు చెప్తారా?', gloss: 'Hello! There’s a free slot tomorrow at 5 p.m. Could you tell me your name?' },
-        { speaker: 'Caller', native: 'లక్ష్మి. Evening 5 okay.', gloss: 'Lakshmi. Evening 5 is okay.' },
+        { speaker: 'Caller', native: 'లక్ష్మి. సాయంత్రం 5 okay.', gloss: 'Lakshmi. 5 in the evening is okay.' },
         { speaker: 'Agent', native: 'సరే లక్ష్మి గారు, రేపు సాయంత్రం 5 గంటలకు మీ appointment book అయింది.', gloss: 'Okay Lakshmi garu, your appointment is booked for 5 p.m. tomorrow.' },
       ],
       outcome: 'The booking appears in Appointments, inside the clinic’s bookable hours, and the transcript is in Calls history.',
@@ -1357,9 +1369,9 @@ export const LANGUAGES: LanguagePage[] = [
       { title: 'Website visitors', body: 'A visitor on your Telugu or English site taps to talk and is answered in Telugu, no phone number or app needed.', to: '/product/widget', link: 'Website call widget' },
     ],
     sampleLines: [
-      { label: 'Greeting', native: 'నమస్కారం! నేను Artha, మీకు ఎలా సహాయం చేయగలను?', gloss: 'Hello! I’m Artha, how can I help you?' },
-      { label: 'When the caller is busy', native: 'ఇప్పుడు busy గా ఉంటే, ఏ టైమ్ లో call చేయమంటారు?', gloss: 'If you’re busy now, what time should we call?' },
-      { label: 'A question outside the knowledge base', native: 'ఆ విషయం మా team తో confirm చేసి మీకు చెప్తాము.', gloss: 'We’ll confirm that with our team and get back to you.' },
+      { label: 'Greeting', native: 'నమస్కారం! నేను Artha ని, మీకు ఎలా help చేయగలను?', gloss: 'Hello! I am Artha, how can I help you?' },
+      { label: 'When the caller is busy', native: 'ఇప్పుడు busy గా ఉంటే, ఏ టైమ్ కి call చేయమంటారు?', gloss: 'If you are busy now, what time should we call?' },
+      { label: 'A question outside the knowledge base', native: 'ఆ విషయం మా team తో confirm చేసి మళ్ళీ చెప్తాము.', gloss: 'We will confirm that with our team and get back to you.' },
       { label: 'Transfer on a phone call', native: 'ఒక్క నిమిషం, మిమ్మల్ని మా sales team కి connect చేస్తాను.', gloss: 'One minute, I’ll connect you to our sales team.' },
     ],
     guide: [
@@ -1390,6 +1402,8 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Karnataka',
     greeting: 'ನಮಸ್ಕಾರ',
     blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.',
+    intro: 'Serve Bengaluru and wider Karnataka with an AI voice calling agent in Kannada that answers and makes calls, with English code-switching where it feels natural.',
+    regionalHeading: 'Where an AI voice calling agent in Kannada helps most.',
     localUseCases: [
       'Bengaluru and Karnataka property enquiries where English-only calling loses context',
       'Support and booking calls for local customers who prefer Kannada',
@@ -1410,8 +1424,8 @@ export const LANGUAGES: LanguagePage[] = [
       context: 'An inbound property enquiry in Bengaluru',
       turns: [
         { speaker: 'Caller', native: 'ಹಲೋ, Whitefield ಹತ್ತಿರ 2BHK flat ಇದೆಯಾ?', gloss: 'Hello, is there a 2BHK flat near Whitefield?' },
-        { speaker: 'Agent', native: 'ನಮಸ್ಕಾರ! ಹೌದು, Whitefield ಹತ್ತಿರ 2BHK ಆಯ್ಕೆಗಳಿವೆ. ನಿಮ್ಮ budget ಎಷ್ಟು ಅಂತ ಹೇಳ್ತೀರಾ?', gloss: 'Hello! Yes, there are 2BHK options near Whitefield. Could you tell me your budget?' },
-        { speaker: 'Caller', native: 'ಸುಮಾರು 80 lakh ಒಳಗೆ. Weekend site visit ಮಾಡಬಹುದಾ?', gloss: 'Under about 80 lakh. Can I do a site visit at the weekend?' },
+        { speaker: 'Agent', native: 'ನಮಸ್ಕಾರ! ಹೌದು, Whitefield ಹತ್ತಿರ 2BHK options ಇವೆ. ನಿಮ್ಮ budget ಎಷ್ಟು ಅಂತ ಹೇಳ್ತೀರಾ?', gloss: 'Hello! Yes, there are 2BHK options near Whitefield. What is your budget?' },
+        { speaker: 'Caller', native: 'ಸುಮಾರು 80 lakh ಒಳಗೆ. Weekend-ಅಲ್ಲಿ site visit ಮಾಡಬಹುದಾ?', gloss: 'Under about 80 lakh. Can I do a site visit on the weekend?' },
         { speaker: 'Agent', native: 'ಖಂಡಿತ. ಶನಿವಾರ ಬೆಳಿಗ್ಗೆ 11 ಗಂಟೆಗೆ slot ಖಾಲಿ ಇದೆ, book ಮಾಡ್ಲಾ?', gloss: 'Of course. There’s a free slot on Saturday at 11 a.m. Shall I book it?' },
       ],
       outcome: 'Budget, location and the site-visit slot are saved on the call and can be sent to your CRM.',
@@ -1429,10 +1443,10 @@ export const LANGUAGES: LanguagePage[] = [
       { title: 'Website visitors', body: 'A visitor on your site taps to talk and is answered in Kannada, no phone number or app needed.', to: '/product/widget', link: 'Website call widget' },
     ],
     sampleLines: [
-      { label: 'Greeting', native: 'ನಮಸ್ಕಾರ! ನಾನು Artha, ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ?', gloss: 'Hello! I’m Artha, how can I help you?' },
-      { label: 'When the caller is busy', native: 'ಈಗ busy ಇದ್ರೆ, ಯಾವ ಸಮಯಕ್ಕೆ call ಮಾಡಲಿ?', gloss: 'If you’re busy now, what time shall we call?' },
+      { label: 'Greeting', native: 'ನಮಸ್ಕಾರ, ನಾನು Artha. ನಿಮಗೆ ಹೇಗೆ help ಮಾಡಲಿ?', gloss: 'Hello, I am Artha. How can I help you?' },
+      { label: 'When the caller is busy', native: 'ಈಗ busy ಇದ್ರೆ, ಯಾವ time ಗೆ call ಮಾಡ್ಲಿ?', gloss: 'If you are busy now, what time should we call?' },
       { label: 'A question outside the knowledge base', native: 'ಆ ವಿಷಯ ನಮ್ಮ team ಹತ್ರ confirm ಮಾಡಿ ನಿಮಗೆ ತಿಳಿಸ್ತೀವಿ.', gloss: 'We’ll confirm that with our team and let you know.' },
-      { label: 'Transfer on a phone call', native: 'ಒಂದು ನಿಮಿಷ, ನಿಮ್ಮನ್ನು ನಮ್ಮ sales team ಗೆ connect ಮಾಡ್ತೀನಿ.', gloss: 'One minute, I’ll connect you to our sales team.' },
+      { label: 'Transfer on a phone call', native: 'ಒಂದು ನಿಮಿಷ hold ಮಾಡಿ, sales team ಗೆ connect ಮಾಡ್ತೀನಿ.', gloss: 'Hold for one minute, I will connect you to the sales team.' },
     ],
     guide: [
       { title: 'Script and welcome line', body: 'Write the welcome message in Kannada script, opening with “ನಮಸ್ಕಾರ”, rather than in romanised Kannada. Keep the English words your callers already use, such as “site visit” or “EMI”, instead of formal Kannada terms nobody says on the phone.' },
@@ -1483,8 +1497,8 @@ export const LANGUAGES: LanguagePage[] = [
     sampleExchange: {
       context: 'An inbound order-status call to an online seller',
       turns: [
-        { speaker: 'Caller', native: 'হ্যালো, আমার অর্ডারটা কবে আসবে? অর্ডার নম্বর 5821।', gloss: 'Hello, when will my order arrive? Order number 5821.' },
-        { speaker: 'Agent', native: 'নমস্কার! একটু দেখে নিচ্ছি। আপনার অর্ডারটা আজ বিকেল পাঁচটার মধ্যে পৌঁছানোর কথা। ডেলিভারি পার্টনারের নম্বর কি SMS-এ পাঠিয়ে দেব?', gloss: 'Hello! Let me check. Your order is due to arrive by 5 p.m. today. Shall I send the delivery partner’s number by SMS?' },
+        { speaker: 'Caller', native: 'হ্যালো, আমার order-টা কবে আসবে? order number 5821.', gloss: 'Hello, when will my order arrive? Order number 5821.' },
+        { speaker: 'Agent', native: 'নমস্কার! একটু দেখে নিচ্ছি। আপনার order-টা আজ বিকেল ৫টার মধ্যে পৌঁছানোর কথা। delivery partner-এর number-টা কি SMS-এ পাঠিয়ে দেব?', gloss: 'Hello! Let me check. Your order is due to arrive by 5 p.m. today. Shall I send the delivery partner’s number via SMS?' },
         { speaker: 'Caller', native: 'হ্যাঁ, পাঠিয়ে দিন। ধন্যবাদ।', gloss: 'Yes, please send it. Thank you.' },
       ],
       outcome: 'This sample assumes the seller’s order system is connected, so the status is read from it rather than guessed. The call and the follow-up request are saved on the call.',
@@ -1541,9 +1555,9 @@ export const LANGUAGES: LanguagePage[] = [
     sampleExchange: {
       context: 'An outbound invoice reminder to a trader in Surat',
       turns: [
-        { speaker: 'Agent', native: 'નમસ્તે મહેશભાઈ, હું Artha બોલું છું. Invoice નંબર 1042નું payment 20 તારીખે due છે, એની યાદ અપાવવા ફોન કર્યો છે.', gloss: 'Hello Maheshbhai, this is Artha. The payment for invoice number 1042 is due on the 20th; I’m calling to remind you.' },
+        { speaker: 'Agent', native: 'નમસ્તે મહેશભાઈ, હું Artha બોલું છું. Invoice નંબર 1042 નું payment 20 તારીખે due છે, બસ એની યાદ અપાવવા call કર્યો છે.', gloss: 'Hello Maheshbhai, this is Artha. The payment for invoice number 1042 is due on the 20th; I just called to remind you.' },
         { speaker: 'Caller', native: 'હા, ખબર છે. સોમવાર સુધીમાં transfer કરી દઈશ.', gloss: 'Yes, I know. I’ll transfer it by Monday.' },
-        { speaker: 'Agent', native: 'સારું, હું સોમવારની તારીખ નોંધી લઉં છું. બીજું કંઈ જોઈએ તો કહો.', gloss: 'Fine, I’m noting Monday. Tell me if you need anything else.' },
+        { speaker: 'Agent', native: 'સારું, હું સોમવારની તારીખ નોંધી લઉં છું. બીજું કંઈ હોય તો કહેજો.', gloss: 'Okay, I’m noting down Monday. Let me know if there’s anything else.' },
       ],
       outcome: 'With a post-call field set up for it, the promised date is pulled from the transcript for your accounts team.',
     },
@@ -1654,9 +1668,9 @@ export const LANGUAGES: LanguagePage[] = [
     sampleExchange: {
       context: 'An inbound call to a study-abroad consultancy',
       turns: [
-        { speaker: 'Caller', native: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ ਜੀ, Canada ਦੇ study visa ਲਈ counselling ਕਦੋਂ ਹੋ ਸਕਦੀ ਹੈ?', gloss: 'Sat Sri Akal, when can I get counselling for a Canada study visa?' },
-        { speaker: 'Agent', native: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਕੱਲ੍ਹ ਸਵੇਰੇ 11 ਵਜੇ ਦਾ slot ਖਾਲੀ ਹੈ। ਤੁਹਾਡਾ IELTS ਹੋ ਗਿਆ ਹੈ?', gloss: 'Sat Sri Akal! There’s a free slot tomorrow at 11 a.m. Have you taken your IELTS?' },
-        { speaker: 'Caller', native: 'ਹਾਂ ਜੀ, 6.5 bands ਆਏ ਨੇ। 11 ਵਜੇ ਠੀਕ ਹੈ।', gloss: 'Yes, I got 6.5 bands. 11 o’clock is fine.' },
+        { speaker: 'Caller', native: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ, Canada ਦੇ study visa ਲਈ counselling ਕਦੋਂ ਹੋ ਸਕਦੀ ਹੈ?', gloss: 'Hello, when can I get counselling for a Canada study visa?' },
+        { speaker: 'Agent', native: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਕੱਲ੍ਹ ਸਵੇਰੇ 11 ਵਜੇ ਦਾ slot ਖਾਲੀ ਹੈ। ਤੁਹਾਡਾ IELTS ਹੋ ਗਿਆ?', gloss: 'Hello! The slot is free tomorrow morning at 11. Have you done your IELTS?' },
+        { speaker: 'Caller', native: 'ਹਾਂ ਜੀ, 6.5 bands ਆਏ ਨੇ। 11 ਵਜੇ ਠੀਕ ਹੈ ਜੀ।', gloss: 'Yes, I got 6.5 bands. 11 o’clock is fine.' },
         { speaker: 'Agent', native: 'ਵਧੀਆ। ਆਪਣਾ ਨਾਂ ਦੱਸ ਦਿਓ, ਮੈਂ ਕੱਲ੍ਹ 11 ਵਜੇ ਦੀ counselling book ਕਰ ਦਿੰਦੀ ਹਾਂ।', gloss: 'Great. Tell me your name and I’ll book the counselling for 11 tomorrow.' },
       ],
       outcome: 'The appointment lands in Appointments inside the consultancy’s bookable hours. With a post-call field set up for it, the IELTS score is saved for the counsellor.',
@@ -1701,9 +1715,9 @@ export const LANGUAGES: LanguagePage[] = [
       context: 'An inbound call to a coaching institute in Bhubaneswar',
       turns: [
         { speaker: 'Caller', native: 'ନମସ୍କାର, ଆପଣଙ୍କ ଇନଷ୍ଟିଚ୍ୟୁଟରେ ନୂଆ batch କେବେ ଆରମ୍ଭ ହେବ?', gloss: 'Hello, when does the new batch start at your institute?' },
-        { speaker: 'Agent', native: 'ନମସ୍କାର! ନୂଆ batch ଆସନ୍ତା ସୋମବାରରୁ ଆରମ୍ଭ ହେବ। ଆପଣ କେଉଁ class ପାଇଁ ପଚାରୁଛନ୍ତି?', gloss: 'Hello! The new batch starts from next Monday. Which class are you asking about?' },
-        { speaker: 'Caller', native: 'Class 10 ପାଇଁ। Demo class ଅଛି କି?', gloss: 'For class 10. Is there a demo class?' },
-        { speaker: 'Agent', native: 'ହଁ, ଆସନ୍ତାକାଲି ସକାଳ 10ଟାରେ demo class ଅଛି। ଆପଣଙ୍କ ନାମ କହିବେ, ମୁଁ book କରିଦେବି।', gloss: 'Yes, there is a demo class tomorrow at 10 a.m. Tell me your name and I will book it.' },
+        { speaker: 'Agent', native: 'ନମସ୍କାର! ନୂଆ batch ଆସନ୍ତା ସୋମବାରରୁ ଆରମ୍ଭ ହେବ। ଆପଣ କୋଉ class ପାଇଁ ପଚାରୁଛନ୍ତି?', gloss: 'Hello! The new batch starts from next Monday. Which class are you asking about?' },
+        { speaker: 'Caller', native: 'Class 10 ପାଇଁ। କିଛି demo class ଅଛି କି?', gloss: 'For class 10. Is there any demo class?' },
+        { speaker: 'Agent', native: 'ହଁ, ଆସନ୍ତାକାଲି ସକାଳ 10ଟାରେ demo class ଅଛି। ଆପଣଙ୍କ ନାଁ କହିବେ, ମୁଁ book କରିଦେବି।', gloss: 'Yes, there is a demo class tomorrow at 10 a.m. Tell me your name, I will book it.' },
       ],
       outcome: 'The class, the demo slot and the caller’s name are saved on the call, so the admissions team can follow up with the right batch details.',
     },

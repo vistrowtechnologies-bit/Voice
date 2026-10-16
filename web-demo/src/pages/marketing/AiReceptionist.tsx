@@ -59,10 +59,10 @@ const DAY = [
 
 const SAMPLE = [
   { speaker: 'Agent', line: 'Namaste, Sunrise Dental Clinic. How can I help you today?' },
-  { speaker: 'Caller', line: 'Haan, mujhe cleaning ke liye appointment chahiye, Thursday ko.' },
-  { speaker: 'Agent', line: 'Zaroor. Thursday ko 11 baje aur 4 baje slot khaali hai. Aapke liye kaunsa theek rahega?' },
-  { speaker: 'Caller', line: '4 baje. Naam Priya hai.' },
-  { speaker: 'Agent', line: 'Thank you, Priya ji. Thursday 4 baje ka appointment book ho gaya hai. Kya main is number ko hi contact number ke liye save karun?' },
+  { speaker: 'Caller', line: 'Haan, mujhe cleaning ki appointment chahiye, Thursday ko.' },
+  { speaker: 'Agent', line: 'Theek hai. Thursday ko 11 baje aur 4 baje ka slot khaali hai. Aapko kaunsa time suit karega?' },
+  { speaker: 'Caller', line: '4 baje. Mera naam Priya hai.' },
+  { speaker: 'Agent', line: 'Thank you, Priya ji. Thursday 4 baje ka appointment book ho gaya hai. Kya main is number ko hi contact number ke liye save kar doon?' },
 ]
 
 const HANDLES = [

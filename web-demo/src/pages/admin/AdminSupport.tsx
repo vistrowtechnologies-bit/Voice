@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
-import { AdminCard, EmptyState, PageHeader } from '../../components/AdminUI'
+import { AdminCard, EmptyState, errMsg, ErrorState, PageHeader } from '../../components/AdminUI'
 import { PriorityChip, StatusChip, TicketThread } from '../../components/SupportTicketParts'
 import { CATEGORY_LABELS, ticketTime, toUploads } from '../../lib/support'
 import { Icon } from '../../components/Icon'
@@ -61,6 +61,10 @@ export function AdminSupport() {
   const [rows, setRows] = useState<SupportTicket[] | null>(null)
   const [selected, setSelected] = useState<SupportTicket | null>(null)
   const [saving, setSaving] = useState(false)
+  const [listError, setListError] = useState<string | null>(null)
+  const [detailError, setDetailError] = useState<string | null>(null)
+  const [detailReload, setDetailReload] = useState(0)
+  const [updateError, setUpdateError] = useState<string | null>(null)
   const [team, setTeam] = useState<{ id: number; name: string; email: string }[]>([])
   useEffect(() => {
     adminSupportTeam().then(setTeam).catch(() => setTeam([]))
@@ -68,17 +72,27 @@ export function AdminSupport() {
 
   const load = useCallback(() => {
     setRows(null)
-    adminSupportTickets(filter).then(setRows).catch(() => setRows([]))
+    setListError(null)
+    adminSupportTickets(filter)
+      .then(setRows)
+      .catch((e: unknown) => setListError(errMsg(e)))
   }, [filter])
   useEffect(load, [load])
 
   useEffect(() => {
+    setDetailError(null)
+    setUpdateError(null)
     if (!selectedId) {
       setSelected(null)
       return
     }
-    adminSupportTicket(selectedId).then(setSelected).catch(() => setSelected(null))
-  }, [selectedId])
+    adminSupportTicket(selectedId)
+      .then(setSelected)
+      .catch((e: unknown) => {
+        setSelected(null)
+        setDetailError(errMsg(e))
+      })
+  }, [selectedId, detailReload])
 
   const applyUpdate = (t: SupportTicket) => {
     setSelected(t)
@@ -88,8 +102,11 @@ export function AdminSupport() {
   const change = async (patch: { status?: string; priority?: string }) => {
     if (!selected) return
     setSaving(true)
+    setUpdateError(null)
     try {
       applyUpdate(await adminUpdateSupportTicket(selected.id, patch))
+    } catch (e) {
+      setUpdateError(`Couldn't update the ticket: ${errMsg(e)}`)
     } finally {
       setSaving(false)
     }
@@ -109,9 +126,11 @@ export function AdminSupport() {
           </button>
         ))}
       </AdminCard>
-      <div className="grid gap-4 xl:grid-cols-[minmax(320px,420px)_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(280px,380px)_1fr] xl:grid-cols-[minmax(320px,420px)_1fr]">
         <AdminCard className="overflow-hidden">
-          {rows === null ? (
+          {listError ? (
+            <ErrorState message={`Couldn't load tickets: ${listError}`} onRetry={load} />
+          ) : rows === null ? (
             <p className="p-5 text-sm text-text-muted">Loading…</p>
           ) : rows.length === 0 ? (
             <EmptyState icon="support_agent" message="No tickets here. New tickets from any workspace land in this inbox and in the support email." />
@@ -173,8 +192,11 @@ export function AdminSupport() {
                       value={selected.assignedUserId ?? ''}
                       onChange={async (e) => {
                         setSaving(true)
+                        setUpdateError(null)
                         try {
                           applyUpdate(await adminAssignSupportTicket(selected.id, e.target.value ? Number(e.target.value) : null))
+                        } catch (err) {
+                          setUpdateError(`Couldn't update the assignee: ${errMsg(err)}`)
                         } finally {
                           setSaving(false)
                         }
@@ -205,6 +227,11 @@ export function AdminSupport() {
                   </label>
                 </div>
               </div>
+              {updateError && (
+                <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {updateError}
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-3 text-xs">
                 <FirstResponse ticket={selected} />
                 {selected.rating && (
@@ -222,9 +249,14 @@ export function AdminSupport() {
                 onReply={async (body, files) => applyUpdate(await adminReplySupportTicket(selected.id, body, await toUploads(files)))}
               />
             </div>
+          ) : detailError ? (
+            <ErrorState message={`Couldn't load this ticket: ${detailError}`} onRetry={() => setDetailReload((n) => n + 1)} />
+          ) : selectedId ? (
+            <p className="text-sm text-text-muted">Loading…</p>
           ) : (
             <EmptyState icon="forum" message="Pick a ticket to read and reply." />
           )}
+
         </AdminCard>
       </div>
     </>

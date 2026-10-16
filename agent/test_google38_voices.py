@@ -35,12 +35,12 @@ class Google38Voices(unittest.TestCase):
             self.assertTrue(v["preview"], v["value"])
             self.assertTrue(v["multilingual"], v["value"])
             self.assertEqual(v["tier"], "premium", v["value"])
-            self.assertIn("Flash-Lite", v["name"])
+            self.assertTrue(v["name"].endswith(" Studio Lite"), v["name"])
             self.assertIn(v["gender"], ("male", "female"))
         for v in self.flash_entries():
             self.assertTrue(v["preview"], v["value"])
             self.assertEqual(v["tier"], "premium", v["value"])
-            self.assertIn("Flash", v["name"])
+            self.assertTrue(v["name"].endswith(" Studio"), v["name"])
 
     def test_model_mapping(self):
         self.assertEqual(

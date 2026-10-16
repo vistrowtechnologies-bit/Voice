@@ -33,13 +33,13 @@ const PARTS = [
 ]
 
 const SAMPLE: { who: 'bot' | 'caller'; text: string }[] = [
-  { who: 'bot', text: 'Namaste, Sunrise Dental Clinic. Main appointment mein madad kar sakti hoon. Bataiye?' },
-  { who: 'caller', text: 'Haan, mujhe cleaning ke liye aana tha, is Saturday ho sakta hai?' },
-  { who: 'bot', text: 'Saturday ko 11 baje aur 3 baje ke slot khaali hain. Kaunsa theek rahega?' },
-  { who: 'caller', text: '11 is fine. Price kitna hai cleaning ka?' },
+  { who: 'bot', text: 'Namaste, Sunrise Dental Clinic. Main aapki appointment mein help kar sakti hoon. Bataiye?' },
+  { who: 'caller', text: 'Haan, mujhe cleaning karwani hai, is Saturday aa sakta hoon kya?' },
+  { who: 'bot', text: 'Saturday ko 11 baje aur 3 baje ke slots free hain. Kaunsa theek rahega?' },
+  { who: 'caller', text: '11 baje theek hai. Cleaning ka price kitna hai?' },
   { who: 'bot', text: 'Clinic ki list ke hisaab se cleaning ka charge doctor checkup ke baad confirm hota hai. Main 11 baje ka slot book kar doon? Aapka naam bata dijiye.' },
   { who: 'caller', text: 'Rohan Mehta.' },
-  { who: 'bot', text: 'Ho gaya, Rohan ji. Saturday 11 baje, cleaning. Kuch aur?' },
+  { who: 'bot', text: 'Ho gaya, Rohan Mehta ji. Saturday 11 baje, cleaning. Aur kuch chahiye?' },
 ]
 
 const MAPPING: { need: string; where: string }[] = [
@@ -108,7 +108,7 @@ export function VoiceBot() {
 
       <section className="mx-auto max-w-3xl px-5 py-8 md:px-8">
         <SectionEyebrow>In plain words</SectionEyebrow>
-        <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What a voice bot is.</h2>
+        <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What an AI voice bot is.</h2>
         <div className="mt-4 space-y-4 leading-relaxed text-text-muted">
           <p>
             A voice bot is a computer program you can talk to. You call a number or press a button on a website, and
@@ -255,7 +255,11 @@ export function VoiceBot() {
               <Link to="/vs-ivr" className="font-semibold text-primary underline-offset-4 hover:underline">
                 voice agent vs IVR comparison
               </Link>{' '}
-              goes through it.
+              goes through it. For one bot that answers your number and also calls customers back, see the{' '}
+              <Link to="/ai-calling-agent" className="font-semibold text-primary underline-offset-4 hover:underline">
+                AI calling agent
+              </Link>{' '}
+              page.
             </p>
           </div>
         </div>

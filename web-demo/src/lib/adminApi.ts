@@ -97,7 +97,11 @@ export interface AdminOverview {
     // Added by the admin P0 backend; absent on older servers.
     calls?: number
     firstCallAt?: string | null
+    /** Real commercial state: subscription plan, 'top-up', 'trial' or 'none'. */
+    effectivePlan?: string
   }[]
+  /** Vistrow's own accounts, left out of every number on this page. */
+  internalAccountIds?: number[]
   // Operations overview (admin P0). Optional until the backend ships it.
   ops?: {
     failedCalls1h: number
@@ -129,9 +133,12 @@ export interface AdminAccountRow {
   agents: number
   calls: number
   last_call: string | null
-  credits_used: number
-  credits_total: number
+  /** This billing period, as the customer's Billing page shows it; null if it couldn't be read. */
+  credits_used: number | null
+  credits_total: number | null
   mrr: number
+  effective_plan?: string
+  internal?: boolean
   // Signup facts for the list: ad source (utm_source) or "How did you hear".
   source?: string
   industry?: string
@@ -150,6 +157,10 @@ export interface AdminAccountDetail {
     // Full-page onboarding answers and first-touch attribution (JSON objects).
     onboarding_profile?: Record<string, string | string[]>
     signup_attribution?: Record<string, string>
+    /** Real commercial state: subscription plan, 'top-up', 'trial' or 'none'. */
+    effective_plan?: string
+    internal?: boolean
+    is_platform_owner?: number
   }
   owner: { id: number; email: string; name: string; phone?: string; auth_provider?: string | null } | null
   billing: { creditsTotal: number; creditsUsed: number; creditsRemaining: number; minutesUsed: number }
@@ -246,6 +257,7 @@ export interface AdminCallRow {
   failureReason?: string | null
   disconnectReason?: string | null
   startedAtIso?: string
+  internal?: boolean
 }
 
 export interface AdminCallDetail extends AdminCallRow {
@@ -286,6 +298,37 @@ export interface AdminCallDetail extends AdminCallRow {
     previousProvider?: string
     reason?: string
   }[]
+  /** Visitor behind a website demo / test / widget call (null for phone calls and older calls). */
+  visitor?: AdminCallVisitor | null
+}
+
+export interface AdminCallVisitor {
+  ip: string
+  userAgent: string
+  source: string
+  seenAt: string
+  callsFromIp30d: number
+  /** Id of the block covering this IP, or null. */
+  blockId: number | null
+}
+
+export interface AdminIpBlock {
+  id: number
+  network: string
+  reason: string
+  createdAt: string
+  createdBy: string
+  expiresAt: string | null
+  active: boolean
+}
+
+export interface AdminPricing {
+  plans: { plan: string; priceInr: number; credits: number }[]
+  channelRates: Record<string, number>
+  voiceTiers: Record<string, number>
+  modelTiers: Record<string, number>
+  minCreditsPerMinute: number
+  overageMultiplier: number
 }
 
 export interface AdminAnalytics {
@@ -297,12 +340,15 @@ export interface AdminAnalytics {
   avgDurationSec: number
   retention: { activeThisMonth: number; activeLastMonth: number }
   mrr: number
+  /** Customer revenue (ex GST) in the last 30 days; ARPA = this / paying accounts. */
+  revenue30dInr?: number
   arpa: number
 }
 
 export interface AdminBilling {
   mrr: number
   payingAccounts: number
+  revenue30dInr?: number
   arpa: number
   byPlan: { plan: string; accounts: number; price: number; mrr: number }[]
   nearLimit: { id: number; name: string; plan: string; used: number; total: number; pct: number }[]
@@ -331,6 +377,7 @@ export interface AdminUsageRow {
   revenueInr: number
   estCostInr: number
   marginInr: number
+  internal?: boolean
 }
 
 export interface AdminUsage {
@@ -338,7 +385,10 @@ export interface AdminUsage {
   costEstimated: true
   rates: { key: string; label: string; inrPerMin: number; source: string }[]
   accounts: AdminUsageRow[]
+  /** Customers only. */
   totals: Omit<AdminUsageRow, 'id' | 'name' | 'plan'>
+  /** Vistrow's own accounts (real vendor cost, no revenue). */
+  internalTotals?: Omit<AdminUsageRow, 'id' | 'name' | 'plan'>
 }
 
 export interface AdminRevenueMonth {
@@ -538,10 +588,18 @@ export const adminSyncOutboundTrunk = (address: string, callerId: string, reason
 
 export const PLAN_LABELS: Record<string, string> = { free: 'Free', starter: 'Starter', growth: 'Growth', scale: 'Scale' }
 
-// Display-only mirrors of the backend's admin_db.PLAN_PRICING and the default
-// per-channel credit rates, shown on the admin Settings page for reference.
-export const PLAN_PRICING_REF: Record<string, number> = { free: 0, starter: 2999, growth: 5999, scale: 12999 }
-export const CREDIT_RATES_REF: Record<string, number> = { browser: 1, phone: 1.5, widget: 1 }
+// What billing actually charges, read from the server (Settings page).
+export const adminPricing = () => aget<AdminPricing>('/pricing')
+
+// Real commercial state of an account (admin_db._EFFECTIVE_PLAN).
+export const EFFECTIVE_PLAN_LABELS: Record<string, string> = {
+  starter: 'Starter', growth: 'Growth', scale: 'Scale', 'top-up': 'Top-up', trial: 'Trial', none: 'No plan',
+}
+
+export const adminIpBlocks = () => aget<{ blocks: AdminIpBlock[] }>('/ip-blocks')
+export const adminAddIpBlock = (ip: string, reason: string, expiresDays: number | null) =>
+  apost<{ ok: boolean; id: number; network: string }>('/ip-blocks', { ip, reason, expiresDays })
+export const adminRemoveIpBlock = (id: number, reason: string) => apost<{ ok: boolean }>(`/ip-blocks/${id}/remove`, { reason })
 
 // ----------------------------------------------------------- support inbox
 

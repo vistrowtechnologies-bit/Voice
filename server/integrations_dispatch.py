@@ -32,6 +32,11 @@ logger = logging.getLogger("vistrow-integrations")
 _DELIVERY_KEYS = {"webhook", "slack", "whatsapp", "sheets", "arthaleads", "zoho_crm"}
 
 _ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"
+# Base of ArthaLeads' API for the link handshake (single-token contract,
+# 2026-10-16); env override for a staging ArthaLeads.
+_ARTHALEADS_API_BASE = (os.environ.get("ARTHALEADS_API_BASE") or _ARTHALEADS_URL.rsplit("/webhook/", 1)[0]).rstrip("/")
+_ARTHALEADS_REJECTED = "ArthaLeads did not accept this key. Copy it again from ArthaLeads → Integrations → Vistrow Voice."
+_ARTHALEADS_PLAN = "ArthaLeads says this feature needs its Enterprise plan."
 
 
 def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
@@ -363,17 +368,37 @@ def _deliver_one(key: str, config: dict, lead: dict, account_id: int | None = No
     return _post_json(url, body)
 
 
-def deliver_lead(account_id: int, lead: dict) -> dict:
+def _wants_event(key: str, config: dict, lead: dict) -> bool:
+    """Server-side twin of agent/tools.py _integration_wants_event: honours
+    the owner's chosen event types; a lead without a known type is never
+    filtered."""
+    if key not in calls_db.EVENT_CONFIGURABLE_KEYS or (key == "sheets" and config.get("mode") == "oauth"):
+        return True
+    event = lead.get("type")
+    if event not in calls_db.INTEGRATION_EVENTS:
+        return True
+    chosen = config.get("events")
+    if not isinstance(chosen, list) or not chosen:
+        chosen = calls_db.default_integration_events(key)
+    return event in chosen
+
+
+def deliver_lead(account_id: int, lead: dict, skip_keys: frozenset = frozenset()) -> dict:
     """Deliver `lead` to every connected delivery integration for the tenant.
     Best-effort: returns a per-integration result map, never raises. Stamps
-    last_sync on each success so the UI can show 'last delivered'."""
+    last_sync on each success so the UI can show 'last delivered'. Applies
+    the owner's event and field choices per integration, as the agent's
+    call-end fan-out does."""
     results: dict[str, str] = {}
     for integ in calls_db.list_integrations(account_id):
         key = integ["key"]
-        if key not in _DELIVERY_KEYS or integ.get("status") != "connected":
+        config = integ.get("config") or {}
+        if key not in _DELIVERY_KEYS or key in skip_keys or integ.get("status") != "connected":
+            continue
+        if not _wants_event(key, config, lead):
             continue
         try:
-            ok, detail = _deliver_one(key, integ.get("config") or {}, lead, account_id)
+            ok, detail = _deliver_one(key, config, apply_field_choice(key, config, lead), account_id)
         except Exception:
             logger.exception("integration %s delivery crashed", key)
             ok, detail = False, "error"
@@ -468,19 +493,51 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
     return ok, detail
 
 
-def _call_transcript_message(transcript: list[dict]) -> str:
-    """Renders a get_call()-shaped transcript ({speaker, text} turns) as
-    readable "Caller: ... / Agent: ..." lines — the ArthaLeads-side twin of
-    agent/tools.py's _transcript_message, which only ever sees the raw
-    {role, text} shape from a live session."""
-    lines = []
+def _saved_turns(transcript: list[dict]) -> list[dict]:
+    """A saved call's transcript as {speaker: "Caller"|"Agent", text} turns,
+    empty turns dropped. Voice calls store {speaker: "visitor"|"agent",
+    text}; widget text chats store the chat model's {role: "user"|
+    "assistant", content} (calls_db.upsert_widget_chat_call)."""
+    turns = []
     for turn in transcript:
-        text = (turn.get("text") or "").strip()
+        text = str(turn.get("text") or turn.get("content") or "").strip()
         if not text:
             continue
-        speaker = "Caller" if turn.get("speaker") == "visitor" else "Agent"
-        lines.append(f"{speaker}: {text}")
-    return "\n".join(lines)
+        caller = turn.get("speaker") == "visitor" or turn.get("role") == "user"
+        turns.append({"speaker": "Caller" if caller else "Agent", "text": text})
+    return turns
+
+
+def _call_transcript_message(transcript: list[dict]) -> str:
+    """Renders a saved transcript as readable "Caller: ... / Agent: ..."
+    lines — the ArthaLeads-side twin of agent/tools.py's
+    _transcript_message, which only ever sees the raw {role, text} shape
+    from a live session."""
+    return "\n".join(f"{t['speaker']}: {t['text']}" for t in _saved_turns(transcript))
+
+
+def _saved_call_outcome(call: dict) -> dict:
+    """crm_outcome (agent/tools.py) from what a saved call row still knows:
+    the booked site visit and whether the caller ever spoke. Callback and
+    opt-out live only in the live session, so a manual re-send can't carry
+    them."""
+    visit = call.get("siteVisit") or {}
+    caller_spoke = any(t["speaker"] == "Caller" for t in _saved_turns(call.get("transcript") or []))
+    if visit.get("date"):
+        out = {"booking": "Site Visit Booked", "status": "Site Visit"}
+        try:
+            from zoneinfo import ZoneInfo
+            import datetime as _dt
+
+            out["site_visit_at"] = _dt.datetime.strptime(
+                f"{visit['date']} {(visit.get('time') or '10:00')[:5]}", "%Y-%m-%d %H:%M"
+            ).replace(tzinfo=ZoneInfo("Asia/Kolkata")).isoformat()
+        except (ValueError, KeyError):
+            pass
+        return out
+    if not caller_spoke:
+        return {"booking": "Not Reachable"} if call.get("direction") == "outbound" else {}
+    return {"status": "Contacted"}
 
 
 def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
@@ -493,14 +550,116 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
     call = calls_db.get_call(call_id, account_id)
     if call is None:
         return False, "Call not found"
-    integ = next((i for i in calls_db.list_integrations(account_id) if i["key"] == "arthaleads"), None)
-    if integ is None or integ.get("status") != "connected":
-        return False, "ArthaLeads isn't connected"
-    token = (integ.get("config") or {}).get("token", "").strip()
+    token, why = _arthaleads_token(account_id)
     if not token:
-        return False, "No ArthaLeads token saved"
+        return False, why
     if not (call.get("name") and call.get("phone")):
         return False, "This call has no name or phone number to send"
+    body = _arthaleads_call_body(account_id, call_id, call, token)
+    ok, detail = _post_json(_ARTHALEADS_URL, body)
+    try:
+        if ok:
+            calls_db.touch_integration_sync(account_id, "arthaleads")
+            calls_db.set_call_arthaleads_status(call_id, account_id, "sent")
+        else:
+            calls_db.mark_integration_error(account_id, "arthaleads", detail)
+            calls_db.set_call_arthaleads_status(call_id, account_id, "failed", detail)
+    except Exception:
+        pass
+    return ok, detail
+
+
+def _arthaleads_token(account_id: int) -> tuple[str, str]:
+    """(token, '') when ArthaLeads is connected with a token, else ('', why)."""
+    integ = next((i for i in calls_db.list_integrations(account_id) if i["key"] == "arthaleads"), None)
+    if integ is None or integ.get("status") != "connected":
+        return "", "ArthaLeads isn't connected"
+    token = (integ.get("config") or {}).get("token", "").strip()
+    if not token:
+        return "", "No ArthaLeads token saved"
+    return token, ""
+
+
+def _arthaleads_api_post(path: str, payload: dict, timeout: int = 8) -> tuple[int, str]:
+    """(HTTP status, body text) of a POST to ArthaLeads' API; status 0 and the
+    error text when no response came back. Never raises."""
+    req = urllib.request.Request(
+        f"{_ARTHALEADS_API_BASE}{path}",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "User-Agent": "Vistrow-Voice/1.0"},
+        method="POST",
+    )
+    try:
+        with kb_crawl.safe_opener().open(req, timeout=timeout) as resp:
+            return resp.status, resp.read(2000).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read(2000).decode("utf-8", "replace")
+        except Exception:
+            body = ""
+        return e.code, body
+    except (urllib.error.URLError, TimeoutError, ValueError, RuntimeError, OSError) as e:
+        return 0, str(e)
+
+
+def link_arthaleads(account_id: int, token: str) -> tuple[dict, str]:
+    """The single-token handshake: tells ArthaLeads which Vistrow account this
+    connection key now belongs to, so its auto-call setup fills itself in.
+    Returns (link, detail) where link is the server-managed config.link —
+    status "linked" (ArthaLeads accepted), "rejected" (401/403: wrong key or
+    plan; do not save the key), or "pending" (ArthaLeads unreachable or
+    answered oddly; the key is valid as far as we know, retry from Test)."""
+    checked_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    status, text = _arthaleads_api_post("/webhook/vistrow/link", {
+        "token": token,
+        "account_id": str(account_id),
+        "base_url": calls_db.public_base_url() or "https://api.vistrowvoice.com",
+        "account_name": calls_db.account_name(account_id),
+    })
+    if status in (401, 403):
+        detail = _ARTHALEADS_PLAN if status == 403 else _ARTHALEADS_REJECTED
+        return {"status": "rejected", "error": detail, "checked_at": checked_at}, detail
+    body = None
+    if status == 200:
+        try:
+            body = json.loads(text)
+        except ValueError:
+            body = None
+    if isinstance(body, dict) and body.get("success") is True:
+        org_name = str(body.get("org_name") or "").strip()
+        link = {"status": "linked", "org_name": org_name, "linked_at": str(body.get("linked_at") or checked_at),
+                "checked_at": checked_at}
+        return link, f"Linked with ArthaLeads ({org_name or 'your organisation'}). Vistrow account {account_id}."
+    error = (f"HTTP {status}: {text[:120]}" if status else text)[:160].strip() or "no response"
+    logger.warning("arthaleads link pending for account %s: %s", account_id, error)
+    return ({"status": "pending", "error": error, "checked_at": checked_at},
+            "Saved, but ArthaLeads could not be reached to finish linking. Click Send test to retry.")
+
+
+def unlink_arthaleads(account_id: int, token: str) -> bool:
+    """Best-effort: tells ArthaLeads this key no longer drives auto-calls."""
+    status, text = _arthaleads_api_post("/webhook/vistrow/unlink", {"token": token})
+    if status != 200:
+        logger.warning("arthaleads unlink failed for account %s: %s %s", account_id, status, text[:120])
+    return status == 200
+
+
+def relink_arthaleads(account_id: int) -> tuple[bool, str]:
+    """Test button: re-run the handshake with the stored key and refresh
+    config.link. True only when ArthaLeads confirmed the link."""
+    integ = next((i for i in calls_db.list_integrations(account_id, strict=True) if i["key"] == "arthaleads"), None)
+    config = (integ or {}).get("config") or {}
+    token = (config.get("token") or "").strip()
+    if (integ or {}).get("status") != "connected" or not token:
+        return False, "ArthaLeads isn't connected"
+    link, detail = link_arthaleads(account_id, token)
+    calls_db.update_integration("arthaleads", "connected", {**config, "link": link}, account_id)
+    return link["status"] == "linked", detail
+
+
+def _arthaleads_call_body(account_id: int, call_id: int, call: dict, token: str) -> dict:
+    """The /webhook/lead body for one saved call - the same shape the agent
+    sends at call end (agent/tools.py _integration_body)."""
     transcript = call.get("transcript") or []
     share_token = calls_db.ensure_call_recording_share_token(call_id, account_id)
     public_base = calls_db.public_base_url() or "https://api.vistrowvoice.com"
@@ -508,17 +667,13 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
         f"{public_base}/public/calls/{call_id}/recording?token={share_token}"
         if share_token and call.get("hasRecording") else ""
     )
-    body = {
+    return {
         "token": token,
         "name": call.get("name") or "Unknown caller",
         "phone": call.get("phone", ""),
         "email": call.get("email", ""),
         "message": _call_transcript_message(transcript),
-        "transcript": [
-            {"speaker": "Caller" if t.get("speaker") == "visitor" else "Agent", "text": t.get("text", "")}
-            for t in transcript
-            if (t.get("text") or "").strip()
-        ],
+        "transcript": _saved_turns(transcript),
         "sentiment": call.get("sentiment") or "neutral",
         "duration_seconds": call.get("durationSeconds"),
         "channel": call.get("channel") or "",
@@ -530,15 +685,105 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
         "recording_url": recording_url,
         "recording_mime_type": "audio/wav",
         "extracted_data": call.get("extractedData") or {},
+        "arthaleads_lead_id": calls_db.arthaleads_lead_id_for_call(call_id, account_id),
+        "direction": call.get("direction") or "",
+        "crm_outcome": _saved_call_outcome(call),
     }
+
+
+def deliver_widget_chat(call: dict) -> dict:
+    """Deliver one finished widget text chat ({id, account_id} from
+    calls_db.idle_widget_chats or widget_chat_call) to the account's
+    integrations — the server-side twin of the agent's call-end fan-out,
+    which text chats never pass through (no LiveKit room, no agent). Same
+    skip rule as voice: nothing reaches a CRM without a phone number or
+    email. ArthaLeads goes through push_call_to_arthaleads so the call's
+    arthaleads_status is stamped exactly as a manual send would. Always
+    stamps integrations_delivered_at, so a failing integration is not
+    retried every tick (the manual Send button is the retry)."""
+    call_id, account_id = int(call["id"]), int(call["account_id"])
+    if not calls_db.claim_widget_chat_delivery(call_id, account_id):
+        return {}
+    saved = calls_db.get_call(call_id, account_id)
+    if saved is None:
+        return {}
+    if not (saved.get("phone") or saved.get("email")):
+        results = {"skipped": "no_contact"}
+    else:
+        transcript = _saved_turns(saved.get("transcript") or [])
+        lead = {
+            "type": "call_completed",
+            "name": saved.get("name"),
+            "phone": saved.get("phone"),
+            "email": saved.get("email"),
+            "channel": "Website chat",
+            "duration_seconds": saved.get("durationSeconds"),
+            "transcript": transcript,
+            "message": "\n".join(f"{t['speaker']}: {t['text']}" for t in transcript),
+            "extracted_data": saved.get("extractedData") or {},
+            "language": saved.get("replyLanguage") or "",
+            "agent_name": saved.get("agent") or "",
+            "agent_id": calls_db.agent_public_id(saved.get("agentId")),
+            "page_path": saved.get("pagePath") or "",
+            "call_id": call_id,
+        }
+        results = deliver_lead(account_id, lead, skip_keys=frozenset({"arthaleads"}))
+        if _arthaleads_token(account_id)[0]:
+            ok, detail = push_call_to_arthaleads(account_id, call_id)
+            results["arthaleads"] = "ok" if ok else detail
+        for key, outcome in results.items():
+            calls_db.record_integration_delivery(
+                account_id, key, "call_completed", "sent" if outcome == "ok" else "failed",
+                "" if outcome == "ok" else outcome, saved.get("name") or "", call_id,
+            )
+    calls_db.mark_widget_chat_delivered(call_id, account_id, results)
+    return results
+
+
+def report_contact_not_reachable(account_id: int, contact: dict) -> tuple[bool, str]:
+    """Tell ArthaLeads a lead's auto-call attempts are spent (the dialer calls
+    this for calls_db.exhausted_arthaleads_contacts). Sent on the lead's last
+    saved call when a dial got far enough to leave one, else as a minimal
+    entry for the lead itself - a busy/switched-off dial saves no call row,
+    and the CRM still needs to hear that nobody was reached."""
+    token, why = _arthaleads_token(account_id)
+    if not token:
+        return False, why
+    attempts = int(contact.get("attempts") or 0)
+    outcome = {"booking": "Not Reachable", "attempts": attempts}
+    call_id = contact.get("last_call_id")
+    call = calls_db.get_call(int(call_id), account_id) if call_id else None
+    if call and call.get("phone"):
+        body = {**_arthaleads_call_body(account_id, int(call_id), call, token), "crm_outcome": outcome}
+    else:
+        fields = contact.get("custom_fields") or {}
+        agent = calls_db.get_agent_by_id_unscoped(int(contact["agent_id"])) if contact.get("agent_id") else None
+        body = {
+            "token": token,
+            "name": contact.get("name") or "Unknown caller",
+            "phone": contact.get("phone") or "",
+            "email": str(fields.get("email") or ""),
+            "message": f"Not reachable after {attempts} call attempt(s) ({contact.get('outcome') or 'no answer'}).",
+            "transcript": [],
+            "channel": "phone",
+            "agent_name": (agent or {}).get("name") or "",
+            "agent_id": calls_db.agent_public_id(contact.get("agent_id")),
+            # ArthaLeads keys a call on a numeric call_id and treats a null
+            # one as a plain lead (new row, 2-minute dedupe, no attempts).
+            # No call row exists for an undelivered dial, so the report gets
+            # a synthetic id: the negated contact id, unique per contact and
+            # never equal to a real (positive) call id.
+            "call_id": -int(contact["id"]),
+            "arthaleads_lead_id": str(fields.get("arthaleads_lead_id") or ""),
+            "direction": "outbound",
+            "crm_outcome": outcome,
+        }
     ok, detail = _post_json(_ARTHALEADS_URL, body)
     try:
         if ok:
             calls_db.touch_integration_sync(account_id, "arthaleads")
-            calls_db.set_call_arthaleads_status(call_id, account_id, "sent")
         else:
             calls_db.mark_integration_error(account_id, "arthaleads", detail)
-            calls_db.set_call_arthaleads_status(call_id, account_id, "failed", detail)
     except Exception:
         pass
     return ok, detail

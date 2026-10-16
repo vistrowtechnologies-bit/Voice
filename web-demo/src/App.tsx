@@ -31,6 +31,7 @@ import { BuyerGuide } from './pages/marketing/BuyerGuide'
 import { VoiceAiPlatform } from './pages/marketing/VoiceAiPlatform'
 import { AiCallCenter } from './pages/marketing/AiCallCenter'
 import { AiTelecaller } from './pages/marketing/AiTelecaller'
+import { AiCallingAgent } from './pages/marketing/AiCallingAgent'
 import { VoiceBot } from './pages/marketing/VoiceBot'
 import { LocalRealEstate } from './pages/marketing/LocalRealEstate'
 import { DemoCall } from './pages/marketing/DemoCall'
@@ -66,6 +67,7 @@ const AdminAudit = lazy(() => import('./pages/admin/AdminAudit').then((m) => ({ 
 const AdminHealth = lazy(() => import('./pages/admin/AdminHealth').then((m) => ({ default: m.AdminHealth })))
 const AdminVendorCredits = lazy(() => import('./pages/admin/AdminVendorCredits').then((m) => ({ default: m.AdminVendorCredits })))
 const AdminPrivacyRequests = lazy(() => import('./pages/admin/AdminPrivacyRequests').then((m) => ({ default: m.AdminPrivacyRequests })))
+const AdminIpBlocks = lazy(() => import('./pages/admin/AdminIpBlocks').then((m) => ({ default: m.AdminIpBlocks })))
 const AdminSupport = lazy(() => import('./pages/admin/AdminSupport').then((m) => ({ default: m.AdminSupport })))
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })))
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
@@ -184,6 +186,7 @@ function App() {
         <Route path="/ai-call-center" element={<AiCallCenter />} />
         <Route path="/voice-bot" element={<VoiceBot />} />
         <Route path="/ai-telecaller" element={<AiTelecaller />} />
+        <Route path="/ai-calling-agent" element={<AiCallingAgent />} />
         <Route path="/:slug" element={<BuyerGuide />} />
         <Route path="/solutions/real-estate/:slug" element={<LocalRealEstate />} />
         <Route path="/demo-calls/:slug" element={<DemoCall />} />
@@ -255,6 +258,7 @@ function App() {
         <Route path="/admin/health" element={<RequireOwner><AdminHealth /></RequireOwner>} />
         <Route path="/admin/vendor-credits" element={<RequireOwner><AdminVendorCredits /></RequireOwner>} />
         <Route path="/admin/privacy-requests" element={<RequireOwner><AdminPrivacyRequests /></RequireOwner>} />
+        <Route path="/admin/ip-blocks" element={<RequireOwner><AdminIpBlocks /></RequireOwner>} />
         <Route path="/admin/support" element={<RequireOwner><AdminSupport /></RequireOwner>} />
         <Route path="/admin/settings" element={<RequireOwner><AdminSettings /></RequireOwner>} />
         <Route path="*" element={<NotFound />} />

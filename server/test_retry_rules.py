@@ -96,5 +96,63 @@ class ShortCall(unittest.TestCase):
         self.assertEqual(retry_rules.short_call_seconds({"short_call": {"underSeconds": "abc"}}), 0)
 
 
+class FollowUpPolicy(unittest.TestCase):
+    """The per-agent follow-up rules (agents.follow_up_policy, owner
+    decisions 2026-10-15): complete with defaults, clamped, never raising."""
+
+    def test_defaults_when_nothing_is_stored(self):
+        for empty in ("", None, "{}", "not json", "[]"):
+            self.assertEqual(retry_rules.follow_up_policy(empty), {
+                "maxAttempts": 3, "busyMinutes": 10, "switchedOffMinutes": 120, "noAnswerMinutes": 30,
+                "voicemailMinutes": 120, "callbackEnabled": True, "visitReminderEnabled": True,
+                "visitReminderTime": "11:00", "nurtureEnabled": True, "nurtureDays": 3,
+            }, empty)
+
+    def test_stored_values_are_read_and_clamped(self):
+        policy = retry_rules.follow_up_policy({
+            "maxAttempts": 99, "busyMinutes": 5, "switchedOffMinutes": 0, "noAnswerMinutes": "45",
+            "voicemailMinutes": 10 ** 9, "callbackEnabled": False, "visitReminderEnabled": "no",
+            "visitReminderTime": "9:5", "nurtureEnabled": False, "nurtureDays": 400,
+        })
+        self.assertEqual(policy["maxAttempts"], retry_rules.FOLLOW_UP_MAX_ATTEMPTS_CEILING)
+        self.assertEqual(policy["busyMinutes"], 5)
+        self.assertEqual(policy["switchedOffMinutes"], 120)  # 0 is not a gap
+        self.assertEqual(policy["noAnswerMinutes"], 45)
+        self.assertEqual(policy["voicemailMinutes"], retry_rules.MAX_GAP_MINUTES)
+        self.assertFalse(policy["callbackEnabled"])
+        self.assertTrue(policy["visitReminderEnabled"])  # a non-bool keeps the default
+        self.assertEqual(policy["visitReminderTime"], "09:05")
+        self.assertFalse(policy["nurtureEnabled"])
+        self.assertEqual(policy["nurtureDays"], retry_rules.FOLLOW_UP_MAX_NURTURE_DAYS)
+
+    def test_bad_reminder_time_falls_back(self):
+        for bad in ("25:00", "11:60", "eleven", "", None, "11"):
+            self.assertEqual(retry_rules.follow_up_policy({"visitReminderTime": bad})["visitReminderTime"], "11:00", bad)
+
+    def test_each_outcome_waits_its_own_gap_under_one_budget(self):
+        policy = retry_rules.follow_up_retry_policy({"maxAttempts": 2, "busyMinutes": 7})
+        self.assertEqual(retry_rules.resolve(policy, "busy", 1, 1, 60), (True, 7))
+        self.assertEqual(retry_rules.resolve(policy, "switched_off", 1, 1, 60), (True, 120))
+        self.assertEqual(retry_rules.resolve(policy, "no_answer", 1, 1, 60), (True, 30))
+        self.assertEqual(retry_rules.resolve(policy, "voicemail", 1, 1, 60), (True, 120))
+        self.assertEqual(retry_rules.resolve(policy, "failed", 1, 1, 60), (True, 30))
+        # The second dial was the last, whatever it came back as.
+        for outcome in ("busy", "switched_off", "no_answer", "voicemail"):
+            self.assertFalse(retry_rules.resolve(policy, outcome, 2, 9, 60)[0], outcome)
+
+    def test_switched_off_is_an_outcome(self):
+        self.assertIn("switched_off", retry_rules.OUTCOMES)
+
+    def test_instant_and_follow_up_campaigns_follow_the_agent_not_their_row(self):
+        own = {"busy": {"attempts": 9, "gapMinutes": 99}}
+        agent = {"maxAttempts": 1, "busyMinutes": 10}
+        for name in retry_rules.AGENT_POLICY_CAMPAIGNS:
+            self.assertEqual(retry_rules.resolve(retry_rules.effective_policy(name, own, agent), "busy", 1, 5, 60),
+                             (False, 10), name)
+        # A bulk campaign keeps its wizard's rules.
+        self.assertEqual(retry_rules.resolve(retry_rules.effective_policy("Diwali list", own, agent), "busy", 1, 5, 60),
+                         (True, 99))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

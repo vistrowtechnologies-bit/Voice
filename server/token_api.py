@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import base64
 import hashlib
 import hmac
@@ -17,6 +18,7 @@ import urllib.request
 from pathlib import Path
 
 import admin_db
+import ip_blocklist
 import agent_builder
 import mfa
 import vendor_health
@@ -137,6 +139,7 @@ _PUBLIC_PATHS = {
     "/widget.js",                      # embedded widget script
     "/widget/token",                   # widget call token (runs on customers' sites)
     "/widget/chat",                    # widget text-chat turn (runs on customers' sites)
+    "/widget/chat/end",                # widget text-chat ended (sendBeacon on close/pagehide)
     "/widget/feedback",                # widget post-conversation rating
     "/widget/telemetry",               # widget latency/failure diagnostics
     "/widget/site-config",             # public avatar/greeting/mode lookup by site key
@@ -177,6 +180,9 @@ async def no_store_api_responses(request: Request, call_next):
     return response
 
 
+ACCOUNT_SUSPENDED_MESSAGE = "This workspace is suspended. Contact support@vistrowvoice.com to restore access."
+
+
 # "View as" (a super-admin support session) can look at everything and fix
 # a customer's setup, but never touch what is the customer's own: keys,
 # billing, team, profile and sign-in, recordings, numbers, integration
@@ -191,6 +197,12 @@ _SUPPORT_BLOCKED_PATHS = re.compile(
     r"|^/telephony/(connect|disconnect)$"
     r"|^/widget/sites/[^/]+/regenerate-key$"
     r"|^/calls/[^/]+/push-to-arthaleads$"
+    # Admin audit 2026-10-15: anything that dials real numbers or spends the
+    # customer's credits (campaign create/edit/start/test-dial, test calls,
+    # AI analysis of a call).
+    r"|^/campaigns(/|$)"
+    r"|^/telephony/test-call$"
+    r"|^/calls/[^/]+/analyze$"
 )
 
 # An API key works for the product API (agents, calls, contacts, campaigns...)
@@ -279,6 +291,11 @@ async def require_session(request: Request, call_next):
             return JSONResponse({"detail": "Support session expired — please sign in again"}, status_code=401)
         if session.get("imp") and not _support_admin_still_signed_in(session):
             return JSONResponse({"detail": "Support session expired — please sign in again"}, status_code=401)
+        # A suspended workspace is locked out of everything, not only calls
+        # (admin audit 2026-10-15: suspend used to stop calls alone). "View
+        # as" still works so support can look into it.
+        if not session.get("imp") and (profile.get("account_status") or "active") == "suspended":
+            return JSONResponse({"detail": ACCOUNT_SUSPENDED_MESSAGE, "code": "account_suspended"}, status_code=403)
         # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
         request.state.user_id = session["uid"]
         request.state.account_id = session["aid"]
@@ -298,6 +315,8 @@ async def require_session(request: Request, call_next):
         resolved = calls_db.resolve_api_key_with_scopes(api_key)
         if resolved is not None:
             account_id, scopes = resolved
+            if calls_db.account_status(account_id) == "suspended":
+                return JSONResponse({"detail": ACCOUNT_SUSPENDED_MESSAGE, "code": "account_suspended"}, status_code=403)
             request.state.account_id = account_id
             request.state.user_id = calls_db.account_owner_user_id(account_id)
             request.state.impersonator_id = None
@@ -457,6 +476,29 @@ def _live_session(request: Request) -> dict | None:
 # cookie's own `samesite=lax` is what's actually gating cross-site use of it).
 # If a future frontend calls this API cross-origin with cookies, it needs
 # allow_credentials=True + a real origin allowlist here, not a wildcard.
+# A blocked visitor can still reach sign-in and the admin panel, so the
+# platform owner can never lock themselves out (adding a block that covers
+# the admin's own IP is refused too); everything else answers 403.
+_IP_BLOCK_EXEMPT_PATHS = {"/healthz", "/auth/config", "/auth/login", "/auth/login/mfa", "/auth/me", "/auth/logout"}
+_IP_BLOCK_EXEMPT_PREFIXES = ("/admin/", "/auth/oauth/")
+IP_BLOCKED_MESSAGE = "Access from your network has been blocked."
+
+
+@app.middleware("http")
+async def ip_block_guard(request: Request, call_next):
+    """Admin IP blocklist (ip_blocklist.py). Registered before CORS so the
+    403 still carries CORS headers and the website/widget can show it."""
+    path = request.url.path
+    if request.method == "OPTIONS" or path in _IP_BLOCK_EXEMPT_PATHS or path.startswith(_IP_BLOCK_EXEMPT_PREFIXES):
+        return await call_next(request)
+    ip = _client_ip(request)
+    block_id = ip_blocklist.blocked_by(ip)
+    if block_id is not None:
+        logger.info("blocked request from %s (block %s): %s %s", ip, block_id, request.method, path)
+        return JSONResponse({"detail": IP_BLOCKED_MESSAGE, "code": "ip_blocked"}, status_code=403)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -773,6 +815,11 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         .with_grants(api.VideoGrants(room_join=True, room=req.room))
         .to_jwt()
     )
+    # For the admin call page and the IP blocklist.
+    await asyncio.to_thread(
+        ip_blocklist.record_visitor, req.room, client_ip, request.headers.get("user-agent", ""),
+        "website demo" if agent_id is None else "dashboard test",
+    )
     return {"token": token, "url": livekit_url}
 
 
@@ -850,6 +897,10 @@ def _set_session_cookie(
     when a session is re-issued). new_sign_in: a real sign-in, so a new
     device gets a security email."""
     profile = calls_db.get_user_by_id(user_id)
+    # Every sign-in path (password, two-step, Google, GitHub, reset, invite)
+    # and every session re-issue goes through here.
+    if profile is not None and (profile.get("account_status") or "active") == "suspended":
+        raise HTTPException(403, ACCOUNT_SUSPENDED_MESSAGE)
     device_id = request.cookies.get(_DEVICE_COOKIE_NAME, "") if request is not None else ""
     if not re.fullmatch(r"[A-Za-z0-9_-]{20,160}", device_id):
         device_id = secrets.token_urlsafe(32)
@@ -2153,6 +2204,8 @@ def auth_me(request: Request, response: Response) -> dict:
     profile = calls_db.get_user_by_id(session["uid"])
     if profile is None or int(profile.get("session_version") or 1) != int(session.get("sv") or 1):
         raise HTTPException(401, "Session expired — please sign in again")
+    if not session.get("imp") and (profile.get("account_status") or "active") == "suspended":
+        raise HTTPException(403, ACCOUNT_SUSPENDED_MESSAGE)
     if session.get("sid"):
         if not calls_db.validate_user_session(session["sid"], session["uid"]):
             raise HTTPException(401, "This device was signed out")
@@ -3055,7 +3108,69 @@ def admin_call_detail(call_id: int, admin: dict = Depends(require_platform_owner
     detail = admin_db.call_detail(call_id)
     if detail is None:
         raise HTTPException(404, "Call not found")
+    try:
+        detail["visitor"] = ip_blocklist.visitor_for_room(detail.get("room_name"))
+    except Exception:
+        logger.exception("visitor lookup failed for call %s", call_id)
+        detail["visitor"] = None
     return detail
+
+
+@app.get("/admin/pricing")
+def admin_pricing(admin: dict = Depends(require_platform_owner)) -> dict:
+    """What billing actually charges, read from the code that bills, so the
+    admin Settings page can't drift (it showed phone at 1.5x; it is 1x)."""
+    return {
+        "plans": [{"plan": k, "priceInr": v["price_inr"], "credits": v["credits"]}
+                  for k, v in plan_policy.PLANS.items() if v.get("price_inr")],
+        "channelRates": {k: 1.0 for k in calls_db._CREDIT_RATE_SETTINGS},
+        "voiceTiers": dict(calls_db._VOICE_TIER_MULTIPLIERS),
+        "modelTiers": dict(calls_db._MODEL_TIER_MULTIPLIERS),
+        "minCreditsPerMinute": calls_db._MIN_CREDITS_PER_MINUTE,
+        "overageMultiplier": calls_db.OVERAGE_RATE_MULTIPLIER,
+    }
+
+
+@app.get("/admin/ip-blocks")
+def admin_list_ip_blocks(admin: dict = Depends(require_platform_owner)) -> dict:
+    return {"blocks": ip_blocklist.list_blocks()}
+
+
+class AdminIpBlockRequest(BaseModel):
+    ip: str
+    reason: str = ""
+    expiresDays: int | None = None
+
+
+@app.post("/admin/ip-blocks")
+def admin_add_ip_block(req: AdminIpBlockRequest, request: Request, admin: dict = Depends(require_platform_owner)) -> dict:
+    reason = _admin_reason(req.reason)
+    try:
+        network = ip_blocklist.normalize(req.ip)
+        own = _client_ip(request)
+        if ip_blocklist._parse_ip(own) is not None and ipaddress.ip_address(own) in ipaddress.ip_network(network):
+            raise HTTPException(400, "That would block your own connection. Pick a different IP or range.")
+        added = ip_blocklist.add_block(network, reason, admin["email"], req.expiresDays)
+    except ip_blocklist.InvalidIp as exc:
+        raise HTTPException(400, str(exc)) from exc
+    admin_db.write_audit(admin["user_id"], admin["email"], "ip_block", None,
+                         detail=f"blocked {added['network']}"
+                                + (f" for {req.expiresDays} days" if req.expiresDays else "") + f". {reason}")
+    return {"ok": True, **added}
+
+
+class AdminIpUnblockRequest(BaseModel):
+    reason: str = ""
+
+
+@app.post("/admin/ip-blocks/{block_id}/remove")
+def admin_remove_ip_block(block_id: int, req: AdminIpUnblockRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    reason = _admin_reason(req.reason)
+    network = ip_blocklist.remove_block(block_id)
+    if network is None:
+        raise HTTPException(404, "Block not found")
+    admin_db.write_audit(admin["user_id"], admin["email"], "ip_unblock", None, detail=f"unblocked {network}. {reason}")
+    return {"ok": True}
 
 
 @app.get("/admin/analytics")
@@ -3243,6 +3358,15 @@ def _admin_reason(reason: str | None) -> str:
     return reason
 
 
+def _admin_account_or_404(account_id: int) -> dict:
+    """A write to an account that doesn't exist used to return 200 (and
+    adjust_credits left an orphan settings row)."""
+    detail = admin_db.account_detail(account_id)
+    if detail is None:
+        raise HTTPException(404, "Account not found")
+    return detail
+
+
 class AdminCreditsRequest(BaseModel):
     total: int
     reason: str = ""
@@ -3251,8 +3375,13 @@ class AdminCreditsRequest(BaseModel):
 @app.post("/admin/accounts/{account_id}/credits")
 def admin_set_credits(account_id: int, req: AdminCreditsRequest, admin: dict = Depends(require_platform_owner)) -> dict:
     reason = _admin_reason(req.reason)
+    if req.total < 0:
+        raise HTTPException(400, "Credits can't be negative")
+    _admin_account_or_404(account_id)
+    previous = calls_db.billing_summary(account_id).get("creditsTotal")
     admin_db.adjust_credits(account_id, req.total)
-    admin_db.write_audit(admin["user_id"], admin["email"], "adjust_credits", account_id, detail=f"set credits_total={req.total}. {reason}")
+    admin_db.write_audit(admin["user_id"], admin["email"], "adjust_credits", account_id,
+                         detail=f"credits_total {previous} -> {req.total}. {reason}")
     return admin_db.account_detail(account_id)
 
 
@@ -3266,6 +3395,7 @@ def admin_set_plan(account_id: int, req: AdminPlanRequest, admin: dict = Depends
     reason = _admin_reason(req.reason)
     if req.plan not in admin_db.PLAN_PRICING:
         raise HTTPException(400, "Unknown plan")
+    _admin_account_or_404(account_id)
     admin_db.change_plan(account_id, req.plan)
     calls_db.end_trial(account_id)
     admin_db.write_audit(admin["user_id"], admin["email"], "change_plan", account_id, detail=f"plan={req.plan}. {reason}")
@@ -3282,6 +3412,9 @@ def admin_set_status(account_id: int, req: AdminStatusRequest, admin: dict = Dep
     reason = _admin_reason(req.reason)
     if req.status not in ("active", "suspended"):
         raise HTTPException(400, "Status must be active or suspended")
+    target = _admin_account_or_404(account_id)
+    if req.status == "suspended" and (target.get("account") or target).get("is_platform_owner"):
+        raise HTTPException(400, "The platform owner's own workspace can't be suspended")
     admin_db.set_account_status(account_id, req.status)
     admin_db.write_audit(admin["user_id"], admin["email"], "set_status", account_id, detail=f"status={req.status}. {reason}")
     return admin_db.account_detail(account_id)
@@ -3293,6 +3426,7 @@ class AdminNotesRequest(BaseModel):
 
 @app.post("/admin/accounts/{account_id}/notes")
 def admin_set_notes(account_id: int, req: AdminNotesRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    _admin_account_or_404(account_id)
     admin_db.set_account_notes(account_id, req.notes)
     admin_db.write_audit(admin["user_id"], admin["email"], "add_note", account_id, detail="updated internal notes")
     return admin_db.account_detail(account_id)
@@ -5173,6 +5307,19 @@ def update_integration(key: str, data: dict = Body(...), user: dict = Depends(re
         config.pop(server_key, None)
         if keep_stored and server_key in stored:
             config[server_key] = stored[server_key]
+    if key == "arthaleads":
+        # Single-token handshake (docs: ArthaLeads contract 2026-10-16): the
+        # key is saved only once ArthaLeads accepts it; config.link records
+        # the outcome and is never taken from the browser.
+        if keep_stored:
+            link, detail = integrations_dispatch.link_arthaleads(
+                user["account_id"], (config.get("token") or "").strip()
+            )
+            if link["status"] == "rejected":
+                raise HTTPException(400, detail)
+            config["link"] = link
+        elif (stored.get("token") or "").strip():
+            integrations_dispatch.unlink_arthaleads(user["account_id"], stored["token"].strip())
     calls_db.update_integration(
         key,
         data.get("status", "not_connected"),
@@ -5186,11 +5333,21 @@ def update_integration(key: str, data: dict = Body(...), user: dict = Depends(re
 _SERVER_MANAGED_INTEGRATION_KEYS = (
     "accounts_base", "api_domain", "access_token", "refresh_token", "expires_at",
     "bot_token", "pageAccessToken",
+    # ArthaLeads link outcome: set by the handshake, never by the browser.
+    "link",
 )
 
 
 @app.post("/integrations/{key}/test")
 def test_integration(key: str, user: dict = Depends(require_role("admin"))) -> dict:
+    if key == "arthaleads":
+        # Re-run the link handshake first (it refreshes config.link), then
+        # the sample lead as before; report both.
+        linked, link_detail = integrations_dispatch.relink_arthaleads(user["account_id"])
+        if not linked:
+            return {"ok": False, "detail": link_detail}
+        ok, detail = integrations_dispatch.test_integration(user["account_id"], key)
+        return {"ok": ok, "detail": f"{link_detail} {detail}"}
     ok, detail = integrations_dispatch.test_integration(user["account_id"], key)
     return {"ok": ok, "detail": detail}
 
@@ -6457,7 +6614,7 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
     authorization = request.headers.get("authorization", "")
     if not header_token and authorization.lower().startswith("bearer "):
         header_token = authorization[7:].strip()
-    if calls_db.account_id_for_lead_webhook_token(header_token) != account_id:
+    if calls_db.account_id_for_inbound_token(header_token) != account_id:
         raise HTTPException(404, "Not found")
 
     knowledge_bases = {
@@ -6468,7 +6625,10 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
     for agent in calls_db.list_agents(account_id):
         kb_id = agent.get("kbId")
         kb_name = knowledge_bases.get(str(kb_id)) if kb_id is not None else None
-        if agent.get("status") != "active" or not kb_name:
+        # Agents are stored 'live' / 'paused' / 'draft'. This compared against
+        # 'active', which no agent ever has, so the list was always empty and
+        # ArthaLeads could never pick an agent for auto-calls (2026-10-15).
+        if agent.get("status") != "live" or not kb_name:
             continue
         agents.append({
             "id": str(agent["id"]),
@@ -6479,6 +6639,67 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
             "knowledge_base": kb_name,
         })
     return {"agents": agents}
+
+
+# Control characters (tab/newline included: values become one-line notes) and
+# the Unicode line/paragraph separators, which break prompts and logs.
+_LEAD_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f\u2028\u2029]")
+# Form questions that repeat the contact's own identity add nothing for the agent.
+_FORM_IDENTITY_KEYS = {
+    "full_name", "name", "first_name", "last_name", "phone", "phone_number",
+    "mobile", "mobile_number", "email", "email_address", "whatsapp_number",
+}
+
+
+def _lead_text(value, cap: int) -> str:
+    text = " ".join(_LEAD_CONTROL_CHARS.sub(" ", str(value if value is not None else "")).split())
+    return text[:cap]
+
+
+def _lead_form_fields(extra: dict) -> dict:
+    """ArthaLeads' list-valued custom_fields as flat strings the agent can read.
+
+    custom_fields.form_responses is a list of {key, label, value} (Facebook and
+    website form answers) and custom_fields.tags a list; the scalar-only copy
+    in leads_inbound dropped both. Every value is public, untrusted text:
+    control characters stripped, lengths capped."""
+    out: dict[str, str] = {}
+    answers: list[str] = []
+    responses = extra.get("form_responses")
+    for item in responses[:30] if isinstance(responses, list) else []:
+        if not isinstance(item, dict):
+            continue
+        key = _lead_text(item.get("key"), 100)
+        label = _lead_text(item.get("label"), 120) or key.replace("_", " ")
+        value = _lead_text(item.get("value"), 300)
+        slug = re.sub(r"[^a-z0-9]+", "_", (key or label).casefold()).strip("_")[:48]
+        if not value or not slug or slug in _FORM_IDENTITY_KEYS:
+            continue
+        answers.append(f"{label}: {value}")
+        # Individually addressable as {{custom.form_<slug>}}; the first answer wins.
+        if re.fullmatch(r"[a-z][a-z0-9_]*", slug):
+            out.setdefault(f"form_{slug}", value)
+        # A form is where a lead's language would be asked.
+        if "language" in slug:
+            out.setdefault("language", value)
+    if answers:
+        out["form_answers"] = " · ".join(answers)[:1200]
+    tags = extra.get("tags")
+    if isinstance(tags, list):
+        joined = ", ".join(t for t in (_lead_text(tag, 50) for tag in tags[:20]) if t)
+        if joined:
+            out["tags"] = joined[:500]
+    return out
+
+
+def _queued_until(account_id: int, result: dict) -> dict:
+    """Adds when a queued lead will be dialled if the calling window is shut
+    now, so the sender can say "call scheduled for 9:00" (account timezone)."""
+    if result.get("queued"):
+        opens = calls_db.next_calling_window_open(account_id)
+        if opens is not None:
+            return {**result, "queued_until": opens.isoformat()}
+    return result
 
 
 @app.post("/leads/inbound/{account_id}")
@@ -6507,7 +6728,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
     authorization = request.headers.get("authorization", "")
     if not header_token and authorization.lower().startswith("bearer "):
         header_token = authorization[7:].strip()
-    if calls_db.account_id_for_lead_webhook_token(header_token or token or "") != account_id:
+    if calls_db.account_id_for_inbound_token(header_token or token or "") != account_id:
         raise HTTPException(404, "Not found")
     try:
         body = await request.json()
@@ -6520,6 +6741,9 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
             return {"ok": False, "reason": "invalid_event"}
         lead_id = str(body.get("lead_id") or "").strip()
         org_id = str(body.get("org_id") or "").strip()
+        enquiry_id = str(body.get("enquiry_id") or "").strip()
+        if len(enquiry_id) > 128:
+            return {"ok": False, "reason": "missing_or_invalid_lead_identity"}
         if not lead_id or not org_id or len(lead_id) > 128 or len(org_id) > 128:
             return {"ok": False, "reason": "missing_or_invalid_lead_identity"}
         if body.get("opt_out") is True or body.get("do_not_call") is True:
@@ -6545,6 +6769,9 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
                 if (isinstance(key, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", key)
                         and value is not None and not isinstance(value, (dict, list))):
                     fields[key] = str(value)[:2000]
+            for key, value in _lead_form_fields(extra).items():
+                if key not in fields:
+                    fields[key] = value
         # The agent's contact-notes builder recognises these established keys.
         for source_key, target_key in (
             ("source_detail", "lead_source"),
@@ -6561,15 +6788,22 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
                 fields[target_key] = fields[source_key]
         fields["arthaleads_org_id"] = org_id
         fields["arthaleads_lead_id"] = lead_id
-        result = calls_db.ingest_inbound_lead(
+        result = await asyncio.to_thread(
+            calls_db.ingest_inbound_lead,
             account_id, str(body.get("name") or ""), str(body.get("phone") or ""),
-            source="arthaleads", external_id=f"{org_id}:{lead_id}",
+            # A repeat enquiry about an existing lead carries its own
+            # enquiry_id (evt_re_<lead>_<ms>): it is a new event to call on,
+            # while a re-delivery of the same enquiry still dedupes.
+            source="arthaleads", external_id=f"{org_id}:{lead_id}" + (f":{enquiry_id}" if enquiry_id else ""),
             custom_fields=fields, allow_call=body.get("auto_call") is not False,
+            requested_agent_id=str(body.get("agent_id") or "") if body.get("auto_call") is True else "",
         )
         if not result.get("ok"):
             logger.warning("leads_inbound: ArthaLeads lead not queued for account %s: %s",
                            account_id, result.get("reason"))
-        return result
+        if result.get("queued"):
+            campaign_dialer.notify()
+        return await asyncio.to_thread(_queued_until, account_id, result)
     name = str(body.get("name") or body.get("full_name") or "").strip()
     phone = str(body.get("phone") or body.get("phone_number") or "").strip()
     if not phone:
@@ -6579,13 +6813,16 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
     if not phone:
         logger.warning("leads_inbound: no phone number in payload for account %s", account_id)
         return {"ok": False, "reason": "no_phone_in_payload"}
-    result = calls_db.ingest_inbound_lead(
+    result = await asyncio.to_thread(
+        calls_db.ingest_inbound_lead,
         account_id, name, phone, source="facebook_lead_ads",
         external_id=str(body.get("leadgen_id") or body.get("id") or ""),
     )
     if not result.get("ok"):
         logger.warning("leads_inbound: could not queue lead for account %s: %s", account_id, result.get("reason"))
-    return result
+    if result.get("queued"):
+        campaign_dialer.notify()
+    return await asyncio.to_thread(_queued_until, account_id, result)
 
 
 @app.get("/webhooks/meta")
@@ -6677,6 +6914,8 @@ async def webhooks_meta_event(request: Request) -> dict:
             )
             if not result.get("ok"):
                 logger.warning("webhooks_meta_event: could not queue lead %s: %s", leadgen_id, result.get("reason"))
+            if result.get("queued"):
+                campaign_dialer.notify()
     return {"ok": True}
 
 
@@ -7307,7 +7546,7 @@ class WidgetTokenRequest(BaseModel):
 
 
 @app.post("/widget/token")
-async def create_widget_token(req: WidgetTokenRequest) -> dict:
+async def create_widget_token(req: WidgetTokenRequest, request: Request) -> dict:
     """Public, unauthenticated endpoint the embeddable widget.js calls from
     an arbitrary third-party website — auth is the site key itself, not a
     dashboard session. Issues a LiveKit token for a fresh room pre-tagged
@@ -7425,6 +7664,9 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
         .with_name(req.identity)
         .with_grants(api.VideoGrants(room_join=True, room=room))
         .to_jwt()
+    )
+    await asyncio.to_thread(
+        ip_blocklist.record_visitor, room, _client_ip(request), request.headers.get("user-agent", ""), "widget",
     )
     return {"token": token, "url": livekit_url, "room": room}
 
@@ -7623,3 +7865,36 @@ def widget_chat_route(req: WidgetChatRequest) -> StreamingResponse:
                 logger.exception("failed to log widget chat call for site=%s", site["name"])
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.post("/widget/chat/end")
+async def widget_chat_end(request: Request) -> dict:
+    """The visitor closed the chat panel or left the page: deliver this chat
+    to the account's integrations now instead of waiting for the dialer
+    tick's 3-minute idle sweep (campaign_dialer._deliver_idle_widget_chats).
+    Same site_key-is-the-auth model as /widget/chat, no session. The body
+    is read raw because the widget sends it with navigator.sendBeacon,
+    whose Content-Type is text/plain (a JSON type would force a CORS
+    preflight the unloading page never completes). ended_at is left as the
+    chat's last turn — stretching it to "now" would bill minutes the
+    visitor spent with the tab open but idle."""
+    if _limited("widget-chat-end", _client_ip(request), 60, 3600):
+        raise HTTPException(429, "Too many requests")
+    try:
+        data = json.loads(await request.body() or b"{}")
+    except ValueError:
+        raise HTTPException(400, "Invalid body")
+    site_key, session_id = str(data.get("siteKey") or ""), str(data.get("sessionId") or "")
+    if not session_id or len(session_id) > 200:
+        raise HTTPException(400, "Invalid conversation session")
+    site = calls_db.get_site_by_key(site_key)
+    if site is None:
+        raise HTTPException(404, "Unknown site key")
+    chat = calls_db.widget_chat_call(site["id"], session_id)
+    if chat is None:
+        # First turn still streaming (or never sent): the idle sweep covers it.
+        return {"ok": False}
+    threading.Thread(
+        target=integrations_dispatch.deliver_widget_chat, args=(chat,), name="widget-chat-end", daemon=True,
+    ).start()
+    return {"ok": True}

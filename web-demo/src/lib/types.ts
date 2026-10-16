@@ -281,6 +281,40 @@ export interface PostCallField {
   description: string
 }
 
+/** Per-agent follow-up rules (agents.follow_up_policy) - the "Follow-ups"
+ * panel. Retries by outcome and max tries drive the instant ArthaLeads
+ * campaign and the agent's scheduled follow-up calls (bulk campaigns keep
+ * their own retry settings); the three toggles schedule a call after a
+ * callback request, a site-visit booking, or an interested call. The server
+ * fills every key with its default when the row has none
+ * (server/retry_rules.py follow_up_policy). */
+export interface FollowUpPolicy {
+  maxAttempts: number
+  busyMinutes: number
+  switchedOffMinutes: number
+  noAnswerMinutes: number
+  voicemailMinutes: number
+  callbackEnabled: boolean
+  visitReminderEnabled: boolean
+  /** 'HH:MM' account time, the day before the visit. */
+  visitReminderTime: string
+  nurtureEnabled: boolean
+  nurtureDays: number
+}
+
+export const FOLLOW_UP_DEFAULTS: FollowUpPolicy = {
+  maxAttempts: 3,
+  busyMinutes: 10,
+  switchedOffMinutes: 120,
+  noAnswerMinutes: 30,
+  voicemailMinutes: 120,
+  callbackEnabled: true,
+  visitReminderEnabled: true,
+  visitReminderTime: '11:00',
+  nurtureEnabled: true,
+  nurtureDays: 3,
+}
+
 export interface AgentVariable {
   /** The exact text between {{ and }} - "enquiry_bhk", or an operator's
    * own choice of "custom.enquiry_bhk" to also match a CSV column of that
@@ -342,6 +376,9 @@ export interface AgentConfig {
   // Connected integration keys this agent fans out to (empty = all connected)
   crmIntegrationKeys: string[]
   variables: AgentVariable[]
+  // Optional only so partially-built agent objects elsewhere still type-check;
+  // the API always returns it complete.
+  followUpPolicy?: FollowUpPolicy
   memoryEnabled: boolean
   liveCatalogEnabled: boolean
   createdAt: string
@@ -532,6 +569,15 @@ export interface Campaign {
   contacts?: CampaignContact[]
 }
 
+// ArthaLeads single-token handshake outcome; set by the server, never by the browser.
+export interface IntegrationLink {
+  status: 'linked' | 'pending' | 'rejected'
+  org_name?: string
+  linked_at?: string
+  checked_at?: string
+  error?: string
+}
+
 export interface Integration {
   key: string
   name: string
@@ -541,7 +587,7 @@ export interface Integration {
   // Mostly strings (url, channel, google_email...), plus `events` (string[])
   // and the Sheets sheet_id (number). Tokens are redacted server-side.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>
+  config: Record<string, any> & { link?: IntegrationLink }
   lastSync: string | null
   lastError: string | null
   // True for integrations switched off for new connections (Facebook Lead

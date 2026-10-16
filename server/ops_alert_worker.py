@@ -148,7 +148,9 @@ def _zero_balance_live() -> list[dict]:
             "and no credits left, so its calls will not connect.</p>",
         )
         for p in admin_db.credit_positions()
-        if p["remaining"] <= 0 and p["liveAgents"] > 0
+        # A trial that used its grant is the trial ending, not an outage;
+        # internal accounts are already left out of credit_positions.
+        if p["remaining"] <= 0 and p["liveAgents"] > 0 and not p.get("onTrial")
     ]
 
 

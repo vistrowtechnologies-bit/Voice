@@ -805,8 +805,11 @@ def get_compliance_config(account_id: int | None) -> dict:
     now = time.monotonic()
     if cached is not None and now - cached[0] < _COMPLIANCE_CACHE_TTL_S:
         return cached[1]
-    conn = dbconn.connect()
+    conn = None
     try:
+        # Inside the try: an unreachable database raises PoolTimeout (a
+        # psycopg.OperationalError) here, and must fall back like a failed query.
+        conn = dbconn.connect()
         row = conn.execute(
             "SELECT value FROM settings WHERE key = 'compliance.config' AND account_id = ?",
             (account_id,),
@@ -821,7 +824,8 @@ def get_compliance_config(account_id: int | None) -> dict:
         logger.exception("could not read compliance config for account %s", account_id)
         return dict(_COMPLIANCE_FALLBACK)
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
     _compliance_cache[account_id] = (now, cfg)
     return cfg
 
@@ -1680,14 +1684,37 @@ def _row_value(row, key, default=""):
         return default
 
 
+def _campaign_retry_rules(conn, campaign_id: int) -> tuple:
+    """(retry_policy, max_attempts, retry_minutes) for a campaign: its own
+    row, or its agent's follow-up rules for an instant/follow-up campaign
+    (retry_rules.effective_policy) — the same choice server/calls_db.py's
+    record_campaign_dial_result makes, so a contact's fate does not depend
+    on which process resolved it."""
+    camp = conn.execute(
+        "SELECT max_attempts, retry_minutes, retry_policy, name, "
+        "(SELECT follow_up_policy FROM agents WHERE id = campaigns.agent_id) AS follow_up_policy "
+        "FROM campaigns WHERE id = ?",
+        (campaign_id,),
+    ).fetchone()
+    max_attempts = (camp["max_attempts"] if camp else 1) or 1
+    retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
+    policy = retry_rules.effective_policy(
+        _row_value(camp, "name"), _row_value(camp, "retry_policy"), _row_value(camp, "follow_up_policy")
+    ) if camp else ""
+    return policy, max_attempts, retry_minutes
+
+
 def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = "voicemail") -> None:
     """Correct a campaign contact from 'placed' to what actually picked up.
 
-    outcome is 'voicemail' for an answering machine, or 'no_answer' for a
-    carrier announcement ("the number you have dialled is currently busy").
-    Both are non-conversations that the dialer optimistically recorded as
-    'placed', and both must schedule a retry rather than burn the contact —
-    'no_answer' is already a retrying status in calls_db.record_campaign_dial_result.
+    outcome is 'voicemail' for an answering machine, 'busy' / 'switched_off'
+    for a carrier announcement ("the number you have dialled is currently
+    busy" / "switched off"), or 'no_answer' when the leg simply never
+    connected. All are non-conversations that the dialer optimistically
+    recorded as 'placed', and all must schedule a retry rather than burn the
+    contact. The dialer re-dials 'no_answer' and 'voicemail' rows, so the
+    carrier outcomes wait as status 'no_answer' with the specific word kept
+    in `outcome`, and each waits its own gap (retry_rules).
 
     The dialer records 'placed' the instant the dial goes out, because it
     deliberately does not wait for an answer (waiting would serialise dials
@@ -1704,13 +1731,7 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
     conn = dbconn.connect()
     try:
         with conn:
-            camp = conn.execute(
-                "SELECT max_attempts, retry_minutes, retry_policy FROM campaigns WHERE id = ?",
-                (campaign_id,),
-            ).fetchone()
-            max_attempts = (camp["max_attempts"] if camp else 1) or 1
-            retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
-            policy = _row_value(camp, "retry_policy")
+            policy, max_attempts, retry_minutes = _campaign_retry_rules(conn, campaign_id)
             row = conn.execute(
                 "SELECT attempts FROM campaign_contacts WHERE id = ?", (contact_id,)
             ).fetchone()
@@ -1721,11 +1742,13 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
             retry_again, retry_minutes = retry_rules.resolve(
                 policy, outcome, attempts, max_attempts, retry_minutes
             )
+            status = "voicemail" if outcome == "voicemail" else "no_answer"
+            label = outcome.replace("_", " ")
             if not retry_again:
                 conn.execute(
                     "UPDATE campaign_contacts SET status = ?, outcome = ?, "
                     "next_attempt_at = NULL WHERE id = ?",
-                    (outcome, outcome, contact_id),
+                    (status, label, contact_id),
                 )
             else:
                 next_at = (
@@ -1735,7 +1758,7 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
                 conn.execute(
                     "UPDATE campaign_contacts SET status = ?, outcome = ?, "
                     "next_attempt_at = ? WHERE id = ?",
-                    (outcome, outcome, next_at, contact_id),
+                    (status, label, next_at, contact_id),
                 )
                 # The dialer auto-completes once the last dial goes out, before this lands.
                 conn.execute(
@@ -1841,11 +1864,9 @@ def finish_campaign_contact(
             ).fetchone()
             if row is None or row["status"] != "calling":
                 return
+            policy, max_attempts, retry_minutes = _campaign_retry_rules(conn, campaign_id)
             if outcome == "connected" and duration_seconds is not None:
-                camp_policy = conn.execute(
-                    "SELECT retry_policy FROM campaigns WHERE id = ?", (campaign_id,)
-                ).fetchone()
-                threshold = retry_rules.short_call_seconds(_row_value(camp_policy, "retry_policy"))
+                threshold = retry_rules.short_call_seconds(policy)
                 if threshold and duration_seconds < threshold:
                     logger.info(
                         "campaign contact %s: connected call lasted %.1fs (under %ss) — treating as short_call",
@@ -1859,15 +1880,9 @@ def finish_campaign_contact(
                     (contact_id,),
                 )
             else:
-                camp = conn.execute(
-                    "SELECT max_attempts, retry_minutes, retry_policy FROM campaigns WHERE id = ?",
-                    (campaign_id,),
-                ).fetchone()
-                max_attempts = (camp["max_attempts"] if camp else 1) or 1
-                retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
                 attempts = row["attempts"] or 1
                 retry_again, retry_minutes = retry_rules.resolve(
-                    _row_value(camp, "retry_policy"), outcome, attempts, max_attempts, retry_minutes
+                    policy, outcome, attempts, max_attempts, retry_minutes
                 )
                 next_at = None
                 if retry_again:
@@ -1883,6 +1898,110 @@ def finish_campaign_contact(
         logger.info("campaign contact %s finished as %s", contact_id, outcome)
     except Exception:
         logger.exception("could not finish campaign contact %s", contact_id)
+    finally:
+        conn.close()
+
+
+def schedule_follow_up_call(
+    account_id: int | None,
+    agent_id: int | None,
+    phone: str,
+    name: str,
+    custom_fields: dict,
+    next_attempt_at: str,
+    source_campaign_id: int | None = None,
+) -> int | None:
+    """Queue one outbound follow-up call (see follow_ups.py) for the dialer.
+
+    A pending campaign_contacts row with next_attempt_at set, in the agent's
+    own "Follow-up calls" campaign (created on first use, reopened whenever
+    the dialer auto-completed it). The server's claim_next_campaign_contact
+    leaves a pending row alone until that moment, and the dialer only dials
+    inside the calling window and never a DNC number — so a DB row is the
+    whole scheduler and it survives restarts. next_attempt_at is UTC
+    'YYYY-MM-DD HH:MM:SS', the format every other retry stamp uses.
+
+    Dials from the number the previous call used (its campaign), else the
+    agent's own number; an agent with neither cannot be rung from, and the
+    follow-up is skipped. A pending follow-up for the same number is
+    rescheduled rather than duplicated. Returns the contact id, or None.
+    Never raises: a missed follow-up must not break a call's teardown.
+    """
+    norm = _normalize_dnc_phone(phone, account_id)
+    if not (account_id and agent_id and norm):
+        return None
+    conn = dbconn.connect()
+    try:
+        with conn:
+            from_number = ""
+            if source_campaign_id:
+                row = conn.execute("SELECT from_number FROM campaigns WHERE id = ?", (int(source_campaign_id),)).fetchone()
+                from_number = (row["from_number"] if row else "") or ""
+            if not from_number:
+                row = conn.execute(
+                    "SELECT number FROM phone_numbers WHERE account_id = ? AND agent_id = ? AND status = 'active' "
+                    "ORDER BY id LIMIT 1",
+                    (account_id, agent_id),
+                ).fetchone()
+                from_number = row["number"] if row else ""
+            if not from_number:
+                logger.info("follow-up not scheduled: agent %s has no caller number", agent_id)
+                return None
+            camp = conn.execute(
+                "SELECT id, status FROM campaigns WHERE account_id = ? AND agent_id = ? AND name = ? "
+                "ORDER BY id LIMIT 1",
+                (account_id, agent_id, retry_rules.FOLLOW_UP_CAMPAIGN_NAME),
+            ).fetchone()
+            if camp is None:
+                camp = conn.execute(
+                    "INSERT INTO campaigns (account_id, name, agent_id, from_number, status, started_at, "
+                    f"max_attempts, retry_minutes, concurrency) VALUES (?, ?, ?, ?, 'running', {_NOW}, 3, 30, 1) "
+                    "RETURNING id",
+                    (account_id, retry_rules.FOLLOW_UP_CAMPAIGN_NAME, agent_id, from_number),
+                ).fetchone()
+            elif camp["status"] == "cancelled":
+                logger.info("follow-up not scheduled: campaign %s is cancelled", camp["id"])
+                return None
+            else:
+                # A human pause (or the carrier breaker) stays paused; the
+                # contact waits in it. Only the dialer's own auto-complete
+                # is undone.
+                conn.execute(
+                    "UPDATE campaigns SET from_number = ?, status = CASE WHEN status = 'completed' "
+                    "THEN 'running' ELSE status END WHERE id = ?",
+                    (from_number, camp["id"]),
+                )
+            fields = json.dumps(custom_fields, ensure_ascii=False)
+            dup = conn.execute(
+                "SELECT id, status FROM campaign_contacts WHERE campaign_id = ? AND phone_norm = ? "
+                "AND status IN ('pending', 'calling') ORDER BY id DESC LIMIT 1",
+                (camp["id"], norm),
+            ).fetchone()
+            if dup is not None and dup["status"] == "calling":
+                logger.info("follow-up not scheduled: contact %s is being called now", dup["id"])
+                return None
+            if dup is not None:
+                conn.execute(
+                    "UPDATE campaign_contacts SET name = ?, custom_fields = ?, next_attempt_at = ?, attempts = 0 "
+                    "WHERE id = ?",
+                    ((name or "").strip(), fields, next_attempt_at, dup["id"]),
+                )
+                contact_id = dup["id"]
+            else:
+                contact_id = conn.execute(
+                    "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, company, "
+                    "custom_fields, next_attempt_at) VALUES (?, ?, ?, ?, ?, '', ?, ?) RETURNING id",
+                    (camp["id"], account_id, (name or "").strip(), account_phone(account_id, phone) or phone.strip(),
+                     norm, fields, next_attempt_at),
+                ).fetchone()["id"]
+        logger.info(
+            "follow-up %s scheduled at %s UTC (contact %s)",
+            custom_fields.get("follow_up_kind"), next_attempt_at, contact_id,
+        )
+        return contact_id
+    except Exception:
+        logger.exception("could not schedule a follow-up call")
+        return None
     finally:
         conn.close()
 

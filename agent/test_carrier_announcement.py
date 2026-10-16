@@ -18,6 +18,52 @@ os.environ.setdefault("LIVEKIT_API_SECRET", "x")
 import main
 
 
+class CarrierOutcome(unittest.TestCase):
+    """busy vs switched_off: the follow-up rules retry them on different
+    gaps (10 min vs 2 h by default), so the agent must record which it heard."""
+
+    def test_busy_announcements(self):
+        for text in (
+            "the number you have dialled is currently busy, please try again later",
+            "all lines are busy, please try again",
+            "आपने जिस व्यक्ति को कॉल किया है वह दूसरी कॉल पर व्यस्त है",
+            "आपण डायल केलेला क्रमांक सध्या व्यस्त आहे",
+            "તમે જે નંબર ડાયલ કર્યો છે તે હાલમાં વ્યસ્ત છે",
+            "நீங்கள் டயல் செய்த எண் தற்போது பிஸியாக உள்ளது",
+            # Telugu: "the customer you are calling is busy on another call"
+            "మీరు కాల్ చేస్తున్న కస్టమర్ మరో కాల్‌లో బిజీగా ఉన్నారు",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(main._carrier_outcome(text), "busy")
+
+    def test_switched_off_and_not_reachable_announcements(self):
+        for text in (
+            "the number you have dialled is currently switched off",
+            "the subscriber is out of coverage area",
+            "the number you are calling is not reachable at the moment",
+            "आप द्वारा डायल किया गया नंबर अभी बंद है",
+            # Telugu: "the customer you are calling is switched off" /
+            # "not in the coverage area" / "currently not available"
+            "మీరు కాల్ చేస్తున్న కస్టమర్ స్విచ్ ఆఫ్ చేయబడింది",
+            "మీరు డయల్ చేసిన నంబర్ ప్రస్తుతం కవరేజ్ ప్రాంతంలో లేరు",
+            "కస్టమర్ ప్రస్తుతం అందుబాటులో లేరు దయచేసి కొంత సమయం తర్వాత ప్రయత్నించండి",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(main._carrier_outcome(text), "switched_off")
+
+    def test_a_live_person_is_neither(self):
+        for text in ("hello?", "sorry, I'm busy right now", "my phone was switched off yesterday",
+                     "హలో, ఎవరు మాట్లాడుతున్నారు?", ""):
+            with self.subTest(text=text):
+                self.assertEqual(main._carrier_outcome(text), "")
+
+    def test_telugu_voicemail_greeting(self):
+        for text in ("మీ కాల్ వాయిస్ మెయిల్‌కు మళ్లించబడింది", "బీప్ తర్వాత మీ సందేశాన్ని రికార్డ్ చేయండి"):
+            with self.subTest(text=text):
+                self.assertTrue(main._VOICEMAIL_GREETING_PATTERN.search(text))
+        self.assertFalse(main._VOICEMAIL_GREETING_PATTERN.search("నేను మీకు సందేశం పంపుతాను"))
+
+
 class CarrierAnnouncementDetection(unittest.TestCase):
     def test_call_890_gujarati_announcement(self):
         # Verbatim from the call-890 transcript.

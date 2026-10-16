@@ -122,7 +122,11 @@ class DbTests(unittest.TestCase):
 
         everyone = self.admin.usage_cost()
         self.assertIn(aid, {r["id"] for r in everyone["accounts"]})
-        self.assertAlmostEqual(everyone["totals"]["estCostInr"], sum(r["estCostInr"] for r in everyone["accounts"]), places=1)
+        # Totals are customers only; internal accounts get their own line.
+        customers = [r for r in everyone["accounts"] if not r["internal"]]
+        self.assertAlmostEqual(everyone["totals"]["estCostInr"], sum(r["estCostInr"] for r in customers), places=1)
+        self.assertAlmostEqual(everyone["internalTotals"]["estCostInr"],
+                               sum(r["estCostInr"] for r in everyone["accounts"] if r["internal"]), places=1)
         with self.assertRaises(ValueError):
             self.admin.usage_cost("2026-10-10", "2026-10-01")
 

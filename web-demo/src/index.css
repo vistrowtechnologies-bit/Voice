@@ -1055,3 +1055,130 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
 .vv-tooltip[data-side="right"] .vv-tooltip-arrow { transform: translate(0, -50%) rotate(45deg); }
 @keyframes vv-tooltip-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .vv-tooltip { animation: none; } }
+
+/* Language-page sample-call player (VoiceSamplePlayer). The orb scales with
+   --vs-level, which the component sets from the audio analyser while playing. */
+.vs-orb {
+  --vs-level: 0;
+  background:
+    radial-gradient(circle at 32% 28%, rgb(255 255 255 / 55%), transparent 38%),
+    radial-gradient(circle at 70% 75%, var(--color-cyan), transparent 55%),
+    linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 0 calc(30px + var(--vs-level) * 40px) calc(var(--vs-level) * 10px) color-mix(in srgb, var(--color-primary) 55%, transparent);
+  transform: scale(calc(1 + var(--vs-level) * 0.12));
+  transition: transform 90ms linear, box-shadow 90ms linear;
+}
+.vs-orb.is-playing::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+  animation: vs-ring 1.8s ease-out infinite;
+}
+@keyframes vs-ring {
+  0% { opacity: 0.9; transform: scale(0.95); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+.vs-chip.is-switched {
+  animation: vs-chip-in 600ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+@keyframes vs-chip-in {
+  0% { opacity: 0; transform: translateY(6px) scale(0.85); }
+  100% { opacity: 1; transform: none; }
+}
+.vs-line {
+  transition: opacity 350ms ease, transform 350ms ease;
+}
+.vs-line.is-hidden {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+.vs-range {
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--color-primary) var(--vs-progress, 0%), color-mix(in srgb, var(--color-primary) 18%, var(--color-surface-high)) var(--vs-progress, 0%));
+  cursor: pointer;
+}
+.vs-range::-webkit-slider-thumb {
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  border: 2px solid white;
+}
+.vs-range::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  border: 2px solid white;
+}
+.vs-range:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+}
+/* Unlayered .material-symbols-outlined (font-size 20px) beats Tailwind's
+   text-[..px] utilities, so the play glyph is sized here, after that rule. */
+.material-symbols-outlined.vs-play-icon {
+  font-size: 44px;
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 48;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vs-orb, .vs-line { transition: none; }
+  .vs-orb.is-playing::after, .vs-chip.is-switched { animation: none; }
+  .vs-line.is-hidden { transform: none; }
+}
+
+/* ---- Marketing header (MarketingLayout.tsx) ---- */
+/* Header icon sizes: the unlayered .material-symbols-outlined rule above
+   (font-size 20px) beats Tailwind's text-[..px] utilities, so these come
+   after it with one more class of specificity. */
+.material-symbols-outlined.mh-icon-16 { font-size: 16px; }
+.material-symbols-outlined.mh-icon-18 { font-size: 18px; }
+.material-symbols-outlined.mh-icon-22 { font-size: 22px; }
+.material-symbols-outlined.mh-icon-24 { font-size: 24px; }
+
+/* "Hear a live call" mini waveform. */
+.mh-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+}
+.mh-wave i {
+  display: block;
+  width: 2px;
+  height: 4px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: mh-wave 1s ease-in-out infinite;
+}
+.mh-wave i:nth-child(2) { animation-delay: 0.15s; }
+.mh-wave i:nth-child(3) { animation-delay: 0.3s; }
+.mh-wave i:nth-child(4) { animation-delay: 0.45s; }
+@keyframes mh-wave {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+
+/* "Book a demo": brand purple into magenta. */
+.mh-cta {
+  background: linear-gradient(135deg, var(--color-primary-dark), #c026d3);
+  box-shadow: 0 8px 22px -10px var(--color-primary);
+  transition: opacity 150ms ease;
+}
+.mh-cta:hover { opacity: 0.92; }
+
+/* Language strip: scrolls sideways on a narrow desktop, no visible bar. */
+.mh-scroll { scrollbar-width: none; }
+.mh-scroll::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mh-wave i { animation: none; }
+  .mh-wave i:nth-child(odd) { height: 10px; }
+  .mh-wave i:nth-child(even) { height: 6px; }
+}

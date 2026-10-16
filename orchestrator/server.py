@@ -37,6 +37,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, WebSocket, We
 from fastapi.middleware.cors import CORSMiddleware
 
 import audio
+import compliance
 import db
 import enablex
 import recording
@@ -289,6 +290,12 @@ async def _ensure_pending_call_context(event: dict) -> int | None:
             return None
     else:
         account_id, agent_id = number_row["account_id"], number_row["agent_id"]
+        if not agent_id:
+            # A number with no agent assigned is not answered, as agent/ does:
+            # it must never fall back to another account's (or the platform
+            # demo) agent.
+            logger.warning("no agent assigned to %s (account %s); not answering", matched_number, account_id)
+            return None
 
     if not account_id:
         return None
@@ -358,7 +365,8 @@ async def _build_session(
     here would otherwise freeze every other concurrent call, not just
     this one.
     """
-    cfg = await asyncio.to_thread(db.get_agent_config, agent_id) or {}
+    # Scoped to the account so an agent_id never loads another tenant's agent.
+    cfg = await asyncio.to_thread(db.get_agent_config, agent_id, account_id or None) or {}
     if str(cfg.get("model") or "").startswith("gemini-live"):
         raise ValueError("Native Google Live audio requires the LiveKit realtime route, not the STT/LLM/TTS orchestrator")
     try:
@@ -388,7 +396,39 @@ async def _build_session(
         custom_fields=custom_fields,
     )
     session_module.build_tools_for_session(sess, cfg.get("custom_functions"))
+    # Compliance -> record_calls / announce_recording, read once per call so
+    # the announcement and the recorder (_recording_config, in the stream
+    # handlers) can never disagree. Session has no field for it and
+    # session.py is not changed here, hence the plain attribute.
+    rec_cfg = await asyncio.to_thread(compliance.recording_config, account_id)
+    sess.compliance_config = rec_cfg
+    disclosure = compliance.recording_disclosure(
+        rec_cfg, sess.reply_language, bool(cfg.get("is_platform_demo")),
+    )
+    if disclosure and sess.first_speaker == "user":
+        # No opener to carry it, so the model says it in its first reply
+        # (agent/main.py's _disclosure_first_reply_instructions). Seeding the
+        # system message is what handle_utterance* would do on turn one.
+        prompt = await session_module.build_system_prompt(sess)
+        sess.messages.append({"role": "system", "content": prompt + compliance.first_reply_instruction(disclosure)})
+    elif disclosure:
+        # Folded into the spoken opener, as agent/ does. With no welcome
+        # message, build_greeting_audio's own default opener is built here so
+        # the notice can be folded into it.
+        opener = sess.welcome_message
+        if not opener:
+            greeting = f"Hi {sess.visitor_name.split()[0]}," if sess.visitor_name else "Hi,"
+            template = session_module._DEFAULT_OPENERS.get(sess.reply_language, session_module._DEFAULT_OPENER_EN)
+            opener = template.format(greeting=greeting, agent_name=sess.agent_name)
+        sess.welcome_message = compliance.with_disclosure(opener, disclosure)
     return sess
+
+
+async def _recording_config(sess) -> dict:
+    cfg = getattr(sess, "compliance_config", None)
+    if cfg is None:
+        cfg = await asyncio.to_thread(compliance.recording_config, getattr(sess, "account_id", None))
+    return cfg
 
 
 @app.post("/telephony/enablex/outbound-test-call")
@@ -430,6 +470,26 @@ async def enablex_outbound_test_call(
         return {"ok": False, "error": "Missing 'to' in request body."}
     if not account_id or not from_number:
         return {"ok": False, "error": "accountId/fromNumber not configured."}
+    # Same gate as calls_db.check_call_allowed on the LiveKit path (DNC, then
+    # calling window). Every orchestrator outbound dial comes through here
+    # ("Call now", the dashboard test call, the campaign dialer) and none of
+    # them checked before posting. accountId is the dialling tenant (all
+    # three callers send it; otherwise the TEST_ACCOUNT_ID default above).
+    # The refusal has the LiveKit path's shape, which the callers already
+    # surface and the campaign dialer records as "blocked". The staging lock
+    # stays where it was, in enablex.place_outbound_call.
+    try:
+        allowed, reason = await asyncio.to_thread(compliance.check_call_allowed, account_id, to_number)
+    except Exception:
+        logger.exception("compliance check failed for account %s; not dialling", account_id)
+        return {
+            "ok": False,
+            "error": "Could not check the Do-Not-Call list and calling window (database unavailable); "
+            "the call was not placed.",
+        }
+    if not allowed:
+        logger.info("outbound call refused by compliance for account %s: %s", account_id, reason)
+        return {"ok": False, "blocked": True, "error": reason, "reason": reason}
     base = enablex.public_base_url()
     if not base:
         return {"ok": False, "error": "PUBLIC_BASE_URL/RAILWAY_PUBLIC_DOMAIN not set."}
@@ -575,7 +635,8 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # without the head start.
         sess = await _build_session_for_test_call()
         greeting_task = None
-    recorder = recording.CallRecorder()
+    # Records only when the tenant turned record_calls on (compliance.records_call).
+    recorder = compliance.call_recorder(await _recording_config(sess), recording.CallRecorder)
     vad = audio.UtteranceVAD()
     # Real echo cancellation for the barge-in detector — see
     # audio.AnchoredDelayEchoCanceller's docstring. Persists for the whole
@@ -978,7 +1039,8 @@ async def browser_token(
     agent_id = agent_id or TEST_AGENT_ID or None
     if not account_id or not agent_id:
         return {"ok": False, "error": "account_id/agent_id not provided and TEST_ACCOUNT_ID/TEST_AGENT_ID not configured."}
-    cfg = await asyncio.to_thread(db.get_agent_config, agent_id) or {}
+    # Scoped to the account so an agent_id never loads another tenant's agent.
+    cfg = await asyncio.to_thread(db.get_agent_config, agent_id, account_id or None) or {}
     if str(cfg.get("model") or "").startswith("gemini-live"):
         return {"ok": False, "error": "This agent requires the LiveKit native realtime connection."}
     wss_base = enablex.public_wss_host()
@@ -1041,7 +1103,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     # room-noise-floor readings (10-40) while still requiring real voice.
     vad = audio.UtteranceVAD(energy_threshold=80)
     frame_count = 0
-    recorder = recording.CallRecorder()
+    recorder = compliance.call_recorder(await _recording_config(sess), recording.CallRecorder)
     # CallRecorder always writes at recording.RECORDING_SAMPLE_RATE (16kHz) -
     # the phone path's decoded ulaw is actually 8kHz (EnableX's rate, not
     # 16kHz; a stale version of this comment claimed otherwise, which is why

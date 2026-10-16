@@ -24,3 +24,8 @@ if ".rlwy.net" in _url or ".railway.internal" in _url:
     pytest.exit("DATABASE_URL points at a Railway database; tests use a throwaway local Postgres "
                 "(TEST_DATABASE_URL).", returncode=4)
 os.environ["DATABASE_URL"] = _url
+
+# Production's internal account ids (admin_db.INTERNAL_ACCOUNT_IDS) are low
+# numbers that a fresh test database hands to the tests' own accounts; use an
+# id no test creates so customer numbers in tests stay customer numbers.
+os.environ.setdefault("INTERNAL_ACCOUNT_IDS", "999999999")

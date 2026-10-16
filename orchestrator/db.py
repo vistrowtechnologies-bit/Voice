@@ -14,12 +14,15 @@ without closing).
 
 import datetime
 import json
+import logging
 
 import psycopg
 from zoneinfo import ZoneInfo
 
 import dbconn
 import integration_crypto
+
+logger = logging.getLogger("orchestrator-db")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
@@ -130,26 +133,39 @@ def save_caller_memory(account_id: int | None, agent_id: int, caller_phone: str,
         conn.close()
 
 
-def get_agent_config(agent_id: int | None = None) -> dict | None:
+def get_agent_config(agent_id: int | None = None, account_id: int | None = None) -> dict | None:
     """Dashboard-managed agent settings (server/calls_db.py owns the table).
 
     With `agent_id`, loads that specific agent — used by inbound phone calls,
-    where the LiveKit dispatch rule for the dialed number names which agent
-    handles it. Without it (an unrouted browser call, notably the public
-    marketing site's /demo and /call), prefers whichever agent is flagged
-    is_platform_demo — see server/calls_db.py update_agent — falling back to
-    the first agent by id if none is flagged yet. Returns None when the
-    table doesn't exist yet (dashboard API never ran) or the id isn't found,
-    so callers fall back to the in-code defaults and the agent keeps working
-    standalone.
+    where the dialed number's phone_numbers row names which agent handles it.
+    With `account_id` too, the agent must belong to that account, and no
+    agent_id means no agent: a tenant's number never borrows another
+    account's agent.
+
+    With neither (only the public marketing demo's unrouted browser call),
+    returns the agent flagged is_platform_demo — see server/calls_db.py
+    update_agent. It used to fall back to the first agent by id when none was
+    flagged, i.e. whichever tenant's agent happened to be oldest; now it
+    returns None instead.
+
+    Returns None when the table doesn't exist yet (dashboard API never ran) or
+    no matching agent is found, so callers fall back to the in-code defaults
+    and the agent keeps working standalone.
     """
     conn = dbconn.connect()
     try:
-        if agent_id is not None:
+        if agent_id is not None and account_id is not None:
+            row = conn.execute(
+                "SELECT * FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id)
+            ).fetchone()
+        elif agent_id is not None:
             row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        elif account_id is not None:
+            logger.warning("get_agent_config: no agent assigned for account_id=%s; not borrowing another", account_id)
+            return None
         else:
             row = conn.execute(
-                "SELECT * FROM agents ORDER BY is_platform_demo DESC, id LIMIT 1"
+                "SELECT * FROM agents WHERE is_platform_demo = 1 ORDER BY id LIMIT 1"
             ).fetchone()
         return dict(row) if row else None
     except psycopg.Error:
@@ -279,22 +295,6 @@ def is_on_orchestrator_pipeline(account_id: int) -> bool:
         return bool(row) and row["value"] == "1"
     except psycopg.Error:
         return False
-    finally:
-        conn.close()
-
-
-def get_webhook_url() -> str | None:
-    """URL of the connected CRM webhook integration, if any."""
-    conn = dbconn.connect()
-    try:
-        row = conn.execute(
-            "SELECT config_json FROM integrations WHERE key = 'webhook' AND status = 'connected'"
-        ).fetchone()
-        if row is None:
-            return None
-        return integration_crypto.decode_config(row["config_json"]).get("url") or None
-    except psycopg.Error:
-        return None
     finally:
         conn.close()
 

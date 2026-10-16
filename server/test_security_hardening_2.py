@@ -270,7 +270,7 @@ class ApiKeyScopeTests(unittest.TestCase):
         self.assertEqual(calls_db._api_key_scopes('["full"]'), ["full"])
         self.assertEqual(calls_db._api_key_scopes("not json"), [])
 
-    def run_middleware(self, method, path, scopes):
+    def run_middleware(self, method, path, scopes, status="active"):
         from starlette.requests import Request
         from starlette.responses import JSONResponse, Response
 
@@ -278,8 +278,10 @@ class ApiKeyScopeTests(unittest.TestCase):
                   re=re, os=os, logger=logging.getLogger("test"), JSONResponse=JSONResponse, Request=Request,
                   _PUBLIC_PATHS=set(), _PUBLIC_PREFIXES=(),
                   auth=types.SimpleNamespace(COOKIE_NAME="vv", read_session_token=lambda _token: None),
+                  ACCOUNT_SUSPENDED_MESSAGE="suspended",
                   calls_db=types.SimpleNamespace(resolve_api_key_with_scopes=lambda key: (7, scopes),
-                                                 account_owner_user_id=lambda aid: 70))
+                                                 account_owner_user_id=lambda aid: 70,
+                                                 account_status=lambda aid: status))
         request = Request({"type": "http", "method": method, "path": path, "query_string": b"",
                            "headers": [(b"x-api-key", b"vv_live_test")]})
 
@@ -287,6 +289,11 @@ class ApiKeyScopeTests(unittest.TestCase):
             return Response("ok")
 
         return asyncio.run(ns["require_session"](request, call_next)).status_code
+
+    def test_suspended_account_api_key_is_refused(self):
+        # Admin audit 2026-10-15: suspend used to stop calls only.
+        self.assertEqual(self.run_middleware("GET", "/calls", ["full"], status="suspended"), 403)
+        self.assertEqual(self.run_middleware("GET", "/calls", ["full"], status="active"), 200)
 
     def test_middleware_enforces_scopes(self):
         self.assertEqual(self.run_middleware("GET", "/calls", ["read", "calls"]), 200)

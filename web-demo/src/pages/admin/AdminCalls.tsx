@@ -1,10 +1,29 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { adminCalls, adminCallDetail, type AdminCallRow, type AdminCallDetail } from '../../lib/adminApi'
-import { AdminCard, EmptyState, ErrorState, fmtDateTime, fmtDuration, FilterChip, PageHeader, Pill, SearchInput, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, errMsg, ErrorState, fmtDateTime, fmtDuration, FilterChip, PageHeader, Pill, ROW_FOCUS, rowLinkProps, SearchInput, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
+import { AdminIpBlockDialog } from '../../components/AdminIpBlockDialog'
 
 const CHANNELS = ['browser', 'phone', 'widget']
+
+// Mirrors FAILED_DISCONNECT_REASONS in server/calls_db.py - keep in sync.
+// Any other disconnect reason (client_initiated, participant_removed, a
+// caller hanging up...) is a normal ending, not a failure.
+const FAILED_DISCONNECT_REASONS = new Set([
+  'agent_error',
+  'connection_timeout',
+  'error',
+  'job_shutdown',
+  'join_failure',
+  'media_failure',
+  'sip_trunk_failure',
+  'user_rejected',
+  'user_unavailable',
+])
+
+const fmtCredits = (n: number | null | undefined) =>
+  typeof n === 'number' ? n.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '-'
 
 function latencySummary(values?: number[]): string | null {
   if (!values?.length) return null
@@ -141,12 +160,14 @@ export function AdminCalls() {
                 </thead>
                 <tbody>
                   {rows.map((c) => {
-                    const failure = c.failureReason || c.disconnectReason
+                    const failedDisconnect =
+                      c.disconnectReason && FAILED_DISCONNECT_REASONS.has(c.disconnectReason.trim().toLowerCase()) ? c.disconnectReason : null
+                    const failure = c.failureReason || failedDisconnect
                     return (
                       <tr
                         key={c.id}
-                        onClick={() => navigate(`/admin/calls/${c.id}`)}
-                        className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
+                        {...rowLinkProps(() => navigate(`/admin/calls/${c.id}`))}
+                        className={`cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high ${ROW_FOCUS}`}
                       >
                         <td className="whitespace-nowrap px-4 py-3 text-text-muted">
                           <span title={fmtDateTime(c.startedAtIso || c.started_at)}>{timeAgo(c.startedAtIso || c.started_at)}</span>
@@ -161,7 +182,7 @@ export function AdminCalls() {
                           {failure ? (
                             <span
                               title={failure}
-                              className={`block truncate font-mono text-xs ${c.failureReason ? 'text-destructive' : 'text-text-muted'}`}
+                              className="block truncate font-mono text-xs text-destructive"
                             >
                               {failure}
                             </span>
@@ -169,7 +190,8 @@ export function AdminCalls() {
                             <span className="text-text-muted">-</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums">{c.credits.toFixed(1)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{fmtCredits(c.credits)}</td>
+
                       </tr>
                     )
                   })}
@@ -189,13 +211,20 @@ export function AdminCallDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [c, setC] = useState<AdminCallDetail | null>(null)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const [blocking, setBlocking] = useState(false)
 
   useEffect(() => {
-    adminCallDetail(Number(id)).then(setC).catch(() => setError(true))
-  }, [id])
+    setError(null)
+    adminCallDetail(Number(id))
+      .then(setC)
+      .catch((e: unknown) => setError(errMsg(e)))
+  }, [id, attempt])
 
-  if (error) return <EmptyState icon="error" message="Call not found." />
+  // The API answers a missing call with 404 "Call not found"; anything else is a real failure worth retrying.
+  if (error === 'Call not found') return <EmptyState icon="search_off" message="Call not found." />
+  if (error) return <ErrorState message={`Couldn't load this call: ${error}`} onRetry={() => setAttempt((n) => n + 1)} />
   if (!c) return <div className="h-40 animate-pulse rounded-xl border border-border bg-surface" />
 
   return (
@@ -235,6 +264,30 @@ export function AdminCallDetailPage() {
           )}
         </AdminCard>
 
+        <div className="flex flex-col gap-4">
+        {c.visitor && (
+          <AdminCard className="p-5">
+            <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Visitor</h3>
+            <dl className="flex flex-col gap-2 text-sm">
+              <Field label="IP address" value={c.visitor.ip} mono />
+              <Field label="Started from" value={c.visitor.source} />
+              <Field label="Calls from this IP (30 days)" value={String(c.visitor.callsFromIp30d)} />
+              <Field label="Browser" value={c.visitor.userAgent} mono />
+            </dl>
+            {c.visitor.blockId ? (
+              <Link to="/admin/ip-blocks" className="mt-3 flex items-center gap-2 text-sm font-semibold text-destructive hover:underline">
+                <Icon name="block" className="text-[18px]" /> Blocked. Manage blocked IPs
+              </Link>
+            ) : (
+              <button
+                onClick={() => setBlocking(true)}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/50 bg-surface px-3 py-2 text-sm font-semibold text-destructive hover:bg-destructive/10"
+              >
+                <Icon name="block" className="text-[18px]" /> Block this IP
+              </button>
+            )}
+          </AdminCard>
+        )}
         <AdminCard className="p-5">
           <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Captured lead</h3>
           <dl className="flex flex-col gap-2 text-sm">
@@ -258,7 +311,7 @@ export function AdminCallDetailPage() {
             <Field label="Voice" value={c.voice} mono />
             <Field label="Failure reason" value={c.failure_reason} />
             <Field label="Disconnect reason" value={c.disconnect_reason} mono />
-            <Field label="Credits" value={String(c.credits)} />
+            <Field label="Credits" value={fmtCredits(c.credits)} />
             <Field label="Room" value={c.room_name} mono />
           </dl>
 
@@ -282,7 +335,7 @@ export function AdminCallDetailPage() {
                     </span>
                     {typeof tool.ms === 'number' && (
                       <span
-                        className={`shrink-0 text-xs ${tool.ms >= 1500 ? 'text-amber-500' : 'text-text-muted'}`}
+                        className={`shrink-0 text-xs ${tool.ms >= 1500 ? 'text-amber' : 'text-text-muted'}`}
                       >
                         {tool.ms >= 1000 ? `${(tool.ms / 1000).toFixed(1)}s` : `${tool.ms}ms`}
                       </span>
@@ -293,7 +346,19 @@ export function AdminCallDetailPage() {
             </div>
           )}
         </AdminCard>
+        </div>
       </div>
+      {blocking && c.visitor && (
+        <AdminIpBlockDialog
+          initialIp={c.visitor.ip}
+          context={`call #${c.id}: `}
+          onClose={() => setBlocking(false)}
+          onBlocked={() => {
+            setBlocking(false)
+            setAttempt((n) => n + 1)
+          }}
+        />
+      )}
     </>
   )
 }

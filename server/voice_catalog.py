@@ -216,18 +216,25 @@ GEMINI_PREBUILT_VOICES = (
 )
 GEMINI_38_PREFIX = "google38:"
 GEMINI_38_FLASH_PREFIX = "google38flash:"
+# Customer-facing names never show the vendor (owner decision 2026-10-15):
+# each Gemini persona is named after its HD voice (Achernar -> Myra), and the
+# 3.8 Flash / Flash-Lite models are "Studio" / "Studio Lite".
+_HD_NAMES = {
+    e["value"].rsplit(":", 1)[-1].lower(): e["name"].removesuffix(" HD")
+    for e in CATALOG if e["value"].startswith("google:chirp3:")
+}
 CATALOG += [
     {
         "value": f"{prefix}{persona.lower()}",
-        "name": f"{persona} 3.8 {edition}",
+        "name": f"{_HD_NAMES.get(persona.lower(), persona)} {edition}",
         "gender": gender,
         "tier": "premium",
         "multilingual": True,
         "preview": True,
         "note": f"{style} · {edition} · test before live calls",
     }
-    for prefix, edition in ((GEMINI_38_PREFIX, "Flash-Lite"),
-                            (GEMINI_38_FLASH_PREFIX, "Flash"))
+    for prefix, edition in ((GEMINI_38_PREFIX, "Studio Lite"),
+                            (GEMINI_38_FLASH_PREFIX, "Studio"))
     for persona, gender, style in GEMINI_PREBUILT_VOICES
 ]
 
@@ -244,11 +251,8 @@ CATALOG += [
 # until the quota is raised. Price $10 per 1M audio tokens,
 # 25 tokens/s: about $0.0082 per call minute at the measured 373 agent
 # characters/min and 12.1 characters/s - below Chirp 3 HD's list price.
-# Named after each persona's HD voice; Kore/Charon keep their Mira/Arin names.
-_HD_NAMES = {
-    e["value"].rsplit(":", 1)[-1].lower(): e["name"].removesuffix(" HD")
-    for e in CATALOG if e["value"].startswith("google:chirp3:")
-}
+# Named after each persona's HD voice (_HD_NAMES above); Kore/Charon keep
+# their Mira/Arin names.
 CATALOG += [
     {
         "value": f"google:{persona.lower()}",
@@ -526,7 +530,7 @@ def _sarvam_v4_entry(vid: str, g: str) -> dict:
         "multilingual": True,
         "native_lang": "hi" if lang == "enhi" else lang,
         "native_language": native,
-        "note": f"Native {native} · Sarvam v4{' · expressive' if expressive else ''}",
+        "note": f"Native {native}{' · expressive' if expressive else ''}",
     }
 
 
@@ -559,12 +563,12 @@ _GEMINI_LIBRARY_IDS = {vid for vid, *_ in GEMINI_LIBRARY_VOICES}
 CATALOG += [
     {
         "value": f"{GEMINI_38_PREFIX}{vid}",
-        "name": f"{name} 3.8 Flash-Lite",
+        "name": f"{name} Studio Lite",
         "gender": gender,
         "tier": "premium",
         "multilingual": True,
         "preview": True,
-        "note": f"{role} · {accent} · Flash-Lite · test before live calls",
+        "note": f"{role} · {accent} · Studio Lite · test before live calls",
     }
     for vid, name, gender, role, accent in GEMINI_LIBRARY_VOICES
 ]

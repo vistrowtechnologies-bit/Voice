@@ -419,7 +419,7 @@ Set hours, days and limits for incoming calls under **Inbound**.""",
                 "title": "Calling window and Do-Not-Call",
                 "summary": "Keep outbound calling within TRAI rules automatically.",
                 "body": """## Calling window
-TRAI norms limit unsolicited calls to 9am–9pm, Monday–Saturday. With **Enforce calling window** on, outbound dials outside your hours and days are blocked automatically, in the callee's timezone.
+TRAI norms limit unsolicited calls to 9am–9pm, Monday–Saturday. With **Enforce calling window** on, outbound dials outside your hours and days are blocked automatically, using your account's timezone.
 
 ## Do-Not-Call
 Every outbound dial is checked against your **Do-Not-Call registry** first. Add numbers with **Block** or **Bulk import numbers**. When a caller asks your agent not to be called again, the agent adds them itself.
