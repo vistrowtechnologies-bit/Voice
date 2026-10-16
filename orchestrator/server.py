@@ -475,11 +475,20 @@ async def _build_session(
             custom_fields = {}
     except (ValueError, TypeError):
         custom_fields = {}
+    saved_voice = cfg.get("voice") or "shubh"
+    tts_voice = saved_voice
+    if saved_voice.startswith("custom:"):
+        # A customer's cloned voice. This pipeline speaks only ElevenLabs
+        # clones; anything else falls back to the default voice, never fails.
+        tts_voice = await asyncio.to_thread(db.custom_voice_tts, saved_voice, account_id or None) or "shubh"
+        if tts_voice == "shubh":
+            logger.warning("cloned voice %s not usable on the orchestrator pipeline; using default", saved_voice)
     sess = session_module.Session(
         account_id=account_id or None,
         agent_id=agent_id or None,
         call_type=call_type,
-        voice=cfg.get("voice") or "shubh",
+        voice=tts_voice,
+        billed_voice=saved_voice if saved_voice != tts_voice else "",
         reply_language=cfg.get("language") or "hi-IN",
         agent_name=cfg.get("name") or "Artha",
         business_name=cfg.get("name") or "this business",
@@ -523,8 +532,9 @@ async def _build_session(
     # session.py is not changed here, hence the plain attribute.
     rec_cfg = await asyncio.to_thread(compliance.recording_config, account_id)
     sess.compliance_config = rec_cfg
+    cloned = saved_voice.startswith("custom:")
     disclosure = compliance.recording_disclosure(
-        rec_cfg, sess.reply_language, bool(cfg.get("is_platform_demo")),
+        rec_cfg, sess.reply_language, bool(cfg.get("is_platform_demo")), cloned_voice=cloned,
     )
     if disclosure and sess.first_speaker == "user":
         # No opener to carry it, so the model says it in its first reply
@@ -541,7 +551,7 @@ async def _build_session(
             greeting = f"Hi {sess.visitor_name.split()[0]}," if sess.visitor_name else "Hi,"
             template = session_module._DEFAULT_OPENERS.get(sess.reply_language, session_module._DEFAULT_OPENER_EN)
             opener = template.format(greeting=greeting, agent_name=sess.agent_name)
-        sess.welcome_message = compliance.with_disclosure(opener, disclosure)
+        sess.welcome_message = compliance.with_disclosure(opener, disclosure, force=cloned)
     return sess
 
 

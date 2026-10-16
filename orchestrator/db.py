@@ -174,6 +174,30 @@ def get_agent_config(agent_id: int | None = None, account_id: int | None = None)
         conn.close()
 
 
+def custom_voice_tts(voice: str, account_id: int | None) -> str | None:
+    """TTS voice string for a customer's cloned voice ("custom:vv_<id>").
+    This pipeline only speaks ElevenLabs clones ("elevenlabs:<id>"); a
+    Sarvam-only clone, another account's id, a deleted/unready clone or a DB
+    error gives None and the caller uses the default voice."""
+    if not voice.startswith("custom:") or account_id is None:
+        return None
+    conn = None
+    try:
+        conn = dbconn.connect()
+        row = conn.execute(
+            "SELECT elevenlabs_voice_id FROM custom_voices WHERE id = ? AND account_id = ? "
+            "AND deleted_at IS NULL AND status = 'ready'",
+            (voice[len("custom:"):], account_id),
+        ).fetchone()
+        return f"elevenlabs:{row['elevenlabs_voice_id']}" if row and row["elevenlabs_voice_id"] else None
+    except psycopg.Error:
+        logger.exception("could not read cloned voice for account %s", account_id)
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
     """Knowledge-base text to append to the system prompt.
 

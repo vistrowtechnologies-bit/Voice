@@ -5,9 +5,9 @@ the LiveKit image ships it alongside db.py. Unknown plans fail closed.
 """
 
 PLANS = {
-    "starter": {"price_inr": 2999, "credits": 300, "agents": 1, "concurrency": 5, "knowledge_bases": 1, "storage_gb": 5},
-    "growth": {"price_inr": 5999, "credits": 1000, "agents": 5, "concurrency": 15, "knowledge_bases": 5, "storage_gb": 25},
-    "scale": {"price_inr": 12999, "credits": 2500, "agents": 20, "concurrency": 30, "knowledge_bases": 15, "storage_gb": 100},
+    "starter": {"price_inr": 2999, "credits": 300, "agents": 1, "concurrency": 5, "knowledge_bases": 1, "storage_gb": 5, "cloned_voices": 0},
+    "growth": {"price_inr": 5999, "credits": 1000, "agents": 5, "concurrency": 15, "knowledge_bases": 5, "storage_gb": 25, "cloned_voices": 1},
+    "scale": {"price_inr": 12999, "credits": 2500, "agents": 20, "concurrency": 30, "knowledge_bases": 15, "storage_gb": 100, "cloned_voices": 3},
 }
 # Measured worst-case cost of one minute of the default stack (Sarvam STT +
 # Sarvam 105B + Chirp 3 HD), Oct 2026 bills: STT 0.31 + LLM 1.70 + TTS 0.13 +
@@ -106,10 +106,15 @@ def validate_agent(conn, account_id: int, config: dict, catalog) -> None:
     if config.get("live_catalog_enabled"):
         require(conn, account_id, "live_catalog")
     voice = config.get("voice") or "shubh"
-    entry = catalog.get_voice(voice)
-    if not entry or entry.get("preview"):
+    # A customer's cloned voice ("custom:vv_<id>") is checked at agent save
+    # (owned, ready) and resolved at call time with a default-voice fallback,
+    # so it never refuses a call here.
+    if str(voice).startswith("custom:"):
+        voice = ""
+    entry = catalog.get_voice(voice) if voice else None
+    if voice and (not entry or (entry.get("preview") and not catalog.is_grandfathered(voice))):
         raise EntitlementError("Select an available catalog voice before taking calls.")
-    if entry["tier"] not in catalog.allowed_tiers_for_plan(policy["plan"]):
+    if entry and entry["tier"] not in catalog.allowed_tiers_for_plan(policy["plan"]):
         raise EntitlementError("This voice requires a higher plan. Select an included voice or upgrade.")
     count = conn.execute("SELECT COUNT(*) c FROM agents WHERE account_id = ?", (account_id,)).fetchone()["c"]
     if count > policy["agentLimit"]:

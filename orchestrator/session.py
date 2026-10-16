@@ -57,6 +57,10 @@ class Session:
     call_type: str = "browser"  # "phone" | "widget" | "browser"
     site_id: int | None = None
     voice: str = "shubh"
+    # The agent's saved voice when it differs from `voice` (a cloned voice,
+    # "custom:vv_<id>", resolved to its TTS voice in server.py). Saved on the
+    # call row so billing sees the voice the agent was set to.
+    billed_voice: str = ""
     voice_gender: str = ""  # set in __post_init__ from voice_catalog, below
     reply_language: str = "hi-IN"
     pending_language: str | None = None
@@ -1072,7 +1076,7 @@ def build_save_call_record(session: Session, room_name: str) -> dict:
         "ended_at": ended_at.strftime("%Y-%m-%d %H:%M:%S"),
         "duration_seconds": duration_seconds,
         "reply_language": session.reply_language,
-        "voice": session.voice,
+        "voice": session.billed_voice or session.voice,
         "transcript": session.transcript,
         "call_type": session.call_type,
         "site_id": session.site_id,

@@ -66,7 +66,8 @@ class WiringInMain(unittest.TestCase):
 class SarvamStreamingRecipeEverywhere(unittest.TestCase):
     def test_primary_and_safety_net_share_the_recipe(self):
         build_tts = function_source("_build_tts")
-        self.assertEqual(build_tts.count("**sarvam_stream_options"), 2)
+        # Primary, Google-path safety net, and the cloned voice's stock backup.
+        self.assertEqual(build_tts.count("**sarvam_stream_options"), 3)
         self.assertNotIn("if sarvam_latency_lab else {}", build_tts)
         self.assertIn('"output_audio_codec": "linear16"', build_tts)
         self.assertIn('"speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000', build_tts)
