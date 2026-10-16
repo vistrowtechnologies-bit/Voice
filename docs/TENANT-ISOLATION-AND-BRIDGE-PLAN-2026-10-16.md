@@ -137,3 +137,27 @@ ship to staging / a PR only; nothing merges to production without review.
 4. Are channel (simultaneous call) limits per project or per account?
 5. When a customer uses their OWN EnableX account, does your bridge into our LiveKit SIP host (`connect` to a sip: URI) work with no setup on your side, or do you have to add our SIP login to their account like you did for ours?
 6. When a customer brings their OWN EnableX account, what do they configure so their numbers reach us and our outbound calls are billed to them?
+
+---
+
+## 6. Owner decision 16 Oct: outbound = option A (each customer's own EnableX keys)
+
+Safety step taken: ArthaLeads auto-calling for Prophunt switched OFF (server shows `enabled: false`; Facebook routing + Siya KHOPOLI default kept) until the new outbound path passes the acceptance test. VERIFIED nothing was dialled: no instant-call campaign exists on ws 1; only outbound today is test call 1383.
+
+Two ways to do option A, both using the tenant's keys:
+
+| | A1. EnableX API call, then bridge to our LiveKit agent | A2. EnableX API call with EnableX audio streaming (the `orchestrator/` service) |
+|---|---|---|
+| Voice engine | our main LiveKit agent (all features) | separate engine; feature parity work in progress by another session today |
+| Code | exists: `calls_db.place_test_call` + `/telephony/enablex/outbound-test-event` (unused since 3 Sep) | exists: `orchestrator/enablex.place_outbound_call`; ws 8 is on it |
+| Same bridge as inbound | yes (inbound uses API accept + connect to LiveKit SIP and works, calls 1160-1211) | no |
+| Known problem | 3 Sep commit d39e56aa: "EnableX told us on 2026-09-03 to stop using REST entirely (it requires their WebSocket streaming flow)", and the direct path "is the one that actually connects with two-way audio" | none recorded; EnableX's documented flow |
+
+UNVERIFIED and decisive: does A1 now give two-way audio, and is it billed to the tenant's project? One test call answers both: `place_test_call(from=+917935466148, to=owner's phone, account_id=1)` with Prophunt's own keys, then check audio both ways and the Prophunt CDR.
+
+Plan: run that test (owner answers the phone), ask EnableX Q1/Q5 in parallel. A1 passes -> build A1 for every dial site. A1 fails -> A2.
+
+## 7. First-call delay setting (owner request; build after outbound is fixed)
+
+Per agent (or per ArthaLeads source): "Call new leads: immediately / after 30 s / 1 min / 5 min". Vistrow stores it next to the agent's follow-up rules; on lead arrival the contact row gets `next_attempt_at = arrival + delay`; the dialer already skips pending rows until `next_attempt_at`. Calling window and line limits still apply. Today's behaviour (immediately, typically under 30 s) is the default.
+
