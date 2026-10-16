@@ -76,6 +76,25 @@ class Session:
     memory_enabled: bool = False
     first_speaker: str = "agent"
     welcome_message: str = ""
+    # The agent's dashboard {{variable}} fallbacks (agents.variables), keyed
+    # by the exact text between the braces — see _substitute_template_vars.
+    variable_defaults: dict = field(default_factory=dict)
+    # Dashboard call-behaviour settings, read by CallGuards below. Same
+    # columns and defaults agent/main.py reads.
+    is_platform_demo: bool = False
+    max_call_duration_s: int = 0
+    silence_reminder_ms: int = 0
+    silence_reminder_max: int = 1
+    end_call_on_silence_ms: int = 0
+    post_call_fields: list = field(default_factory=list)
+    # agent/main.py's _EMOTION_INTENSITY_MULTIPLIERS value (off/subtle/strong).
+    emotion_intensity: float = 1.0
+    # 0-1, None when unset; scales how long a barge-in must last (server.py).
+    interruption_sensitivity: float | None = None
+    # Set for the integrations code in tools.py (agents.crm_integration_keys
+    # and agents.webhook_url); not read in this module.
+    crm_integration_keys: list[str] = field(default_factory=list)
+    agent_webhook_url: str = ""
 
     lead_data: dict = field(default_factory=dict)
     messages: list[dict] = field(default_factory=list)
@@ -181,8 +200,12 @@ def _substitute_template_vars(session: Session, text: str) -> str:
     def repl(match: re.Match) -> str:
         key = match.group(1)
         if key.startswith("custom."):
-            return str(values["custom"].get(key[7:], ""))
-        return str(values.get(key, ""))
+            value = str(values["custom"].get(key[7:], ""))
+        else:
+            value = str(values.get(key, ""))
+        # agent/main.py: the agent's own Variables-panel default fills the gap
+        # only when this call has no real value; it never overrides one.
+        return value if value else str(session.variable_defaults.get(key, ""))
 
     # A blank value (e.g. no visitor name on a test call) still leaves the
     # token's surrounding punctuation/spacing behind - "नमस्कार {{name}}!"
@@ -427,13 +450,27 @@ def _parse_json_config(raw, default):
         return default
 
 
-def build_tools_for_session(session: Session, custom_functions=None) -> None:
+# The built-ins agent/main.py's _build_tools lets enabled_functions switch
+# off (send_dtmf has no orchestrator counterpart). Every other tool is core
+# and stays on whatever the list says.
+_OPTIONAL_TOOLS = frozenset({"end_call", "web_search"})
+
+
+def build_tools_for_session(session: Session, custom_functions=None, enabled_functions: str | None = None) -> None:
     """Merges the global tool set with any operator-defined custom
     functions for this agent, scoped to this Session instance only (mirrors
     agent/main.py building a fresh tool list per RealEstateAgent instance,
-    not a process-global mutation)."""
-    schemas = list(tools.TOOL_SCHEMAS)
-    handlers = dict(tools.TOOL_FUNCTIONS)
+    not a process-global mutation).
+
+    enabled_functions is the agent's comma-separated list; blank means every
+    optional tool is on, as in agent/main.py."""
+    enabled_raw = (enabled_functions or "").strip()
+    enabled = {e.strip() for e in enabled_raw.split(",") if e.strip()} if enabled_raw else None
+    schemas = [
+        s for s in tools.TOOL_SCHEMAS
+        if enabled is None or s["function"]["name"] not in _OPTIONAL_TOOLS or s["function"]["name"] in enabled
+    ]
+    handlers = {s["function"]["name"]: tools.TOOL_FUNCTIONS[s["function"]["name"]] for s in schemas}
     custom_functions = _parse_json_config(custom_functions, [])
     if custom_functions:
         custom_schemas, custom_handlers = tools.build_custom_function_tools(custom_functions)
@@ -488,18 +525,22 @@ def _tone_kwargs_for(session: Session, caller_text: str) -> dict:
     emotion-adaptive delivery instead of the completely static TTS the
     orchestrator had before. Returns {} for neutral/undetected emotion, so
     the synthesize() call is byte-identical to today's for the common case."""
-    caller_emotion = emotion.detect_caller_emotion(caller_text)
+    # The agent's emotion_intensity (off 0 / subtle 0.5 / strong 1) scales
+    # the delta — the same multiplier agent/main.py applies to its own
+    # emotion-reactive delivery.
+    k = session.emotion_intensity
+    caller_emotion = emotion.detect_caller_emotion(caller_text) if k > 0 else None
     if not caller_emotion:
         return {}
     if session.tts_provider == "elevenlabs":
         delta = emotion.ELEVENLABS_EMOTION_DELTAS.get(caller_emotion)
         if not delta:
             return {}
-        return {"speed": 1.0 + delta.get("speed", 0.0), "style": 0.0 + delta.get("style", 0.0)}
+        return {"speed": 1.0 + k * delta.get("speed", 0.0), "style": 0.0 + k * delta.get("style", 0.0)}
     delta = emotion.EMOTION_TONE_DELTAS.get(caller_emotion)
     if not delta:
         return {}
-    return {"pace": 1.0 + delta.get("pace", 0.0), "pitch": 0.0 + delta.get("pitch", 0.0)}
+    return {"pace": 1.0 + k * delta.get("pace", 0.0), "pitch": 0.0 + k * delta.get("pitch", 0.0)}
 
 
 class _BufferedTTSStream:
@@ -800,6 +841,224 @@ async def handle_utterance_streaming(
     return reply_text
 
 
+async def speak_instruction(
+    session: Session,
+    instructions: str,
+    on_reply_audio: Callable[[bytes, str], Awaitable[None]],
+    on_transcript: Callable[[str, str], Awaitable[None]] | None = None,
+    on_reply_chunk: Callable[[object], Awaitable[None]] | None = None,
+) -> str:
+    """An agent-initiated line with no caller turn — agent/main.py's
+    session.generate_reply(instructions=...), used for the silence check-in
+    and the time-limit/silence goodbyes. The instruction is a one-off system
+    message for this reply only and is not kept in the history; the spoken
+    reply is."""
+    if not session.messages:
+        session.messages.append({"role": "system", "content": await build_system_prompt(session)})
+    pipeline = _OrderedTTSPipeline(session.voice, session.reply_language, on_reply_audio, on_reply_chunk)
+
+    async def _on_sentence(sentence: str) -> None:
+        await pipeline.enqueue(sentence)
+        if on_transcript:
+            await on_transcript("assistant", sentence)
+
+    try:
+        reply_text, new_messages = await llm.stream_turn(
+            session.model,
+            session.messages + [{"role": "system", "content": instructions}],
+            session.tool_schemas, session.tool_handlers, session, _on_sentence,
+        )
+        await pipeline.close()
+    except asyncio.CancelledError:
+        await pipeline.abort()
+        spoken = " ".join(pipeline.spoken).strip()
+        if spoken:
+            session.transcript.append({"role": "assistant", "text": spoken, "interrupted": True})
+        raise
+    session.messages.extend(new_messages)
+    session.transcript.append({"role": "assistant", "text": reply_text})
+    return reply_text
+
+
+# --- Call-length and silence guards (agent/main.py + agent/call_limit.py) ---
+_PLATFORM_MAX_CALL_DURATION_S = 45 * 60
+_WRAPUP_LEAD_MAX_S = 25.0
+_POST_CHECKIN_TIMEOUT_S = 12.0
+_GUARD_POLL_S = 0.25
+
+WRAPUP_INSTRUCTIONS = (
+    "The time limit for this call has been reached. In the language the caller has been "
+    "speaking, say one or two short, warm sentences: thank them, tell them the call has to "
+    "end now, and say goodbye. Do not ask a question and do not start a new topic."
+)
+WRAPUP_DEMO_SUFFIX = (
+    " You may add that they are welcome to call again any time, or book a demo with the "
+    "team on the website."
+)
+CHECKIN_INSTRUCTIONS = (
+    "The caller has gone quiet. Check in — warmly, briefly, and in "
+    "your own words for THIS conversation, referring to whatever you "
+    "were just talking about. One short line, nothing else. Do not use "
+    "a stock check-in phrase, and never reuse wording you have already "
+    "used on this call."
+)
+SILENT_GOODBYE_INSTRUCTIONS = (
+    "The caller still hasn't responded after you already checked in. Say one "
+    "short, warm line explaining you can't hear them so you'll go ahead and end "
+    "the call here — e.g. something like \"लगता है आवाज़ नहीं आ रही, मैं कॉल यहीं "
+    "खत्म करती हूँ\" — then stop. Do not ask another question."
+)
+
+
+def effective_max_call_duration_s(configured) -> int:
+    """agent/main.py's _effective_max_call_duration_s: the tenant's limit
+    when it is below the 45-minute platform ceiling, else the ceiling (0 no
+    longer means unlimited)."""
+    try:
+        value = int(configured or 0)
+    except (TypeError, ValueError):
+        value = 0
+    return value if 0 < value < _PLATFORM_MAX_CALL_DURATION_S else _PLATFORM_MAX_CALL_DURATION_S
+
+
+def silence_reminder_after_s(session: Session) -> float:
+    """agent/main.py's away_timeout: the configured silence_reminder_ms, else
+    20 s on a phone line, 18 s for the platform demo, 6.5 s otherwise."""
+    if session.silence_reminder_ms > 0:
+        return session.silence_reminder_ms / 1000
+    if session.call_type == "phone":
+        return 20.0
+    return 18.0 if session.is_platform_demo else 6.5
+
+
+class CallGuards:
+    """Max call length, silence check-ins and the silence hang-up for one
+    call, with agent/main.py's behaviour:
+
+    - max_call_duration_s: a short spoken wrap-up starts min(25 s, limit/3)
+      before the limit (waiting up to half that lead for a quiet moment), and
+      the call is hung up at the limit whatever happens.
+    - silence_reminder_ms / silence_reminder_max: after that much quiet
+      (both sides idle), the agent checks in, at most _max times per silence
+      stretch; still silent 12 s after the check-in finished, it says a short
+      goodbye and hangs up.
+    - end_call_on_silence_ms: hang up (no goodbye) after that much quiet,
+      unless a check-in is pending.
+
+    Silence is only counted while nobody is talking and no reply is being
+    produced: the transport reports `is_busy()` and calls caller_voice() on
+    every frame of caller speech. speak(instructions) starts the line as the
+    call's current reply and returns; once a reply spoken with
+    session.ending_call set has played, the transport closes the call (as it
+    already does after end_call's goodbye). hang_up() ends the call now."""
+
+    def __init__(
+        self,
+        session: Session,
+        *,
+        speak: Callable[[str], Awaitable[None]],
+        hang_up: Callable[[], Awaitable[None]],
+        is_busy: Callable[[], bool],
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> None:
+        self._s = session
+        self._speak = speak
+        self._hang_up = hang_up
+        self._is_busy = is_busy
+        self._clock = clock
+        self._sleep = sleep
+        self._last_active = clock()
+        self._reminders_sent = 0
+        self._checkin_pending = False
+        self._hung_up = False
+        self._tasks: list[asyncio.Task] = []
+
+    def start(self) -> None:
+        self._last_active = self._clock()
+        self._tasks = [asyncio.create_task(self._silence_loop()), asyncio.create_task(self._limit_guard())]
+
+    def stop(self) -> None:
+        for task in self._tasks:
+            task.cancel()
+
+    def caller_voice(self) -> None:
+        """Caller is talking: reset the reminder count and silence timers."""
+        self._last_active = self._clock()
+        self._reminders_sent = 0
+        self._checkin_pending = False
+
+    async def _end(self) -> None:
+        if not self._hung_up:
+            self._hung_up = True
+            await self._hang_up()
+
+    async def _silence_loop(self) -> None:
+        s = self._s
+        reminder_after = silence_reminder_after_s(s)
+        reminder_max = max(0, int(s.silence_reminder_max if s.silence_reminder_max is not None else 1))
+        hangup_after = (s.end_call_on_silence_ms or 0) / 1000
+        try:
+            while not self._hung_up:
+                await self._sleep(_GUARD_POLL_S)
+                now = self._clock()
+                if self._is_busy():
+                    self._last_active = now
+                    continue
+                if s.ending_call:
+                    # A goodbye is under way (end_call, the time-limit wrap-up
+                    # or the silence goodbye); the transport hangs up once it
+                    # has played. Never talk over it.
+                    continue
+                quiet = now - self._last_active
+                if self._checkin_pending:
+                    if quiet >= _POST_CHECKIN_TIMEOUT_S:
+                        logger.info("ending call — caller silent after check-in")
+                        s.ending_call = True
+                        self._last_active = now
+                        await self._speak(SILENT_GOODBYE_INSTRUCTIONS)
+                    continue
+                if hangup_after > 0 and quiet >= hangup_after:
+                    logger.info("hanging up after %dms of silence", s.end_call_on_silence_ms)
+                    await self._end()
+                    return
+                if quiet >= reminder_after and self._reminders_sent < reminder_max:
+                    self._reminders_sent += 1
+                    self._checkin_pending = True
+                    self._last_active = now
+                    await self._speak(CHECKIN_INSTRUCTIONS)
+        except asyncio.CancelledError:
+            pass
+
+    async def _limit_guard(self) -> None:
+        s = self._s
+        max_s = effective_max_call_duration_s(s.max_call_duration_s)
+        lead = max(0.0, min(_WRAPUP_LEAD_MAX_S, max_s / 3.0))
+        elapsed = max_s - lead
+        try:
+            await self._sleep(elapsed)
+            patience = max(1.0, lead * 0.5)
+            waited = 0.0
+            while self._is_busy() and waited < patience:
+                await self._sleep(0.3)
+                waited += 0.3
+            elapsed += waited
+            if s.ending_call:
+                logger.info("time limit reached while the call was already ending; no wrap-up")
+            else:
+                s.ending_call = True
+                self._checkin_pending = False
+                try:
+                    await self._speak(WRAPUP_INSTRUCTIONS + (WRAPUP_DEMO_SUFFIX if s.is_platform_demo else ""))
+                except Exception:  # noqa: BLE001 - the hard cut below still ends the call
+                    logger.exception("time-limit wrap-up could not be started")
+            await self._sleep(max(0.0, max_s - elapsed))
+            logger.info("hanging up after max duration %ds", max_s)
+            await self._end()
+        except asyncio.CancelledError:
+            pass
+
+
 def build_save_call_record(session: Session, room_name: str) -> dict:
     """Shapes this session into the exact dict db.save_call expects — same
     keys agent/main.py's log_call builds, so the dashboard/billing/CRM
@@ -824,50 +1083,83 @@ def build_save_call_record(session: Session, room_name: str) -> dict:
     return record
 
 
-async def _post_call_summary(transcript: list[dict]) -> str:
-    """Simplified port of agent/main.py's _post_call_analysis — just the
-    memory-summary half (the operator-defined structured-field extraction
-    half has no orchestrator config equivalent yet, so isn't ported).
-    Best-effort — returns "" on any failure so call teardown never breaks."""
-    if not transcript:
-        return ""
+_POST_CALL_ANALYSIS_TIMEOUT_S = 8.0
+
+
+async def _post_call_analysis(
+    transcript: list[dict], post_call_fields: list[dict], want_summary: bool
+) -> tuple[dict, str]:
+    """Port of agent/main.py's _post_call_analysis: one LLM pass over the
+    transcript for the agent's post_call_fields (operator-defined extraction
+    fields) and, for memory-enabled agents, a short summary to recall this
+    caller next time. Best-effort — returns ({}, "") on any failure so call
+    teardown never breaks."""
+    field_specs = [f for f in (post_call_fields or []) if isinstance(f, dict) and f.get("key")]
+    if not transcript or (not field_specs and not want_summary):
+        return {}, ""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        return ""
+        return {}, ""
     convo = "\n".join(f"{t['role']}: {t['text']}" for t in transcript if t.get("text"))[:6000]
     if not convo:
-        return ""
+        return {}, ""
+    directives = ["Respond with ONLY a compact JSON object."]
+    if field_specs:
+        lines = "\n".join(f"- {f['key']}: {f.get('description') or f.get('type', 'string')}" for f in field_specs)
+        directives.append(
+            'Include a "fields" object with exactly these keys, filled from the transcript '
+            "(use null when the transcript doesn't cover one):\n" + lines
+        )
+    if want_summary:
+        directives.append(
+            'Include a "summary" string of 1-3 sentences capturing who the caller is and what '
+            "they wanted, written to help recognize and help them on a future call. The "
+            "assistant lines are OUR agent, speaking for our business; only the user lines are "
+            "the caller. Never describe the caller as being from our business."
+        )
+    system = "You extract structured data from a voice-call transcript. " + " ".join(directives)
     try:
         from openai import AsyncOpenAI
 
         client = AsyncOpenAI(api_key=api_key)
+        # Same model and settings as agent/main.py (GPT-4 retired 2026-10-14).
         resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Summarize this voice-call transcript in 1-3 sentences capturing who the "
-                        "caller is and what they wanted, written to help recognize and help them on "
-                        "a future call. Respond with ONLY the summary text, nothing else."
-                    ),
-                },
-                {"role": "user", "content": convo},
-            ],
+            model="gpt-5.4-mini",
+            reasoning_effort="none",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": convo}],
+            response_format={"type": "json_object"},
             temperature=0,
         )
-        return (resp.choices[0].message.content or "").strip()
+        data = json.loads(resp.choices[0].message.content or "{}")
+        fields = data.get("fields") if field_specs else {}
+        summary = data.get("summary") if want_summary else ""
+        return (fields if isinstance(fields, dict) else {}), (summary if isinstance(summary, str) else "")
     except Exception:
-        logger.warning("post-call summary failed", exc_info=True)
-        return ""
+        logger.warning("post-call analysis failed", exc_info=True)
+        return {}, ""
 
 
 async def finalize_call(session: Session, room_name: str) -> int | None:
     """Persists the call and fires the call_completed event to this
     account's integrations (its webhook included) — same call-end contract
     as agent/main.py's log_call.
+
+    The post-call analysis (extraction fields + memory summary) runs first,
+    bounded at _POST_CALL_ANALYSIS_TIMEOUT_S like agent/, so its fields go
+    into the saved row and the delivered event.
     """
+    want_memory = bool(session.memory_enabled and session.visitor_phone and session.agent_id)
+    extracted, summary = {}, ""
+    try:
+        extracted, summary = await asyncio.wait_for(
+            _post_call_analysis(session.transcript, session.post_call_fields, want_memory),
+            timeout=_POST_CALL_ANALYSIS_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("post-call analysis timed out for %s; saving without it", room_name)
     record = build_save_call_record(session, room_name)
+    if extracted:
+        record["extracted_data"] = extracted
     call_id = await asyncio.to_thread(db.save_call, record)
     event = {
         "type": "call_completed",
@@ -879,15 +1171,16 @@ async def finalize_call(session: Session, room_name: str) -> int | None:
         "channel": session.call_type,
         "language": session.reply_language,
         "agent_name": session.agent_name,
-        "extracted_data": {},
+        "extracted_data": extracted,
     }
-    await tools._deliver_to_integrations(session.account_id, event, call_id=call_id)
+    await tools._deliver_to_integrations(
+        session.account_id, event, call_id=call_id,
+        allowed_keys=getattr(session, "crm_integration_keys", None) or None,
+    )
 
-    if session.memory_enabled and session.visitor_phone and session.agent_id:
-        summary = await _post_call_summary(session.transcript)
-        if summary:
-            await asyncio.to_thread(
-                db.save_caller_memory, session.account_id, session.agent_id, session.visitor_phone, summary
-            )
+    if want_memory and summary:
+        await asyncio.to_thread(
+            db.save_caller_memory, session.account_id, session.agent_id, session.visitor_phone, summary
+        )
 
     return call_id

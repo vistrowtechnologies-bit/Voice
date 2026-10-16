@@ -98,6 +98,7 @@ class EnableXEventRoutingTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(server.db, "get_phone_number_by_number", return_value={"account_id": 7, "agent_id": 11}),
             patch.object(server.db, "is_on_orchestrator_pipeline", return_value=True),
+            patch.object(server.agent_rules, "inbound_rejection", return_value=None),
             patch.object(server, "_build_session_for_test_call", AsyncMock(return_value=session)),
             patch.object(server.session_module, "build_greeting_audio", AsyncMock(return_value=None), create=True),
             patch.object(server.enablex, "public_wss_host", return_value="wss://orchestrator.example"),

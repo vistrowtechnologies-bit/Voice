@@ -36,6 +36,7 @@ import numpy as np
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+import agent_rules
 import audio
 import compliance
 import db
@@ -232,6 +233,15 @@ _PENDING_AGENT_BY_VOICE_ID: dict[str, int] = {}
 # EnableX->us WebSocket handshake instead of waiting for `start_media`.
 _PENDING_GREETING_BY_VOICE_ID: dict[str, tuple[session_module.Session, asyncio.Task]] = {}
 
+# voice_id -> the owned number an inbound call came in on, from the moment it
+# is accepted until it is finalized — the in-progress count for an inbound
+# route's max_concurrent. In-memory, like the maps above (one replica).
+_INBOUND_NUMBER_BY_VOICE_ID: dict[str, str] = {}
+
+
+def _live_calls_on_number(number: str, exclude_voice_id: str = "") -> int:
+    return sum(1 for vid, n in _INBOUND_NUMBER_BY_VOICE_ID.items() if n == number and vid != exclude_voice_id)
+
 
 def _event_number_candidates(event: dict) -> list[str]:
     """Return likely tenant-owned numbers in the safest lookup order.
@@ -302,10 +312,40 @@ async def _ensure_pending_call_context(event: dict) -> int | None:
     if not await asyncio.to_thread(db.is_on_orchestrator_pipeline, account_id) and account_id != TEST_ACCOUNT_ID:
         return None
 
+    direction = str(event.get("direction") or "").strip().lower()
+    inbound_number = ""
+    if direction != "outbound" and number_row is not None and matched_number == str(event.get("to") or "").strip():
+        # The number's inbound route (hours, days, dates, concurrency), as
+        # agent/main.py applies it: a blocked call is not answered.
+        inbound_number = matched_number
+        live = _live_calls_on_number(inbound_number, exclude_voice_id=voice_id)
+        try:
+            reason = await asyncio.to_thread(agent_rules.inbound_rejection, inbound_number, live)
+        except Exception:
+            # As agent/: a lookup failure must not stop us answering.
+            logger.exception("inbound route check failed for %s; answering", inbound_number)
+            reason = None
+        if reason:
+            logger.info("inbound call to %s declined: %s (live=%s, voice_id=%s)", inbound_number, reason, live, voice_id)
+            return None
+
+    sess = None
+    if voice_id not in _PENDING_GREETING_BY_VOICE_ID:
+        try:
+            sess = await _build_session_for_test_call(
+                account_id=account_id, agent_id=agent_id,
+                direction="outbound" if direction == "outbound" else "inbound",
+            )
+        except AgentPaused:
+            # agent/main.py refuses a paused agent's call; here it is never answered.
+            logger.info("agent %s is paused; not answering voice_id=%s", agent_id, voice_id)
+            return None
+
     _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = account_id
     _PENDING_AGENT_BY_VOICE_ID[voice_id] = agent_id
-    if voice_id not in _PENDING_GREETING_BY_VOICE_ID:
-        sess = await _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
+    if inbound_number:
+        _INBOUND_NUMBER_BY_VOICE_ID[voice_id] = inbound_number
+    if sess is not None:
         _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
             sess,
             asyncio.create_task(session_module.build_greeting_audio(sess)),
@@ -317,6 +357,61 @@ async def _ensure_pending_call_context(event: dict) -> int | None:
     return account_id
 
 
+class AgentPaused(Exception):
+    """The agent is paused from the dashboard; the call must not be taken."""
+
+
+def _is_paused(cfg: dict | None) -> bool:
+    # agent/main.py: config.get("status") == "paused" refuses the call.
+    return bool(cfg) and cfg.get("status") == "paused"
+
+
+# agent/main.py's _EMOTION_INTENSITY_MULTIPLIERS.
+_EMOTION_INTENSITY_MULTIPLIERS = {"off": 0.0, "subtle": 0.5, "strong": 1.0}
+
+
+def _int_setting(value, default: int) -> int:
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _json_list(raw, default: list) -> list:
+    """A JSON-list column (agents.variables, post_call_fields,
+    crm_integration_keys): stored as text, so parse defensively."""
+    if not isinstance(raw, list):
+        try:
+            raw = json.loads(raw) if raw else default
+        except (ValueError, TypeError):
+            raw = default
+    return raw if isinstance(raw, list) else default
+
+
+def _str_list(raw) -> list[str]:
+    return [str(v) for v in _json_list(raw, []) if v]
+
+
+def _sensitivity_setting(value) -> float | None:
+    """0..1, or None when unset/unreadable (agent/ treats None as 0.5)."""
+    try:
+        return None if value is None else max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _barge_in_frames(base: int, sensitivity: float | None) -> int:
+    """agent/main.py maps interruption_sensitivity 0..1 to how long the
+    caller must talk over the agent: 1.1 s (least) .. 0.5 s (most), 0.8 s at
+    the 0.5 default. Same ratio applied to this leg's own frame count, so
+    unset or 0.5 keeps today's value."""
+    if sensitivity is None:
+        return base
+    return max(1, round(base * (1.1 - sensitivity * 0.6) / 0.8))
+
+
 async def _build_session_for_test_call(
     call_type: str = "phone",
     account_id: int | None = None,
@@ -325,6 +420,7 @@ async def _build_session_for_test_call(
     contact_phone: str = "",
     contact_company: str = "",
     contact_custom_fields: str = "{}",
+    direction: str = "inbound",
 ) -> session_module.Session:
     """Loads agent_id's dashboard config into a fresh Session, defaulting to
     the feature-flagged TEST_ACCOUNT_ID/TEST_AGENT_ID when the caller
@@ -339,6 +435,7 @@ async def _build_session_for_test_call(
         contact_phone,
         contact_company,
         contact_custom_fields,
+        direction,
     )
 
 
@@ -350,6 +447,7 @@ async def _build_session(
     contact_phone: str = "",
     contact_company: str = "",
     contact_custom_fields: str = "{}",
+    direction: str = "inbound",
 ) -> session_module.Session:
     """Loads agent_id's dashboard config into a fresh Session — same
     per-call config lookup agent/main.py did via db.get_agent_config.
@@ -369,6 +467,8 @@ async def _build_session(
     cfg = await asyncio.to_thread(db.get_agent_config, agent_id, account_id or None) or {}
     if str(cfg.get("model") or "").startswith("gemini-live"):
         raise ValueError("Native Google Live audio requires the LiveKit realtime route, not the STT/LLM/TTS orchestrator")
+    if _is_paused(cfg):
+        raise AgentPaused(f"agent {agent_id} is paused")
     try:
         custom_fields = json.loads(contact_custom_fields) if contact_custom_fields else {}
         if not isinstance(custom_fields, dict):
@@ -389,13 +489,34 @@ async def _build_session(
         memory_enabled=bool(cfg.get("memory_enabled")),
         transfer_phone=cfg.get("transfer_phone") or "",
         first_speaker=(cfg.get("first_speaker") or "agent").lower(),
-        welcome_message=cfg.get("welcome_message") or "",
+        # agent/main.py: an outbound call opens with the outbound line when
+        # the tenant wrote one (it asks permission before pitching), else
+        # the inbound one.
+        welcome_message=(
+            (cfg.get("welcome_message_outbound") or "").strip() if direction == "outbound" else ""
+        ) or (cfg.get("welcome_message") or "").strip(),
         visitor_name=contact_name,
         visitor_phone=contact_phone,
         company=contact_company,
         custom_fields=custom_fields,
+        variable_defaults={
+            v["name"]: v.get("defaultValue", "")
+            for v in _json_list(cfg.get("variables"), [])
+            if isinstance(v, dict) and v.get("name")
+        },
+        is_platform_demo=bool(cfg.get("is_platform_demo")),
+        max_call_duration_s=_int_setting(cfg.get("max_call_duration_s"), 0),
+        silence_reminder_ms=_int_setting(cfg.get("silence_reminder_ms"), 0),
+        # None means the column was never set: agent/ defaults that to 1.
+        silence_reminder_max=max(0, _int_setting(cfg.get("silence_reminder_max"), 1)),
+        end_call_on_silence_ms=_int_setting(cfg.get("end_call_on_silence_ms"), 0),
+        post_call_fields=_json_list(cfg.get("post_call_fields"), []),
+        emotion_intensity=_EMOTION_INTENSITY_MULTIPLIERS.get(cfg.get("emotion_intensity") or "strong", 1.0),
+        interruption_sensitivity=_sensitivity_setting(cfg.get("interruption_sensitivity")),
+        crm_integration_keys=_str_list(cfg.get("crm_integration_keys")),
+        agent_webhook_url=(cfg.get("webhook_url") or "").strip(),
     )
-    session_module.build_tools_for_session(sess, cfg.get("custom_functions"))
+    session_module.build_tools_for_session(sess, cfg.get("custom_functions"), cfg.get("enabled_functions"))
     # Compliance -> record_calls / announce_recording, read once per call so
     # the announcement and the recorder (_recording_config, in the stream
     # handlers) can never disagree. Session has no field for it and
@@ -490,6 +611,11 @@ async def enablex_outbound_test_call(
     if not allowed:
         logger.info("outbound call refused by compliance for account %s: %s", account_id, reason)
         return {"ok": False, "blocked": True, "error": reason, "reason": reason}
+    # A paused agent takes no calls (agent/main.py). Checked before dialling:
+    # refusing after the callee answers would ring someone for nothing.
+    if _is_paused(await asyncio.to_thread(db.get_agent_config, agent_id, account_id or None)):
+        logger.info("outbound call refused: agent %s is paused", agent_id)
+        return {"ok": False, "blocked": True, "error": "This agent is paused.", "reason": "This agent is paused."}
     base = enablex.public_base_url()
     if not base:
         return {"ok": False, "error": "PUBLIC_BASE_URL/RAILWAY_PUBLIC_DOMAIN not set."}
@@ -515,6 +641,7 @@ async def enablex_outbound_test_call(
             contact_phone=to_number,
             contact_company=contact_company,
             contact_custom_fields=contact_custom_fields,
+            direction="outbound",
         )
         _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
             sess,
@@ -573,7 +700,14 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
             # ran) don't have a session yet — build it now, for the actual
             # resolved tenant/agent rather than always the test account.
             agent_id = _PENDING_AGENT_BY_VOICE_ID.get(voice_id)
-            sess = await _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
+            try:
+                sess = await _build_session_for_test_call(
+                    account_id=account_id, agent_id=agent_id,
+                    direction="outbound" if str(event.get("direction") or "").lower() == "outbound" else "inbound",
+                )
+            except AgentPaused:
+                logger.info("agent %s is paused; not streaming voice_id=%s", agent_id, voice_id)
+                return {"ok": True}
             _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
                 sess,
                 asyncio.create_task(session_module.build_greeting_audio(sess)),
@@ -589,6 +723,7 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     if state in ("disconnected", "stream_stopped", "stream_failed"):
         _PENDING_ACCOUNT_BY_VOICE_ID.pop(voice_id, None)
         _PENDING_AGENT_BY_VOICE_ID.pop(voice_id, None)
+        _INBOUND_NUMBER_BY_VOICE_ID.pop(voice_id, None)
         _pop_pending_greeting(voice_id)
         return {"ok": True}
 
@@ -633,7 +768,11 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # entry (e.g. a service restart between the `connected` webhook and
         # this WebSocket connecting) — same session build as before, just
         # without the head start.
-        sess = await _build_session_for_test_call()
+        try:
+            sess = await _build_session_for_test_call()
+        except AgentPaused:
+            await websocket.close()
+            return
         greeting_task = None
     # Records only when the tenant turned record_calls on (compliance.records_call).
     recorder = compliance.call_recorder(await _recording_config(sess), recording.CallRecorder)
@@ -669,6 +808,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
     last_frame_sent_at = 0.0
     playback_run_started_at = 0.0
     loud_streak = 0
+    phone_barge_in_frames = _barge_in_frames(_PHONE_BARGE_IN_FRAMES, sess.interruption_sensitivity)
     logger.info("stream connected for voice_id=%s", voice_id)
 
     async def _send_ulaw_frames(ulaw_chunks) -> None:
@@ -804,6 +944,42 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
             # teardown, so the call actually ends now.
             await websocket.close()
 
+    async def _hang_up() -> None:
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass  # already closed
+
+    async def _process_instruction(instructions: str) -> None:
+        # A guard-initiated line (silence check-in, goodbyes), played like
+        # any reply; closes the call afterwards if it was a goodbye.
+        try:
+            await session_module.speak_instruction(
+                sess, instructions, _send_reply_audio, on_reply_chunk=_send_reply_audio_stream
+            )
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("unexpected error speaking a guard line")
+        if sess.ending_call:
+            await _hang_up()
+
+    async def _guard_speak(instructions: str) -> None:
+        nonlocal speaking_task
+        if speaking_task and not speaking_task.done():
+            # Only the time-limit wrap-up can land mid-reply; two turns must
+            # never run on one message history at once.
+            speaking_task.cancel()
+        echo_canceller.reset_for_new_turn()
+        speaking_task = asyncio.create_task(_process_instruction(instructions))
+
+    guards = session_module.CallGuards(
+        sess,
+        speak=_guard_speak,
+        hang_up=_hang_up,
+        is_busy=lambda: speaking_task is not None and not speaking_task.done(),
+    )
+
     async def _barge_in() -> None:
         # Caller started talking over the agent — stop the in-flight reply
         # immediately and tell EnableX to drop whatever's still queued on
@@ -851,6 +1027,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
             # worst case is just no cue this time, not a dead call.
             logger.exception("unexpected error playing listening cue")
 
+    guards_started = False
     try:
         while True:
             msg = await websocket.receive_json()
@@ -885,6 +1062,9 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 # greeting — first-ever call on a voice still pays for it
                 # once, but never again after that.
                 asyncio.create_task(_prefetch_listening_cue(sess.voice, sess.reply_language))
+                if not guards_started:
+                    guards_started = True
+                    guards.start()
                 continue
 
             if event == "media":
@@ -976,13 +1156,15 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                         loud_streak += 1
                     else:
                         loud_streak = max(0, loud_streak - _BARGE_IN_STREAK_DECAY)
-                    if loud_streak >= _PHONE_BARGE_IN_FRAMES:
+                    if loud_streak >= phone_barge_in_frames:
                         loud_streak = 0
                         echo_canceller.reset_for_new_turn()
                         await _barge_in()
                         vad.push_ulaw_frame(ulaw_frame)
                     continue
 
+                if audioop.rms(audioop.ulaw2lin(ulaw_frame, 2), 2) >= vad.energy_threshold:
+                    guards.caller_voice()
                 utterance_ulaw = vad.push_ulaw_frame(ulaw_frame)
                 if not utterance_ulaw:
                     continue
@@ -996,6 +1178,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
     except WebSocketDisconnect:
         logger.info("stream disconnected for voice_id=%s", voice_id)
     finally:
+        guards.stop()
         if speaking_task and not speaking_task.done():
             speaking_task.cancel()
         if greeting_task and not greeting_task.done():
@@ -1008,6 +1191,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 await asyncio.to_thread(db.set_call_recording, call_id, key)
         _PENDING_ACCOUNT_BY_VOICE_ID.pop(voice_id, None)
         _PENDING_AGENT_BY_VOICE_ID.pop(voice_id, None)
+        _INBOUND_NUMBER_BY_VOICE_ID.pop(voice_id, None)
         logger.info("call finalized: voice_id=%s call_id=%s", voice_id, call_id)
 
 
@@ -1043,6 +1227,8 @@ async def browser_token(
     cfg = await asyncio.to_thread(db.get_agent_config, agent_id, account_id or None) or {}
     if str(cfg.get("model") or "").startswith("gemini-live"):
         return {"ok": False, "error": "This agent requires the LiveKit native realtime connection."}
+    if _is_paused(cfg):
+        return {"ok": False, "error": "This agent is paused."}
     wss_base = enablex.public_wss_host()
     if not wss_base:
         return {"ok": False, "error": "PUBLIC_BASE_URL/WSS_PUBLIC_HOST not set."}
@@ -1093,7 +1279,12 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     session_id = payload["voice_id"]
     account_id = payload.get("account_id") or TEST_ACCOUNT_ID
     agent_id = payload.get("agent_id") or TEST_AGENT_ID
-    sess = await _build_session(account_id, agent_id, call_type="browser")
+    try:
+        sess = await _build_session(account_id, agent_id, call_type="browser")
+    except AgentPaused:
+        logger.info("agent %s is paused; closing browser session %s", agent_id, session_id)
+        await websocket.close()
+        return
     # UtteranceVAD's default energy_threshold=400 was tuned against
     # mu-law-decoded 8kHz phone audio, which runs much hotter than a raw
     # browser mic capture — real sessions here logged a median frame energy
@@ -1124,6 +1315,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     client_speaking = False
     speaking_started_at = 0.0
     loud_streak = 0
+    barge_in_frames = _barge_in_frames(_BARGE_IN_FRAMES, sess.interruption_sensitivity)
     sample_rate = 48000  # overwritten by the client's "start" message
     logger.info("browser stream connected for session_id=%s", session_id)
 
@@ -1189,6 +1381,37 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
         if sess.ending_call:
             await websocket.close()
 
+    async def _hang_up() -> None:
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass  # already closed
+
+    async def _process_instruction(instructions: str) -> None:
+        # Guard-initiated line (silence check-in, goodbyes); see stream_ws.
+        try:
+            await session_module.speak_instruction(sess, instructions, _send_reply_audio, _send_transcript)
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("unexpected error speaking a guard line")
+        if sess.ending_call:
+            await _hang_up()
+
+    async def _guard_speak(instructions: str) -> None:
+        nonlocal speaking_task
+        if speaking_task and not speaking_task.done():
+            speaking_task.cancel()
+        speaking_task = asyncio.create_task(_process_instruction(instructions))
+
+    guards = session_module.CallGuards(
+        sess,
+        speak=_guard_speak,
+        hang_up=_hang_up,
+        # The clip is sent near-instantly; client_speaking covers its playback.
+        is_busy=lambda: client_speaking or (speaking_task is not None and not speaking_task.done()),
+    )
+
     try:
         # Speak first, like the phone path's greeting — otherwise the
         # visitor sits in silence waiting for the mic to pick something up.
@@ -1203,6 +1426,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
             await _send_transcript("assistant", sess.transcript[-1]["text"])
             speaking_task = asyncio.create_task(_speak(greeting_audio, greeting_content_type))
         asyncio.create_task(_prefetch_listening_cue(sess.voice, sess.reply_language))
+        guards.start()
 
         while True:
             try:
@@ -1267,12 +1491,14 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
                     # window (4 frames / 80ms) — a full _BARGE_IN_STREAK_DECAY
                     # would just be a hard reset again at this scale.
                     loud_streak = max(0, loud_streak - 1)
-                if loud_streak >= _BARGE_IN_FRAMES:
+                if loud_streak >= barge_in_frames:
                     loud_streak = 0
                     await _barge_in()
                     vad.push_pcm16_frame(pcm16_frame, frame_ms)
                 continue
 
+            if audio.frame_energy_pcm16(pcm16_frame) >= vad.energy_threshold:
+                guards.caller_voice()
             utterance_pcm16 = vad.push_pcm16_frame(pcm16_frame, frame_ms)
             if not utterance_pcm16:
                 continue
@@ -1281,6 +1507,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         logger.info("browser stream disconnected for session_id=%s", session_id)
     finally:
+        guards.stop()
         if speaking_task and not speaking_task.done():
             speaking_task.cancel()
         wav_path = recorder.stop()

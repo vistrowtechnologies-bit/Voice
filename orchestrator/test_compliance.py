@@ -133,8 +133,9 @@ class RecordingSettingsTests(unittest.IsolatedAsyncioTestCase):
             build_greeting_audio=AsyncMock(return_value=None),
             get_listening_cue_audio=AsyncMock(),
             finalize_call=AsyncMock(return_value=42),
+            CallGuards=MagicMock(),
         )
-        sess = SimpleNamespace(account_id=5, voice="v", reply_language="en-IN", transcript=[])
+        sess = SimpleNamespace(account_id=5, voice="v", reply_language="en-IN", transcript=[], interruption_sensitivity=None)
         with _fake_db(cfg), \
                 patch.object(server, "recording", fake_recording), \
                 patch.object(server, "session_module", fake_session), \

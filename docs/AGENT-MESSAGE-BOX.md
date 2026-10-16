@@ -1005,3 +1005,15 @@ Branch `claude/qa-phase1-orchestrator` (PR pending). Files: orchestrator/db.py, 
 - Not ported to orchestrator: Zoho CRM + Google-sign-in Sheets delivery, plan CRM gate, per-agent crm_integration_keys / agent webhook (phase 2).
 - QA false alarm: Testing Lab already forces LiveKit for Lab runs (AgentTestCall.tsx forceLiveKit).
 - Next: merge + Railway deploy of orchestrator, read-only live probe; phase 2 = ignored agent settings + inbound rules on orchestrator.
+
+### Claude — 2026-10-16 — QA release (phases 2-4 + billing + auto analysis)
+
+Release branch `claude/qa-release-oct16` merges PRs #125, #134, #135, #136, #137 and `claude/lead-qualified-rule`.
+- #136 orchestrator: agent settings honoured (pause, max duration, silence, outbound welcome, functions, variables, post-call fields, emotion, interruption), inbound route rules, Zoho/Google-sheets/plan gate/per-agent integrations/activity log. Deploy: `railway up` of orchestrator folder (not git-linked).
+- #137 agent: billed end = caller disconnect (caller hang-ups were billed ~20 s of LiveKit departure timeout since >= 3 Sep). Needs `lk agent deploy` both workers. Refund list pending owner approval.
+- #135 server: automatic call intelligence sweep (AUTO_CALL_ANALYSIS, default on, gpt-5.4-mini).
+- lead-qualified-rule: Qualified = real name + phone/email (server status + counts); widget placeholder name not seeded (agent).
+- #134 dashboard polish; #125 marketing contact/WhatsApp/wordmark.
+- Evidence: release server suite 783 passed; orchestrator 79 passed; web build + SEO + menu tests pass; agent suite 843 passed on lead-rule branch, release run in progress before worker deploy.
+- Not verified yet: live EnableX call on orchestrator (hang-up by closing stream), first production auto-analysis pass.
+
