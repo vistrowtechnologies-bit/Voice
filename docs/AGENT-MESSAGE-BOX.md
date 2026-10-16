@@ -17,6 +17,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-14): branch `claude/security-tokens-mfa` (PR open, NOT merged): integration tokens encrypted at rest (server + agent + orchestrator). Inert until the owner sets INTEGRATION_ENCRYPTION_KEY everywhere, then INTEGRATION_ENCRYPTION_WRITE=on; see docs/SECURITY-AUDIT-2026-10-12.md.
 - Claude (2026-10-16): PR #129 `claude/arthaleads-single-token` MERGED (main c74f5d08) and live on Railway; ArthaLeads half live on staging df4632f / main d563069. Production handshake for account 2 returned linked (Prophunt LLP). No agent code, no worker deploy.
 - Claude (2026-10-16): PR #132 `claude/chat-lead-delivery` MERGED with PR #130 (one push): widget text chats delivered to the integrations (idle sweep from the dialer tick + /widget/chat/end beacon); Railway deploy, widget bundle in server/static.
+- Claude (2026-10-16): branch `claude/contact-arthaleads-details` (PR open, NOT merged): contact page Lead details card hides ArthaLeads internal keys/tags, shows "From ArthaLeads" line + link; display only, web-demo only, Vercel deploy only.
 
 ## Takeover checklist
 
@@ -1005,3 +1006,25 @@ Branch `claude/qa-phase1-orchestrator` (PR pending). Files: orchestrator/db.py, 
 - Not ported to orchestrator: Zoho CRM + Google-sign-in Sheets delivery, plan CRM gate, per-agent crm_integration_keys / agent webhook (phase 2).
 - QA false alarm: Testing Lab already forces LiveKit for Lab runs (AgentTestCall.tsx forceLiveKit).
 - Next: merge + Railway deploy of orchestrator, read-only live probe; phase 2 = ignored agent settings + inbound rules on orchestrator.
+
+### Claude — 2026-10-16 — QA release (phases 2-4 + billing + auto analysis)
+
+Release branch `claude/qa-release-oct16` merges PRs #125, #134, #135, #136, #137 and `claude/lead-qualified-rule`.
+- #136 orchestrator: agent settings honoured (pause, max duration, silence, outbound welcome, functions, variables, post-call fields, emotion, interruption), inbound route rules, Zoho/Google-sheets/plan gate/per-agent integrations/activity log. Deploy: `railway up` of orchestrator folder (not git-linked).
+- #137 agent: billed end = caller disconnect (caller hang-ups were billed ~20 s of LiveKit departure timeout since >= 3 Sep). Needs `lk agent deploy` both workers. Refund list pending owner approval.
+- #135 server: automatic call intelligence sweep (AUTO_CALL_ANALYSIS, default on, gpt-5.4-mini).
+- lead-qualified-rule: Qualified = real name + phone/email (server status + counts); widget placeholder name not seeded (agent).
+- #134 dashboard polish; #125 marketing contact/WhatsApp/wordmark.
+- Evidence: release server suite 783 passed; orchestrator 79 passed; web build + SEO + menu tests pass; agent suite 843 passed on lead-rule branch, release run in progress before worker deploy.
+- Not verified yet: live EnableX call on orchestrator (hang-up by closing stream), first production auto-analysis pass.
+
+### Claude — 2026-10-16 — ArthaLeads leads on the contact page (branch `claude/contact-arthaleads-details`)
+
+Files: web-demo/src/lib/leadDetails.ts (new arthaleadsOrigin / visibleLeadEntries / visibleTags), web-demo/src/pages/ContactDetail.tsx, web-demo/scripts/test-lead-details.mts.
+- Display only; stored custom_fields and tags unchanged (bridge + agent still read them). The inline Lead details editor still shows every key, on purpose: its save sends the whole map, so hiding keys there would delete them.
+- For a contact with custom_fields.arthaleads_lead_id: card hides arthaleads_org_id, arthaleads_lead_id, arthaleads_source, external_id, channel_source, source; created_at is labelled "Lead created" and shown as local date/time. Header line "From ArthaLeads · <lead_source or arthaleads_source> lead" + "Open in ArthaLeads".
+- Link is https://app.arthaleads.com/leads, not a single lead: verified in the ArthaLeads frontend (local copy + GitHub main/staging) that Leads.jsx opens one lead only from router state (openLeadId); there is no URL param or /leads/:id route.
+- Tags: drops "arthaleads", "channel:*", and any "label:value" tag whose value the card already shows. Non-ArthaLeads contacts untouched.
+- Evidence: npm run test:leads passes (new cases), tsc -b --noEmit, lint (exit 0, nothing in touched files), full npm run build pass.
+- Not verified: the page in a real browser against a real ArthaLeads contact. Next: review + merge (Vercel only), then open contact 9 of workspace 1 and check the card.
+

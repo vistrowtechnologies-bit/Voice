@@ -15,6 +15,7 @@ from livekit.agents import RunContext
 from livekit.agents.llm import function_tool
 
 import db
+from lead_placeholders import PLACEHOLDER_VALUES
 from language import (
     catalog_locality,
     catalog_rows_mentioned,
@@ -2505,11 +2506,8 @@ async def log_lead(
 # Shared by capture_platform_lead and log_lead — a model under pressure to
 # wrap up a call invents one of these instead of either asking the caller
 # or just not calling the tool yet. Lowercased comparison, so casing never
-# matters at the call site.
-_PLACEHOLDER_VALUES = {
-    "", "not applicable", "n/a", "na", "none", "unknown", "website visitor",
-    "the caller", "caller", "-", "nil", "n.a.", "not available", "not given",
-}
+# matters at the call site. Shared with main.py's widget seed.
+_PLACEHOLDER_VALUES = PLACEHOLDER_VALUES
 
 
 def _looks_like_valid_indian_mobile(digits: str) -> bool:

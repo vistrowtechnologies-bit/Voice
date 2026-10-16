@@ -4,9 +4,8 @@ import { Link, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
 import { trackMarketingCta } from '../lib/analytics'
-import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE, LANGUAGES } from '../lib/marketingContent'
+import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL, LANGUAGES } from '../lib/marketingContent'
 import type { NavGroup } from '../lib/marketingContent'
-import { LIVE_DEMO_HREF, useGoToLiveDemo } from './MarketingBits'
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import vistrowMark from '../assets/vistrow-mark.png'
@@ -17,6 +16,15 @@ import { SeoRelatedLinks } from './SeoRelatedLinks'
 // site, dashboard, auth pages) for one consistent visual identity.
 function OrbMark() {
   return <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
+}
+
+// Matches the official lockup: "Vistrow" bold, "Voice" regular.
+function BrandWordmark({ className = '' }: { className?: string }) {
+  return (
+    <span className={`font-display tracking-tight ${className}`}>
+      <span className="font-bold">Vistrow</span> <span className="font-normal">Voice</span>
+    </span>
+  )
 }
 
 // Every nav/footer/CTA link in this file must go through here instead of a
@@ -388,7 +396,6 @@ function MobileNav({ onClose }: { onClose: () => void }) {
   // One group open at a time, accordion-style, so the sheet stays scannable.
   const [openGroup, setOpenGroup] = useState<string | null>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
-  const goToLiveDemo = useGoToLiveDemo('mobile_header_hear_live_call')
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -409,7 +416,7 @@ function MobileNav({ onClose }: { onClose: () => void }) {
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <NavLink to="/" onClick={onClose} className="flex items-center gap-2">
           <OrbMark />
-          <span className="font-display text-lg font-semibold">{BRAND.name}</span>
+          <BrandWordmark className="text-lg" />
         </NavLink>
         <div className="flex items-center gap-2">
           <MarketingThemeSwitcher />
@@ -425,19 +432,7 @@ function MobileNav({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-5 pb-8 pt-5">
-        <a
-          href={LIVE_DEMO_HREF}
-          onClick={(e) => {
-            // Close first so the page is scrollable again before the scroll.
-            onClose()
-            goToLiveDemo(e)
-          }}
-          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-surface-high px-5 py-4 text-base font-bold text-primary"
-        >
-          <LiveWave />
-          Hear a live call
-        </a>
-        <div className="mt-4 flex flex-col divide-y divide-border">
+        <div className="flex flex-col divide-y divide-border">
           {NAV.map((group) => {
             if (!group.items) {
               return (
@@ -586,7 +581,6 @@ function Header() {
   const [scrolled, setScrolled] = useState(false)
   const headerRef = useRef<HTMLElement>(null)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
-  const goToLiveDemo = useGoToLiveDemo('desktop_header_hear_live_call')
 
   useEffect(() => {
     const header = headerRef.current
@@ -622,10 +616,10 @@ function Header() {
           scrolled ? 'border-border shadow-[0_10px_30px_-18px_rgba(76,29,149,0.45)]' : 'border-border/70'
         }`}
       >
-        <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-3 md:px-8 lg:gap-4">
+        <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 min-[360px]:px-5 md:px-8 lg:gap-4">
           <NavLink to="/" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap">
             <OrbMark />
-            <span className="font-display text-base font-semibold tracking-tight min-[400px]:text-lg">{BRAND.name}</span>
+            <BrandWordmark className="text-[15px] min-[360px]:text-base min-[400px]:text-lg" />
             <span className="hidden font-mono text-xs text-text-muted 2xl:inline">by Vistrow</span>
           </NavLink>
 
@@ -641,20 +635,10 @@ function Header() {
             >
               Sign in
             </NavLink>
-            <a
-              href={LIVE_DEMO_HREF}
-              onClick={goToLiveDemo}
-              aria-label="Hear a live call"
-              className="hidden items-center gap-2 rounded-full bg-surface-high px-3 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/15 lg:inline-flex xl:px-4"
-            >
-              <LiveWave />
-              <span className="hidden xl:inline">Hear a live call</span>
-              <span className="xl:hidden">Live call</span>
-            </a>
             <NavLink
               to="/contact"
               onClick={() => trackMarketingCta('book_demo', 'desktop_header')}
-              className="mh-cta rounded-full px-3.5 py-2 text-xs font-bold text-white min-[400px]:text-sm lg:px-5"
+              className="mh-cta rounded-full px-3 py-2 text-xs font-bold text-white min-[360px]:px-3.5 min-[400px]:text-sm lg:px-5"
             >
               Book a demo
             </NavLink>
@@ -685,12 +669,13 @@ function Footer() {
           <div className="col-span-2">
             <NavLink to="/" className="flex items-center gap-2">
               <OrbMark />
-              <span className="font-display text-lg font-semibold">{BRAND.name}</span>
+              <BrandWordmark className="text-lg" />
             </NavLink>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-text-muted">{BRAND.tagline}</p>
             <div className="mt-3 flex text-text-muted">
               <a href={`mailto:${CONTACT_EMAIL}`} aria-label={`Email us at ${CONTACT_EMAIL}`} className="-ml-2 flex h-11 w-11 items-center justify-center hover:text-text"><Icon name="mail" className="text-[20px]" /></a>
               <a href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`} aria-label={`Call us on ${CONTACT_PHONE}`} className="flex h-11 w-11 items-center justify-center hover:text-text"><Icon name="call" className="text-[20px]" /></a>
+              <a href={CONTACT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" aria-label={`Message us on WhatsApp at ${CONTACT_PHONE}`} className="flex h-11 w-11 items-center justify-center hover:text-text"><Icon name="chat" className="text-[20px]" /></a>
             </div>
           </div>
           {FOOTER_COLUMNS.map((col) => (

@@ -35,6 +35,9 @@ const bottomOffsetPx = (() => {
   const raw = Number(scriptEl?.dataset.bottomOffset)
   return Number.isFinite(raw) && raw > 0 ? raw : null
 })()
+// Snippet value is only the first paint; site-config's label (the dashboard's
+// current "Button label") replaces it below, so a renamed button reaches
+// already-installed snippets.
 const label = scriptEl?.dataset.label || 'Talk to us'
 const agentName = scriptEl?.dataset.agentName || 'Artha'
 const ctaLabel = scriptEl?.dataset.ctaLabel || ''
@@ -512,7 +515,7 @@ function widgetHtml(label: string): string {
 
       <div id="av-panel" class="av-panel" role="dialog" aria-modal="false" aria-label="Talk to ${agentName}">
         <div class="av-header">
-          <div class="av-title"><span class="av-title-avatar" id="av-title-avatar">${avatarTag()}</span>${label}</div>
+          <div class="av-title"><span class="av-title-avatar" id="av-title-avatar">${avatarTag()}</span><span id="av-title-text">${label}</span></div>
           <div class="av-header-right">
             <span id="av-timer" class="av-timer">5:00</span>
             <button id="av-end-chat" class="av-end-chat">End chat</button>
@@ -868,6 +871,7 @@ function init(): void {
           avatar?: string
           greeting?: string
           position?: string
+          label?: string
           mode?: string
           askName?: boolean
           requireName?: boolean
@@ -893,6 +897,12 @@ function init(): void {
         if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
           customGreeting = data.greeting
           applyGreetingText(customGreeting || DEFAULT_GREETING)
+        }
+        if (typeof data.label === 'string' && data.label.trim()) {
+          const serverLabel = data.label.trim()
+          button.setAttribute('aria-label', serverLabel)
+          const titleTextEl = shadow.getElementById('av-title-text')
+          if (titleTextEl) titleTextEl.textContent = serverLabel
         }
         if ((data.position === 'bottom-left' || data.position === 'bottom-right') && data.position !== position) {
           position = data.position

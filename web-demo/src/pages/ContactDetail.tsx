@@ -19,7 +19,7 @@ import {
 import type { ContactDetail as ContactDetailType, PhoneNumber } from '../lib/types'
 import { composeE164, isE164, splitE164, useAccountDialCode } from '../lib/phone'
 import { CustomFieldsEditor } from '../components/CustomFieldsEditor'
-import { leadEntries } from '../lib/leadDetails'
+import { ARTHALEADS_LEADS_URL, arthaleadsOrigin, visibleLeadEntries, visibleTags } from '../lib/leadDetails'
 import { Tooltip } from '../components/ui/Tooltip'
 
 const TABS = ['Activity', 'Calls', 'Campaigns', 'Notes'] as const
@@ -264,6 +264,9 @@ export function ContactDetail() {
   const latestActivity = activity[0]
   const s = contact.callStats
   const successRate = pct(s.completed, s.total)
+  const arthaleads = arthaleadsOrigin(contact.customFields)
+  const leadFields = visibleLeadEntries(contact.customFields)
+  const tags = visibleTags(contact.tags, contact.customFields)
 
   return (
     <DashboardLayout>
@@ -446,38 +449,53 @@ export function ContactDetail() {
                     </button>
                   </div>
                 </div>
-              ) : leadEntries(contact.customFields).length === 0 ? (
-                <p className="text-sm text-text-muted">None yet. Add lead source, budget and more with Edit.</p>
               ) : (
-                <div className="mt-2 flex flex-col gap-2">
-                  {leadEntries(contact.customFields).filter((e) => e.key === 'enquiry_details').map((e) => (
-                    <blockquote key={e.key} className="rounded-lg border-l-4 border-primary/50 bg-surface px-3 py-2">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{e.label}</p>
-                      <p className="mt-0.5 text-sm italic leading-snug">“{e.value}”</p>
-                    </blockquote>
-                  ))}
-                  <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {leadEntries(contact.customFields).filter((e) => e.key !== 'enquiry_details').map((e) => (
-                      <div key={e.key} className="min-w-0 rounded-lg bg-surface px-3 py-2">
-                        <dt className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{e.label}</dt>
-                        <dd className="mt-0.5 break-words text-sm font-medium">
-                          {e.key === 'website_url' && /^https?:\/\//i.test(e.value) ? (
-                            <a href={e.value} target="_blank" rel="noreferrer" className="text-primary hover:underline">{e.value}</a>
-                          ) : (
-                            e.value
-                          )}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
+                <>
+                  {arthaleads && (
+                    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-text-muted">
+                      <span>From ArthaLeads{arthaleads.source && ` · ${arthaleads.source} lead`}</span>
+                      <a href={ARTHALEADS_LEADS_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 font-semibold text-primary hover:underline">
+                        Open in ArthaLeads
+                        <Icon name="north_east" className="text-[13px]" />
+                      </a>
+                    </p>
+                  )}
+                  {leadFields.length === 0 ? (
+                    <p className="text-sm text-text-muted">None yet. Add lead source, budget and more with Edit.</p>
+                  ) : (
+                    <div className="mt-2 flex flex-col gap-2">
+                      {leadFields.filter((e) => e.key === 'enquiry_details').map((e) => (
+                        <blockquote key={e.key} className="rounded-lg border-l-4 border-primary/50 bg-surface px-3 py-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{e.label}</p>
+                          <p className="mt-0.5 text-sm italic leading-snug">“{e.value}”</p>
+                        </blockquote>
+                      ))}
+                      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {leadFields.filter((e) => e.key !== 'enquiry_details').map((e) => (
+                          <div key={e.key} className="min-w-0 rounded-lg bg-surface px-3 py-2">
+                            <dt className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{e.label}</dt>
+                            <dd className="mt-0.5 break-words text-sm font-medium">
+                              {e.key === 'website_url' && /^https?:\/\//i.test(e.value) ? (
+                                <a href={e.value} target="_blank" rel="noreferrer" className="text-primary hover:underline">{e.value}</a>
+                              ) : arthaleads && e.key === 'created_at' && Number.isFinite(Date.parse(e.value)) ? (
+                                formatDateTime(e.value)
+                              ) : (
+                                e.value
+                              )}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <div className="flex flex-wrap gap-1">
-              {contact.tags.length === 0 ? (
+              {tags.length === 0 ? (
                 <span className="text-xs text-text-muted">No tags</span>
               ) : (
-                contact.tags.map((t) => (
+                tags.map((t) => (
                   <span key={t} className="rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
                     {t}
                   </span>
