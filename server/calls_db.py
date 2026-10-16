@@ -4041,7 +4041,7 @@ def _agent_dict(row: dict) -> dict:
         # "gpt-4.1-mini"). Resolved here rather than in the frontend because
         # the catalog lives on this side; falls back to the raw string only
         # for a voice no longer in the catalog, which the UI then softens.
-        "voiceName": (voice_catalog.get_voice(row["voice"]) or {}).get("name") or row["voice"],
+        "voiceName": __import__("custom_voices").display_name(_row_get(row, "account_id"), row["voice"]) if str(row["voice"] or "").startswith("custom:") else (voice_catalog.get_voice(row["voice"]) or {}).get("name") or row["voice"],
         "sttProvider": _row_get(row, "stt_provider") or "sarvam",
         "language": row["language"],
         "status": row["status"],

@@ -93,6 +93,8 @@ class BuilderUnitTests(unittest.TestCase):
             patch.object(calls_db, "list_account_voices", lambda account_id: self.menu),
             patch.object(calls_db, "count_agent_drafts", lambda account_id: 0),
             patch.object(calls_db, "record_agent_draft", lambda a, u: self.recorded.append((a, u))),
+            # No database here: the account has no cloned voices.
+            patch.object(agent_builder.custom_voices, "agent_voice_options", lambda account_id: []),
         ]
         os.environ.pop("AGENT_BUILDER_PROVIDER", None)
         # No Sarvam key: these tests start at OpenAI (Sarvam has its own below).

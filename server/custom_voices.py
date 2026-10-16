@@ -50,7 +50,9 @@ import subprocess
 import sys
 import threading
 import time
+import difflib
 import http.client
+import unicodedata
 import urllib.error
 import urllib.request
 import wave
@@ -96,8 +98,22 @@ SAMPLE_MAX_BYTES = 20 * 1024 * 1024
 CONSENT_MAX_BYTES = 2 * 1024 * 1024
 CONSENT_MIN_S = 2.0
 PREVIEW_MAX_CHARS = 200
-# Vendor cost guard: new (uncached) previews per account per day.
+# Preview limits (H3). Sarvam's voice-cloning rate limit (Pay-as-you-go /
+# Starter: 10 requests/min sustained, burst 50) is ONE budget for our whole
+# Sarvam account: every tenant's previews and every live call on a cloned
+# voice. So previews get at most PREVIEW_GLOBAL_PER_MIN of those 10 per
+# rolling minute across all accounts (leaving ~6/min for calls), one
+# account at most PREVIEW_PER_MIN per rolling minute and PREVIEW_DAILY_LIMIT
+# per rolling 24 h. Every uncached attempt counts, including ones the vendor
+# then fails; cached previews never count. Counted in the database
+# (settings rows, row-locked), so every replica shares the same budget.
 PREVIEW_DAILY_LIMIT = 40
+PREVIEW_PER_MIN = 3
+PREVIEW_GLOBAL_PER_MIN = 4
+_PREVIEW_LOG_KEY = "custom_voices.preview_attempts"         # per account: last 24 h
+_PREVIEW_GLOBAL_KEY = "custom_voices.preview_attempts_all"  # platform row: last 60 s
+_PREVIEWS_BUSY = "Too many previews right now, try again in a minute."
+_PREVIEWS_DAILY = "You've reached today's preview limit. Please try again tomorrow."
 # A clone still "processing" after this long was lost (server restart).
 STALE_PROCESSING_MIN = 20
 NAME_MAX = 60
@@ -414,6 +430,33 @@ def sarvam_tts(voice_id: str, text: str, language: str) -> tuple[bytes, str]:
     return base64.b64decode(b64), "audio/mpeg"
 
 
+# Speech-to-text REST (docs.sarvam.ai/api-reference-docs/speech-to-text/
+# transcribe, read 2026-10-16): POST /speech-to-text, multipart `file`,
+# `model`, `mode` (saaras:v3 only), `language_code`; 200 body has
+# "transcript". The REST endpoint is for clips under 30 s. saaras:v3 with
+# mode=transcribe is the model our account already uses for calls
+# (agent/main.py, orchestrator/stt.py).
+STT_MODEL = "saaras:v3"
+_STT_MAX_S = 29.0
+
+
+def sarvam_stt(wav: bytes, language: str) -> str:
+    body, ctype = _multipart({"model": STT_MODEL, "mode": "transcribe", "language_code": language},
+                             [("file", "consent.wav", wav, "audio/wav")])
+    status, raw = _http("POST", f"{_SARVAM_BASE}/speech-to-text",
+                        {"api-subscription-key": _sarvam_key() or "", "Content-Type": ctype}, body, timeout=30)
+    if status >= 300:
+        raise _sarvam_error(status, raw)
+    try:
+        parsed = json.loads(raw or b"{}")
+    except ValueError:
+        raise SarvamError(status, message="speech-to-text returned non-JSON")
+    transcript = parsed.get("transcript") if isinstance(parsed, dict) else None
+    if not isinstance(transcript, str):
+        raise SarvamError(status, message="speech-to-text returned no transcript")
+    return transcript.strip()
+
+
 # ------------------------------------------------------------------ audio
 
 class AudioError(Exception):
@@ -445,6 +488,111 @@ def to_mp3(pcm: bytes) -> bytes:
 
 def pcm_seconds(pcm: bytes) -> float:
     return len(pcm) / (2 * _PCM_RATE)
+
+
+def stt_wav(pcm: bytes) -> bytes:
+    """At most the first _STT_MAX_S of 24 kHz PCM as a 16 kHz mono WAV (the
+    rate Sarvam's STT works best at)."""
+    pcm = pcm[: int(_STT_MAX_S * _PCM_RATE) * 2]
+    proc = subprocess.run(
+        [_ffmpeg() or "ffmpeg", "-v", "error", "-f", "s16le", "-ar", str(_PCM_RATE), "-ac", "1", "-i", "pipe:0",
+         "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"],
+        input=pcm, capture_output=True, timeout=60,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        raise AudioError(proc.stderr[:300].decode("utf-8", "replace"))
+    return proc.stdout
+
+
+# ------------------------------------------------------------ consent check
+# M4: the consent clip is transcribed and compared with the sentence the
+# speaker was shown. The result is only recorded (consent_verified,
+# consent_transcript) and logged for manual review: a mismatch or an STT
+# failure never blocks or fails the clone (owner has not decided on that).
+#
+# Threshold: score = the larger of (a) the share of the expected sentence's
+# words found in the transcript and (b) difflib's character ratio of the two
+# normalised texts. The English sentence is ~30 words with the company name
+# twice; Indian-English read speech typically comes back with 10-20% of
+# words wrong, and the company name (a proper noun) may be missed entirely,
+# which still leaves ~0.75. Reading only half the sentence scores at most
+# ~0.67 on either measure, and unrelated speech far lower. So 0.70.
+CONSENT_MATCH_MIN = 0.70
+# Devanagari candrabindu vs anusvara (हूँ / हूं) and the nukta are spelling
+# variants ASR outputs interchangeably; zero-width (non-)joiners are invisible.
+_SPELLING_FOLD = str.maketrans({"ँ": "ं", "़": None, "‌": None, "‍": None})
+
+
+def _consent_tokens(text: str) -> list[str]:
+    """Lowercased words with punctuation and symbols removed (any script)."""
+    text = unicodedata.normalize("NFKC", text or "").lower().translate(_SPELLING_FOLD)
+    return "".join(" " if unicodedata.category(ch)[0] in "PSZC" else ch for ch in text).split()
+
+
+def consent_match(expected: str, transcript: str) -> float:
+    want, got = _consent_tokens(expected), _consent_tokens(transcript)
+    if not want or not got:
+        return 0.0
+    pool: dict[str, int] = {}
+    for w in got:
+        pool[w] = pool.get(w, 0) + 1
+    found = 0
+    for w in want:
+        if pool.get(w):
+            pool[w] -= 1
+            found += 1
+    chars = difflib.SequenceMatcher(None, " ".join(want), " ".join(got), autojunk=False).ratio()
+    return max(found / len(want), chars)
+
+
+def consent_language(expected: str, voice_language: str) -> str:
+    """The language the consent sentence is read in. Today the sentence is
+    always English (consent_sentence(), shown verbatim by the dashboard), so
+    a Hindi voice still reads English: asking STT for hi-IN would come back
+    in Devanagari and never match. A sentence in an Indic script is
+    transcribed in the voice's recording language. Decided by the letters'
+    script, so a company name in another script doesn't change it."""
+    letters = [ch for ch in expected or "" if ch.isalpha()]
+    latin = sum(1 for ch in letters if unicodedata.name(ch, "").startswith("LATIN"))
+    return "en-IN" if letters and latin * 2 >= len(letters) else voice_language
+
+
+def verify_consent(voice_id: str, account_id: int | None, consent_pcm: bytes, expected: str,
+                   voice_language: str) -> bool | None:
+    """Transcribe the consent clip, record transcript + verdict on the row.
+    Returns the verdict, or None when it could not be checked (left
+    unverified). Never raises."""
+    try:
+        if not (_sarvam_key() and consent_pcm and expected):
+            logger.warning("custom voice %s: consent not checked (no STT key, audio or sentence)", voice_id)
+            return None
+        transcript = sarvam_stt(stt_wav(consent_pcm), consent_language(expected, voice_language))
+    except Exception as e:
+        logger.warning("custom voice %s: consent speech-to-text failed (%s); left unverified for manual review",
+                       voice_id, e)
+        return None
+    try:
+        score = consent_match(expected, transcript)
+        verified = score >= CONSENT_MATCH_MIN
+        conn = calls_db._connect()
+        try:
+            with conn:
+                conn.execute("UPDATE custom_voices SET consent_transcript = ?, consent_verified = ? WHERE id = ?",
+                             (transcript[:2000], verified, voice_id))
+        finally:
+            conn.close()
+        if verified:
+            logger.info("custom voice %s: spoken consent matched (score %.2f)", voice_id, score)
+        else:
+            what = (f"Custom voice {voice_id}: spoken consent did not match the consent sentence "
+                    f"(score {score:.2f} < {CONSENT_MATCH_MIN:.2f}); needs manual review.")
+            logger.warning(what)
+            import admin_db  # admin error log; level "warning" is not emailed (ops_alert_worker: errors only)
+            admin_db.log_error(what, source="custom_voices", level="warning", account_id=account_id)
+        return verified
+    except Exception:
+        logger.exception("custom voice %s: recording the consent check failed", voice_id)
+        return None
 
 
 _TOO_LITTLE_SPEECH = ("We could only hear about {secs} seconds of you speaking. Please record at least "
@@ -818,6 +966,35 @@ def validate_agent_voice(account_id: int, value: str) -> None:
         raise CloneError(400, "That cloned voice isn't ready yet.")
 
 
+def display_name(account_id: int | None, value: str | None) -> str:
+    """What to show for an agent's "custom:vv_<id>" voice: the clone's own
+    name when it is this account's (not deleted) voice, else a generic
+    label - never the raw id. Used by calls_db._agent_dict (dashboard and
+    help chat)."""
+    row = get_row(account_id, str(value or "")[len(VOICE_PREFIX):]) if account_id is not None else None
+    return (row["name"] if row else "") or "Cloned voice"
+
+
+def agent_voice_options(account_id: int) -> list[dict]:
+    """The account's ready clones as voice choices ({value, name, gender})
+    for "Build with AI" - none when its plan doesn't allow its clones
+    (clone_allowed_for_account, the same rule as an agent save)."""
+    if not clone_allowed_for_account(account_id):
+        return []
+    conn = calls_db._connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, name, gender FROM custom_voices WHERE account_id = ? AND status = 'ready' "
+            "AND deleted_at IS NULL ORDER BY created_at, id",
+            (account_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    # "|" and ";" separate entries in the builder's prompt voice list.
+    return [{"value": VOICE_PREFIX + r["id"], "name": re.sub(r"[|;]", " ", r["name"]).strip() or "Cloned voice",
+             "gender": r["gender"] if r["gender"] in GENDERS else "neutral"} for r in rows]
+
+
 def _ext(filename: str | None) -> str:
     ext = (filename or "").rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
     return ext if ext in _ALLOWED_EXT else "webm"
@@ -883,10 +1060,10 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
         raise CloneError(400, "The recording is longer than 5 minutes. Please keep it shorter.")
     ref_wav = reference_clip(pcm)  # refuses when there is too little speech
     try:
-        consent_s = pcm_seconds(decode_pcm(consent))
+        consent_pcm = decode_pcm(consent)
     except (AudioError, subprocess.TimeoutExpired, OSError):
         raise CloneError(400, "We couldn't read the consent recording. Please record it again.")
-    if consent_s < CONSENT_MIN_S:
+    if pcm_seconds(consent_pcm) < CONSENT_MIN_S:
         raise CloneError(400, "The consent recording is too short. Please read the whole sentence.")
 
     voice_id = _new_id()
@@ -921,6 +1098,8 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
                 calls_db._adjust_credits_total(conn, account_id, -charge)
             row = conn.execute("SELECT * FROM custom_voices WHERE id = ?", (voice_id,)).fetchone()
             voice = public(row)
+            # The sentence the speaker was shown (quote() builds it the same way).
+            expected_consent = consent_sentence(_company(conn, account_id))
     finally:
         conn.close()
 
@@ -934,7 +1113,7 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
         _unstore([sample_key, consent_key, ref_key])
         raise CloneError(503, _UNAVAILABLE)
     job = {"voice_id": voice_id, "account_id": account_id, "name": name, "language": language, "gender": gender,
-           "pcm": pcm, "ref_wav": ref_wav}
+           "pcm": pcm, "ref_wav": ref_wav, "consent_pcm": consent_pcm, "consent_expected": expected_consent}
     return voice, charge, job
 
 
@@ -1060,6 +1239,9 @@ def finish_create(job: dict) -> None:
             return
         logger.info("custom voice %s ready: engine=%s eleven=%s sarvam=%s",
                     voice_id, engine, bool(eleven_id), bool(sarvam_id))
+        # After ready, so the check never delays or fails the clone.
+        verify_consent(voice_id, job.get("account_id"), job.get("consent_pcm") or b"",
+                       job.get("consent_expected") or "", language)
     except Exception:
         logger.exception("custom voice %s: finishing failed", voice_id)
         try:
@@ -1138,7 +1320,57 @@ def delete(account_id: int, voice_id: str) -> None:
     _unstore([k for k in (row.get("sample_key"), row.get("consent_key"), row.get("sarvam_ref_key")) if k])
 
 
-def preview(account_id: int, voice_id: str, text: str | None, language: str | None = None) -> tuple[bytes, str]:
+def _attempts(raw, since: float) -> list[float]:
+    try:
+        values = json.loads(raw or "[]")
+    except ValueError:
+        return []
+    return [float(t) for t in values if isinstance(t, (int, float)) and float(t) > since] if isinstance(values, list) else []
+
+
+def _take_preview_slot(account_id: int) -> None:
+    """Count one uncached preview attempt against the account's per-minute
+    and daily caps and the all-accounts per-minute cap, or raise
+    CloneError(429) without counting anything. One transaction: the
+    account's row is locked first, then the platform row (always that
+    order, so concurrent previews can't deadlock), and the database clock
+    is used so every replica agrees on the windows."""
+    platform = calls_db.PLATFORM_ACCOUNT_ID
+    conn = calls_db._connect()
+    try:
+        with conn:
+            for acct, key in ((account_id, _PREVIEW_LOG_KEY), (platform, _PREVIEW_GLOBAL_KEY)):
+                conn.execute("INSERT INTO settings (account_id, key, value) VALUES (?, ?, '[]') "
+                             "ON CONFLICT (account_id, key) DO NOTHING", (acct, key))
+            now = float(conn.execute("SELECT EXTRACT(EPOCH FROM clock_timestamp()) AS t").fetchone()["t"])
+            mine = conn.execute("SELECT value FROM settings WHERE account_id = ? AND key = ? FOR UPDATE",
+                                (account_id, _PREVIEW_LOG_KEY)).fetchone()
+            day = _attempts(mine["value"], now - 86400)
+            if len(day) >= PREVIEW_DAILY_LIMIT:
+                raise CloneError(429, _PREVIEWS_DAILY)
+            if sum(1 for t in day if t > now - 60) >= PREVIEW_PER_MIN:
+                raise CloneError(429, _PREVIEWS_BUSY)
+            everyone = conn.execute("SELECT value FROM settings WHERE account_id = ? AND key = ? FOR UPDATE",
+                                    (platform, _PREVIEW_GLOBAL_KEY)).fetchone()
+            minute = _attempts(everyone["value"], now - 60)
+            if len(minute) >= PREVIEW_GLOBAL_PER_MIN:
+                logger.warning("custom voice previews: all-accounts cap (%s/min) reached; account %s refused",
+                               PREVIEW_GLOBAL_PER_MIN, account_id)
+                raise CloneError(429, _PREVIEWS_BUSY)
+            for acct, key, log in ((account_id, _PREVIEW_LOG_KEY, day), (platform, _PREVIEW_GLOBAL_KEY, minute)):
+                conn.execute("UPDATE settings SET value = ? WHERE account_id = ? AND key = ?",
+                             (json.dumps(log + [now]), acct, key))
+    finally:
+        conn.close()
+
+
+def preview(account_id: int, voice_id: str, text: str | None, language: str | None = None,
+            max_chars: int = PREVIEW_MAX_CHARS) -> tuple[bytes, str]:
+    """The voice speaking `text` (or the language's default line). Cached
+    per (voice, language, text); an uncached one first takes a preview slot
+    (_take_preview_slot: 429 when over a cap). `max_chars` is raised only
+    for a drafted agent's greeting (agent_builder, up to 300; Sarvam's
+    /voices/clone accepts up to 1000)."""
     row = _require(account_id, voice_id)
     if row["status"] != "ready":
         raise CloneError(409, "This voice isn't ready yet.")
@@ -1148,8 +1380,8 @@ def preview(account_id: int, voice_id: str, text: str | None, language: str | No
     if language not in LANGUAGES:
         raise CloneError(400, "Choose a supported language for the preview.")
     text = " ".join((text or "").split())
-    if len(text) > PREVIEW_MAX_CHARS:
-        raise CloneError(400, f"Preview text can be at most {PREVIEW_MAX_CHARS} characters.")
+    if len(text) > max_chars:
+        raise CloneError(400, f"Preview text can be at most {max_chars} characters.")
     if not text:
         text = _DEFAULT_PREVIEW.get(language) or _DEFAULT_PREVIEW["en-IN"]
     # Cached per (voice, language, text): the same words in another
@@ -1163,15 +1395,9 @@ def preview(account_id: int, voice_id: str, text: str | None, language: str | No
         ).fetchone()
         if cached:
             return bytes(cached["audio"]), cached["content_type"]
-        recent = conn.execute(
-            "SELECT COUNT(*) c FROM custom_voice_previews p JOIN custom_voices v ON v.id = p.voice_id "
-            "WHERE v.account_id = ? AND p.created_at > now() - interval '1 day'",
-            (account_id,),
-        ).fetchone()
     finally:
         conn.close()
-    if int(recent["c"] or 0) >= PREVIEW_DAILY_LIMIT:
-        raise CloneError(429, "You've reached today's preview limit. Please try again tomorrow.")
+    _take_preview_slot(account_id)
     try:
         if row["engine_default"] == "sarvam" and row["sarvam_voice_id"] and _sarvam_key():
             audio, ctype = sarvam_tts(row["sarvam_voice_id"], text, language)

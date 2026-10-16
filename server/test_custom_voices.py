@@ -112,6 +112,9 @@ class Vendors:
         self.create_script: list = []      # queued (status, body) or Exception for /voices/create
         self.listed: list[dict] = []       # voices GET /voices returns
         self.delete_fail: set[str] = set()
+        # POST /speech-to-text: None = 503 (STT down), else this transcript.
+        self.stt_transcript: str | None = None
+        self.clone_fail = False            # /voices/clone (preview) returns 500
 
     def __call__(self, method, url, headers, body=None, timeout=60):
         self.calls.append((method, url))
@@ -131,7 +134,14 @@ class Vendors:
             return 201, CREATE_201
         if "/text-to-speech/" in url:
             return 200, b"ID3eleven-audio"
+        if url.endswith("/speech-to-text"):
+            if self.stt_transcript is None:
+                return 503, sarvam_err("internal_server_error", "overloaded")
+            return 200, json.dumps({"request_id": "req_stt", "transcript": self.stt_transcript,
+                                    "language_code": "en-IN"}).encode()
         if url.endswith("/voices/clone"):
+            if self.clone_fail:
+                return 500, sarvam_err("internal_server_error", "clone down")
             b64 = base64.b64encode(b"ID3sarvam-audio").decode()
             return 200, json.dumps({"audio_b64": b64, "audio": b64, "request_id": "req_c", "audio_duration": 1.2}).encode()
         if method == "GET" and urlparse(url).path == "/voices":
@@ -248,11 +258,15 @@ class CustomVoiceTests(unittest.TestCase):
                               if data.startswith(b"SAMPLE") else b"\0\0" * 24000 * 4),
             mock.patch.object(self.cv, "to_mp3", lambda pcm: b"MP3"),
             mock.patch.object(self.cv.storage, "b2_client", lambda: (self.b2, "bucket")),
+            mock.patch.object(self.cv, "stt_wav", lambda pcm: b"RIFF-16k-wav"),
         ]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
         self.bodies: list[bytes] = []
+        # The all-accounts preview budget is one shared row: start each test empty.
+        self.sql("DELETE FROM settings WHERE account_id = ? AND key = ?",
+                 (self.db.PLATFORM_ACCOUNT_ID, self.cv._PREVIEW_GLOBAL_KEY))
 
     def tearDown(self):
         for body in self.bodies:
@@ -686,6 +700,253 @@ class CustomVoiceTests(unittest.TestCase):
         self.assertEqual(status, 200)  # the customer's delete still succeeds
         self.assertIsNone(self.sql("SELECT vendor_deleted_at FROM custom_voices WHERE id = ?",
                                    (v["id"],))[0]["vendor_deleted_at"])
+
+
+    # preview limits (H3) ---------------------------------------------
+    def previews(self, key, voice_id, texts):
+        aid = self.accounts[key]["account_id"]
+        out = []
+        for t in texts:
+            try:
+                self.cv.preview(aid, voice_id, t)
+                out.append(200)
+            except self.cv.CloneError as e:
+                out.append((e.status, e.detail))
+        return out
+
+    def clone_calls(self):
+        return sum(1 for _m, u in list(self.vendors.calls) if u.endswith("/voices/clone"))
+
+    def seed_log(self, account_id, key, ages):
+        """Attempts `ages` seconds before the database's clock."""
+        conn = self.db._connect()
+        with conn:
+            now = float(conn.execute("SELECT EXTRACT(EPOCH FROM clock_timestamp()) AS t").fetchone()["t"])
+            conn.execute("INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                         "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value",
+                         (account_id, key, json.dumps([now - a for a in ages])))
+        conn.close()
+
+    def clear_log(self, account_id, key):
+        self.sql("DELETE FROM settings WHERE account_id = ? AND key = ?", (account_id, key))
+
+    def log_len(self, account_id, key):
+        rows = self.sql("SELECT value FROM settings WHERE account_id = ? AND key = ?", (account_id, key))
+        return len(json.loads(rows[0]["value"])) if rows else 0
+
+    def test_preview_per_account_minute_cap_and_cache_is_free(self):
+        _s, v = self.create("scale")
+        busy = (429, self.cv._PREVIEWS_BUSY)
+        self.assertEqual(self.previews("scale", v["id"], ["one", "two", "three", "four"]), [200, 200, 200, busy])
+        self.assertEqual(self.clone_calls(), 3)
+        # Cached previews still play and are not counted.
+        self.assertEqual(self.previews("scale", v["id"], ["one", "two"]), [200, 200])
+        self.assertEqual(self.clone_calls(), 3)
+        # Over the cap through the route: 429 with the friendly message.
+        status, body = self.call(self.client("scale", "member"), "GET", f"/voices/custom/{v['id']}/preview",
+                                 query=b"text=five")
+        self.assertEqual((status, body["detail"]), busy)
+        # Attempts older than a minute no longer count against the minute caps.
+        aid = self.accounts["scale"]["account_id"]
+        self.seed_log(aid, self.cv._PREVIEW_LOG_KEY, [61, 62, 63])
+        self.seed_log(self.db.PLATFORM_ACCOUNT_ID, self.cv._PREVIEW_GLOBAL_KEY, [61, 62, 63, 64])
+        self.assertEqual(self.previews("scale", v["id"], ["six"]), [200])
+
+    def test_preview_daily_cap_counts_failed_attempts(self):
+        _s, v = self.create("scale")
+        aid = self.accounts["scale"]["account_id"]
+        # 39 attempts earlier today (none in the last minute) and one 25 h ago.
+        self.seed_log(aid, self.cv._PREVIEW_LOG_KEY, [3600 + i for i in range(39)] + [90000])
+        self.vendors.clone_fail = True
+        self.assertEqual(self.previews("scale", v["id"], ["fails"]), [(502, self.cv._PREVIEW_FAILED)])
+        self.vendors.clone_fail = False
+        self.assertEqual(self.previews("scale", v["id"], ["fails", "other"]), [(429, self.cv._PREVIEWS_DAILY)] * 2)
+        self.assertEqual(self.clone_calls(), 1)
+        self.assertEqual(self.log_len(aid, self.cv._PREVIEW_LOG_KEY), 40)  # the 25 h old one dropped
+
+    def test_preview_global_cap_across_accounts_counts_nothing_when_refused(self):
+        _s, a = self.create("scale")
+        _s, b = self.create("other")
+        busy = (429, self.cv._PREVIEWS_BUSY)
+        self.assertEqual(self.previews("scale", a["id"], ["a1", "a2", "a3"]), [200, 200, 200])
+        self.assertEqual(self.previews("other", b["id"], ["b1", "b2"]), [200, busy])
+        self.assertEqual(self.clone_calls(), 4)
+        # The refused attempt was rolled back: not counted for the account.
+        self.assertEqual(self.log_len(self.accounts["other"]["account_id"], self.cv._PREVIEW_LOG_KEY), 1)
+        self.assertEqual(self.log_len(self.db.PLATFORM_ACCOUNT_ID, self.cv._PREVIEW_GLOBAL_KEY), 4)
+
+    def test_concurrent_previews_never_exceed_the_caps(self):
+        import threading
+        _s, a = self.create("scale")
+        _s, b = self.create("other")
+        results, lock = [], threading.Lock()
+
+        def run(key, vid, text, gate):
+            gate.wait()
+            r = self.previews(key, vid, [text])[0]
+            with lock:
+                results.append((key, r))
+
+        def burst(jobs):
+            results.clear()
+            gate = threading.Barrier(len(jobs))
+            threads = [threading.Thread(target=run, args=(*j, gate)) for j in jobs]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(60)
+            self.assertEqual(len(results), len(jobs))
+            return list(results)
+
+        # One account, 8 at once: exactly its 3 per minute go through.
+        r = burst([("scale", a["id"], f"s{i}") for i in range(8)])
+        self.assertEqual(sum(1 for _k, x in r if x == 200), 3)
+        self.assertEqual(self.clone_calls(), 3)
+        # Fresh windows, two accounts with 6 each at once: exactly the 4 global slots go through.
+        for key in ("scale", "other"):
+            self.clear_log(self.accounts[key]["account_id"], self.cv._PREVIEW_LOG_KEY)
+        self.clear_log(self.db.PLATFORM_ACCOUNT_ID, self.cv._PREVIEW_GLOBAL_KEY)
+        r = burst([("scale", a["id"], f"t{i}") for i in range(6)] + [("other", b["id"], f"u{i}") for i in range(6)])
+        ok = [k for k, x in r if x == 200]
+        self.assertEqual(len(ok), 4)
+        self.assertTrue(all(ok.count(k) <= 3 for k in ("scale", "other")))
+        self.assertEqual(self.clone_calls(), 7)
+        self.assertEqual(self.log_len(self.db.PLATFORM_ACCOUNT_ID, self.cv._PREVIEW_GLOBAL_KEY), 4)
+
+    # spoken consent (M4) ---------------------------------------------
+    def consent_row(self, voice_id):
+        return self.sql("SELECT status, consent_verified, consent_transcript FROM custom_voices WHERE id = ?",
+                        (voice_id,))[0]
+
+    def stt_requests(self):
+        return [form_fields(b) for _m, u, b in self.vendors.requests if u.endswith("/speech-to-text")]
+
+    def test_consent_transcript_matches(self):
+        sentence = self.call(self.client("scale"), "GET", "/voices/custom/quote")[1]["consentSentence"]
+        company = sentence.split(" give ")[1].split(" permission")[0]
+        # Indian-English ASR: company name misheard, punctuation and case differ.
+        heard = sentence.replace(company, "go scale company").rstrip(".").upper()
+        self.vendors.stt_transcript = heard
+        status, v = self.create("scale", language="hi-IN")
+        self.assertEqual(status, 201)
+        self.assertNotIn("consent", json.dumps(v).lower())  # never in the tenant's view
+        row = self.consent_row(v["id"])
+        self.assertEqual((row["status"], row["consent_verified"], row["consent_transcript"]), ("ready", True, heard))
+        # Hindi voice, English sentence: transcribed as English.
+        self.assertEqual(self.stt_requests(), [{"model": "saaras:v3", "mode": "transcribe", "language_code": "en-IN"}])
+
+    def test_consent_mismatch_flagged_not_blocked(self):
+        self.vendors.stt_transcript = "haan ji theek hai"
+        status, v = self.create("growth")
+        self.assertEqual(status, 201)
+        row = self.consent_row(v["id"])
+        self.assertEqual((row["status"], row["consent_verified"], row["consent_transcript"]),
+                         ("ready", False, "haan ji theek hai"))
+        events = self.sql("SELECT level, message FROM error_events WHERE source = 'custom_voices' AND message LIKE ?",
+                          (f"%{v['id']}%",))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["level"], "warning")
+        self.assertNotIn("theek", events[0]["message"])  # the speech itself is not logged
+
+    def test_consent_stt_failure_leaves_unverified_never_fails(self):
+        self.vendors.stt_transcript = None  # 503
+        status, v = self.create("growth")
+        self.assertEqual(status, 201)
+        row = self.consent_row(v["id"])
+        self.assertEqual((row["status"], row["consent_verified"], row["consent_transcript"]), ("ready", False, ""))
+        self.vendors.stt_transcript = "x"
+        with mock.patch.object(self.cv, "stt_wav", mock.Mock(side_effect=self.cv.AudioError("bad"))):
+            status, v2 = self.create("scale")
+        self.assertEqual((status, self.consent_row(v2["id"])["status"]), (201, "ready"))
+        self.assertEqual(len(self.stt_requests()), 1)
+
+    # names shown for a cloned voice (dashboard + help chat) -------------
+    def test_agent_voice_name_is_the_clone_name(self):
+        import help_tools
+        _s, v = self.create("scale", name="Abhi voice")
+        aid = self.accounts["scale"]["account_id"]
+        value = "custom:" + v["id"]
+        self.sql("INSERT INTO agents (account_id, name, voice) VALUES (?, 'Cloned desk', ?)", (aid, value))
+        self.sql("INSERT INTO agents (account_id, name, voice) VALUES (?, 'Stock desk', 'google:chirp3:Achernar')",
+                 (aid,))
+        agents = {a["name"]: a for a in self.db.list_agents(aid)}
+        self.assertEqual((agents["Cloned desk"]["voice"], agents["Cloned desk"]["voiceName"]), (value, "Abhi voice"))
+        self.assertNotIn("Cloned", agents["Stock desk"]["voiceName"])
+        listed = {a["name"]: a for a in help_tools.list_my_agents(aid)["agents"]}
+        self.assertEqual(listed["Cloned desk"]["voice"], "Abhi voice")
+        self.assertEqual(help_tools.agent_detail(aid, agents["Cloned desk"]["id"])["voice"], "Abhi voice")
+        # Another account's id, or an unknown one: a generic label, never the raw id.
+        self.assertEqual(self.cv.display_name(self.accounts["other"]["account_id"], value), "Cloned voice")
+        self.assertEqual(self.cv.display_name(aid, "custom:vv_nope"), "Cloned voice")
+
+    # Build with AI ------------------------------------------------------
+    def test_build_with_ai_offers_ready_clones_and_plays_them_through_preview(self):
+        import agent_builder
+        _s, v = self.create("scale", name="Abhi | voice", gender="male")
+        aid = self.accounts["scale"]["account_id"]
+        value = "custom:" + v["id"]
+        opts = agent_builder._account_options(aid)
+        self.assertIn({"value": value, "name": "Abhi   voice", "gender": "male"}, opts["voices"])
+        # Not offered to other accounts, or on a plan without cloning.
+        for key in ("other", "starter"):
+            values = {o["value"] for o in agent_builder._account_options(self.accounts[key]["account_id"])["voices"]}
+            self.assertNotIn(value, values)
+        drafted = agent_builder.validate_draft({"voice": value, "welcomeMessage": "नमस्ते, मैं अमित बोल रही हूँ"}, opts)
+        self.assertEqual(drafted["voice"], value)
+        self.assertEqual(drafted["welcomeMessage"], "नमस्ते, मैं अमित बोल रहा हूँ")
+        body = {"voice": value, "language": "hi-IN", "text": "नमस्ते " * 40}  # 280 chars: allowed for a greeting
+        self.assertEqual(agent_builder.greeting_audio(body, aid, 1), (b"ID3sarvam-audio", "audio/mpeg"))
+        self.assertEqual(self.clone_calls(), 1)
+        self.assertEqual(self.log_len(aid, self.cv._PREVIEW_LOG_KEY), 1)
+        # A language clones can't speak falls back to the voice's own.
+        self.assertEqual(agent_builder.greeting_audio({**body, "language": "en-US", "text": "Hi"}, aid, 1)[1],
+                         "audio/mpeg")
+        # The preview caps apply to greetings too.
+        self.seed_log(self.db.PLATFORM_ACCOUNT_ID, self.cv._PREVIEW_GLOBAL_KEY, [1, 2, 3, 4])
+        with self.assertRaises(agent_builder.BuilderError) as ctx:
+            agent_builder.greeting_audio({**body, "text": "new words"}, aid, 1)
+        self.assertEqual((ctx.exception.status, ctx.exception.detail), (429, self.cv._PREVIEWS_BUSY))
+        # Another account can't play this clone.
+        with self.assertRaises(agent_builder.BuilderError) as ctx:
+            agent_builder.greeting_audio(body, self.accounts["other"]["account_id"], 1)
+        self.assertEqual(ctx.exception.status, 400)
+
+
+class ConsentMatching(unittest.TestCase):
+    def setUp(self):
+        import custom_voices
+        self.cv = custom_voices
+        self.sentence = custom_voices.consent_sentence("Sharma Builders")
+
+    def test_exact_and_asr_variants_match(self):
+        m = self.cv.consent_match
+        self.assertEqual(m(self.sentence, self.sentence), 1.0)
+        self.assertGreaterEqual(m(self.sentence, self.sentence.lower().replace(",", "").replace(".", "")), 0.99)
+        misheard = self.sentence.replace("Sharma Builders", "Sharma Bill Does")
+        self.assertGreaterEqual(m(self.sentence, misheard), self.cv.CONSENT_MATCH_MIN)
+        self.assertEqual(m("मैं बोल रहा हूँ।", "मैं बोल रहा हूं"), 1.0)  # candrabindu / anusvara
+
+    def test_half_sentence_or_other_speech_fails(self):
+        m = self.cv.consent_match
+        words = self.sentence.split()
+        self.assertLess(m(self.sentence, " ".join(words[: len(words) // 2])), self.cv.CONSENT_MATCH_MIN)
+        self.assertLess(m(self.sentence, "Hello, this is a test of my microphone, one two three."),
+                        self.cv.CONSENT_MATCH_MIN)
+        self.assertEqual(m(self.sentence, ""), 0.0)
+
+    def test_language_follows_the_sentence_script(self):
+        self.assertEqual(self.cv.consent_language(self.sentence, "hi-IN"), "en-IN")
+        self.assertEqual(self.cv.consent_language(self.cv.consent_sentence("शर्मा"), "hi-IN"), "en-IN")
+        self.assertEqual(self.cv.consent_language("मैं पुष्टि करता हूँ कि यह मेरी आवाज़ है", "hi-IN"), "hi-IN")
+
+    def test_stt_parsing(self):
+        ok = b'{"request_id":"r","transcript":" hi ","language_code":"en-IN"}'
+        with mock.patch.object(self.cv, "_http", lambda *a, **k: (200, ok)):
+            self.assertEqual(self.cv.sarvam_stt(b"RIFF", "en-IN"), "hi")
+        with mock.patch.object(self.cv, "_http", lambda *a, **k: (429, sarvam_err("rate_limit_exceeded_error", "slow"))):
+            with self.assertRaises(self.cv.SarvamError) as ctx:
+                self.cv.sarvam_stt(b"RIFF", "en-IN")
+        self.assertEqual((ctx.exception.status, ctx.exception.code), (429, "rate_limit_exceeded_error"))
 
 
 class SarvamCreateParsing(unittest.TestCase):
