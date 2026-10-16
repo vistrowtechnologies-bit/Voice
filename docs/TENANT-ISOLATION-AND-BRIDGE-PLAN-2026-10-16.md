@@ -181,3 +181,11 @@ VERIFIED: dialling with a tenant's own keys works and is attributed to that tena
 - The two EnableX handovers at 16:05-16:08 IST are **absent** from LiveKit's log: EnableX never delivered them to LiveKit. The "User alerting, no answer" was inside EnableX.
 - Every working EnableX → LiveKit handover in 7 days (Oct 9, 10, 13) shows **FROM `vistrow-4xfxv26j`** (our SIP username) TO +917713128715, all from the "Vistrow voice" project. EnableX presents our SIP login only where it has been set up for us.
 - Conclusion (strong, not yet confirmed by EnableX): EnableX's handover into our SIP host needs per-project (or per-account) setup on EnableX's side. The Prophunt project does not have it. A customer's own EnableX account would not either.
+
+### 8c. Our side proven for Prophunt's number (16 Oct ~16:30 IST) — VERIFIED
+
+LiveKit dialled its own SIP host (temporary outbound trunk ST_D29pX8ty5622, address 4an9t157nkc.sip.livekit.cloud, our SIP login vistrow-4xfxv26j, caller 910000000001, deleted right after) to 917935466148. LiveKit matched the inbound trunk, accepted the login, created room `phone-917935466148_910000000001_DkFEyBC28ojM`, and the agent joined (participant kind AGENT). Saved as call 1384 (ws 1, agent 17, 9 s, ArthaLeads push failed, so no CRM lead). The caller side showed 408 because LiveKit was calling itself; expected.
+
+So: our LiveKit trunk, login, dispatch and agent all work for +917935466148. The failing piece is EnableX not sending the handover from the Prophunt project.
+
+Still to isolate before asking EnableX: outbound-leg-specific vs project-specific. Test: inbound call to +917713128715 (working project, accept + connect) and to +917935466148 (after its Event URL is set). If the Prophunt inbound handover also never reaches LiveKit, it is project-specific setup at EnableX.
