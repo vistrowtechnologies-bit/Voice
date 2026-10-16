@@ -189,3 +189,22 @@ LiveKit dialled its own SIP host (temporary outbound trunk ST_D29pX8ty5622, addr
 So: our LiveKit trunk, login, dispatch and agent all work for +917935466148. The failing piece is EnableX not sending the handover from the Prophunt project.
 
 Still to isolate before asking EnableX: outbound-leg-specific vs project-specific. Test: inbound call to +917713128715 (working project, accept + connect) and to +917935466148 (after its Event URL is set). If the Prophunt inbound handover also never reaches LiveKit, it is project-specific setup at EnableX.
+
+## 9. Zero-touch onboarding via EnableX's Service Administration API (docs VERIFIED 16 Oct)
+
+Source: developer.enablex.io/service-admin/{authentication,project-management,phone-numbers}.html
+
+- Auth: account-level **API Access ID + API Access Key** (HTTP Basic), base `https://api.enablex.io/cpaas/`. Every customer generates them in the EnableX Portal under **Developers → API Access**. They "grant full access to your EnableX account" → store encrypted, server-side only.
+- `POST /cpaas/projects` → creates a project; response includes `app_id` **and `app_key`**.
+- `GET /cpaas/projects/{APP_ID}` → returns `app_key` and service config incl. `sip {server_url, username, password}`.
+- `PATCH /cpaas/projects/{APP_ID}/voice` → "Controls inbound/outbound call routing, SIP configuration, inbound call handling … and the notification webhook": body `{in, out, sip:{server_url, username, password, sig_servers, media_servers}, inbound:{event_url, welcome_text, voice_type, language, auto_record}, phone:[...], notification_url}`.
+- `PATCH /cpaas/phone-numbers/link-project` → links an owned number to a project (project must have voice configured first).
+
+Customer flow this enables (one paste, nothing technical):
+1. Customer pastes API Access ID + Key into Vistrow → Integrations → EnableX.
+2. Vistrow creates (or reuses) a "Vistrow Voice" project in THEIR account, stores its `app_id`/`app_key` encrypted.
+3. Vistrow configures that project: `sip` = our LiveKit SIP host + a per-tenant SIP login; `inbound.event_url` = our webhook (+ per-tenant webhook credentials).
+4. Customer picks their numbers in Vistrow; Vistrow links them to that project and registers them to the workspace. Ownership is proven because the numbers come from their own account.
+5. Outbound: Voice API `POST /call` with that project's keys + `action_on_connect.connect` to our SIP host (caller ID = their number, billed to their wallet). Inbound: their number → our event URL → accept + connect with their keys.
+
+UNVERIFIED hypothesis this also explains the failed handover: "Vistrow voice" has `sip` set to our LiveKit login (EnableX set it in Aug), "Prophunt - Vistrow Voice" does not. Proof: `GET /cpaas/projects/{APP_ID}` for both, compare `voice.sip.server_url` / `username`. Needs the account's API Access credentials.
