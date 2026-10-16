@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chordTarget, detectMac, fuzzyScore, groupInOrder, rankItems } from '../src/lib/commandMenu.ts'
+import { capGroups, chordTarget, detectMac, fuzzyScore, groupInOrder, phoneMatches, rankItems } from '../src/lib/commandMenu.ts'
 
 // Platform detection
 assert.equal(detectMac({ platform: 'MacIntel' }), true)
@@ -27,6 +27,16 @@ assert.equal(rankItems(items, '').length, 3)
 assert.deepEqual(rankItems(items, 'dkl').map((i) => i.id), []) // keywords are not matched loosely
 assert.deepEqual(rankItems(items, 'person').map((i) => i.id), ['2'])
 assert.deepEqual(groupInOrder(items).map((g) => g.group), ['Pages', 'Actions'])
+
+// Phone and group caps (global search over calls/contacts)
+assert.equal(phoneMatches('+91 80801 97945', '8080197945'), true)
+assert.equal(phoneMatches('8080197945', '+918080197945'), true)
+assert.equal(phoneMatches('+918080197945', '9794'), true)
+assert.equal(phoneMatches('+918080197945', '979'), false) // too short
+assert.equal(phoneMatches('', '8080197945'), false)
+assert.equal(phoneMatches('+918080197945', 'ravi'), false)
+const many = [1, 2, 3, 4, 5, 6, 7].map((n) => ({ id: `c${n}`, group: 'Calls' }))
+assert.deepEqual(capGroups([{ id: 'p', group: 'Pages' }, ...many], { Calls: 5 }).map((i) => i.id), ['p', 'c1', 'c2', 'c3', 'c4', 'c5'])
 
 // Chords
 assert.equal(chordTarget('g', 'D')?.to, '/dashboard')

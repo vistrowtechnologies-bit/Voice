@@ -10,6 +10,7 @@ import {
   CHORD_WINDOW_MS,
   CREATE_CHORDS,
   GO_CHORDS,
+  capGroups,
   MOD_LABEL,
   OPEN_EVENT,
   chordTarget,
@@ -18,14 +19,34 @@ import {
   isTypingTarget,
   loadRecents,
   openCommandMenu,
+  phoneMatches,
   pushRecent,
   rankItems,
 } from '../lib/commandMenu'
 import type { MenuItem } from '../lib/commandMenu'
+import type { CallRecord } from '../lib/types'
 import { applyTheme, useTheme } from '../lib/theme'
 
 interface Item extends MenuItem {
   run: () => void
+  /** Contacts: matched on digits when a number is typed. */
+  phone?: string
+}
+
+// Data results (calls, contacts) shown per group while searching.
+const RECORD_CAP = 5
+
+function callItem(c: CallRecord, goTo: (to: string) => void): Item {
+  return {
+    id: `call:${c.id}`,
+    label: c.name || c.phone || 'Unknown caller',
+    description: `Call · ${c.agent} · ${c.channel}`,
+    // "calls" lists recent calls; the phone (and its digits) finds a caller by number.
+    keywords: `calls ${c.id} ${c.phone ?? ''} ${(c.phone ?? '').replace(/\D/g, '')}`,
+    icon: 'history',
+    group: 'Calls',
+    run: () => goTo(`/dashboard/calls/${c.id}`),
+  }
 }
 
 // What a shortcut chip shows for a "G then D" chord.
@@ -88,6 +109,9 @@ export function CommandPalette() {
   const [records, setRecords] = useState<Record<string, Item[]>>({})
   const [loaded, setLoaded] = useState(false)
   const [recents, setRecents] = useState<string[]>(() => loadRecents())
+  // Server-side call matches for the typed text: reaches calls older than the
+  // recent window loaded on open, same search as the Calls page.
+  const [callHits, setCallHits] = useState<{ q: string; items: Item[] }>({ q: '', items: [] })
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
@@ -164,9 +188,9 @@ export function CommandPalette() {
         })
     void Promise.all([
       land('Agents', fetchAgents(), (a) => ({ id: `agent:${a.id}`, label: a.name, description: `Agent · ${a.status}`, icon: 'smart_toy', run: () => goTo(`/dashboard/agents/${a.id}`) })),
-      land('Contacts', fetchContacts(), (c) => ({ id: `contact:${c.id}`, label: c.name || c.phone, description: c.name ? `Contact · ${c.phone}` : 'Contact', keywords: `${c.phone} ${c.email ?? ''} ${c.company ?? ''}`, icon: 'contacts', run: () => goTo(`/dashboard/contacts/${c.id}`) })),
-      // Capped: this is for jumping to a known record; the Calls page browses.
-      land('Calls', fetchCalls({}).then((l) => l.slice(0, 100)), (c) => ({ id: `call:${c.id}`, label: c.name || 'Unknown caller', description: `Call · ${c.agent} · ${c.channel}`, keywords: String(c.id), icon: 'history', run: () => goTo(`/dashboard/calls/${c.id}`) })),
+      land('Contacts', fetchContacts(), (c) => ({ id: `contact:${c.id}`, label: c.name || c.phone, description: c.name ? `Contact · ${c.phone}` : 'Contact', keywords: `contacts ${c.phone} ${c.email ?? ''} ${c.company ?? ''}`, icon: 'contacts', phone: c.phone, run: () => goTo(`/dashboard/contacts/${c.id}`) })),
+      // Recent calls for instant matches; older ones come from the search below.
+      land('Calls', fetchCalls({ limit: 100 }), (c) => callItem(c, goTo)),
       land('Appointments', fetchAppointments().then((l) => l.slice(0, 100)), (a) => ({ id: `appt:${a.id}`, label: a.name || 'Appointment', description: `Appointment · ${a.date} ${a.time}`, keywords: `${a.phone} ${a.purpose}`, icon: 'event', run: () => goTo(`/dashboard/appointments?date=${a.date}&id=${a.id}`) })),
       land('Knowledge Base', fetchKnowledgeBases(), (k) => ({ id: `kb:${k.id}`, label: k.name, description: `Knowledge base · ${k.sources.length} sources`, icon: 'menu_book', run: () => goTo('/dashboard/knowledge') })),
     ]).then(() => { if (!cancelled) setLoaded(true) })
@@ -245,6 +269,20 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [open, mode, close, show, navigate])
 
+  // Debounced server search for calls by name or number (account-scoped by
+  // the session, capped). Results merge into the Calls group below.
+  useEffect(() => {
+    const q = query.trim()
+    if (!open || mode !== 'search' || q.length < 2) return
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      fetchCalls({ search: q, limit: RECORD_CAP })
+        .catch(() => [] as CallRecord[])
+        .then((list) => { if (!cancelled) setCallHits({ q, items: list.map((c) => callItem(c, goTo)) }) })
+    }, 250)
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [open, mode, query, goTo])
+
   useEffect(() => {
     const onOpen = () => show('search')
     window.addEventListener(OPEN_EVENT, onOpen)
@@ -266,14 +304,23 @@ export function CommandPalette() {
   const everything = useMemo(() => [...actions, ...pages, ...Object.values(records).flat()], [actions, pages, records])
 
   const rows = useMemo<Item[]>(() => {
-    if (query.trim()) return rankItems(everything, query)
+    if (query.trim()) {
+      const ranked = rankItems(everything, query)
+      const seen = new Set(ranked.map((i) => i.id))
+      // Number typed with spaces or a country code: match contacts on digits.
+      const byPhone = (records.Contacts ?? []).filter((c) => phoneMatches(c.phone ?? '', query))
+      // Only hits for the text now in the box, never a previous query's.
+      const hits = callHits.q === query.trim() ? callHits.items : []
+      const extra = [...hits, ...byPhone].filter((i) => !seen.has(i.id) && (seen.add(i.id), true))
+      return capGroups([...ranked, ...extra], { Calls: RECORD_CAP, Contacts: RECORD_CAP })
+    }
     const byId = new Map(everything.map((i) => [i.id, i]))
     const recent = recents
       .map((id) => byId.get(id))
       .filter((i): i is Item => !!i)
       .map((i) => ({ ...i, group: 'Recent' }))
     return [...recent, ...actions, ...pages]
-  }, [query, everything, recents, actions, pages])
+  }, [query, everything, recents, actions, pages, records, callHits])
 
   const groups = useMemo(() => groupInOrder(rows), [rows])
   // Keyboard order must equal screen order, so index across the grouped list.

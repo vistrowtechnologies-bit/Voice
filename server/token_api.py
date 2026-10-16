@@ -2441,7 +2441,6 @@ class PreferencesRequest(BaseModel):
     notify_leads: bool | None = None
     notify_calls: bool | None = None
     notify_billing: bool | None = None
-    notify_product: bool | None = None
     dashboard_checklist_dismissed: bool | None = None
     dashboard_hidden_cards: str | None = None
     bell_calls: bool | None = None
@@ -2450,9 +2449,19 @@ class PreferencesRequest(BaseModel):
     notify_sound: bool | None = None
 
 
+# notify_product ("Product updates") is a legacy column with no toggle and no
+# email that reads it, so it is kept out of the API rather than offered as a
+# preference that does nothing.
+_HIDDEN_PREFERENCES = ("notify_product",)
+
+
+def _public_preferences(prefs: dict) -> dict:
+    return {k: v for k, v in prefs.items() if k not in _HIDDEN_PREFERENCES}
+
+
 @app.get("/profile/preferences")
 def get_profile_preferences(user: dict = Depends(current_user)) -> dict:
-    return calls_db.get_user_preferences(user["user_id"])
+    return _public_preferences(calls_db.get_user_preferences(user["user_id"]))
 
 
 @app.patch("/profile/preferences")
@@ -2471,7 +2480,7 @@ def update_profile_preferences(req: PreferencesRequest, user: dict = Depends(cur
         if not isinstance(hidden_cards, list) or len(hidden_cards) > len(allowed_cards) or any(card not in allowed_cards for card in hidden_cards):
             raise HTTPException(400, "Unknown dashboard card preference")
         values["dashboard_hidden_cards"] = json.dumps(list(dict.fromkeys(hidden_cards)))
-    return calls_db.update_user_preferences(user["user_id"], values)
+    return _public_preferences(calls_db.update_user_preferences(user["user_id"], values))
 
 
 @app.get("/profile/security-events")
@@ -7195,6 +7204,9 @@ def widget_site_config(siteKey: str, path: str = "") -> dict:
         "greeting": resolved["greeting"],
         "mode": site["widgetMode"],
         "position": site["widgetPosition"],
+        # Button text: lets an already-installed snippet pick up a label
+        # changed on the dashboard (the snippet's data-label is only a fallback).
+        "label": site["widgetLabel"],
         "askName": site["widgetAskName"],
         "requireName": site["widgetRequireName"],
         "askPhone": site["widgetAskPhone"],
