@@ -214,3 +214,8 @@ UNVERIFIED hypothesis this also explains the failed handover: "Vistrow voice" ha
 The owner's EnableX portal has NO "Developers → API Access" page: not in the menu, profile (`/account-settings/profile/`), user management or settings. So the Service Administration API credentials the docs describe are not self-serve on this account (possibly not enabled for regular accounts). Zero-touch onboarding depends on EnableX confirming how a customer gets API Access credentials. Until then, the fallback is the customer pasting the project App ID + App Key (already supported) and setting the Event URL themselves.
 
 Also VERIFIED: ArthaLeads org-wide ad list is live in production (`ads.all`, 9 ads with lead counts and routed AI agent names; staging cd9f98b, main 24f6d2d).
+
+### 8d. Inbound comparison, 16 Oct 16:27 IST — VERIFIED
+
+- +917935466148 (Prophunt project, Event URL set today): EnableX POSTed `incomingcall` to our webhook, we accepted with Prophunt's own keys (200 success) and sent `connect` to `sip:917935466148@4an9t157nkc.sip.livekit.cloud` (200, initiated). The caller heard beeps; `bridge_disconnected` when they hung up after 10 s. **LiveKit's call log shows no call at 16:27.** Same operation that works for the "Vistrow voice" project (LiveKit shows those as FROM vistrow-4xfxv26j), so EnableX does not deliver SIP handovers from the Prophunt project → project-level SIP setup at EnableX is missing. Our side for this number was proven working at 16:16 (8c).
+- +917713128715 ("Vistrow voice"): caller heard "number is unavailable"; **no webhook event reached us**. Combined with the 16:08 API dial from this number ending in 0 s, this number currently fails at EnableX in both directions (its last working inbound was 13 Oct). Separate EnableX issue.
