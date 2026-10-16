@@ -280,6 +280,10 @@ async def build_system_prompt(session: Session) -> str:
         "health, or any other unrelated topic), do not try to actually answer it — briefly and "
         "warmly acknowledge them, then steer the conversation back to how you can help them here."
     )
+    # Static, so it goes BEFORE the per-call parts below (caller memory, the
+    # date to the minute). After them it was a fresh, uncached prefix on every
+    # call; agent/main.py keeps per-call text last for the same reason.
+    parts.append(VOICE_STYLE_PROMPT)
 
     memory = (
         await asyncio.to_thread(db.get_caller_memory, session.agent_id, session.visitor_phone)
@@ -342,7 +346,6 @@ async def build_system_prompt(session: Session) -> str:
             f"unrelated — your own self-reference never changes. Concretely:\n{_examples}",
         )
 
-    parts.append(VOICE_STYLE_PROMPT)
     return "\n\n".join(parts)
 
 
