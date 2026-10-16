@@ -61,6 +61,17 @@ rules keep their changes from colliding (owner rule, 2026-10-16):
 7. **Merge combined.** When several PRs ship together, merge them into one
    release branch, run every affected test suite on the combined code, then
    merge once.
+8. **The edit guard enforces this.** `scripts/hooks/pre_edit_guard.py` runs
+   before every file edit (registered in `.claude/settings.json`). It blocks an
+   edit to a file another branch has in an open PR or `[CLAIM]`, and an edit to
+   another lane's file (`.claude/lanes.json`) unless your branch claimed it.
+   Declare your lane once per checkout:
+   `echo "dashboard" > .claude/lane.local` (lanes: seo, voice-clone,
+   dashboard, runtime, video; comma-separate several).
+9. **Need a change in another lane? Ask, don't edit.** SendMessage to the
+   owning session (name in `.claude/lanes.json`) with exactly what to change
+   and why, and post the same as `[REQUEST] @<lane>` on issue #2. The owner
+   makes the change on its own branch and replies with `[DONE]`.
 
 ## Shared message box and takeover
 
