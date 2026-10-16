@@ -956,7 +956,10 @@ CREATE TABLE IF NOT EXISTS custom_voices (
     setup_credits_charged INTEGER NOT NULL DEFAULT 0,
     created_by INTEGER,
     created_at TEXT DEFAULT {_NOW},
-    deleted_at TEXT
+    deleted_at TEXT,
+    gender TEXT,
+    reference_text TEXT NOT NULL DEFAULT '',
+    vendor_deleted_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_custom_voices_account ON custom_voices(account_id);
 
@@ -1512,6 +1515,13 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_requested_at TEXT")
             conn.execute("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_reason TEXT DEFAULT ''")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_platform_owner INTEGER DEFAULT 0")
+            # Cloned voices (custom_voices.py, 2026-10-16): the speaker's
+            # gender (required for new clones; NULL on older rows), Sarvam's
+            # ASR transcript of the reference clip, and when the vendor voice
+            # was deleted (NULL on a deleted/failed row = reconcile retries).
+            conn.execute("ALTER TABLE custom_voices ADD COLUMN IF NOT EXISTS gender TEXT")
+            conn.execute("ALTER TABLE custom_voices ADD COLUMN IF NOT EXISTS reference_text TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE custom_voices ADD COLUMN IF NOT EXISTS vendor_deleted_at TEXT")
             # NULL until the first-run onboarding modal is dismissed. Every
             # pre-existing account (created before onboarding existed) should
             # count as already onboarded rather than suddenly seeing the

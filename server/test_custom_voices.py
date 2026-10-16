@@ -2,18 +2,87 @@
 app against a throwaway Postgres (TEST_DATABASE_URL). Every vendor request,
 ffmpeg and object storage are replaced: nothing leaves this machine.
 
+Vendor mocks use Sarvam's documented response shapes (docs.sarvam.ai API
+reference, read 2026-10-16): create 201 {"status","data":{"voice_id",
+"status","reference_text"}}, delete 204, list {"data":{"voices","total"}},
+errors {"error":{"request_id","message","code"}}.
+
 Covers pricing (first clone free, later clones 25 credits once, refunded on
 failure), 402/403 refusals, account isolation, vendor names never in a
 response, stock premium voices owner-only, agent-save validation, billing
-on the standard tier."""
+on the standard tier, Sarvam error mapping and retries, gender, all 12
+languages, orphan reconcile, and the reference-clip chooser."""
 import asyncio
+import base64
+import functools
 import json
+import math
 import os
+import random
+import re
 import unittest
+import urllib.error
+from array import array
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 
 TEST_DB = os.environ.get("TEST_DATABASE_URL")
 VENDOR_WORDS = ("eleven", "sarvam")
+
+# Sarvam's own example values (create-voice API reference).
+SVC = "svc-efb9cac0-c63d-433a-9903-b3f0b0865b2b"
+REF_TEXT = "Hello, welcome to Sarvam AI. We build cutting edge voice technology for Indian languages."
+CREATE_201 = json.dumps({"status": "success", "data": {"voice_id": SVC, "status": "saved",
+                                                       "reference_text": REF_TEXT}}).encode()
+
+
+def sarvam_err(code: str, message: str, request_id: str = "req_test_1") -> bytes:
+    return json.dumps({"error": {"request_id": request_id, "message": message, "code": code}}).encode()
+
+
+RATE = 24000
+
+
+def synth(seconds: float, segments=(), amp=6000.0, noise=40.0, clip=False, gauss=0.0, seed=1) -> bytes:
+    """24 kHz mono s16le test PCM: low uniform noise everywhere, plus
+    speech-like amplitude-modulated harmonic tones inside `segments`
+    ((start_s, end_s) pairs). clip=True makes them full-scale square waves;
+    gauss>0 adds steady gaussian noise of that std-dev (a fan)."""
+    rnd = random.Random(seed)
+    n = int(seconds * RATE)
+    out = array("h", bytes(2 * n))
+    segs = sorted(segments)
+    k = 0
+    for i in range(n):
+        t = i / RATE
+        x = rnd.uniform(-noise, noise) if noise else 0.0
+        if gauss:
+            x += rnd.gauss(0.0, gauss)
+        while k < len(segs) and t >= segs[k][1]:
+            k += 1
+        if k < len(segs) and segs[k][0] <= t < segs[k][1]:
+            tt = t - segs[k][0]
+            v = (math.sin(2 * math.pi * 180 * t) + 0.5 * math.sin(2 * math.pi * 360 * t)) / 1.5
+            if clip:
+                x += 32767.0 if v >= 0 else -32768.0
+            else:
+                x += amp * (0.6 + 0.4 * math.sin(2 * math.pi * 4 * tt)) * v
+        out[i] = max(-32768, min(32767, int(x)))
+    return out.tobytes()
+
+
+def bursts(start: float, end: float, on: float = 1.7, off: float = 0.3) -> list[tuple[float, float]]:
+    """Talking from start to end: on-second phrases with off-second pauses."""
+    segs, t = [], start
+    while t < end:
+        segs.append((t, min(t + on, end)))
+        t += on + off
+    return segs
+
+
+@functools.lru_cache(maxsize=4)
+def speech_pcm(seconds: float) -> bytes:
+    return synth(seconds, bursts(0.5, seconds - 0.5))
 
 
 class FakeB2:
@@ -28,29 +97,69 @@ class FakeB2:
         self.objects.pop(Key, None)
 
 
+def form_fields(body: bytes) -> dict:
+    """Plain (non-file) fields of a multipart body."""
+    return {m.group(1).decode(): m.group(2).decode("utf-8")
+            for m in re.finditer(rb'name="([^"]+)"\r\n\r\n([^\r]*)\r\n', body)}
+
+
 class Vendors:
-    """Stands in for custom_voices._http. Records every request."""
+    """Stands in for custom_voices._http. Records every request. Sarvam
+    responses follow its API reference exactly."""
 
     def __init__(self):
-        self.calls, self.fail = [], set()
+        self.calls, self.requests, self.fail = [], [], set()
+        self.create_script: list = []      # queued (status, body) or Exception for /voices/create
+        self.listed: list[dict] = []       # voices GET /voices returns
+        self.delete_fail: set[str] = set()
 
     def __call__(self, method, url, headers, body=None, timeout=60):
         self.calls.append((method, url))
+        self.requests.append((method, url, body or b""))
+        assert "api-subscription-key" in headers or "xi-api-key" in headers
         vendor = "eleven" if "elevenlabs" in url else "sarvam"
         if vendor in self.fail:
-            return 500, b'{"detail":"vendor down"}'
+            return 500, sarvam_err("internal_server_error", "vendor down")
         if url.endswith("/v1/voices/add"):
             return 200, b'{"voice_id":"EL_NEW"}'
         if url.endswith("/voices/create"):
-            return 200, b'{"voice_id":"SV_NEW","reference_text":"..."}'
+            if self.create_script:
+                step = self.create_script.pop(0)
+                if isinstance(step, Exception):
+                    raise step
+                return step
+            return 201, CREATE_201
         if "/text-to-speech/" in url:
             return 200, b"ID3eleven-audio"
         if url.endswith("/voices/clone"):
-            import base64
-            return 200, json.dumps({"audio": base64.b64encode(b"ID3sarvam-audio").decode()}).encode()
+            b64 = base64.b64encode(b"ID3sarvam-audio").decode()
+            return 200, json.dumps({"audio_b64": b64, "audio": b64, "request_id": "req_c", "audio_duration": 1.2}).encode()
+        if method == "GET" and urlparse(url).path == "/voices":
+            q = parse_qs(urlparse(url).query)
+            limit, offset = int(q["limit"][0]), int(q["offset"][0])
+            page = self.listed[offset:offset + limit]
+            return 200, json.dumps({"status": "success", "data": {"voices": page, "total": len(page)}}).encode()
+        if method == "DELETE" and "/voices/delete/" in url:
+            vid = url.rsplit("/", 1)[1]
+            if vid in self.delete_fail:
+                return 500, sarvam_err("internal_server_error", "delete failed")
+            self.listed = [v for v in self.listed if v["id"] != vid]
+            return 204, b""
         if method == "DELETE":
             return 200, b"{}"
         raise AssertionError(f"unexpected vendor request {method} {url}")
+
+    def creates(self) -> list[dict]:
+        return [form_fields(b) for m, u, b in self.requests if u.endswith("/voices/create")]
+
+    def sarvam_deletes(self) -> list[str]:
+        return [u.rsplit("/", 1)[1] for m, u in self.calls if m == "DELETE" and "/voices/delete/" in u]
+
+
+def listed_voice(vid: str, name: str, status: str = "active") -> dict:
+    return {"id": vid, "name": name, "language": "hi-IN", "status": status, "source": "cloned",
+            "created_by": "user-uuid", "created_at": "2026-10-16T10:00:00Z", "has_preview": False,
+            "gender": None, "accent": None, "descriptor": "conversational"}
 
 
 def multipart(fields: dict, files: dict) -> tuple[bytes, str]:
@@ -128,12 +237,14 @@ class CustomVoiceTests(unittest.TestCase):
         self.vendors = Vendors()
         self.b2 = FakeB2()
         self.seconds = 45.0
+        self.sleeps: list[float] = []
         env = {"ELEVEN_API_KEY": "k-e", "SARVAM_API_KEY": "k-s"}
         patches = [
             mock.patch.dict(os.environ, env),
             mock.patch.object(self.cv, "_http", self.vendors),
+            mock.patch.object(self.cv, "_sleep", self.sleeps.append),
             mock.patch.object(self.cv, "_ffmpeg", lambda: "/usr/bin/ffmpeg"),
-            mock.patch.object(self.cv, "decode_pcm", lambda data: b"\0\0" * int(self.seconds * 24000)
+            mock.patch.object(self.cv, "decode_pcm", lambda data: speech_pcm(self.seconds)
                               if data.startswith(b"SAMPLE") else b"\0\0" * 24000 * 4),
             mock.patch.object(self.cv, "to_mp3", lambda pcm: b"MP3"),
             mock.patch.object(self.cv.storage, "b2_client", lambda: (self.b2, "bucket")),
@@ -164,6 +275,17 @@ class CustomVoiceTests(unittest.TestCase):
         conn.close()
         return int(row["value"])
 
+    def sql(self, query, params=()):
+        conn = self.db._connect()
+        with conn:
+            cur = conn.execute(query, params)
+            try:
+                rows = [dict(r) for r in cur.fetchall()]
+            except Exception:
+                rows = []
+        conn.close()
+        return rows
+
     def client(self, key, role="admin"):
         acct = self.accounts[key]
         return Client(self.app, {"account_id": acct["account_id"], "user_id": acct["user_id"], "role": role})
@@ -175,10 +297,16 @@ class CustomVoiceTests(unittest.TestCase):
             return status, json.loads(data)
         return status, data
 
-    def create(self, key, language="hi-IN", name="My voice", sample=b"SAMPLE-audio"):
-        raw, ctype = multipart({"name": name, "language": language},
-                               {"sample": ("s.webm", sample, "audio/webm"), "consent": ("c.webm", b"CONSENT", "audio/webm")})
+    def create(self, key, language="hi-IN", name="My voice", sample=b"SAMPLE-audio", gender="female"):
+        fields = {"name": name, "language": language}
+        if gender is not None:
+            fields["gender"] = gender
+        raw, ctype = multipart(fields, {"sample": ("s.webm", sample, "audio/webm"),
+                                        "consent": ("c.webm", b"CONSENT", "audio/webm")})
         return self.call(self.client(key), "POST", "/voices/custom", raw=raw, ctype=ctype)
+
+    def row(self, key, voice_id):
+        return self.cv.get_row(self.accounts[key]["account_id"], voice_id)
 
     # tests --------------------------------------------------------------
     def test_quote_by_plan(self):
@@ -215,7 +343,7 @@ class CustomVoiceTests(unittest.TestCase):
 
     def test_vendor_failure_refunds(self):
         # Sarvam failing is a failed clone: no fallback to the other vendor,
-        # even with its key present.
+        # even with its key present. 500 is retried twice first.
         aid = self.accounts["scale"]["account_id"]
         self.create("scale")
         self.vendors.fail = {"sarvam"}
@@ -224,8 +352,9 @@ class CustomVoiceTests(unittest.TestCase):
         _s, listed = self.call(self.client("scale"), "GET", "/voices/custom")
         broken = next(x for x in listed if x["id"] == v["id"])
         self.assertEqual(broken["status"], "failed")
-        self.assertTrue(broken["error"])
+        self.assertEqual(broken["error"], self.cv._CREATE_FAILED)
         self.assertEqual(self.credits(aid), 1000)
+        self.assertEqual(self.sleeps, [2.0, 6.0])
         # a failed clone does not use a slot or the free clone
         _s, q = self.call(self.client("scale"), "GET", "/voices/custom/quote")
         self.assertEqual(q["used"], 1)
@@ -254,16 +383,17 @@ class CustomVoiceTests(unittest.TestCase):
         self.assertIn("1 cloned voice", body["detail"])
 
     def test_member_cannot_create(self):
-        raw, ctype = multipart({"name": "x", "language": "hi-IN"},
+        raw, ctype = multipart({"name": "x", "language": "hi-IN", "gender": "male"},
                                {"sample": ("s.webm", b"SAMPLE", "audio/webm"), "consent": ("c.webm", b"C", "audio/webm")})
         status, _ = self.call(self.client("scale", "member"), "POST", "/voices/custom", raw=raw, ctype=ctype)
         self.assertEqual(status, 403)
 
     def test_sample_too_short_400(self):
-        self.seconds = 10
+        self.seconds = 9
         status, body = self.create("scale")
         self.assertEqual(status, 400)
-        self.assertIn("30 seconds", body["detail"])
+        self.assertIn("at least 10 seconds", body["detail"])
+        self.assertEqual(self.vendors.creates(), [])
 
     def test_missing_keys_503(self):
         # The ElevenLabs key alone is not enough: cloning is Sarvam only.
@@ -279,12 +409,221 @@ class CustomVoiceTests(unittest.TestCase):
         for v in (hi, en):
             row = self.cv.get_row(aid, v["id"])
             self.assertEqual((row["status"], row["engine_default"], row["elevenlabs_voice_id"], row["sarvam_voice_id"]),
-                             ("ready", "sarvam", None, "SV_NEW"))
+                             ("ready", "sarvam", None, SVC))
         self.assertFalse(any("elevenlabs" in url for _m, url in self.vendors.calls))
         row_hi = self.cv.get_row(aid, hi["id"])
         self.assertTrue(row_hi["sarvam_ref_key"].endswith("reference.wav"))
         self.assertIn(row_hi["sarvam_ref_key"], self.b2.objects)
         self.assertFalse(row_hi["consent_verified"])
+
+    # B1: Sarvam's real create response nests the id under data ----------
+    def test_create_stores_data_voice_id_reference_text_and_sends_documented_fields(self):
+        status, v = self.create("scale", gender="male")
+        self.assertEqual(status, 201)
+        row = self.row("scale", v["id"])
+        self.assertEqual((row["status"], row["sarvam_voice_id"], row["reference_text"], row["gender"]),
+                         ("ready", SVC, REF_TEXT, "male"))
+        self.assertEqual(v["gender"], "male")
+        sent = self.vendors.creates()
+        self.assertEqual(len(sent), 1)
+        # Exactly the documented fields; never a Studio-only one (those 400).
+        self.assertEqual(sent[0], {"name": v["id"], "language": "hi-IN", "style": "conversational", "gender": "male"})
+        _s, listed = self.call(self.client("scale"), "GET", "/voices/custom")
+        self.assertEqual(listed[0]["gender"], "male")
+        self.assertNotIn("reference_text", listed[0])
+        self.assertNotIn("referenceText", listed[0])
+
+    # Gender --------------------------------------------------------------
+    def test_gender_required(self):
+        for gender, label in ((None, "missing"), ("", "empty"), ("other", "invalid")):
+            status, body = self.create("scale", gender=gender)
+            self.assertEqual(status, 400, label)
+            self.assertEqual(body["detail"], self.cv._GENDER_REQUIRED, label)
+        self.assertEqual(self.vendors.creates(), [])
+        self.assertEqual(self.create("scale", gender="Female")[0], 201)  # case-insensitive
+
+    # Languages -----------------------------------------------------------
+    def test_all_twelve_languages_including_assamese(self):
+        self.assertEqual(set(self.cv.LANGUAGES), {"as-IN", "bn-IN", "en-IN", "gu-IN", "hi-IN", "kn-IN", "ml-IN",
+                                                  "mr-IN", "od-IN", "pa-IN", "ta-IN", "te-IN"})
+        self.assertEqual(set(self.cv._DEFAULT_PREVIEW), set(self.cv.LANGUAGES))
+        self.assertEqual(self.cv.LANGUAGES["as-IN"], "Assamese")
+        status, v = self.create("scale", language="as-IN")
+        self.assertEqual(status, 201)
+        self.assertEqual(self.vendors.creates()[0]["language"], "as-IN")
+        self.assertEqual(sorted(v["speaksLanguages"]), sorted(self.cv.LANGUAGES))
+        status, body = self.create("scale", language="fr-FR", name="French")
+        self.assertEqual(status, 400)
+        c = self.client("scale", "member")
+        status, audio = self.call(c, "GET", f"/voices/custom/{v['id']}/preview", query=b"language=as-IN")
+        self.assertEqual((status, audio), (200, b"ID3sarvam-audio"))
+        clone_req = [form_fields(b) for m, u, b in self.vendors.requests if u.endswith("/voices/clone")][-1]
+        self.assertEqual((clone_req["language_code"], clone_req["text"], clone_req["voice_id"]),
+                         ("as-IN", self.cv._DEFAULT_PREVIEW["as-IN"], SVC))
+        status, _ = self.call(c, "GET", f"/voices/custom/{v['id']}/preview", query=b"language=fr-FR")
+        self.assertEqual(status, 400)
+
+    # B3 / M3: error mapping ----------------------------------------------
+    def test_422_asks_to_rerecord_and_refunds_without_retry(self):
+        aid = self.accounts["scale"]["account_id"]
+        self.create("scale")
+        self.vendors.create_script = [(422, sarvam_err("unprocessable_entity_error", "Reference audio failed QC"))]
+        status, v = self.create("scale", name="Noisy")
+        self.assertEqual((status, v["creditsCharged"]), (201, 25))
+        row = self.row("scale", v["id"])
+        self.assertEqual((row["status"], row["error"]), ("failed", self.cv._RERECORD))
+        self.assertIn("quiet room", row["error"])
+        self.assertEqual(self.credits(aid), 1000)
+        self.assertEqual((len(self.vendors.creates()), self.sleeps), (2, []))
+
+    def test_401_403_unavailable_ops_alert_and_refund(self):
+        aid = self.accounts["scale"]["account_id"]
+        self.create("scale")
+        for n, (status_code, code) in enumerate(((403, "invalid_request_error"), (401, "invalid_api_key_error"))):
+            rid = f"req_acct_{os.urandom(3).hex()}"
+            self.vendors.create_script = [(status_code, sarvam_err(code, "TIER_LIMIT_REACHED", rid))]
+            status, v = self.create("scale", name=f"Capped {n}")
+            self.assertEqual((status, v["creditsCharged"]), (201, 25))
+            row = self.row("scale", v["id"])
+            self.assertEqual((row["status"], row["error"]), ("failed", self.cv._UNAVAILABLE_REFUNDED))
+            self.assertEqual(self.credits(aid), 1000)
+            events = self.sql("SELECT source, level, message, account_id FROM error_events WHERE message LIKE ?",
+                              (f"%{rid}%",))
+            self.assertEqual(len(events), 1)
+            self.assertEqual((events[0]["source"], events[0]["level"], events[0]["account_id"]),
+                             ("custom_voices", "error", aid))
+            self.assertIn(f"HTTP {status_code}", events[0]["message"])
+            self.assertNotIn("k-s", events[0]["message"])  # never the key
+        self.assertEqual(self.sleeps, [])  # never retried
+
+    def test_quota_429_is_account_level_not_retried(self):
+        self.vendors.create_script = [(429, sarvam_err("insufficient_quota_error", "Credits exhausted"))]
+        status, v = self.create("scale")
+        self.assertEqual(self.row("scale", v["id"])["error"], self.cv._UNAVAILABLE_REFUNDED)
+        self.assertEqual(self.sleeps, [])
+
+    def test_transient_errors_retried_then_ready(self):
+        self.vendors.create_script = [(503, sarvam_err("rate_limit_exceeded_error", "overloaded")),
+                                      (502, sarvam_err("model_call_error", "retry"))]
+        status, v = self.create("scale")
+        self.assertEqual(self.row("scale", v["id"])["status"], "ready")
+        self.assertEqual((len(self.vendors.creates()), self.sleeps), (3, [2.0, 6.0]))
+
+    def test_transient_errors_exhausted_fail_and_refund(self):
+        aid = self.accounts["scale"]["account_id"]
+        self.create("scale")
+        self.vendors.create_script = [(429, sarvam_err("rate_limit_exceeded_error", "slow down")),
+                                      (504, sarvam_err("gateway_timeout_error", "timeout")),
+                                      (500, sarvam_err("internal_server_error", "boom"))]
+        status, v = self.create("scale", name="Unlucky")
+        row = self.row("scale", v["id"])
+        self.assertEqual((row["status"], row["error"]), ("failed", self.cv._CREATE_FAILED))
+        self.assertEqual(self.credits(aid), 1000)
+        self.assertEqual((len(self.vendors.creates()) - 1, self.sleeps), (3, [2.0, 6.0]))
+
+    def test_network_error_retried(self):
+        self.vendors.create_script = [urllib.error.URLError("connection reset"), TimeoutError("read timed out")]
+        status, v = self.create("scale")
+        self.assertEqual(self.row("scale", v["id"])["status"], "ready")
+        self.assertEqual(self.sleeps, [2.0, 6.0])
+
+    # M5: orphans ---------------------------------------------------------
+    def test_vendor_id_persisted_before_anything_else_can_fail(self):
+        with mock.patch.object(self.cv, "_mark_ready", side_effect=RuntimeError("db hiccup")):
+            status, v = self.create("scale")
+        row = self.sql("SELECT status, sarvam_voice_id, reference_text, vendor_deleted_at FROM custom_voices "
+                       "WHERE id = ?", (v["id"],))[0]
+        self.assertEqual((row["status"], row["sarvam_voice_id"], row["reference_text"]), ("failed", SVC, REF_TEXT))
+        self.assertIsNone(row["vendor_deleted_at"])
+        # reconcile cleans it up
+        with mock.patch.dict(os.environ, {"VOICE_CLONE_RECONCILE": "1"}), \
+                mock.patch.object(self.cv, "_RECONCILE_MAX_DELETES", 1000):
+            self.cv.reconcile_once()
+        self.assertIn(SVC, self.vendors.sarvam_deletes())
+        self.assertIsNotNone(self.sql("SELECT vendor_deleted_at FROM custom_voices WHERE id = ?",
+                                      (v["id"],))[0]["vendor_deleted_at"])
+
+    def _insert_row(self, voice_id, status, sarvam_id, deleted=False):
+        aid = self.accounts["scale"]["account_id"]
+        self.sql("INSERT INTO custom_voices (id, account_id, name, language, gender, status, sarvam_voice_id, deleted_at) "
+                 f"VALUES (?, ?, 'x', 'hi-IN', 'female', ?, ?, {self.db._NOW if deleted else 'NULL'})",
+                 (voice_id, aid, status, sarvam_id))
+
+    def test_reconcile(self):
+        def vid():
+            return "vv_" + "".join(random.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(16))
+        a, b, c, d, e = vid(), vid(), vid(), vid(), vid()
+        foreign = vid()
+        self._insert_row(a, "ready", "svc-a")                 # live: kept
+        self._insert_row(b, "ready", "svc-b", deleted=True)   # deleted, vendor delete failed earlier
+        self._insert_row(c, "ready", "svc-c")                 # live, plus a duplicate svc-c2 from a retry
+        self._insert_row(d, "processing", None)               # mid-create: kept
+        self._insert_row(e, "failed", None)                   # failed, but a late create landed: svc-e
+        self.vendors.listed = [
+            listed_voice("svc-a", a), listed_voice("svc-b", b), listed_voice("svc-c", c),
+            listed_voice("svc-c2", c), listed_voice("svc-d", d), listed_voice("svc-e", "vistrow-" + e),
+            listed_voice("svc-h", "Ravi studio voice"),       # made by a human in Studio
+            listed_voice("svc-f", foreign),                   # ours-looking, no row here (other env)
+            listed_voice("svc-x", vid(), status="deleted"),
+        ]
+        # Off by default: no vendor traffic at all.
+        self.assertEqual(self.cv.reconcile_once(), {"deleted": 0, "failed": 0, "kept": 0, "foreign": 0})
+        self.assertEqual(self.vendors.calls, [])
+        with mock.patch.dict(os.environ, {"VOICE_CLONE_RECONCILE": "1"}), \
+                mock.patch.object(self.cv, "_LIST_PAGE", 2), \
+                mock.patch.object(self.cv, "_RECONCILE_MAX_DELETES", 1000):
+            out = self.cv.reconcile_once()
+            deleted = set(self.vendors.sarvam_deletes())
+            self.assertTrue({"svc-b", "svc-c2", "svc-e"} <= deleted, deleted)
+            self.assertFalse({"svc-a", "svc-c", "svc-d", "svc-h", "svc-f", "svc-x"} & deleted, deleted)
+            self.assertGreaterEqual(out["kept"], 3)
+            self.assertGreaterEqual(out["foreign"], 1)
+            lists = [u for m, u in self.vendors.calls if m == "GET"]
+            self.assertGreaterEqual(len(lists), 5)  # paginated: 9 voices, 2 per page
+            self.assertIsNotNone(self.sql("SELECT vendor_deleted_at FROM custom_voices WHERE id = ?",
+                                          (b,))[0]["vendor_deleted_at"])
+            self.assertTrue(all(s == self.cv._RECONCILE_SPACING_S for s in self.sleeps))
+            # A failed vendor delete stays pending and is retried next pass.
+            g = vid()
+            self._insert_row(g, "ready", "svc-g", deleted=True)
+            self.vendors.listed.append(listed_voice("svc-g", g))
+            self.vendors.delete_fail = {"svc-g"}
+            self.cv.reconcile_once()
+            self.assertIsNone(self.sql("SELECT vendor_deleted_at FROM custom_voices WHERE id = ?",
+                                       (g,))[0]["vendor_deleted_at"])
+            self.vendors.delete_fail = set()
+            self.vendors.calls.clear()
+            self.cv.reconcile_once()
+            self.assertEqual(self.vendors.sarvam_deletes().count("svc-g"), 1)
+            self.assertNotIn("svc-b", self.vendors.sarvam_deletes())  # done once, never again
+
+    def test_reconcile_claim_is_hourly_and_single(self):
+        self.sql("DELETE FROM settings WHERE account_id = ? AND key = ?",
+                 (self.db.PLATFORM_ACCOUNT_ID, self.cv._RECONCILE_MARK))
+        now = 1_800_000_000.0
+        self.assertTrue(self.cv._claim_reconcile(now))
+        self.assertFalse(self.cv._claim_reconcile(now + 10))       # another replica, same hour
+        self.assertFalse(self.cv._claim_reconcile(now + 3599))
+        self.assertTrue(self.cv._claim_reconcile(now + 3600))
+
+    # plan limit helper ----------------------------------------------------
+    def test_clone_allowed_for_account(self):
+        self.assertFalse(self.cv.clone_allowed_for_account(self.accounts["starter"]["account_id"]))
+        self.assertTrue(self.cv.clone_allowed_for_account(self.accounts["growth"]["account_id"]))
+        aid = self.accounts["scale"]["account_id"]
+        _s, v1 = self.create("scale")
+        self.create("scale", name="Two")
+        self.assertTrue(self.cv.clone_allowed_for_account(aid))
+        self.cv.validate_agent_voice(aid, v1["voiceValue"])
+        self.sql("UPDATE accounts SET plan = 'growth' WHERE id = ?", (aid,))  # downgrade: 2 clones, limit 1
+        self.assertFalse(self.cv.clone_allowed_for_account(aid))
+        with self.assertRaises(self.cv.CloneError) as ctx:
+            self.cv.validate_agent_voice(aid, v1["voiceValue"])
+        self.assertEqual(ctx.exception.status, 403)
+        self.sql("UPDATE accounts SET plan = 'starter' WHERE id = ?", (aid,))
+        with self.assertRaises(self.cv.CloneError) as ctx:
+            self.cv.validate_agent_voice(aid, v1["voiceValue"])
+        self.assertIn("Growth and Scale", ctx.exception.detail)
 
     def test_isolation(self):
         _s, v = self.create("scale")
@@ -331,12 +670,109 @@ class CustomVoiceTests(unittest.TestCase):
         conn.close()
         status, body = self.call(self.client("scale"), "DELETE", f"/voices/custom/{v['id']}")
         self.assertEqual((status, body), (200, {"ok": True}))
-        self.assertIn(("DELETE", "https://api.sarvam.ai/voices/delete/SV_NEW"), self.vendors.calls)
+        self.assertIn(("DELETE", f"https://api.sarvam.ai/voices/delete/{SVC}"), self.vendors.calls)
+        self.assertIsNotNone(self.sql("SELECT vendor_deleted_at FROM custom_voices WHERE id = ?",
+                                      (v["id"],))[0]["vendor_deleted_at"])
         self.assertTrue(any(k.endswith("sample.webm") for k in self.b2.deleted))
         self.assertEqual(self.call(self.client("scale"), "GET", "/voices/custom")[1], [])
         # a deleted clone can't be assigned
         with self.assertRaises(self.cv.CloneError):
             self.cv.validate_agent_voice(aid, v["voiceValue"])
+
+    def test_failed_vendor_delete_left_for_reconcile(self):
+        _s, v = self.create("scale")
+        self.vendors.delete_fail = {SVC}
+        status, _ = self.call(self.client("scale"), "DELETE", f"/voices/custom/{v['id']}")
+        self.assertEqual(status, 200)  # the customer's delete still succeeds
+        self.assertIsNone(self.sql("SELECT vendor_deleted_at FROM custom_voices WHERE id = ?",
+                                   (v["id"],))[0]["vendor_deleted_at"])
+
+
+class SarvamCreateParsing(unittest.TestCase):
+    """B1: no database needed; _http is mocked with Sarvam's documented bodies."""
+
+    def run_create(self, status, body):
+        import custom_voices as cv
+        with mock.patch.object(cv, "_http", lambda *a, **k: (status, body)), \
+                mock.patch.dict(os.environ, {"SARVAM_API_KEY": "k"}):
+            return cv.sarvam_create("vv_abcdefghijklmnop", "hi-IN", b"RIFF", "female")
+
+    def test_documented_201_body(self):
+        # Fails on the old parser, which read only a top-level voice_id.
+        self.assertEqual(self.run_create(201, CREATE_201), (SVC, REF_TEXT))
+
+    def test_top_level_fallback_and_null_reference_text(self):
+        self.assertEqual(self.run_create(201, b'{"voice_id":"svc-old"}'), ("svc-old", ""))
+        body = json.dumps({"status": "success", "data": {"voice_id": SVC, "status": "saved", "reference_text": None}})
+        self.assertEqual(self.run_create(201, body.encode()), (SVC, ""))
+
+    def test_error_body_parsed(self):
+        import custom_voices as cv
+        with self.assertRaises(cv.SarvamError) as ctx:
+            self.run_create(403, sarvam_err("invalid_request_error", "TIER_LIMIT_REACHED", "req_42"))
+        e = ctx.exception
+        self.assertEqual((e.status, e.code, e.request_id, e.message),
+                         (403, "invalid_request_error", "req_42", "TIER_LIMIT_REACHED"))
+        with self.assertRaises(cv.SarvamError) as ctx:
+            self.run_create(502, b"<html>bad gateway</html>")
+        self.assertEqual(ctx.exception.status, 502)
+        with self.assertRaises(cv.SarvamError):
+            self.run_create(201, b'{"status":"success","data":{}}')
+
+
+class ReferenceChooser(unittest.TestCase):
+    """H5: choose_reference on synthetic 24 kHz PCM (no database)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import custom_voices
+        cls.cv = custom_voices
+
+    def refused(self, pcm, message=None):
+        with self.assertRaises(self.cv.CloneError) as ctx:
+            self.cv.choose_reference(pcm)
+        self.assertEqual(ctx.exception.status, 400)
+        if message is not None:
+            self.assertEqual(ctx.exception.detail, message)
+        return ctx.exception.detail
+
+    def test_good_speech_accepted_with_12_to_15_s_window(self):
+        pcm = synth(20.0, bursts(0.5, 20.0), noise=40)
+        start, end = self.cv.choose_reference(pcm)
+        seconds = (end - start) / RATE
+        self.assertGreaterEqual(seconds, 12.0)
+        self.assertLessEqual(seconds, 15.0)
+        # the window starts at or just before a phrase onset, not mid-phrase
+        onsets = [s for s, _e in bursts(0.5, 20.0)]
+        self.assertTrue(any(-0.15 <= o - start / RATE <= 0.35 for o in onsets), start / RATE)
+
+    def test_short_good_speech_uses_whole_span(self):
+        pcm = synth(14.0, bursts(0.5, 13.5), noise=40)
+        start, end = self.cv.choose_reference(pcm)
+        self.assertLessEqual((end - start) / RATE, 15.0)
+        self.assertGreaterEqual((end - start) / RATE, 12.5)
+
+    def test_fan_noise_only_refused(self):
+        self.refused(synth(30.0, (), noise=0, gauss=2500.0), self.cv._ONLY_NOISE)
+
+    def test_two_coughs_in_silence_refused(self):
+        self.refused(synth(60.0, [(20.0, 20.4), (40.0, 40.4)], amp=20000, noise=40))
+
+    def test_fully_clipped_refused(self):
+        self.refused(synth(20.0, bursts(0.5, 20.0), clip=True), self.cv._CLIPPED)
+
+    def test_nine_seconds_of_speech_refused(self):
+        detail = self.refused(synth(16.0, bursts(0.5, 9.5), noise=40))
+        self.assertIn("seconds of you speaking", detail)
+
+    def test_digital_silence_refused(self):
+        self.refused(b"\0\0" * RATE * 20, self.cv._TOO_LITTLE_SPEECH.format(secs=0))
+        self.refused(b"", self.cv._TOO_LITTLE_SPEECH.format(secs=0))
+
+    def test_scattered_speech_without_a_continuous_window_refused(self):
+        # 12 s of talking overall, but in 1 s phrases 3 s apart: no 15 s
+        # window holds 10 s of speech.
+        self.refused(synth(50.0, bursts(0.5, 48.0, on=1.0, off=3.0), noise=40), self.cv._NOT_CONTINUOUS)
 
 
 class AgentSaveGuard(unittest.TestCase):

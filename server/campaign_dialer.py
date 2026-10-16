@@ -522,6 +522,13 @@ def _loop() -> None:
                 _kick_auto_analysis()
             except Exception:
                 logger.exception("auto-analysis kick failed")
+            # Orphan cloned-voice cleanup: off unless VOICE_CLONE_RECONCILE=1,
+            # hourly, one replica (custom_voices.kick_reconcile).
+            try:
+                import custom_voices
+                custom_voices.kick_reconcile()
+            except Exception:
+                logger.exception("voice clone reconcile kick failed")
             campaigns = calls_db.running_campaigns()
             # Stable sort: instant-lead campaigns first, the rest unchanged.
             campaigns.sort(key=lambda c: c.get("name") not in _INSTANT_CAMPAIGN_NAMES)

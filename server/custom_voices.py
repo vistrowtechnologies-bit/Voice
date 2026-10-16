@@ -2,8 +2,11 @@
 
 Owner decision 2026-10-16 (real bills): every clone is a Sarvam clone, for
 all languages, server-side only:
-  - Sarvam Instant Voice Cloning (beta; POST /voices/create -> voice_id,
+  - Sarvam Instant Voice Cloning (beta; POST /voices/create -> data.voice_id,
     needs the text_to_speech_voice_cloning capability on our Sarvam account).
+    The Sarvam-side name of every voice we create is our own row id
+    ("vv_<16>"), so reconcile_once() can find orphans without ever touching
+    voices made by hand in Sarvam's Studio.
     About Rs 1.4 per minute of agent speech (Rs 30 per 10K chars; stock Bulbul
     v4 is ~Rs 0.37/min). Created from a 10-15 s reference clip cut from the
     sample (silence trimmed, best window chosen: choose_reference); the clip is kept in storage (sarvam_ref_key) so the voice can be
@@ -45,6 +48,9 @@ import secrets
 import shutil
 import subprocess
 import sys
+import threading
+import time
+import http.client
 import urllib.error
 import urllib.request
 import wave
@@ -104,21 +110,51 @@ SPEECH_MIN_S = 10.0
 _FRAME_S = 0.05                 # analysis frame: 50 ms
 _FRAME = int(_PCM_RATE * _FRAME_S)
 _ABS_SPEECH_RMS = 150.0         # ~ -47 dBFS: quieter than this is never speech
-_CLIP_PEAK = 32000              # a frame whose peak reaches this is clipped
+_NOISE_FACTOR = 2.0             # speech = louder than 2x the noise floor
+_MIN_DYNAMIC_RANGE_DB = 10.0    # loud (95th pct) vs quiet (10th pct) frames
+_CLIP_PEAK = 32000              # samples at/above this are at full scale...
+_CLIP_SAMPLES = 3               # ...and this many in one frame = a clipped frame
+_MAX_CLIPPED_FRACTION = 0.01    # of the reference window
 _LONG_PAUSE_S = 1.0             # pauses longer than this count against a window
 _EDGE_PAD_S = 0.1               # kept around speech so word onsets aren't cut
 
-# Sarvam voice cloning languages (docs, 2026-10-12). A clone speaks any of
-# them on calls (cross-lingual); the voice's own language is what it was
-# recorded in.
-_SARVAM_CLONE_LANGS = {"as-IN", "bn-IN", "en-IN", "gu-IN", "hi-IN", "kn-IN", "ml-IN", "mr-IN", "od-IN", "pa-IN", "ta-IN", "te-IN"}
-LANGUAGES = {code: label for code, label in __import__("voice_catalog").LANGUAGE_LABELS.items()
-             if code in _SARVAM_CLONE_LANGS}
+# Sarvam voice cloning languages (docs + SDK VoiceCloningLanguage, read
+# 2026-10-16): exactly these 12. A clone speaks all of them on calls
+# (cross-lingual); a voice's own `language` is the language spoken in the
+# recording, which is what Sarvam's create call needs. Owner 2026-10-16: all
+# 12 (Assamese included) for recording and speaking. The catalog's label is
+# used when it has one (it has no Assamese).
+_SARVAM_CLONE_LANGS = {
+    "hi-IN": "Hindi", "en-IN": "English", "bn-IN": "Bengali", "mr-IN": "Marathi",
+    "ta-IN": "Tamil", "te-IN": "Telugu", "kn-IN": "Kannada", "ml-IN": "Malayalam",
+    "gu-IN": "Gujarati", "pa-IN": "Punjabi", "od-IN": "Odia", "as-IN": "Assamese",
+}
+LANGUAGES = {code: __import__("voice_catalog").LANGUAGE_LABELS.get(code) or label
+             for code, label in _SARVAM_CLONE_LANGS.items()}
+# The speaker's gender, asked in the form (owner 2026-10-16) and sent as
+# Sarvam's optional gender tag; style is always conversational (calls).
+GENDERS = ("male", "female")
+SARVAM_STYLE = "conversational"
 
 _ALLOWED_EXT = {"webm", "ogg", "oga", "opus", "wav", "mp3", "mpeg", "m4a", "mp4", "aac", "flac"}
 
 _UNAVAILABLE = "Voice cloning is not available right now. Please try again later."
+_UNAVAILABLE_REFUNDED = ("Voice cloning is not available right now. Any credits charged have been returned. "
+                         "Please try again later.")
 _CREATE_FAILED = "We couldn't create this voice from the recording. Any credits charged have been returned. Please try again with a clearer recording."
+_RERECORD = ("We couldn't create a voice from this recording. Please record again in a quiet room, with only you "
+             "speaking. Any credits charged have been returned.")
+_GENDER_REQUIRED = "Choose whether the speaker is male or female."
+
+# Sarvam create retries (statuses its docs call transient, plus network
+# errors): 2 more attempts, 2 s then 6 s apart. 400/401/403/422 never retry.
+_CREATE_RETRY_DELAYS = (2.0, 6.0)
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+# Our account can't clone at all (key, capability, voice cap, credits): ops
+# must act, the customer just sees "not available right now".
+_ACCOUNT_LEVEL_STATUS = {401, 403}
+_ACCOUNT_LEVEL_CODES = {"insufficient_quota_error", "invalid_api_key_error", "authentication_error"}
+_sleep = time.sleep  # tests replace this
 _PREVIEW_FAILED = "We couldn't play this preview right now. Please try again."
 
 _ELEVEN_BASE = "https://api.elevenlabs.io"
@@ -127,6 +163,7 @@ ELEVEN_MODEL = "eleven_flash_v2_5"
 
 # Default preview line per language: a clone speaks every language in
 # LANGUAGES, so the owner can hear it in each one.
+# The Assamese line awaits native-speaker review.
 _DEFAULT_PREVIEW = {
     "hi-IN": "नमस्ते! आपके ग्राहकों से कॉल पर आपकी आवाज़ कुछ ऐसी सुनाई देगी।",
     "en-IN": "Hello! This is how your voice will sound on calls with your customers.",
@@ -139,6 +176,7 @@ _DEFAULT_PREVIEW = {
     "bn-IN": "নমস্কার! আপনার গ্রাহকদের সঙ্গে কলে আপনার গলা এরকমই শোনাবে।",
     "pa-IN": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਤੁਹਾਡੇ ਗਾਹਕਾਂ ਨਾਲ ਕਾਲ 'ਤੇ ਤੁਹਾਡੀ ਆਵਾਜ਼ ਕੁਝ ਇਸ ਤਰ੍ਹਾਂ ਸੁਣਾਈ ਦੇਵੇਗੀ।",
     "od-IN": "ନମସ୍କାର! ଆପଣଙ୍କ ଗ୍ରାହକଙ୍କ ସହ କଲରେ ଆପଣଙ୍କ ସ୍ୱର ଏମିତି ଶୁଣାଯିବ।",
+    "as-IN": "নমস্কাৰ! আপোনাৰ গ্ৰাহকসকলৰ সৈতে কলত আপোনাৰ মাত এনেকৈ শুনা যাব।",
 }
 
 SCRIPT_EN = (
@@ -285,20 +323,80 @@ def eleven_tts(voice_id: str, text: str) -> tuple[bytes, str]:
     return raw, "audio/mpeg"
 
 
-def sarvam_create(name: str, language: str, ref_wav: bytes) -> str:
-    body, ctype = _multipart({"name": name, "language": language}, [("file", "reference.wav", ref_wav, "audio/wav")])
+class SarvamError(VendorError):
+    """A Sarvam HTTP error. Body shape (docs): {"error": {"request_id",
+    "message", "code"}}."""
+
+    def __init__(self, status: int | None, code: str = "", request_id: str = "", message: str = "") -> None:
+        super().__init__(f"Sarvam HTTP {status} code={code or '-'} request_id={request_id or '-'}: {message[:200]}")
+        self.status, self.code, self.request_id, self.message = status, code, request_id, message
+
+
+def _sarvam_error(status: int, raw: bytes) -> SarvamError:
+    err: dict = {}
+    try:
+        parsed = json.loads(raw or b"{}")
+        if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict):
+            err = parsed["error"]
+    except ValueError:
+        pass
+    return SarvamError(status, str(err.get("code") or ""), str(err.get("request_id") or ""),
+                       str(err.get("message") or (raw or b"")[:200].decode("utf-8", "replace")))
+
+
+def sarvam_create(name: str, language: str, ref_wav: bytes, gender: str | None = None) -> tuple[str, str]:
+    """POST /voices/create -> (voice_id, reference_text). The 201 body is
+    {"status": "success", "data": {"voice_id", "status", "reference_text"}};
+    a top-level voice_id is still accepted. Raises SarvamError."""
+    fields = {"name": name, "language": language, "style": SARVAM_STYLE}
+    if gender in GENDERS:
+        fields["gender"] = gender
+    body, ctype = _multipart(fields, [("file", "reference.wav", ref_wav, "audio/wav")])
     status, raw = _http("POST", f"{_SARVAM_BASE}/voices/create",
                         {"api-subscription-key": _sarvam_key() or "", "Content-Type": ctype}, body, timeout=120)
-    voice_id = _json_or_raise(status, raw, "Sarvam voices/create").get("voice_id")
+    if status >= 300:
+        raise _sarvam_error(status, raw)
+    try:
+        parsed = json.loads(raw or b"{}")
+    except ValueError:
+        raise SarvamError(status, message="voices/create returned non-JSON")
+    parsed = parsed if isinstance(parsed, dict) else {}
+    data = parsed.get("data") if isinstance(parsed.get("data"), dict) else {}
+    voice_id = data.get("voice_id") or parsed.get("voice_id")
     if not voice_id:
-        raise VendorError("Sarvam voices/create returned no voice_id")
-    return voice_id
+        raise SarvamError(status, message="voices/create returned no voice_id")
+    return str(voice_id), str(data.get("reference_text") or parsed.get("reference_text") or "")
 
 
 def sarvam_delete(voice_id: str) -> None:
+    """DELETE /voices/delete/{id}: 204 deleted, 404 already gone."""
     status, raw = _http("DELETE", f"{_SARVAM_BASE}/voices/delete/{voice_id}", {"api-subscription-key": _sarvam_key() or ""})
     if status >= 300 and status != 404:
-        raise VendorError(f"Sarvam delete returned HTTP {status}: {raw[:200]!r}")
+        raise _sarvam_error(status, raw)
+
+
+_LIST_PAGE = 200      # the API's max page size
+_LIST_MAX_PAGES = 50
+
+
+def sarvam_list_voices() -> list[dict]:
+    """Every cloned voice on our Sarvam account: GET /voices pages of
+    {"data": {"voices": [...], "total": <count in this page>}}."""
+    out: list[dict] = []
+    for page in range(_LIST_MAX_PAGES):
+        status, raw = _http("GET", f"{_SARVAM_BASE}/voices?limit={_LIST_PAGE}&offset={page * _LIST_PAGE}",
+                            {"api-subscription-key": _sarvam_key() or ""})
+        if status >= 300:
+            raise _sarvam_error(status, raw)
+        try:
+            data = (json.loads(raw or b"{}") or {}).get("data") or {}
+        except (ValueError, AttributeError):
+            raise SarvamError(status, message="GET /voices returned unexpected JSON")
+        voices = [v for v in (data.get("voices") or []) if isinstance(v, dict)]
+        out.extend(voices)
+        if len(voices) < _LIST_PAGE:
+            break
+    return out
 
 
 def sarvam_tts(voice_id: str, text: str, language: str) -> tuple[bytes, str]:
@@ -351,10 +449,18 @@ def pcm_seconds(pcm: bytes) -> float:
 
 _TOO_LITTLE_SPEECH = ("We could only hear about {secs} seconds of you speaking. Please record at least "
                       "10 seconds of yourself talking, in a quiet room.")
+_ONLY_NOISE = ("We couldn't hear clear speech in this recording, only background sound. Please record again in a "
+               "quiet room, speaking close to the microphone.")
+_NOT_CONTINUOUS = ("We need about 12 seconds of you speaking without long breaks. Please record again and keep "
+                   "talking at your normal pace.")
+_CLIPPED = ("The recording is too loud and sounds distorted. Please record again a little further from the "
+            "microphone.")
 
 
-def _frame_stats(pcm: bytes) -> list[tuple[float, int]]:
-    """(RMS, peak) of each 50 ms frame of 24 kHz mono s16le PCM."""
+def _frame_stats(pcm: bytes) -> list[tuple[float, bool]]:
+    """(RMS, clipped) of each 50 ms frame of 24 kHz mono s16le PCM. A frame
+    is clipped when _CLIP_SAMPLES or more of its samples are at full scale
+    (one loud peak in a normalised file is not clipping)."""
     samples = array("h")
     samples.frombytes(pcm[: len(pcm) // 2 * 2])
     if sys.byteorder == "big":
@@ -362,18 +468,11 @@ def _frame_stats(pcm: bytes) -> list[tuple[float, int]]:
     out = []
     for i in range(0, len(samples) - _FRAME + 1, _FRAME):
         f = samples[i:i + _FRAME]
-        out.append((math.sqrt(sum(map(operator.mul, f, f)) / _FRAME), max(max(f), -min(f))))
+        clipped = False
+        if max(max(f), -min(f)) >= _CLIP_PEAK:
+            clipped = sum(1 for x in f if x >= _CLIP_PEAK or x <= -_CLIP_PEAK) >= _CLIP_SAMPLES
+        out.append((math.sqrt(sum(map(operator.mul, f, f)) / _FRAME), clipped))
     return out
-
-
-def _speech_threshold(rms: list[float]) -> float:
-    """RMS above which a frame counts as speech: 3x the noise floor (the
-    quietest 10% of frames), but never above 30% of the loud frames (so a
-    noisy room still finds the speech) nor below an absolute floor."""
-    ordered = sorted(rms)
-    noise = ordered[len(ordered) // 10]
-    loud = ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))]
-    return max(_ABS_SPEECH_RMS, min(noise * 3, loud * 0.3))
 
 
 def _window_score(voiced: list[bool], clipped: list[bool]) -> float:
@@ -393,22 +492,33 @@ def choose_reference(pcm: bytes) -> tuple[int, int]:
     """(start, end) sample offsets of the reference clip: leading and
     trailing silence trimmed, then - if more than 15 s is left - the
     contiguous 12-15 s window with the most speech, fewest long pauses and
-    no clipping, cut at pauses rather than mid-word. Raises CloneError when
-    less than 10 s of speech remains after trimming."""
+    no clipping, cut at pauses rather than mid-word.
+
+    A frame is speech when its RMS is above max(absolute floor, 2x the noise
+    floor = the quietest 10% of frames). Raises CloneError when the
+    recording is silent, is only steady background sound (loud and quiet
+    frames differ by under 10 dB), has under 10 s of speech frames overall
+    or inside the chosen window, or more than 1% of the window is clipped."""
     frames = _frame_stats(pcm)
     if not frames:
         raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=0))
-    rms = [r for r, _p in frames]
-    thr = _speech_threshold(rms)
-    voiced = [r >= thr for r in rms]
-    clipped = [p >= _CLIP_PEAK for _r, p in frames]
-    if not any(voiced):
+    rms = [r for r, _c in frames]
+    clipped = [c for _r, c in frames]
+    ordered = sorted(rms)
+    noise = ordered[len(ordered) // 10]
+    loud = ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))]
+    if loud < _ABS_SPEECH_RMS:
         raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=0))
+    if 20 * math.log10(loud / max(noise, 1.0)) < _MIN_DYNAMIC_RANGE_DB:
+        raise CloneError(400, _ONLY_NOISE)
+    thr = max(_ABS_SPEECH_RMS, noise * _NOISE_FACTOR)
+    voiced = [r >= thr for r in rms]
+    total = sum(voiced)
+    if total * _FRAME_S < SPEECH_MIN_S:
+        raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=f"{total * _FRAME_S:.0f}"))
     first = voiced.index(True)
     last = len(voiced) - 1 - voiced[::-1].index(True)
     span = last - first + 1
-    if span * _FRAME_S < SPEECH_MIN_S:
-        raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=f"{span * _FRAME_S:.0f}"))
     max_n, min_n = round(REF_MAX_S / _FRAME_S), round(REF_MIN_S / _FRAME_S)
     if span <= max_n:
         start, end = first, last + 1
@@ -431,6 +541,10 @@ def choose_reference(pcm: bytes) -> tuple[int, int]:
                 break
         while end - start > min_n and not voiced[end - 1]:
             end -= 1
+    if sum(voiced[start:end]) * _FRAME_S < SPEECH_MIN_S:
+        raise CloneError(400, _NOT_CONTINUOUS)
+    if sum(clipped[start:end]) > _MAX_CLIPPED_FRACTION * (end - start):
+        raise CloneError(400, _CLIPPED)
     # A little room around the speech, without going past 15 s.
     pad = round(_EDGE_PAD_S / _FRAME_S)
     room = max(0, max_n - (end - start))
@@ -488,6 +602,7 @@ def public(row) -> dict:
         "id": row["id"],
         "name": row["name"],
         "language": row["language"],
+        "gender": row["gender"] or "",
         "status": row["status"],
         "error": row["error"] or "",
         "createdAt": _iso(row["created_at"]),
@@ -670,9 +785,32 @@ def _require(account_id: int, voice_id: str) -> dict:
     return row
 
 
+def _limit_and_used(account_id: int) -> tuple[int, int]:
+    conn = calls_db._connect()
+    try:
+        plan, owner = _plan_owner(conn, account_id)
+        return _limit(plan, owner), _used(conn, account_id)
+    finally:
+        conn.close()
+
+
+def clone_allowed_for_account(account_id: int) -> bool:
+    """The account's plan includes cloned voices (limit > 0) and it holds
+    no more clones than the plan allows (e.g. after a downgrade)."""
+    limit, used = _limit_and_used(account_id)
+    return limit > 0 and used <= limit
+
+
 def validate_agent_voice(account_id: int, value: str) -> None:
-    """Agent save: a custom voice must be this account's own, ready clone."""
+    """Agent save: a custom voice must be this account's own, ready clone,
+    on a plan that allows its clones (clone_allowed_for_account)."""
     voice_id = value[len(VOICE_PREFIX):]
+    if not clone_allowed_for_account(account_id):
+        limit, _n = _limit_and_used(account_id)
+        if limit <= 0:
+            raise CloneError(403, "Voice cloning is available on the Growth and Scale plans.")
+        raise CloneError(403, f"Your plan includes {limit} cloned voice{'s' if limit != 1 else ''}. "
+                              "Delete the extra ones or upgrade your plan to use them.")
     row = get_row(account_id, voice_id)
     if row is None:
         raise CloneError(400, "Select one of your own cloned voices.")
@@ -692,7 +830,7 @@ def _audio_type_ok(content_type: str | None, filename: str | None) -> bool:
     return ct in ("", "application/octet-stream") and (filename or "").rsplit(".", 1)[-1].lower() in _ALLOWED_EXT
 
 
-def start_create(account_id: int, user_id: int | None, name: str, language: str,
+def start_create(account_id: int, user_id: int | None, name: str, language: str, gender: str,
                  sample: bytes, sample_type: str, sample_name: str,
                  consent: bytes, consent_type: str, consent_name: str,
                  source: str = "upload") -> tuple[dict, int, dict]:
@@ -702,8 +840,15 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
     name = " ".join((name or "").split())[:NAME_MAX]
     if not name:
         raise CloneError(400, "Give your voice a name.")
+    # `language` is the language spoken in the recording (Sarvam's create
+    # needs the clip's own language); the clone then speaks all of LANGUAGES.
+    if language == "or-IN":
+        language = "od-IN"
     if language not in LANGUAGES:
         raise CloneError(400, "Choose a supported language for this voice.")
+    gender = (gender or "").strip().lower()
+    if gender not in GENDERS:
+        raise CloneError(400, _GENDER_REQUIRED)
     if not sample or not _audio_type_ok(sample_type, sample_name):
         raise CloneError(400, "Upload your voice recording as an audio file.")
     if len(sample) > SAMPLE_MAX_BYTES:
@@ -767,10 +912,10 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
                     raise CloneError(402, f"You need {charge} credits to create another voice. "
                                           f"Your balance is {balance:g}. Top up to continue.")
             conn.execute(
-                "INSERT INTO custom_voices (id, account_id, name, language, status, sample_key, consent_key, "
+                "INSERT INTO custom_voices (id, account_id, name, language, gender, status, sample_key, consent_key, "
                 "sarvam_ref_key, consent_verified, setup_credits_charged, created_by) "
-                "VALUES (?, ?, ?, ?, 'processing', ?, ?, ?, FALSE, ?, ?)",
-                (voice_id, account_id, name, language, sample_key, consent_key, ref_key, charge, user_id),
+                "VALUES (?, ?, ?, ?, ?, 'processing', ?, ?, ?, FALSE, ?, ?)",
+                (voice_id, account_id, name, language, gender, sample_key, consent_key, ref_key, charge, user_id),
             )
             if charge:
                 calls_db._adjust_credits_total(conn, account_id, -charge)
@@ -788,7 +933,8 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
         fail(voice_id)
         _unstore([sample_key, consent_key, ref_key])
         raise CloneError(503, _UNAVAILABLE)
-    job = {"voice_id": voice_id, "name": name, "language": language, "pcm": pcm, "ref_wav": ref_wav}
+    job = {"voice_id": voice_id, "account_id": account_id, "name": name, "language": language, "gender": gender,
+           "pcm": pcm, "ref_wav": ref_wav}
     return voice, charge, job
 
 
@@ -810,43 +956,108 @@ def choose_engine(language: str, eleven_id: str | None, sarvam_id: str | None) -
     return None
 
 
+def _sarvam_create_with_retry(name: str, language: str, gender: str | None, ref_wav: bytes) -> tuple[str, str]:
+    """sarvam_create, retried after _CREATE_RETRY_DELAYS on a transient
+    status or a network error. Raises the last error."""
+    last = len(_CREATE_RETRY_DELAYS)
+    for attempt in range(last + 1):
+        try:
+            return sarvam_create(name, language, ref_wav, gender)
+        except SarvamError as e:
+            if e.status not in _RETRYABLE_STATUS or e.code in _ACCOUNT_LEVEL_CODES or attempt == last:
+                raise
+            logger.warning("custom voice %s: Sarvam create attempt %s failed (%s); retrying", name, attempt + 1, e)
+        except (OSError, http.client.HTTPException) as e:
+            if attempt == last:
+                raise
+            logger.warning("custom voice %s: Sarvam create attempt %s network error (%s); retrying",
+                           name, attempt + 1, type(e).__name__)
+        _sleep(_CREATE_RETRY_DELAYS[attempt])
+    raise AssertionError("unreachable")
+
+
+def _create_failure_message(voice_id: str, account_id: int | None, e: Exception) -> str:
+    """Log a failed Sarvam create; return the customer's message for it."""
+    status, code, rid = getattr(e, "status", None), getattr(e, "code", ""), getattr(e, "request_id", "")
+    if status == 422:
+        logger.warning("custom voice %s: reference rejected by Sarvam quality checks (code=%s request_id=%s)",
+                       voice_id, code or "-", rid or "-")
+        return _RERECORD
+    if status in _ACCOUNT_LEVEL_STATUS or code in _ACCOUNT_LEVEL_CODES:
+        what = (f"Voice cloning refused for our Sarvam account: HTTP {status} code={code or '-'} "
+                f"request_id={rid or '-'} (check key, cloning capability, voice cap, credits). "
+                f"Custom voice {voice_id}.")
+        logger.error(what)
+        try:
+            import admin_db  # error_events: ops_alert_worker emails the owner
+            admin_db.log_error(what, source="custom_voices", level="error", account_id=account_id)
+        except Exception:
+            logger.exception("custom voice %s: could not record the ops alert", voice_id)
+        return _UNAVAILABLE_REFUNDED
+    logger.error("custom voice %s: Sarvam clone failed after retries: %s", voice_id, e)
+    return _CREATE_FAILED
+
+
+def _record_sarvam_voice(voice_id: str, sarvam_id: str, reference_text: str) -> None:
+    """Persist the vendor id the moment create returns, whatever the row's
+    state, so a later failure never leaves a voice we don't know about."""
+    conn = calls_db._connect()
+    try:
+        with conn:
+            conn.execute("UPDATE custom_voices SET sarvam_voice_id = ?, reference_text = ? WHERE id = ?",
+                         (sarvam_id, reference_text or "", voice_id))
+    finally:
+        conn.close()
+
+
+def _mark_ready(voice_id: str, eleven_id: str | None, sarvam_id: str | None, engine: str) -> bool:
+    conn = calls_db._connect()
+    try:
+        with conn:
+            return conn.execute(
+                "UPDATE custom_voices SET status = 'ready', error = '', elevenlabs_voice_id = ?, "
+                "sarvam_voice_id = ?, engine_default = ? WHERE id = ? AND status = 'processing' "
+                "AND deleted_at IS NULL RETURNING id",
+                (eleven_id, sarvam_id, engine, voice_id),
+            ).fetchone() is not None
+    finally:
+        conn.close()
+
+
 def finish_create(job: dict) -> None:
     """Background: clone with each configured vendor. Ready if at least one
-    worked; otherwise failed and refunded. Never raises."""
+    worked; otherwise failed (message matching the cause) and refunded.
+    Never raises."""
     voice_id, language = job["voice_id"], job["language"]
-    label = f"vistrow-{voice_id}"  # vendor-side name: no customer data
+    label = voice_id  # vendor-side name: our id only, no customer data (reconcile_once relies on it)
     eleven_id = sarvam_id = None
+    message = _CREATE_FAILED
     try:
         if _eleven_clones_enabled():
             try:
-                eleven_id = eleven_create(label, to_mp3(job["pcm"]))
+                eleven_id = eleven_create(f"vistrow-{voice_id}", to_mp3(job["pcm"]))
             except Exception:
                 logger.exception("custom voice %s: ElevenLabs clone failed", voice_id)
         if _sarvam_key() and language in _SARVAM_CLONE_LANGS:
             try:
-                sarvam_id = sarvam_create(label, language, job["ref_wav"])
-            except Exception:
-                # A 403 here usually means the text_to_speech_voice_cloning
-                # capability is not enabled on our Sarvam account.
-                logger.exception("custom voice %s: Sarvam clone failed", voice_id)
+                sarvam_id, reference_text = _sarvam_create_with_retry(label, language, job.get("gender"),
+                                                                      job["ref_wav"])
+            except Exception as e:
+                message = _create_failure_message(voice_id, job.get("account_id"), e)
+            else:
+                try:
+                    _record_sarvam_voice(voice_id, sarvam_id, reference_text)
+                except Exception:
+                    # _mark_ready writes it too; reconcile finds it by name if both fail.
+                    logger.exception("custom voice %s: could not record Sarvam id", voice_id)
         engine = choose_engine(language, eleven_id, sarvam_id)
-        conn = calls_db._connect()
-        try:
-            with conn:
-                if engine is None:
-                    _fail_and_refund(conn, voice_id, _CREATE_FAILED)
-                    return
-                updated = conn.execute(
-                    "UPDATE custom_voices SET status = 'ready', error = '', elevenlabs_voice_id = ?, "
-                    "sarvam_voice_id = ?, engine_default = ? WHERE id = ? AND status = 'processing' "
-                    "AND deleted_at IS NULL RETURNING id",
-                    (eleven_id, sarvam_id, engine, voice_id),
-                ).fetchone()
-        finally:
-            conn.close()
-        if updated is None:
+        if engine is None:
+            fail(voice_id, message)
+            return
+        if not _mark_ready(voice_id, eleven_id, sarvam_id, engine):
             # Swept or deleted meanwhile: don't leave orphan vendor voices.
             _vendor_delete({"id": voice_id, "elevenlabs_voice_id": eleven_id, "sarvam_voice_id": sarvam_id})
+            return
         logger.info("custom voice %s ready: engine=%s eleven=%s sarvam=%s",
                     voice_id, engine, bool(eleven_id), bool(sarvam_id))
     except Exception:
@@ -884,7 +1095,23 @@ def _vendor_delete(row: dict) -> None:
         try:
             sarvam_delete(row["sarvam_voice_id"])
         except Exception:
+            # Left for reconcile_once (vendor_deleted_at stays NULL).
             logger.exception("custom voice %s: Sarvam delete failed", row["id"])
+        else:
+            _mark_vendor_deleted(row["id"], row["sarvam_voice_id"])
+
+
+def _mark_vendor_deleted(voice_id: str, sarvam_id: str) -> None:
+    try:
+        conn = calls_db._connect()
+        try:
+            with conn:
+                conn.execute(f"UPDATE custom_voices SET vendor_deleted_at = {calls_db._NOW} "
+                             "WHERE id = ? AND sarvam_voice_id = ?", (voice_id, sarvam_id))
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("custom voice %s: could not record the vendor delete", voice_id)
 
 
 def delete(account_id: int, voice_id: str) -> None:
@@ -970,6 +1197,153 @@ def preview(account_id: int, voice_id: str, text: str | None, language: str | No
     return audio, ctype
 
 
+# -------------------------------------------------------------- reconcile
+# Orphan Sarvam voices (created, then our row failed / was deleted / a retry
+# made a duplicate, or a vendor delete failed) are deleted here. Only voices
+# whose Sarvam name is one of OUR row ids in THIS database are touched:
+# voices made by hand in Sarvam's Studio, or by another environment sharing
+# the key (staging), have no row here and are left alone. Off unless
+# VOICE_CLONE_RECONCILE=1; at most once an hour across all replicas.
+
+RECONCILE_EVERY_S = 3600
+_RECONCILE_CHECK_S = 300            # how often a replica asks for the hourly slot
+_RECONCILE_MARK = "custom_voices.reconcile_at"
+_RECONCILE_MAX_DELETES = 20         # per pass
+_RECONCILE_SPACING_S = 6.0          # 10 req/min: Sarvam's sustained cloning rate limit
+_VENDOR_NAME_RE = re.compile(r"^(?:vistrow-)?(vv_[a-z0-9]{16})$")
+_reconcile_thread: threading.Thread | None = None
+_reconcile_checked = 0.0
+
+
+def reconcile_enabled() -> bool:
+    return os.environ.get("VOICE_CLONE_RECONCILE", "0").strip() == "1" and bool(_sarvam_key())
+
+
+def _claim_reconcile(now: float) -> bool:
+    """Take this hour's reconcile slot (one replica wins, atomically)."""
+    conn = calls_db._connect()
+    try:
+        with conn:
+            row = conn.execute(
+                "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value "
+                "WHERE settings.value::float <= ? RETURNING value",
+                (calls_db.PLATFORM_ACCOUNT_ID, _RECONCILE_MARK, repr(now), now - RECONCILE_EVERY_S),
+            ).fetchone()
+            return row is not None
+    finally:
+        conn.close()
+
+
+def _keep_vendor_voice(row: dict | None, sarvam_id: str) -> bool:
+    """True when the Sarvam voice belongs to a live row of ours. A row
+    still processing without an id may be mid-create: kept."""
+    if row is None or row["deleted_at"]:
+        return False
+    if row["status"] == "ready":
+        return row["sarvam_voice_id"] == sarvam_id
+    if row["status"] == "processing":
+        return row["sarvam_voice_id"] in (None, sarvam_id)
+    return False
+
+
+def reconcile_once() -> dict:
+    """One pass. Returns counts: deleted, failed, kept, foreign (named
+    like ours but no row in this database: never touched)."""
+    out = {"deleted": 0, "failed": 0, "kept": 0, "foreign": 0}
+    if not reconcile_enabled():
+        return out
+    budget = _RECONCILE_MAX_DELETES
+    done: set[str] = set()
+
+    def _delete(voice_id: str, sarvam_id: str) -> None:
+        nonlocal budget
+        budget -= 1
+        done.add(sarvam_id)
+        try:
+            sarvam_delete(sarvam_id)
+        except Exception as e:
+            out["failed"] += 1
+            logger.warning("voice reconcile: deleting %s (custom voice %s) failed: %s", sarvam_id, voice_id, e)
+        else:
+            out["deleted"] += 1
+            _mark_vendor_deleted(voice_id, sarvam_id)
+            logger.info("voice reconcile: deleted orphan %s (custom voice %s)", sarvam_id, voice_id)
+        _sleep(_RECONCILE_SPACING_S)
+
+    # 1) Rows that still hold a vendor voice they no longer need (a failed
+    #    delete, or a create that finished after the row failed).
+    conn = calls_db._connect()
+    try:
+        pending = [dict(r) for r in conn.execute(
+            "SELECT id, sarvam_voice_id FROM custom_voices WHERE sarvam_voice_id IS NOT NULL "
+            "AND vendor_deleted_at IS NULL AND (deleted_at IS NOT NULL OR status = 'failed') ORDER BY id LIMIT ?",
+            (budget,),
+        ).fetchall()]
+    finally:
+        conn.close()
+    for r in pending:
+        _delete(r["id"], r["sarvam_voice_id"])
+
+    # 2) Every voice on the Sarvam account named after one of our rows.
+    named: dict[str, list[str]] = {}
+    for v in sarvam_list_voices():
+        if (v.get("status") or "active") == "deleted":
+            continue
+        m = _VENDOR_NAME_RE.match(str(v.get("name") or ""))
+        if m and v.get("id"):
+            named.setdefault(m.group(1), []).append(str(v["id"]))
+    rows: dict[str, dict] = {}
+    ids = list(named)
+    if ids:
+        conn = calls_db._connect()
+        try:
+            for i in range(0, len(ids), 500):
+                chunk = ids[i:i + 500]
+                for r in conn.execute(
+                    "SELECT id, status, sarvam_voice_id, deleted_at FROM custom_voices WHERE id IN ("
+                    + ", ".join("?" for _ in chunk) + ")", tuple(chunk),
+                ).fetchall():
+                    rows[r["id"]] = dict(r)
+        finally:
+            conn.close()
+    for voice_id, sarvam_ids in named.items():
+        row = rows.get(voice_id)
+        for sarvam_id in sarvam_ids:
+            if row is None:
+                out["foreign"] += 1
+            elif _keep_vendor_voice(row, sarvam_id):
+                out["kept"] += 1
+            elif sarvam_id not in done and budget > 0:
+                _delete(voice_id, sarvam_id)
+    logger.info("voice reconcile: %s", out)
+    return out
+
+
+def _reconcile_pass() -> None:
+    try:
+        if _claim_reconcile(time.time()):
+            reconcile_once()
+    except Exception:
+        logger.exception("voice reconcile pass failed")
+
+
+def kick_reconcile() -> None:
+    """Called every dialer tick (campaign_dialer._loop). Cheap: starts a
+    background pass when enabled and this replica wins the hourly slot."""
+    global _reconcile_thread, _reconcile_checked
+    if not reconcile_enabled():
+        return
+    if _reconcile_thread is not None and _reconcile_thread.is_alive():
+        return
+    now = time.monotonic()
+    if _reconcile_checked and now - _reconcile_checked < _RECONCILE_CHECK_S:
+        return
+    _reconcile_checked = now
+    _reconcile_thread = threading.Thread(target=_reconcile_pass, name="voice-clone-reconcile", daemon=True)
+    _reconcile_thread.start()
+
+
 # ------------------------------------------------------------------ routes
 
 async def _read_capped(upload: UploadFile, cap: int, too_big: str) -> bytes:
@@ -999,18 +1373,21 @@ def build_router(require_role) -> APIRouter:
     async def custom_voice_create(
         background: BackgroundTasks,
         name: str = Form(...),
+        # The language spoken in the recording (one of LANGUAGES).
         language: str = Form(...),
         sample: UploadFile = File(...),
         consent: UploadFile = File(...),
         # "record" (in-browser, up to 60 s) or "upload" (a file, up to 5 min).
         source: str = Form("upload"),
+        # The speaker's gender, "male" or "female": required (start_create checks it).
+        gender: str = Form(""),
         user: dict = Depends(require_role("admin")),
     ) -> dict:
         sample_bytes = await _read_capped(sample, SAMPLE_MAX_BYTES, "The recording is too large. Keep it under 20 MB.")
         consent_bytes = await _read_capped(consent, CONSENT_MAX_BYTES, "The consent recording is too large. Keep it under 2 MB.")
         try:
             voice, charged, job = await _run_sync(
-                start_create, user["account_id"], user.get("user_id"), name, language,
+                start_create, user["account_id"], user.get("user_id"), name, language, gender,
                 sample_bytes, sample.content_type, sample.filename,
                 consent_bytes, consent.content_type, consent.filename,
                 "record" if source == "record" else "upload",
