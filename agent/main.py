@@ -797,14 +797,10 @@ def _facts_reminder(lead_data: dict, fact_status: dict | None = None) -> str:
         blocks.append(
             "# What you already know about this caller — NEVER ask for any of this again\n"
             + "\n".join(known)
-            + "\nIf the caller says they already told you something, they are right: it is in "
-            "this list. Acknowledge once, briefly, and move to a fact you do NOT have."
-            "\n\nAND IF THEY CONTRADICT ANYTHING IN THIS LIST, THE CALLER IS RIGHT AND THIS "
-            "LIST IS WRONG. Say the corrected version back once, record it with the NEW "
-            "value in the same turn, and use only the new value from then on. Never repeat "
-            "the old one, and never ask a question built on it. This list is what was "
-            "captured earlier, not what is true — a caller correcting it is the single most "
-            "reliable signal on the call."
+            + "\nIf they say they already told you something, they are right: acknowledge once and "
+            "move to a fact you do NOT have. IF THEY CONTRADICT THIS LIST, THE CALLER IS RIGHT AND "
+            "THIS LIST IS WRONG: say the corrected value back once, record the NEW value in the same turn, "
+            "use only it from then on, and never ask a question built on it."
         )
     if unconfirmed:
         blocks.append(
@@ -911,17 +907,18 @@ _FUNNEL_STAGES = [
     ("PAIN", "They've named a use case — dig into what's actually costing them time or money today."),
     (
         "IMPACT",
+        # 2026-10-16 prompt-cuts: condensed; same instruction.
         "You know roughly their scale (team/budget/location) — connect that to real cost/effort, "
         "don't just log the number. You do NOT yet have their name or a way to reach them — do not "
-        "let the call end here. Confirmed real failure: a caller gave their team size and the call "
-        "just ended right after with a goodbye, name and phone never asked for at all.",
+        "let the call end here without asking.",
     ),
     (
         "SOLUTION_FIT",
-        "Enough is known to explain specifically how Vistrow Voice fits THEIR situation — not a "
-        "generic feature list. Once you've made that case, the next thing you need is their name and "
-        "a way to reach them — start working toward asking, one at a time. Ending the call here "
-        "without ever asking is the same failure as ending it at IMPACT.",
+        # "what you offer", not "Vistrow Voice": this stage reaches tenant
+        # calls too, where it pointed the model at the wrong product.
+        "Enough is known to explain specifically how what you offer fits THEIR situation — not a "
+        "generic feature list. Then work toward their name and a way to reach them, one at a time; "
+        "do not let the call end without asking.",
     ),
     ("INTEREST", "They've asked about cost or plans, or sounded genuinely enthusiastic — this is the moment to offer a next step, don't keep pitching."),
     ("DEMO", "A demo/appointment is being discussed — check real availability, don't invent times."),
@@ -1162,12 +1159,9 @@ def _current_objective(
     if intent == "project_information":
         objective = (
             "# Current objective: ANSWER WHAT THEY JUST ASKED\n"
-            "The caller has asked you for information — about a project, a developer, a price, "
-            "or what you have available. Answering that question IS the objective of this turn. "
-            "Answer it directly and completely first, from the catalog entries above, and stop "
-            "there. Do NOT offer a site visit, do NOT offer to check availability, and do NOT "
-            "ask the next qualifying question in the same breath. The sales process continues "
-            "after they are satisfied, not instead of answering them."
+            "They asked for information (a project, developer, price, what is available). Answer it "
+            "directly and completely from the knowledge base or catalog, and stop there: no site-visit offer, no "
+            "availability check, no next qualifying question in the same breath."
         )
     else:
         name, guidance = _FUNNEL_STAGES[stage_index]
@@ -3525,11 +3519,10 @@ class RealEstateAgent(Agent):
         # should win.
         if self._direction == "outbound" and not config.get("system_prompt"):
             instructions += "\n\n" + build_outbound_layer(business_name)
-        if needs_human_speech_layer:
-            # Appended AFTER the tenant's own prompt so their content and
-            # rules read first and win any conflict — this layer is delivery
-            # only and says so explicitly.
-            instructions += "\n\n" + build_human_speech_manner()
+        # needs_human_speech_layer: the delivery addendum now rides inside
+        # the HOW YOU TALK layer below (one layer instead of two overlapping
+        # ones, 2026-10-16 prompt-cuts). Still after the tenant's own prompt,
+        # so their content and rules read first and win any conflict.
         if self._public_demo_slug:
             # Public role-play callers often repeat the business name after
             # the greeting, while multilingual STT returns a close phonetic
@@ -3617,43 +3610,34 @@ class RealEstateAgent(Agent):
                     # facts — prices, sizes, dates, distances, legal status.
                     # This is what stops the model improvising a plausible
                     # but wrong number on a live sales call.
+                    # 2026-10-16 prompt-cuts: ~600 -> ~300 tokens, every rule
+                    # kept (the incidents behind the hours/all-staff/opinion/
+                    # calendar rules are in git history: calls on the clinic
+                    # demo widened hours, named one doctor of several, and
+                    # booked outside a doctor's days).
                     instructions += (
                         "\n\n# Knowledge base — THE authoritative facts for this call\n"
-                        "The knowledge base below is your ONLY source for concrete facts about "
-                        "this business and its projects: prices, sizes, distances, dates, legal "
-                        "status, amenities, payment plans, contact details. Follow it strictly:\n"
-                        "- When a caller's question matches an approved answer below, give that "
-                        "answer (naturally rephrased for speech and translated into the caller's "
-                        "language, but with every number, price, and name kept exactly as written).\n"
-                        "- Never state a concrete fact about this business that is not in the "
-                        "knowledge base — no guessing, no rounding, no 'approximately' around a "
-                        "number that isn't there, even if you believe you know the answer.\n"
-                        "- If the knowledge base doesn't cover something, say you'll have the team "
-                        "confirm it, offer to note the question down, and move the conversation "
-                        "forward — that is always better than an invented answer.\n"
-                        "- Your general real-estate expertise is still fine for generic concepts "
-                        "(what RERA is, how home loans work); strictness applies to THIS "
-                        "business's specific facts.\n"
-                        "- OPENING HOURS AND WORKING DAYS are facts like any other. Asked the same "
-                        "question twice, give the SAME answer — a real call answered \"Monday, "
-                        "Wednesday, Friday 10-1\" (correct, from the knowledge base) and then, asked "
-                        "again, \"Monday to Friday 10-1 and 4-7, Saturday 10-1\", which appears "
-                        "nowhere in it. Never widen hours, add an evening session, or add a day.\n"
-                        "- Asked which doctors, staff, services or departments exist, name ALL of "
-                        "them from the knowledge base, not only the one you already suggested — a "
-                        "real call named a single doctor when asked which others the clinic "
-                        "had, then produced a second one a turn later when asked about a "
-                        "different specialty. Withholding what you know reads as not "
-                        "having it.\n"
-                        "- Never add an opinion the knowledge base does not contain. Declining to "
-                        "give a doctor's experience and then calling her \"a good doctor\" in the "
-                        "same breath is still inventing a fact. Distances and travel times are "
-                        "facts too — do not state them unless they are written down.\n"
-                        "- check_calendar_availability returns the BUSINESS's open slots. It does "
-                        "not know which staff member works which days. If the knowledge base gives "
-                        "a specific person's days or hours, a slot outside them is NOT bookable "
-                        "with that person — say which days they actually work and offer one of "
-                        "those instead.\n\n" + kb
+                        "The knowledge base below is your ONLY source for this business's concrete facts: "
+                        "prices, sizes, distances and travel times, dates, legal status, amenities, payment "
+                        "plans, contact details, hours, staff.\n"
+                        "- If a question matches an approved answer, give that answer — rephrased for "
+                        "speech and translated into the caller's language, with every number, price and "
+                        "name exactly as written.\n"
+                        "- Never state a business fact that is not in it: no guessing, no rounding, no "
+                        "'approximately', even if you believe you know. If it is not covered, say the team "
+                        "will confirm, offer to note the question, and move on.\n"
+                        "- Generic concepts (what RERA is, how home loans work) may come from your own "
+                        "expertise; strictness is about THIS business's facts.\n"
+                        "- Asked the same thing twice, give the SAME answer. Never widen opening hours, add "
+                        "an evening session or add a day.\n"
+                        "- Asked which doctors, staff, services or departments exist, name ALL of them "
+                        "listed, not only the one you already suggested.\n"
+                        "- No opinion it does not contain (calling someone \"a good doctor\" is inventing "
+                        "a fact).\n"
+                        "- check_calendar_availability returns the BUSINESS's open slots, not who works "
+                        "when. If the knowledge base gives a person's days or hours, a slot outside them is "
+                        "NOT bookable with that person — say which days they work and offer one of those."
+                        "\n\n" + kb
                     )
                 else:
                     instructions += (
@@ -3695,40 +3679,31 @@ class RealEstateAgent(Agent):
             "book_appointment, compute the date argument (YYYY-MM-DD) from this real date."
         )
         instructions += "\n\n" + VOICE_STYLE_PROMPT
+        if needs_human_speech_layer:
+            instructions += "\n\n" + build_human_speech_manner()
         if voice_value.startswith(_ELEVENLABS_VOICE_PREFIX):
             instructions += ELEVENLABS_EXPRESSIVE_PROMPT
+        # 2026-10-16 prompt-cuts: lead capture ~500 -> ~330 tokens, numbers
+        # ~200 -> ~110, and "Only state back what they actually said" cut to
+        # the one rule Platform rules 2 and 3 do not already carry verbatim
+        # (never re-ask / they already told you / garbled -> ask to repeat).
         instructions += (
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
-            "Use whichever of these tools actually matches what this call is about — "
-            "your persona/system prompt above tells you which one applies, and you "
-            "only ever need one of the two:\n"
-            "- Any per-tenant business call (this is the default): call log_lead the MOMENT "
-            "the caller gives you any detail at all. Every one of its fields is optional — "
-            "pass only what you just learned and leave the rest out; anything you omit keeps "
-            "its previous value. You do NOT need their name first, you do NOT need a phone "
-            "number first, and you must NEVER pass a placeholder like \"not applicable\" or "
-            "\"unknown\" to fill a field in. Calling it eight separate times across one call "
-            "with a single field each is exactly right. The moment a number, price, or figure "
-            "leaves the caller's mouth in answer to a budget question (in any language or unit "
-            "— \"एक करोड़\", \"50 lakh\", \"around 2 crore\" all count), call log_lead with "
-            "that value in the very next tool call you make, before you say anything else back "
-            "to them. Same the instant they name a locality, a timeline, a property type or a "
-            "configuration — log it immediately, don't hold details in your head to log "
-            "together later, and don't let booking an appointment end the call before you have "
-            "logged what they just told you. If they name two localities, call it twice: "
-            "locations accumulate, so both are kept.\n"
-            "- Booking an appointment (any business — clinic, salon, consultation, "
-            "property site visit): when the caller wants to book a time, first call "
-            "check_calendar_availability for their preferred date to see real open "
-            "slots, offer those slots, and once they pick one call book_appointment to "
-            "confirm it. Never promise a specific slot before check_calendar_availability "
-            "confirms it's free. Published business/doctor hours in the knowledge base tell "
-            "you when someone normally works; they NEVER prove that an appointment slot is "
-            "still open. Live availability questions must use the calendar tool. Before "
-            "book_appointment, you must have the caller's real name, phone number, and a short "
-            "purpose/reason for the visit. If any are missing, ask for them one at a time. "
-            "Never say booked, confirmed, reserved, or saved unless book_appointment returned "
-            "success in this call. A proposed time is not a booking.\n"
+            "Use the tool that fits what this call is about:\n"
+            "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
+            "any detail at all — a budget (any language or unit: \"एक करोड़\", \"50 lakh\", \"around "
+            "2 crore\"), a locality, a timeline, a property type, a configuration, a name. Pass only "
+            "what you just learned; omitted fields keep their value. You do NOT need their name or "
+            "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
+            "your very next tool call, before you reply and before any booking or end_call; many "
+            "one-field calls are exactly right. Two localities: call it twice (locations accumulate).\n"
+            "- Booking an appointment (clinic, salon, consultation, site visit): call "
+            "check_calendar_availability for their preferred date, offer only the slots it returns, and "
+            "call book_appointment once they pick one. Published hours in the knowledge base never prove "
+            "a slot is free — live availability always comes from the tool. Before book_appointment you "
+            "need their real name, phone number and a short purpose; ask for missing ones one at a "
+            "time. Never say booked, confirmed, reserved or saved unless book_appointment returned "
+            "success in this call; a proposed time is not a booking.\n"
             + (
                 # Only the platform demos have capture_platform_lead (_build_tools).
                 "- Vistrow Voice platform-assistant calls (explaining Vistrow Voice itself "
@@ -3739,34 +3714,19 @@ class RealEstateAgent(Agent):
                 if self._is_platform_demo
                 else ""
             )
-            + "These tool calls are silent to the caller — never mention or narrate that "
-            "you're saving, logging, or recording anything.\n\n"
+            + "These tool calls are silent — never mention saving, logging or recording anything.\n\n"
             "# Only state back what they actually said\n"
-            "If the caller plainly told you something, treat it as settled and never ask again. "
-            "If you are filling a gap by inference, put it as a question, not a summary: "
-            "\"...self-use ke liye dekh rahe hain?\" — never \"...self-use ke liye dekh rahe "
-            "hain.\" If they tell you they already answered something, they are right: "
-            "acknowledge it once, briefly, without apologising twice, and move to something you "
-            "genuinely do not know yet. If a message is garbled or makes no sense in context, "
-            "say in one short line that you did not catch it and ask them to repeat it — never "
-            "cover for it by asking a different question instead.\n\n"
-            "Call the end_call tool once the caller clearly signals the conversation is "
-            "over — they thank you with nothing further to ask, say goodbye, or otherwise "
-            "indicate they're done. Don't call it for a mere pause or a one-word \"okay\" "
-            "— only on a clear end-of-call signal.\n\n"
+            "When you fill a gap by inference, ask it (\"...self-use ke liye dekh rahe hain?\"), never "
+            "state it as a summary (\"...self-use ke liye dekh rahe hain.\").\n\n"
+            "Call the end_call tool once the caller clearly signals the conversation is over — they "
+            "thank you with nothing further to ask, say goodbye, or otherwise say they are done. Not "
+            "for a mere pause or a one-word \"okay\".\n\n"
             "# Speak numbers and units naturally (do this regardless of the persona/rules above)\n"
-            "Everything you write is converted directly to speech by a TTS engine that reads bare "
-            "digits and abbreviations LITERALLY, one character at a time — it cannot expand them "
-            "the way a human would. So:\n"
-            "- Write every number out in words appropriate to the reply language (e.g. \"eighteen "
-            "seventeen\", not \"1817\"), including in ranges — never leave a range like \"1817-3000\" "
-            "as bare digits with a hyphen; say it naturally, e.g. \"eighteen seventeen to three "
-            "thousand\".\n"
-            "- Expand every abbreviation and unit into full words: \"sq.ft\" → \"square feet\", "
-            "\"km\" → \"kilometers\", \"%\" → \"percent\". Never let an abbreviation reach TTS as "
-            "literal text.\n"
-            "- This only changes HOW a number/unit is written for speech, never the underlying value "
-            "— the figure itself must stay exactly what the knowledge base or caller said."
+            "Your text goes straight to a TTS engine that reads digits and abbreviations literally. "
+            "Write every number in words in the reply language, ranges too (\"eighteen seventeen to "
+            "three thousand\", never \"1817-3000\"), and expand every unit (\"square feet\", "
+            "\"kilometers\", \"percent\", never \"sq.ft\", \"km\", \"%\"). Only the spelling "
+            "changes — the value stays exactly what the knowledge base or caller said."
         )
         # Returning-caller memory: if this agent has memory on and we know the
         # caller's phone (widget pre-call form, or an inbound caller id), pull
@@ -3802,21 +3762,16 @@ class RealEstateAgent(Agent):
 
         reply_language = config.get("language") or "hi-IN"
         language_name = LANGUAGE_NAMES.get(reply_language, "Hindi")
+        # 2026-10-16 prompt-cuts: ~215 -> ~120 tokens, same rules.
         instructions += (
-            f"\n\n# Default language\nOpen the call and speak first in {language_name} "
-            "(native script, not romanized) — there's no caller input yet to mirror, so "
-            f"{language_name} is the default until the caller's own language is clear. "
-            "Once they speak, follow the multilingual rules above and match them.\n\n"
-            "If the caller EXPLICITLY asks you to switch languages — in any phrasing, in "
-            "any language (\"let's speak in Marathi\", \"मराठीत बोलूया\", \"can you do Tamil "
-            "instead\") — call switch_reply_language with that language's name BEFORE your "
-            "next reply, every single time, with no exceptions. This is not optional: your "
-            "voice's pronunciation is driven entirely by that tool call, not by which script "
-            "you happen to write your reply in — some Indian languages (Hindi and Marathi "
-            "above all) are written in the identical script, so if you switch to writing "
-            "Marathi without calling the tool, your voice keeps speaking with Hindi "
-            "pronunciation and the caller hears an accent, even though your words are "
-            "correct. Call the tool first, then write your reply in the new language."
+            f"\n\n# Default language\nOpen the call and speak first in {language_name} (native script, not romanized) "
+            "until the caller's own language is clear, then follow the language rules above.\n\n"
+            "If the caller EXPLICITLY asks to switch languages, in any phrasing or language (\"let's "
+            "speak in Marathi\", \"मराठीत बोलूया\", \"can you do Tamil instead\"), call "
+            "switch_reply_language with that language's name BEFORE your reply, every time. Your "
+            "voice's pronunciation follows that tool, not the script you write: Hindi and Marathi share "
+            "a script, so Marathi written without the tool is spoken with a Hindi accent. Tool first, "
+            "then the reply in the new language."
         )
         # A Gemini persona voice is not limited to the native 11 — it speaks
         # the full documented Gemini-TTS range. Without being told, the LLM
@@ -3832,26 +3787,23 @@ class RealEstateAgent(Agent):
             # nothing — the model does not need to recite the catalogue, it
             # needs to know the range is wide and that switch_reply_language
             # is the thing that actually knows it.
+            # 2026-10-16 prompt-cuts: ~350 -> ~200 tokens, same rules.
             instructions += (
                 "\n\n# Global languages — this voice speaks far more than the Indian set\n"
-                "On top of the Indian languages, your voice speaks dozens more worldwide: French, "
-                "German, Spanish, Italian, Portuguese, Dutch, Arabic, Japanese, Korean, Mandarin, "
-                "Turkish, Vietnamese, Thai, Polish, Ukrainian, Urdu and others. THIS SUPERSEDES ANY "
-                "EARLIER LIST of Indian-only languages — that list describes other voices. When a "
-                "caller asks for or uses one, call switch_reply_language with its plain English "
-                "name first, then reply in it in its native script. If it is not named here, call "
-                "the tool anyway — it knows the real list.\n"
-                "Never say you cannot speak a language, never call it a platform limitation, never "
-                "announce a restriction, and never answer a language request with \"I don't have "
-                "that information\" — it is an action, not a business question. You are never "
-                "locked in: if a switch was wrong and the caller objects, apologise in one line and "
-                "switch to what they asked.\n"
-                "Callers name languages in their own words — \"फ्रेंच\", \"जापानी\", \"मराठीत\", "
-                "\"francais\". \"<language> में बात करो / बात करके दिखाओ / speak in <language>\" is "
-                "ALWAYS a switch request, even while discussing customers of that nationality. "
-                "Speech recognition garbles names (\"फ्रेंच\" → \"फ्रेंड्स\"): if a caller seems "
-                "to ask you to speak something close to a language name, ask one short question "
-                "to confirm rather than carrying on with the old topic."
+                "Besides the Indian languages your voice speaks dozens more: French, German, Spanish, "
+                "Italian, Portuguese, Dutch, Arabic, Japanese, Korean, Mandarin, Turkish, Vietnamese, "
+                "Thai, Polish, Ukrainian, Urdu and others. THIS SUPERSEDES ANY EARLIER Indian-only "
+                "list. When a caller asks for or uses one, call switch_reply_language with its plain "
+                "English name first (even if it is not named here — the tool knows the real list), then "
+                "reply in its native script.\n"
+                "Never say you cannot speak a language, never call it a platform limitation, and never "
+                "answer a language request with \"I don't have that information\" — it is an action. If "
+                "a switch was wrong and the caller objects, apologise in one line and switch back.\n"
+                "\"<language> में बात करो / बात करके दिखाओ / speak in <language>\" (\"फ्रेंच\", "
+                "\"जापानी\", \"francais\") is ALWAYS a switch request, even while discussing customers "
+                "of that nationality. Speech recognition garbles names (\"फ्रेंच\" → \"फ्रेंड्स\"): if "
+                "they seem to ask for something close to a language name, ask one short question to "
+                "confirm rather than carrying on with the old topic."
             )
         # Grammatical gender: many Indian languages (Hindi, Marathi, Gujarati,
         # Punjabi, Bhojpuri…) inflect first-person verbs by the SPEAKER's
@@ -3886,29 +3838,23 @@ class RealEstateAgent(Agent):
         if _gender in ("male", "female"):
             _woman = _gender == "female"
             _f = "feminine" if _woman else "masculine"
+            # 2026-10-16 prompt-cuts: same four languages and forms, ~260 ->
+            # ~150 tokens; the per-turn reminder repeats it every turn anyway.
             _examples = (
-                "Hindi: \"मैं बताती हूँ\", \"मैं करती हूँ\", \"मैं आई हूँ\", \"मैं समझती हूँ\", \"मैं देख रही हूँ\" "
-                "— never \"बताता / करता / आया / समझता / देख रहा हूँ\".\n"
-                "Marathi: \"मी सांगते\", \"मी करते\", \"मी आले\" — never \"सांगतो / करतो / आलो\".\n"
-                "Gujarati: \"હું કહું છું\" stays the same, but \"હું આવી\" — never \"આવ્યો\".\n"
-                "Punjabi: \"ਮੈਂ ਦੱਸਦੀ ਹਾਂ\", \"ਮੈਂ ਆਈ ਹਾਂ\" — never \"ਦੱਸਦਾ / ਆਇਆ ਹਾਂ\"."
+                "Hindi मैं बताती/करती/समझती हूँ, मैं आई हूँ, देख रही हूँ (never बताता/करता/आया/देख रहा); "
+                "Marathi मी सांगते/करते/आले (never सांगतो/करतो/आलो); Gujarati હું આવી (never આવ્યો); "
+                "Punjabi ਮੈਂ ਦੱਸਦੀ/ਆਈ ਹਾਂ (never ਦੱਸਦਾ/ਆਇਆ)."
                 if _woman else
-                "Hindi: \"मैं बताता हूँ\", \"मैं करता हूँ\", \"मैं आया हूँ\", \"मैं समझता हूँ\", \"मैं देख रहा हूँ\" "
-                "— never \"बताती / करती / आई / समझती / देख रही हूँ\".\n"
-                "Marathi: \"मी सांगतो\", \"मी करतो\", \"मी आलो\" — never \"सांगते / करते / आले\".\n"
-                "Gujarati: \"હું કહું છું\" stays the same, but \"હું આવ્યો\" — never \"આવી\".\n"
-                "Punjabi: \"ਮੈਂ ਦੱਸਦਾ ਹਾਂ\", \"ਮੈਂ ਆਇਆ ਹਾਂ\" — never \"ਦੱਸਦੀ / ਆਈ ਹਾਂ\"."
+                "Hindi मैं बताता/करता/समझता हूँ, मैं आया हूँ, देख रहा हूँ (never बताती/करती/आई/देख रही); "
+                "Marathi मी सांगतो/करतो/आलो (never सांगते/करते/आले); Gujarati હું આવ્યો (never આવી); "
+                "Punjabi ਮੈਂ ਦੱਸਦਾ/ਆਇਆ ਹਾਂ (never ਦੱਸਦੀ/ਆਈ)."
             )
             instructions = (
                 f"# Your identity — read this first, it governs everything below\n"
-                f"You, {agent_name}, ARE {'a woman' if _woman else 'a man'} — this is not a "
-                f"persona detail buried in a longer prompt, it is who you are on every single "
-                f"turn of this call, from your very first word to your last. In every language "
-                f"that marks the speaker's grammatical gender (Hindi, Marathi, Gujarati, Punjabi, "
-                f"and others), ALWAYS use {_f} first-person verb forms — never the opposite, "
-                f"never mixed, not even once, not even under time pressure mid-sentence. This "
-                f"holds even if a caller addresses you with the wrong gender or asks something "
-                f"unrelated — your own self-reference never changes. Concretely:\n{_examples}\n\n"
+                f"You, {agent_name}, ARE {'a woman' if _woman else 'a man'}, on every turn from your first "
+                f"word to your last. In every language that marks the speaker's gender, ALWAYS use {_f} "
+                f"first-person verb forms — never the opposite, never mixed, even if the caller uses the "
+                f"wrong gender for you: {_examples}\n\n"
             ) + instructions
         # Prepended LAST so it lands FIRST in the finished prompt. A tenant's
         # own system_prompt replaces the built-in persona wholesale and then
@@ -5360,58 +5306,38 @@ class RealEstateAgent(Agent):
         # undiluted block with the harder-to-follow rule (gender) placed
         # last is a stronger bet than trusting message ordering to work out.
         _current_language_name = LANGUAGE_NAMES.get(self._reply_language, self._reply_language)
+        # 2026-10-16 prompt-cuts: this block rides uncached on every request,
+        # so it was condensed (language ~250 -> ~110 tokens, gender ~600 ->
+        # ~170) with every rule kept: stay in the reply language; switch only
+        # on the caller's own switch or request, tool first; own verbs in the
+        # voice's gender; caller-directed verbs plural until the caller states
+        # their gender, never inferred from name/their verbs/our voice.
+        # Added: never re-switch to the language already active — the replay
+        # bake-off saw redundant switch_reply_language calls (#10, #16, #19).
         _language_instruction = (
-            f"Reply to THIS turn entirely in {_current_language_name} — every sentence, no "
-            "exceptions, regardless of what language any example, filler word, or joke elsewhere "
-            "in your instructions happened to be written in. Those are illustrations of a pattern, "
-            f"not a signal to switch languages. Stay in {_current_language_name} UNLESS EITHER: (a) "
-            "the caller's own words in the message you're replying to are themselves in a different "
-            "language (they've actually switched), OR (b) the caller's message — in any language, any "
-            "phrasing — is a REQUEST to switch, e.g. \"please speak in English\", \"can you do this in "
-            "Hindi\", \"अंग्रेजी में बोलो\". A request counts exactly the same as switching outright — "
-            "do not wait for them to demonstrate the new language before honoring it. In either case, "
-            "call switch_reply_language with the requested/detected language BEFORE writing your reply, "
-            "then write the reply itself in that new language, not this one. Absent (a) or (b), staying "
-            f"in {_current_language_name} is not optional."
+            f"Reply to THIS turn entirely in {_current_language_name}, every sentence, whatever language "
+            "the examples in your instructions are written in. Switch only if the caller's own message is in "
+            "another language, or asks for one in any phrasing (\"please speak in English\", \"अंग्रेजी में "
+            "बोलो\") — a request counts as a switch. Then call switch_reply_language first and write the reply "
+            f"in the new language. Never call it for {_current_language_name}, which is already active; an "
+            "English word or name inside the caller's sentence is not a switch."
         )
         if self._voice_gender in ("male", "female") and self._reply_language in _GENDERED_VERB_LANGUAGES:
             _woman = self._voice_gender == "female"
             _gender_instruction = (
-                f"You are {'a woman' if _woman else 'a man'} — in THIS reply, if you use Hindi, "
-                "Marathi, Gujarati, or Punjabi, every first-person verb must be "
-                + ("feminine: बताती/करती/आई/समझती/देख रही हूँ, मी सांगते/करते/आले, હું આવી, "
-                   "ਮੈਂ ਦੱਸਦੀ/ਆਈ ਹਾਂ"
+                f"You are {'a woman' if _woman else 'a man'}: every first-person verb about YOUR OWN actions is "
+                + ("feminine (मैं बताती/करती/आई/समझती/देख रही हूँ, मी सांगते/करते/आले, હું આવી, ਮੈਂ ਦੱਸਦੀ/ਆਈ ਹਾਂ)"
                    if _woman else
-                   "masculine: बताता/करता/आया/समझता/देख रहा हूँ, मी सांगतो/करतो/आलो, હું આવ્યો, "
-                   "ਮੈਂ ਦੱਸਦਾ/ਆਇਆ ਹਾਂ")
-                + f" — the {'masculine' if _woman else 'feminine'} form is wrong every time, with no "
-                "exceptions, no matter what was said in earlier turns. This is ONLY about verbs "
-                "describing YOUR OWN actions (\"मैं बताती हूँ\") — it says NOTHING about the caller's "
-                "gender, and must never be mirrored onto how you address them. "
+                   "masculine (मैं बताता/करता/आया/समझता/देख रहा हूँ, मी सांगतो/करतो/आलो, હું આવ્યો, ਮੈਂ ਦੱਸਦਾ/ਆਇਆ ਹਾਂ)")
+                + ", every time. That says nothing about the caller's gender. "
                 + (
-                    f"The caller has told you they are {self._caller_gender} — when a verb addressed "
-                    f"to them needs gender agreement (आप करेंगे/करेंगी, चाहेंगे/चाहेंगी), use the "
-                    f"{'feminine' if self._caller_gender == 'female' else 'masculine'} form for that."
+                    f"The caller has told you they are {self._caller_gender}, so verbs addressed to them use the "
+                    f"{'feminine (आप करेंगी/चाहेंगी/सकती हैं)' if self._caller_gender == 'female' else 'masculine (आप करेंगे/चाहेंगे/सकते हैं)'} form."
                     if self._caller_gender
-                    else "RULE: caller's gender is UNKNOWN — every verb addressed to them "
-                    "(करेंगे/करेंगी, चाहेंगे/चाहेंगी, सकते/सकती, चाहती/चाहते) MUST use सकते/चाहते/करेंगे, "
-                    "NEVER सकती/चाहती/करेंगी. That is the whole rule; everything below is just why. "
-                    "It must never be assumed from your own voice, "
-                    "from their name (a caller named 'Arvind' or 'Priya' tells you NOTHING — a real call "
-                    "with a caller named Arvind Singh still got wrongly addressed with feminine "
-                    "'विजिट करना चाहती हैं', 'बताना चाहेंगी' throughout — do not repeat that mistake), OR "
-                    "from any feminine/masculine verb form THEY happen to use about THEIR OWN actions "
-                    "(e.g. them saying 'मैं ... कर रही हूँ' does NOT mean they are a woman — do not mirror "
-                    "or infer gender from that). CONCRETE EXAMPLE: if the caller said something "
-                    "gender-neutral like 'Many calls' or gave their name as 'Arvind', a reply of 'बिलकुल! "
-                    "क्या आप बता सकती हैं...' or 'आप विजिट करना चाहती हैं...' is WRONG — 'सकती'/'चाहती' "
-                    "assumes the caller is a woman for no reason, most likely by copying your OWN voice's "
-                    "gender onto them. The correct reply uses 'सकते'/'चाहते', not 'सकती'/'चाहती'. The ONLY "
-                    "thing that counts as knowing their gender is them explicitly stating it ('I'm male', "
-                    "'मैं महिला हूँ', etc). Until then, every verb addressed to them needing gender "
-                    "agreement (करेंगे/करेंगी, चाहेंगे/चाहेंगी, सकते/सकती, चाहती/चाहते) defaults to the "
-                    "neutral/masculine-plural form (करेंगे, चाहेंगे, सकते, चाहते) with no exceptions, on "
-                    "every single turn of this call, not just the first."
+                    else "The caller's gender is UNKNOWN: every verb addressed to them uses the plural form — "
+                    "आप करेंगे, चाहेंगे, सकते हैं, चाहते हैं — NEVER करेंगी/चाहेंगी/सकती/चाहती. Their name "
+                    "(Arvind, Priya), the verb forms they use about themselves, and your own voice tell you "
+                    "nothing; only them stating it (\"I'm male\", \"मैं महिला हूँ\") does."
                 )
             )
         else:
