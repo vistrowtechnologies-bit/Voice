@@ -139,7 +139,7 @@ const FAQ = [
   },
   {
     q: 'How much does an AI receptionist cost?',
-    a: 'Calls are billed in credits by the minute of conversation, and each plan includes a monthly allowance. The voice and model you choose change how many credits a minute uses. Current plans are on the pricing page.',
+    a: 'Calls are billed by the minute of conversation, and each plan includes a monthly allowance of minutes. Current plans are on the pricing page.',
   },
 ]
 

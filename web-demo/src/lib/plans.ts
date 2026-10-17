@@ -164,3 +164,29 @@ export const SHARED_PLAN_FEATURES = PLANS[0].features.filter((feature) =>
 )
 export const planHighlights = (plan: Plan) =>
   plan.features.filter((feature) => !SHARED_PLAN_FEATURES.includes(feature))
+
+// Minute-based plans shown on the public /pricing page (owner decision,
+// 2026-10-17). The dashboard Billing page and the server (PLAN_PRICING in
+// server/calls_db.py, agent/plan_policy.py) still meter credits; switch them
+// to minutes before checkout sells these plans.
+export interface MinutePlan {
+  key: Plan['key']
+  monthlyPriceInr: number
+  monthlyMinutes: number
+  // Annual is billed upfront: pay 11 months, get 12, with more minutes a month.
+  annualPriceInr: number
+  annualMinutesPerMonth: number
+  overageInr: number
+  clonedVoices: number
+}
+
+export const ANNUAL_MONTHS_PAID = 11
+// Vistrow Live (realtime) uses 3 plan minutes per minute of conversation;
+// every standard voice uses 1.
+export const LIVE_MINUTE_MULTIPLIER = 3
+
+export const MINUTE_PLANS: MinutePlan[] = [
+  { key: 'starter', monthlyPriceInr: 2999, monthlyMinutes: 400, annualPriceInr: 2999 * ANNUAL_MONTHS_PAID, annualMinutesPerMonth: 500, overageInr: 7, clonedVoices: 0 },
+  { key: 'growth', monthlyPriceInr: 5999, monthlyMinutes: 1100, annualPriceInr: 5999 * ANNUAL_MONTHS_PAID, annualMinutesPerMonth: 1200, overageInr: 6, clonedVoices: 1 },
+  { key: 'scale', monthlyPriceInr: 12999, monthlyMinutes: 2700, annualPriceInr: 12999 * ANNUAL_MONTHS_PAID, annualMinutesPerMonth: 3000, overageInr: 5, clonedVoices: 3 },
+]
