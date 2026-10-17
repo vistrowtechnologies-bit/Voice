@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchBillingProfile, invoiceDocumentUrl, saveBillingProfile, startTopup, verifyTopupPayment, type BillingProfile } from '../lib/api'
 import { loadRazorpayCheckout } from '../lib/razorpay'
 import { LIVE_MODEL_MULTIPLIER, TOPUP_MAX_CREDITS, TOPUP_MIN_CREDITS, TOPUP_PACKS } from '../lib/plans'
@@ -6,6 +6,29 @@ import type { BillingSummary, TopupResult } from '../lib/types'
 import { Icon } from './Icon'
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+/** Eases a displayed number to its new value (~350 ms) so totals count instead of jumping. */
+function useTween(value: number): number {
+  const [shown, setShown] = useState(value)
+  const from = useRef(value)
+  useEffect(() => {
+    const start = from.current
+    if (start === value || reduceMotion()) { from.current = value; setShown(value); return }
+    let frame = 0
+    const t0 = performance.now()
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / 350)
+      const v = start + (value - start) * (1 - (1 - k) ** 3)
+      from.current = v
+      setShown(v)
+      if (k < 1) frame = requestAnimationFrame(step)
+    }
+    frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame)
+  }, [value])
+  return shown
+}
 
 /** Buy extra minutes (1 credit = 1 standard minute): a pack (with bonus) or a custom
  * amount, priced at the plan's own per-minute rate + GST, paid through Razorpay Checkout, verified server-side, then the
@@ -37,6 +60,17 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
   const needsDetails = profile !== null && !profile.legalName
   // A Vistrow Live minute uses LIVE_MODEL_MULTIPLIER standard minutes.
   const liveMinutes = (n: number) => Math.floor(n / LIVE_MODEL_MULTIPLIER.default)
+  // Effective price of a minute once the bonus is counted; the lowest is "Best value".
+  const effectiveRate = (p: (typeof TOPUP_PACKS)[number]) => (p.credits * perCredit) / (p.credits + Math.floor((p.credits * p.bonusPct) / 100))
+  const bestValueKey = TOPUP_PACKS.reduce((best, p) => (effectiveRate(p) < effectiveRate(best) ? p : best)).key
+  const shownTotal = useTween(customInvalid ? 0 : base + gst)
+  const shownMinutes = useTween(customInvalid ? 0 : credits + bonus)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [busy, onClose])
 
   async function pay() {
     setError('')
@@ -77,31 +111,52 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
     }
   }
 
-  const input = 'w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary'
+  const input = 'w-full rounded-xl border border-border bg-surface-high px-3 py-2.5 text-sm outline-none transition-colors focus:border-primary'
+  const planName = ratePlan ? ratePlan.plan.charAt(0).toUpperCase() + ratePlan.plan.slice(1) : 'Starter'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={busy ? undefined : onClose} role="dialog" aria-modal="true" aria-label="Buy minutes">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-surface p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="topup-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose} role="dialog" aria-modal="true" aria-label="Buy minutes">
+      <div className="topup-panel relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-surface p-4 shadow-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-primary/20 blur-3xl" aria-hidden="true" />
         {result ? (
-          <>
-            <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="check_circle" className="text-[22px] text-cyan" />Minutes added</h2>
-            <p className="mt-2 text-sm text-text-muted">
-              {result.alreadyApplied ? 'This payment was already applied.' : `${result.credits ?? credits + bonus} minutes are in your workspace now.`}{' '}
-              Balance: <b className="text-text">{result.creditsRemaining.toLocaleString('en-IN')} minutes</b>.
+          <div className="relative flex flex-col items-center py-4 text-center">
+            <span className="relative grid h-16 w-16 place-items-center">
+              <span className="topup-ring absolute inset-0 rounded-full bg-cyan/40" aria-hidden="true" />
+              <span className="topup-pop topup-icon grid h-16 w-16 place-items-center rounded-full text-white"><Icon name="check" className="text-[34px]" /></span>
+            </span>
+            <h2 className="topup-rise mt-4 text-xl font-bold">Minutes added</h2>
+            <p className="topup-rise mt-2 max-w-xs text-sm text-text-muted">
+              {result.alreadyApplied ? 'This payment was already applied.' : `${(result.credits ?? credits + bonus).toLocaleString('en-IN')} minutes are in your workspace now.`}
             </p>
-            <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
-              <a href={invoiceDocumentUrl(result.invoiceId, true)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-bold text-primary hover:bg-primary/10">
+            <div className="topup-rise mt-4 rounded-2xl border border-border bg-surface-high px-6 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">New balance</p>
+              <p className="text-2xl font-bold">{result.creditsRemaining.toLocaleString('en-IN')} <span className="text-sm font-medium text-text-muted">minutes</span></p>
+            </div>
+            <div className="mt-6 flex w-full gap-2">
+              <a href={invoiceDocumentUrl(result.invoiceId, true)} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary/10">
                 <Icon name="receipt_long" className="text-[16px]" /> Invoice
               </a>
-              <button onClick={onClose} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Done</button>
+              <button onClick={onClose} className="topup-pay flex-1 rounded-xl py-2.5 text-sm font-bold text-white">Done</button>
             </div>
-          </>
+          </div>
         ) : (
-          <>
-            <h2 className="text-lg font-bold">Buy minutes</h2>
-            <p className="mt-1 text-xs text-text-muted">{inr(perCredit)} per minute on your plan · a Vistrow Live minute uses {LIVE_MODEL_MULTIPLIER.default}. Minutes apply right away.</p>
+          <div className="relative">
+            <div className="flex items-start gap-3">
+              <span className="topup-icon grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white"><Icon name="bolt" className="text-[24px]" /></span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-bold leading-tight">Buy minutes</h2>
+                <p className="mt-0.5 text-xs text-text-muted">Added to your balance the moment payment clears.</p>
+              </div>
+              <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text disabled:opacity-40">
+                <Icon name="close" className="text-[20px]" />
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+              <span className="rounded-full bg-primary/12 px-2.5 py-1 text-primary">{inr(perCredit)} / min on {planName}</span>
+              <span className="rounded-full bg-surface-high px-2.5 py-1 text-text-muted">Vistrow Live uses {LIVE_MODEL_MULTIPLIER.default} min per min</span>
+            </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-5 grid grid-cols-2 gap-2.5 sm:gap-3">
               {TOPUP_PACKS.map((p) => {
                 const b = Math.floor((p.credits * p.bonusPct) / 100)
                 const total = Math.round(p.credits * perCredit * 118) / 100
@@ -111,65 +166,91 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
                     key={p.key}
                     type="button"
                     onClick={() => setChoice(p.key)}
-                    className={`relative flex flex-col items-start rounded-xl border bg-surface-high p-3 text-left ${selected ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/60'}`}
+                    aria-pressed={selected}
+                    className="topup-card relative flex flex-col items-start rounded-2xl border border-border bg-surface-high p-3 pt-4 text-left sm:p-4"
                   >
-                    {b > 0 && <span className="absolute right-2 top-2 rounded-full bg-cyan/15 px-2 py-0.5 text-[10px] font-bold text-cyan">+{b} bonus</span>}
-                    <span className="text-lg font-bold">{p.credits.toLocaleString('en-IN')}</span>
-                    <span className="text-[11px] text-text-muted">minutes</span>
-                    <span className="mt-2 text-sm font-semibold">{inr(total)} <span className="text-[10px] font-normal text-text-muted">incl. GST</span></span>
-                    <span className="text-[10px] text-text-muted">≈ {liveMinutes(p.credits + b).toLocaleString('en-IN')} Vistrow Live min</span>
+                    {p.key === bestValueKey && <span className="absolute -top-2.5 left-4 rounded-full bg-cyan px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-surface">Best value</span>}
+                    {selected
+                      ? <span className="topup-pop absolute right-3 top-3 grid h-5 w-5 place-items-center rounded-full bg-primary text-white"><Icon name="check" className="text-[14px]" /></span>
+                      : b > 0 && <span className="absolute right-3 top-3 rounded-full bg-cyan/15 px-2 py-0.5 text-[10px] font-bold text-cyan">+{b} free</span>}
+                    <span className="mt-3 text-xl font-bold tracking-tight sm:mt-2 sm:text-2xl">{p.credits.toLocaleString('en-IN')}</span>
+                    <span className="text-[11px] text-text-muted">minutes{selected && b > 0 ? ` + ${b} free` : ''}</span>
+                    <span className="mt-3 whitespace-nowrap text-sm font-semibold">{inr(total)} <span className="text-[10px] font-normal text-text-muted">incl. GST</span></span>
+                    <span className="text-[10px] text-text-muted">{b > 0 ? `${inr(effectiveRate(p))}/min with bonus` : `≈ ${liveMinutes(p.credits).toLocaleString('en-IN')} Vistrow Live min`}</span>
                   </button>
                 )
               })}
               <button
                 type="button"
                 onClick={() => setChoice('custom')}
-                className={`col-span-2 flex items-center justify-between rounded-xl border bg-surface-high px-3 py-2 text-left ${choice === 'custom' ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/60'}`}
+                aria-pressed={choice === 'custom'}
+                className="topup-card col-span-2 flex items-center justify-between rounded-2xl border border-border bg-surface-high px-4 py-3 text-left"
               >
-                <span className="text-sm font-semibold">Custom amount</span>
+                <span className="flex items-center gap-2 text-sm font-semibold"><Icon name="tune" className="text-[18px] text-primary" />Custom amount</span>
                 <span className="text-[11px] text-text-muted">{TOPUP_MIN_CREDITS}–{TOPUP_MAX_CREDITS.toLocaleString('en-IN')} minutes</span>
               </button>
               {choice === 'custom' && (
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    min={TOPUP_MIN_CREDITS}
-                    max={TOPUP_MAX_CREDITS}
-                    step={10}
-                    value={custom}
-                    onChange={(e) => setCustom(Number(e.target.value))}
-                    className={input}
-                    aria-label="Minutes"
-                  />
-                  {customInvalid && <p className="mt-1 text-xs text-destructive">Enter a whole number between {TOPUP_MIN_CREDITS} and {TOPUP_MAX_CREDITS.toLocaleString('en-IN')}.</p>}
+                <div className="topup-rise col-span-2 rounded-2xl border border-border bg-surface-high p-4">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={TOPUP_MIN_CREDITS}
+                      max={TOPUP_MAX_CREDITS}
+                      step={50}
+                      value={Number.isFinite(custom) ? Math.min(Math.max(custom, TOPUP_MIN_CREDITS), TOPUP_MAX_CREDITS) : TOPUP_MIN_CREDITS}
+                      onChange={(e) => setCustom(Number(e.target.value))}
+                      className="topup-range min-w-0 flex-1"
+                      aria-label="Minutes slider"
+                    />
+                    <input
+                      type="number"
+                      min={TOPUP_MIN_CREDITS}
+                      max={TOPUP_MAX_CREDITS}
+                      step={10}
+                      value={custom}
+                      onChange={(e) => setCustom(Number(e.target.value))}
+                      className={`${input.replace('w-full', 'w-28 shrink-0')} text-right font-semibold`}
+                      aria-label="Minutes"
+                    />
+                  </div>
+                  {customInvalid && <p className="mt-2 text-xs text-destructive">Enter a whole number between {TOPUP_MIN_CREDITS} and {TOPUP_MAX_CREDITS.toLocaleString('en-IN')}.</p>}
                 </div>
               )}
             </div>
 
-            <div className="mt-4 flex flex-col gap-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-xs">
-              <div className="flex justify-between text-text-muted"><span>{credits.toLocaleString('en-IN')} minutes × {inr(perCredit)}</span><span>{inr(base)}</span></div>
-              {bonus > 0 && <div className="flex justify-between text-cyan"><span>Bonus minutes</span><span>+{bonus} free</span></div>}
-              <div className="flex justify-between text-text-muted"><span>GST (18%)</span><span>{inr(gst)}</span></div>
-              <div className="flex justify-between border-t border-border pt-1 font-bold text-text"><span>Total</span><span>{inr(base + gst)}</span></div>
+            <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface-high">
+              <div className="flex items-end justify-between gap-3 border-b border-border px-4 py-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">You get</p>
+                  <p className="text-2xl font-bold tabular-nums">{Math.round(shownMinutes).toLocaleString('en-IN')} <span className="text-sm font-medium text-text-muted">minutes</span></p>
+                </div>
+                <p className="pb-1 text-right text-[11px] text-text-muted">≈ {liveMinutes(credits + bonus).toLocaleString('en-IN')} Vistrow Live min</p>
+              </div>
+              <div className="flex flex-col gap-1.5 px-4 py-3 text-xs">
+                <div className="flex justify-between text-text-muted"><span>{credits.toLocaleString('en-IN')} minutes × {inr(perCredit)}</span><span className="tabular-nums">{inr(base)}</span></div>
+                {bonus > 0 && <div className="flex justify-between font-semibold text-cyan"><span>Bonus minutes</span><span>+{bonus} free</span></div>}
+                <div className="flex justify-between text-text-muted"><span>GST (18%)</span><span className="tabular-nums">{inr(gst)}</span></div>
+                <div className="mt-1 flex items-baseline justify-between border-t border-border pt-2 text-text"><span className="text-sm font-bold">Total</span><span className="text-lg font-bold tabular-nums">{inr(shownTotal)}</span></div>
+              </div>
             </div>
 
             {needsDetails && (
-              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="topup-rise mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <p className="text-xs text-text-muted sm:col-span-2">For your GST invoice (you can change these later under Billing details).</p>
                 <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">Company or legal name<input value={legalName} onChange={(e) => setLegalName(e.target.value)} className={input} /></label>
                 <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">GSTIN (optional)<input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="27ABCDE1234F1Z5" className={input} /></label>
               </div>
             )}
 
-            {error && <p className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
+            {error && <p className="topup-rise mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
 
-            <div className="mt-5 flex gap-2">
-              <button onClick={onClose} disabled={busy} className="flex-1 rounded-lg border border-border bg-surface py-2 text-sm font-bold text-text-muted disabled:opacity-60">Cancel</button>
-              <button onClick={() => void pay()} disabled={busy || customInvalid} className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-white disabled:opacity-40">
-                {busy ? 'Opening…' : `Pay ${inr(base + gst)}`}
-              </button>
-            </div>
-          </>
+            <button onClick={() => void pay()} disabled={busy || customInvalid} className="topup-pay mt-5 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold text-white disabled:opacity-40">
+              {busy
+                ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />Opening secure checkout…</>
+                : <><Icon name="lock" className="text-[18px]" />Pay <span className="tabular-nums">{inr(shownTotal)}</span></>}
+            </button>
+            <p className="mt-2.5 flex items-center justify-center gap-1 text-[11px] text-text-muted"><Icon name="verified_user" className="text-[14px]" />Secure payment by Razorpay · GST invoice included</p>
+          </div>
         )}
       </div>
     </div>
