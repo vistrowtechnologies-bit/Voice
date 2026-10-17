@@ -86,10 +86,25 @@ class ArthaLeadsAgentRouteTests(unittest.TestCase):
         result = self.lead(self.agent)
         self.assertEqual((result["queued"], result["reason"]), (False, "agent_not_live"))
 
-    def test_agent_without_a_caller_number_is_not_called(self):
+    def test_agent_without_a_caller_number_is_not_called_when_the_number_is_ambiguous(self):
+        # Two numbers in the workspace, neither the agent's: which one to call
+        # from is ambiguous, so no call.
         self.sql("UPDATE phone_numbers SET agent_id = NULL WHERE number = ?", (self.number,))
+        other = f"+9181{int.from_bytes(os.urandom(4), 'big') % 10**8:08d}"
+        self.sql("INSERT INTO phone_numbers (account_id, number, status) VALUES (?, ?, 'active')", (self.aid, other))
         result = self.lead(self.agent)
         self.assertEqual((result["queued"], result["reason"]), (False, "agent_has_no_caller_number"))
+
+    def test_second_agent_calls_from_the_workspaces_only_number(self):
+        # Live 17 Oct: a WhatsApp agent with no number of its own was refused
+        # although the workspace has exactly one number (owned by another agent).
+        kb = self.sql("SELECT kb_id FROM agents WHERE id = ?", (self.agent,))["kb_id"]
+        wa = self.sql("INSERT INTO agents (account_id, name, status, kb_id) VALUES (?, 'Siya WhatsApp', 'live', ?) RETURNING id",
+                      (self.aid, kb))["id"]
+        result = self.lead(wa, source="WhatsApp")
+        self.assertTrue(result["queued"], result)
+        campaign = self.sql("SELECT agent_id, from_number FROM campaigns WHERE id = ?", (result["campaign_id"],))
+        self.assertEqual((campaign["agent_id"], campaign["from_number"]), (wa, self.number))
 
     def test_voice_route_number_is_used_when_the_agent_has_none_assigned(self):
         self.sql("UPDATE phone_numbers SET agent_id = NULL WHERE number = ?", (self.number,))
