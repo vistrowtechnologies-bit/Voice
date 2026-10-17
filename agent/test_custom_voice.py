@@ -162,3 +162,137 @@ class CloneConfigShape(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+ROMAN_HI = "Namaste ji, main Abhi bol raha hoon. Bataiye, main aapki kya madad kar sakta hoon?"
+NATIVE_HI = "नमस्ते जी, मैं अभि बोल रहा हूँ। बताइए, मैं आपकी क्या मदद कर सकता हूँ?"
+
+
+class NativeScriptDecision(unittest.TestCase):
+    """Owner's test 17 Oct: a romanized welcome line in a clone sounded English."""
+
+    def test_romanized_indic_line_is_converted(self):
+        self.assertTrue(custom_voice.needs_native_script(ROMAN_HI, "hi-IN"))
+        self.assertTrue(custom_voice.needs_native_script("Namaskar, tumhala kay madat havi aahe?", "mr-IN"))
+
+    def test_left_alone(self):
+        for text, lang in [
+            (NATIVE_HI, "hi-IN"),                                           # already native
+            ("Hello, thank you for calling. How can I help you today?", "hi-IN"),  # English on purpose
+            (ROMAN_HI, "en-IN"),                                            # English agent
+            (ROMAN_HI, "as-IN"),                                            # Sarvam cannot transliterate Assamese
+            ("", "hi-IN"),
+            ("123 456", "hi-IN"),
+        ]:
+            self.assertFalse(custom_voice.needs_native_script(text, lang), (text, lang))
+
+
+class FakeResponse:
+    def __init__(self, status, body):
+        self.status, self._body = status, body
+
+    async def json(self):
+        return self._body
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+
+class FakeSession:
+    calls = []
+    reply = (200, {"transliterated_text": NATIVE_HI})
+    raise_exc = None
+
+    def __init__(self, *a, **k):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    def post(self, url, json=None, headers=None):
+        FakeSession.calls.append((url, json, headers))
+        if FakeSession.raise_exc:
+            raise FakeSession.raise_exc
+        return FakeResponse(*FakeSession.reply)
+
+
+class NativeScriptCall(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        custom_voice._NATIVE_CACHE.clear()
+        FakeSession.calls, FakeSession.reply, FakeSession.raise_exc = [], (200, {"transliterated_text": NATIVE_HI}), None
+        import aiohttp
+        self.patch = patch.object(aiohttp, "ClientSession", FakeSession)
+        self.patch.start()
+
+    def tearDown(self):
+        self.patch.stop()
+
+    async def test_converts_once_then_caches(self):
+        self.assertEqual(await custom_voice.native_script(ROMAN_HI, "hi-IN", api_key="k"), NATIVE_HI)
+        self.assertEqual(await custom_voice.native_script(ROMAN_HI, "hi-IN", api_key="k"), NATIVE_HI)
+        self.assertEqual(len(FakeSession.calls), 1)
+        url, body, headers = FakeSession.calls[0]
+        self.assertEqual(url, custom_voice.TRANSLITERATE_URL)
+        self.assertEqual(body, {"input": ROMAN_HI, "source_language_code": "en-IN", "target_language_code": "hi-IN"})
+        self.assertEqual(headers, {"api-subscription-key": "k"})
+
+    async def test_any_failure_keeps_the_typed_line(self):
+        FakeSession.reply = (429, {})
+        self.assertEqual(await custom_voice.native_script(ROMAN_HI, "hi-IN", api_key="k"), ROMAN_HI)
+        FakeSession.reply = (200, {"transliterated_text": ""})
+        self.assertEqual(await custom_voice.native_script(ROMAN_HI, "hi-IN", api_key="k"), ROMAN_HI)
+        FakeSession.reply, FakeSession.raise_exc = (200, {}), TimeoutError()
+        self.assertEqual(await custom_voice.native_script(ROMAN_HI, "hi-IN", api_key="k"), ROMAN_HI)
+        self.assertEqual(await custom_voice.native_script(ROMAN_HI, "hi-IN", api_key=""), ROMAN_HI)
+        self.assertEqual(custom_voice._NATIVE_CACHE, {})
+
+    async def test_not_needed_makes_no_request(self):
+        self.assertEqual(await custom_voice.native_script(NATIVE_HI, "hi-IN", api_key="k"), NATIVE_HI)
+        self.assertEqual(FakeSession.calls, [])
+
+
+class NativeWelcomeOnAgent(unittest.IsolatedAsyncioTestCase):
+    """The real agent swaps its welcome line in the background, disclosure kept."""
+
+    def build(self, welcome):
+        import main
+        base = {"id": 1, "account_id": 7, "name": "T", "model": "gpt-4.1-mini", "voice": VALUE,
+                "language": "hi-IN", "tone": "balanced", "system_prompt": "x", "welcome_message": welcome,
+                "enabled_functions": "end_call", "_compliance_config": {}}
+        with patch.object(main.db, "get_custom_voice", lookup_for(READY)), \
+             patch.object(custom_voice, "acquire_clone_slot", return_value=True), \
+             patch.dict(os.environ, {"ELEVEN_API_KEY": "e", "SARVAM_API_KEY": "s"}), \
+             patch.object(main, "_build_tts", return_value=(None, "sarvam")):
+            return main.RealEstateAgent(base, call_type="phone")
+
+    async def test_romanized_welcome_becomes_native_with_disclosure(self):
+        async def fake(text, language, **k):
+            return NATIVE_HI if text == ROMAN_HI else text
+        with patch.object(custom_voice, "native_script", fake):
+            agent = self.build(ROMAN_HI)
+            # typed line until the swap lands
+            self.assertEqual(agent._welcome_message, cd.with_disclosure(ROMAN_HI, agent._recording_disclosure, force=True))
+            await agent._native_welcome_task
+        self.assertEqual(agent._welcome_message,
+                         cd.with_disclosure(NATIVE_HI, agent._recording_disclosure, force=True))
+
+    async def test_native_or_english_welcome_untouched(self):
+        for welcome in (NATIVE_HI, "Hello, thank you for calling. How can I help you today?"):
+            agent = self.build(welcome)
+            self.assertFalse(hasattr(agent, "_native_welcome_task"), welcome)
+            self.assertEqual(agent._welcome_message, cd.with_disclosure(welcome, agent._recording_disclosure, force=True))
+
+    async def test_cleared_welcome_is_not_overwritten(self):
+        async def fake(text, language, **k):
+            return NATIVE_HI
+        with patch.object(custom_voice, "native_script", fake):
+            agent = self.build(ROMAN_HI)
+            agent._welcome_message = ""  # e.g. a follow-up opening replaced it
+            await agent._native_welcome_task
+        self.assertEqual(agent._welcome_message, "")
