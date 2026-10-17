@@ -608,7 +608,29 @@ export interface Integration {
   newConnectionsUnavailable?: boolean
 }
 
+/** One plan as the server sells it (agent/plan_policy.py public_plans). Prices INR,
+ * GST extra; minutes are standard minutes (1 credit = 1 standard minute). */
+export interface PublicPlan {
+  plan: 'starter' | 'growth' | 'scale'
+  monthlyPrice: number
+  annualPrice: number
+  monthlyMinutes: number
+  annualMinutesPerMonth: number
+  annualMinutesPerYear: number
+  overagePerMinute: number
+  clonedVoicesIncluded: number | null
+  agents: number
+  concurrentCalls: number
+  knowledgeBases: number
+  storageGb: number
+}
+
 export interface BillingSummary {
+  // Minute pricing (17 Oct): "standard_minute" = 1 credit is 1 standard minute.
+  creditUnit?: string
+  liveMinutesPerMinute?: number
+  planAnnualPriceInr?: number | null
+  plans?: PublicPlan[]
   creditsTotal: number
   creditsUsed: number
   creditsRemaining: number

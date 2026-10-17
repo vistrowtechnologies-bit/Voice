@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { fetchBillingProfile, invoiceDocumentUrl, saveBillingProfile, startTopup, verifyTopupPayment, type BillingProfile } from '../lib/api'
 import { loadRazorpayCheckout } from '../lib/razorpay'
-import { PLANS, TOPUP_MAX_CREDITS, TOPUP_MIN_CREDITS, TOPUP_PACKS } from '../lib/plans'
+import { LIVE_MODEL_MULTIPLIER, PLANS, TOPUP_MAX_CREDITS, TOPUP_MIN_CREDITS, TOPUP_PACKS } from '../lib/plans'
 import type { BillingSummary, TopupResult } from '../lib/types'
 import { Icon } from './Icon'
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-/** Buy extra credits: a pack (with bonus) or a custom amount, priced at the plan's own
- * per-credit rate + GST, paid through Razorpay Checkout, verified server-side, then the
+/** Buy extra minutes (1 credit = 1 standard minute): a pack (with bonus) or a custom
+ * amount, priced at the plan's own per-minute rate + GST, paid through Razorpay Checkout, verified server-side, then the
  * new balance and the invoice link. Billing details are asked for inline the first time. */
 export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSummary; onClose: () => void; onSuccess: () => void }) {
   const [choice, setChoice] = useState<string>('500')
@@ -33,7 +33,8 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
   const gst = Math.round(base * 18) / 100
   const customInvalid = !pack && (!Number.isInteger(custom) || custom < TOPUP_MIN_CREDITS || custom > TOPUP_MAX_CREDITS)
   const needsDetails = profile !== null && !profile.legalName
-  const minutes = (n: number, channel: 'phone' | 'widget') => Math.round(n / (billing.creditRates[channel] || 1))
+  // A Vistrow Live minute uses LIVE_MODEL_MULTIPLIER standard minutes.
+  const liveMinutes = (n: number) => Math.floor(n / LIVE_MODEL_MULTIPLIER.default)
 
   async function pay() {
     setError('')
@@ -48,7 +49,7 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
         key: session.razorpayKeyId,
         order_id: session.orderId,
         name: 'Vistrow Voice',
-        description: `${session.credits} credits${session.bonusCredits ? ` + ${session.bonusCredits} bonus` : ''}`,
+        description: `${session.credits} minutes${session.bonusCredits ? ` + ${session.bonusCredits} bonus` : ''}`,
         image: 'https://app.vistrowvoice.com/apple-touch-icon.png',
         prefill: session.prefill,
         theme: { color: '#a855f7' },
@@ -60,7 +61,7 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
             window.dispatchEvent(new CustomEvent('vv:billing-changed'))
             onSuccess()
           } catch (e) {
-            setError(e instanceof Error ? e.message : 'Payment went through but could not be confirmed. Your credits will be added shortly.')
+            setError(e instanceof Error ? e.message : 'Payment went through but could not be confirmed. Your minutes will be added shortly.')
           } finally {
             setBusy(false)
           }
@@ -77,14 +78,14 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
   const input = 'w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={busy ? undefined : onClose} role="dialog" aria-modal="true" aria-label="Buy credits">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={busy ? undefined : onClose} role="dialog" aria-modal="true" aria-label="Buy minutes">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-surface p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {result ? (
           <>
-            <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="check_circle" className="text-[22px] text-cyan" />Credits added</h2>
+            <h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="check_circle" className="text-[22px] text-cyan" />Minutes added</h2>
             <p className="mt-2 text-sm text-text-muted">
-              {result.alreadyApplied ? 'This payment was already applied.' : `${result.credits ?? credits + bonus} credits are in your workspace now.`}{' '}
-              Balance: <b className="text-text">{result.creditsRemaining.toLocaleString('en-IN')} credits</b>.
+              {result.alreadyApplied ? 'This payment was already applied.' : `${result.credits ?? credits + bonus} minutes are in your workspace now.`}{' '}
+              Balance: <b className="text-text">{result.creditsRemaining.toLocaleString('en-IN')} minutes</b>.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
               <a href={invoiceDocumentUrl(result.invoiceId, true)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-bold text-primary hover:bg-primary/10">
@@ -95,8 +96,8 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
           </>
         ) : (
           <>
-            <h2 className="text-lg font-bold">Buy credits</h2>
-            <p className="mt-1 text-xs text-text-muted">{inr(perCredit)} per credit on your plan · 1 credit ≈ 1 standard minute. Credits apply right away.</p>
+            <h2 className="text-lg font-bold">Buy minutes</h2>
+            <p className="mt-1 text-xs text-text-muted">{inr(perCredit)} per minute on your plan · a Vistrow Live minute uses {LIVE_MODEL_MULTIPLIER.default}. Minutes apply right away.</p>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
               {TOPUP_PACKS.map((p) => {
@@ -112,9 +113,9 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
                   >
                     {b > 0 && <span className="absolute right-2 top-2 rounded-full bg-cyan/15 px-2 py-0.5 text-[10px] font-bold text-cyan">+{b} bonus</span>}
                     <span className="text-lg font-bold">{p.credits.toLocaleString('en-IN')}</span>
-                    <span className="text-[11px] text-text-muted">credits</span>
+                    <span className="text-[11px] text-text-muted">minutes</span>
                     <span className="mt-2 text-sm font-semibold">{inr(total)} <span className="text-[10px] font-normal text-text-muted">incl. GST</span></span>
-                    <span className="text-[10px] text-text-muted">≈ {minutes(p.credits + b, 'phone')} min phone · {minutes(p.credits + b, 'widget')} min widget</span>
+                    <span className="text-[10px] text-text-muted">≈ {liveMinutes(p.credits + b).toLocaleString('en-IN')} Vistrow Live min</span>
                   </button>
                 )
               })}
@@ -124,7 +125,7 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
                 className={`col-span-2 flex items-center justify-between rounded-xl border bg-surface-high px-3 py-2 text-left ${choice === 'custom' ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/60'}`}
               >
                 <span className="text-sm font-semibold">Custom amount</span>
-                <span className="text-[11px] text-text-muted">{TOPUP_MIN_CREDITS}–{TOPUP_MAX_CREDITS.toLocaleString('en-IN')} credits</span>
+                <span className="text-[11px] text-text-muted">{TOPUP_MIN_CREDITS}–{TOPUP_MAX_CREDITS.toLocaleString('en-IN')} minutes</span>
               </button>
               {choice === 'custom' && (
                 <div className="col-span-2">
@@ -136,7 +137,7 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
                     value={custom}
                     onChange={(e) => setCustom(Number(e.target.value))}
                     className={input}
-                    aria-label="Credits"
+                    aria-label="Minutes"
                   />
                   {customInvalid && <p className="mt-1 text-xs text-destructive">Enter a whole number between {TOPUP_MIN_CREDITS} and {TOPUP_MAX_CREDITS.toLocaleString('en-IN')}.</p>}
                 </div>
@@ -144,8 +145,8 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
             </div>
 
             <div className="mt-4 flex flex-col gap-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-xs">
-              <div className="flex justify-between text-text-muted"><span>{credits.toLocaleString('en-IN')} credits × {inr(perCredit)}</span><span>{inr(base)}</span></div>
-              {bonus > 0 && <div className="flex justify-between text-cyan"><span>Bonus credits</span><span>+{bonus} free</span></div>}
+              <div className="flex justify-between text-text-muted"><span>{credits.toLocaleString('en-IN')} minutes × {inr(perCredit)}</span><span>{inr(base)}</span></div>
+              {bonus > 0 && <div className="flex justify-between text-cyan"><span>Bonus minutes</span><span>+{bonus} free</span></div>}
               <div className="flex justify-between text-text-muted"><span>GST (18%)</span><span>{inr(gst)}</span></div>
               <div className="flex justify-between border-t border-border pt-1 font-bold text-text"><span>Total</span><span>{inr(base + gst)}</span></div>
             </div>
