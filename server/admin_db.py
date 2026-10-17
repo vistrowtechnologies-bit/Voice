@@ -552,7 +552,7 @@ def account_detail(account_id: int) -> dict | None:
         users = [
             dict(r)
             for r in conn.execute(
-                "SELECT id, name, email, role, auth_provider, last_login_at, created_at FROM users WHERE account_id = ? ORDER BY id",
+                "SELECT id, name, email, role, auth_provider, last_login_at, created_at, mfa_enabled_at FROM users WHERE account_id = ? ORDER BY id",
                 (account_id,),
             ).fetchall()
         ]
@@ -616,6 +616,7 @@ def account_detail(account_id: int) -> dict | None:
         billing = calls_db.billing_summary(account_id)
         copilot_actions = calls_db.list_copilot_actions(account_id, limit=10)
         health = _account_health(conn, acct, billing, users, agents, numbers, integrations)
+        onboarding_agent_info = _onboarding_agent(conn, acct)
         sub_plan = conn.execute(f"SELECT {_ACTIVE_SUB_PLAN} p FROM accounts a WHERE a.id = ?", (account_id,)).fetchone()["p"]
         return {
             "health": health,
@@ -632,9 +633,61 @@ def account_detail(account_id: int) -> dict | None:
             "audit": audit,
             "invoices": invoices,
             "copilotActions": copilot_actions,
+            "onboardingAgent": onboarding_agent_info,
         }
     finally:
         conn.close()
+
+
+def _onboarding_agent(conn, acct: dict) -> dict | None:
+    """The starter agent onboarding set up, and which of those settings the
+    customer has changed since. The expected values are rebuilt from the
+    stored answers (onboarding_agent is deterministic), so nothing extra is
+    stored per account beyond which agent it was."""
+    import calls_db
+    import onboarding_agent
+
+    marker = conn.execute(
+        "SELECT value FROM settings WHERE account_id = ? AND key = ?", (acct["id"], calls_db.ONBOARDING_AGENT_SETTING)
+    ).fetchone()
+    if not marker or not str(marker["value"]).isdigit():
+        return None
+    row = conn.execute(
+        "SELECT id, name, status, language, welcome_message, system_prompt, post_call_fields, updated_at "
+        "FROM agents WHERE id = ? AND account_id = ?",
+        (int(marker["value"]), acct["id"]),
+    ).fetchone()
+    if row is None:
+        return {"deleted": True}
+    row = dict(row)
+    try:
+        fields = json.loads(row.get("post_call_fields") or "[]")
+    except ValueError:
+        fields = []
+    if not isinstance(fields, list):
+        fields = []
+    expected = onboarding_agent.agent_from_profile(acct.get("onboarding_profile") or {}, acct.get("name") or "")
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "status": row["status"],
+        "language": row["language"],
+        "welcomeMessage": row.get("welcome_message") or "",
+        "postCallFields": [f.get("key") for f in fields if isinstance(f, dict)],
+        "updatedAt": row.get("updated_at"),
+        # What onboarding set, shown next to the current value once changed.
+        "setUp": {
+            "language": expected["language"],
+            "welcomeMessage": expected["welcomeMessage"],
+            "postCallFields": [f["key"] for f in expected["postCallFields"]],
+        },
+        "changed": {
+            "instructions": (row.get("system_prompt") or "") != expected["systemPrompt"],
+            "language": row["language"] != expected["language"],
+            "welcome": (row.get("welcome_message") or "") != expected["welcomeMessage"],
+            "fields": fields != expected["postCallFields"],
+        },
+    }
 
 
 def _account_health(conn, acct: dict, billing: dict, users: list, agents: list, numbers: list, integrations: list) -> dict:

@@ -189,8 +189,12 @@ export const apiUpdateAccount = (data: { name?: string; country?: string }) =>
   authFetch<{ user: AuthUser }>('/account', data, 'PATCH')
 export const apiAcceptConsent = (version: string) =>
   authFetch<{ user: AuthUser }>('/onboarding/consent', { version, ageConfirmed: true })
-export const apiCompleteOnboarding = (data: { profile?: Record<string, string | string[]>; attribution?: Record<string, string> } = {}) =>
+type OnboardingProfile = Record<string, string | string[]>
+export const apiCompleteOnboarding = (data: { profile?: OnboardingProfile; company?: string; attribution?: Record<string, string> } = {}) =>
   authFetch<{ user: AuthUser }>('/onboarding/complete', data)
+/** Sets the starter agent up from the answers (a no-op once onboarding is done). */
+export const apiSetupOnboardingAgent = (data: { profile: OnboardingProfile; company: string }) =>
+  authFetch<{ agentId: number | null }>('/onboarding/agent', data)
 export const apiCompleteTour = () => authFetch<{ user: AuthUser }>('/tour/complete', {})
 
 export interface AuthConfig {

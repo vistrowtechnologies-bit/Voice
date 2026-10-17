@@ -6,6 +6,7 @@ import {
   adminImpersonate,
   rememberSupportReturn,
   adminResetPassword,
+  adminResetTwoStep,
   adminSetCredits,
   adminSetNotes,
   adminSetPlan,
@@ -54,6 +55,7 @@ export function AdminAccountDetail() {
       return next
     })
   const [modal, setModal] = useState<null | 'credits' | 'plan' | 'status' | 'reset'>(null)
+  const [twoStepUser, setTwoStepUser] = useState<Detail['users'][number] | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [impersonating, setImpersonating] = useState(false)
@@ -177,7 +179,7 @@ export function AdminAccountDetail() {
       <div className="mt-4">
         {tab === 'signup' && <SignupTab d={d} />}
         {tab === 'health' && <HealthTab d={d} />}
-        {tab === 'users' && <UsersTab d={d} />}
+        {tab === 'users' && <UsersTab d={d} onResetTwoStep={setTwoStepUser} />}
         {tab === 'agents' && <AgentsTab d={d} />}
         {tab === 'calls' && <CallsTab d={d} navigate={navigate} />}
         {tab === 'knowledge' && <KnowledgeTab d={d} />}
@@ -237,6 +239,21 @@ export function AdminAccountDetail() {
             setD(updated)
             setModal(null)
             setBanner(suspended ? 'Account reactivated.' : 'Account suspended.')
+          }}
+        />
+      )}
+      {twoStepUser && (
+        <ReasonModal
+          title={`Reset two-step login for ${twoStepUser.name || twoStepUser.email}`}
+          danger
+          helperText={`Only for someone who lost both their authenticator app and their recovery codes. Check it's really them first (from ${twoStepUser.email}, or on a call). They can then sign in with just their password, and they get an email saying it was reset.`}
+          confirmLabel="Reset two-step login"
+          onClose={() => setTwoStepUser(null)}
+          onConfirm={async (_v, reason) => {
+            const updated = await adminResetTwoStep(accountId, twoStepUser.id, reason)
+            setD(updated)
+            setBanner(`Two-step login reset for ${twoStepUser.email}.`)
+            setTwoStepUser(null)
           }}
         />
       )}
@@ -344,7 +361,114 @@ function SignupTab({ d }: { d: Detail }) {
           <p className="px-4 py-3 text-sm text-text-muted">No answers yet (onboarded before the questions existed, or not finished).</p>
         )}
       </AdminCard>
+      <OnboardingAgentCard d={d} />
     </div>
+  )
+}
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  'hi-IN': 'Hindi', 'en-IN': 'English', 'mr-IN': 'Marathi', 'ta-IN': 'Tamil', 'te-IN': 'Telugu', 'kn-IN': 'Kannada',
+  'ml-IN': 'Malayalam', 'gu-IN': 'Gujarati', 'bn-IN': 'Bengali', 'pa-IN': 'Punjabi', 'od-IN': 'Odia',
+}
+
+/** Which onboarding answer became which setting on the starter agent, and
+ *  whether the customer has changed that setting since. */
+function OnboardingAgentCard({ d }: { d: Detail }) {
+  const info = d.onboardingAgent
+  const profile = d.account.onboarding_profile ?? {}
+  const list = (v: string | string[] | undefined) => (Array.isArray(v) ? v.join(', ') : v || '-')
+  const header = <div className="border-b border-border px-4 py-3 text-sm font-bold">First agent, set up from onboarding</div>
+  if (!info || info.deleted) {
+    return (
+      <AdminCard className="overflow-hidden lg:col-span-2">
+        {header}
+        <p className="px-4 py-3 text-sm text-text-muted">
+          {info?.deleted
+            ? 'Onboarding set up a starter agent, but the customer has since deleted it.'
+            : 'Not set up: onboarded before this existed, onboarding not finished, or the starter agent was already customised.'}
+        </p>
+      </AdminCard>
+    )
+  }
+  const state = (changed: boolean) =>
+    changed ? <Pill tone="warning">Changed by customer</Pill> : <Pill tone="active">As set up</Pill>
+  const rows: { answer: string; from: string; setting: string; value: string; was?: string; changed: boolean }[] = [
+    {
+      answer: 'Company, industry, goals',
+      from: [d.account.name, list(profile.industry === 'Other' ? profile.industryOther : profile.industry), list(profile.useCases)].join(' · '),
+      setting: 'Instructions',
+      value: 'Role, goals, call flow, details to collect, tone, never-do rules',
+      changed: info.changed.instructions,
+    },
+    {
+      answer: 'Caller languages',
+      from: list(profile.languages),
+      setting: 'Language',
+      value: LANGUAGE_NAMES[info.language] ?? info.language,
+      was: LANGUAGE_NAMES[info.setUp.language] ?? info.setUp.language,
+      changed: info.changed.language,
+    },
+    {
+      answer: 'Company, language',
+      from: d.account.name,
+      setting: 'Welcome line',
+      value: info.welcomeMessage || 'Default greeting',
+      was: info.setUp.welcomeMessage || 'Default greeting (outbound only, or a language without a reviewed line)',
+      changed: info.changed.welcome,
+    },
+    {
+      answer: 'Industry, goals',
+      from: [list(profile.industry), list(profile.useCases)].join(' · '),
+      setting: 'After-call notes',
+      value: info.postCallFields.join(', ') || '-',
+      was: info.setUp.postCallFields.join(', ') || '-',
+      changed: info.changed.fields,
+    },
+  ]
+  return (
+    <AdminCard className="overflow-hidden lg:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <span className="text-sm font-bold">First agent, set up from onboarding</span>
+        <span className="text-xs text-text-muted">
+          {info.name} · #{info.id} · {info.status}
+          {info.updatedAt ? ` · last saved ${fmtDateTime(info.updatedAt)}` : ''}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
+              <th className="px-4 py-2.5 font-semibold">Onboarding answer</th>
+              <th className="px-4 py-2.5 font-semibold">Agent setting</th>
+              <th className="px-4 py-2.5 font-semibold">Value</th>
+              <th className="px-4 py-2.5 font-semibold">Now</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.setting} className="border-b border-border/60 align-top last:border-0">
+                <td className="px-4 py-3">
+                  <div className="font-semibold">{r.answer}</div>
+                  <div className="text-xs text-text-muted">{r.from}</div>
+                </td>
+                <td className="px-4 py-3 font-semibold">{r.setting}</td>
+                <td className="max-w-md px-4 py-3 text-text-muted">
+                  {r.changed && r.was ? (
+                    <>
+                      <div><span className="font-semibold text-text">Now:</span> {r.value}</div>
+                      <div className="mt-0.5 text-xs">Onboarding set: {r.was}</div>
+                    </>
+                  ) : (
+                    r.changed ? r.value : (r.was ?? r.value)
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">{state(r.changed)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </AdminCard>
   )
 }
 
@@ -460,9 +584,9 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function UsersTab({ d }: { d: Detail }) {
+function UsersTab({ d, onResetTwoStep }: { d: Detail; onResetTwoStep: (u: Detail['users'][number]) => void }) {
   return (
-    <TabTable head={['User', 'Role', 'Auth', 'Last login', 'Joined']} empty={d.users.length === 0}>
+    <TabTable head={['User', 'Role', 'Auth', 'Two-step login', 'Last login', 'Joined']} empty={d.users.length === 0}>
       {d.users.map((u) => (
         <tr key={u.id} className="border-b border-border/60 last:border-0">
           <td className="px-4 py-3">
@@ -473,6 +597,22 @@ function UsersTab({ d }: { d: Detail }) {
             <Pill tone={u.role === 'owner' ? 'primary' : 'neutral'}>{u.role}</Pill>
           </td>
           <td className="px-4 py-3 capitalize text-text-muted">{u.auth_provider || 'password'}</td>
+          <td className="px-4 py-3">
+            {u.mfa_enabled_at ? (
+              <div className="flex items-center gap-2">
+                <Pill tone="active">On</Pill>
+                <button
+                  type="button"
+                  onClick={() => onResetTwoStep(u)}
+                  className="bg-transparent text-xs font-semibold text-destructive hover:underline"
+                >
+                  Reset
+                </button>
+              </div>
+            ) : (
+              <span className="text-text-muted">Off</span>
+            )}
+          </td>
           <td className="px-4 py-3 text-text-muted">{timeAgo(u.last_login_at)}</td>
           <td className="px-4 py-3 text-text-muted">{fmtDate(u.created_at)}</td>
         </tr>
@@ -713,6 +853,7 @@ function ReasonModal({
           </button>
         </div>
         <div className="flex flex-col gap-3">
+          {!field && helperText && <p className="text-xs text-text-muted">{helperText}</p>}
           {field && (
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-text-muted">{field.label}</span>

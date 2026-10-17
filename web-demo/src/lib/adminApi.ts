@@ -173,8 +173,26 @@ export interface AdminAccountDetail {
     auth_provider: string | null
     last_login_at: string | null
     created_at: string
+    /** Set while two-step login is on for this user. */
+    mfa_enabled_at?: string | null
   }[]
   agents: { id: number; name: string; status: string; voice: string; model: string; kb_id: number | null; updated_at: string }[]
+  /** The starter agent onboarding set up from the answers; null if it never ran. */
+  onboardingAgent?:
+    | { deleted: true }
+    | {
+        deleted?: undefined
+        id: number
+        name: string
+        status: string
+        language: string
+        welcomeMessage: string
+        postCallFields: string[]
+        updatedAt: string | null
+        setUp: { language: string; welcomeMessage: string; postCallFields: string[] }
+        changed: { instructions: boolean; language: boolean; welcome: boolean; fields: boolean }
+      }
+    | null
   knowledgeBases: { id: number; name: string; strict: number; sources: number }[]
   numbers: { id: number; number: string; label: string; agent_id: number | null; status: string }[]
   integrations: { key: string; name: string; category: string; status: string }[]
@@ -543,6 +561,8 @@ export const adminSetPlan = (id: number, plan: string, reason: string) =>
 export const adminSetStatus = (id: number, status: string, reason: string) =>
   apost<AdminAccountDetail>(`/accounts/${id}/status`, { status, reason })
 export const adminSetNotes = (id: number, notes: string) => apost<AdminAccountDetail>(`/accounts/${id}/notes`, { notes })
+export const adminResetTwoStep = (id: number, userId: number, reason: string) =>
+  apost<AdminAccountDetail>(`/accounts/${id}/users/${userId}/reset-two-step`, { reason })
 export const adminResetPassword = (id: number) => apost<{ ok: boolean; emailSent: boolean; resetLink: string }>(`/accounts/${id}/reset-password`)
 export const adminImpersonate = (id: number) => apost<{ ok: boolean }>(`/impersonate/${id}`)
 export const adminExitImpersonation = () => apost<{ ok: boolean }>('/impersonate/exit')

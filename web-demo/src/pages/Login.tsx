@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { BRAND } from '../lib/brand'
+import { SUPPORT_EMAIL } from '../lib/support'
 import { useAuth } from '../lib/auth'
 import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
 
@@ -74,7 +75,16 @@ export function Login() {
             maxLength={12}
             error={!!error}
           />
-          <p className="-mt-2 text-xs text-text-muted">No phone? Type one of your recovery codes instead (like abcd-efgh).</p>
+          <p className="-mt-2 text-xs text-text-muted">
+            No phone? Type one of your recovery codes instead (like abcd-efgh). Lost both?{' '}
+            <a
+              href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Lost access to two-step login')}`}
+              className="font-semibold text-primary hover:underline"
+            >
+              Email {SUPPORT_EMAIL}
+            </a>{' '}
+            from your account email and we'll reset it after checking it's you.
+          </p>
           <button
             type="submit"
             disabled={busy || code.trim().length < 6}

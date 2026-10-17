@@ -20,6 +20,8 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16): branch `claude/contact-arthaleads-details` (PR open, NOT merged): contact page Lead details card hides ArthaLeads internal keys/tags, shows "From ArthaLeads" line + link; display only, web-demo only, Vercel deploy only.
 - Claude (2026-10-16): branch `claude/voice-clone-backend` (committed, NOT pushed/merged): "Clone your voice" backend (server/custom_voices.py, /voices/custom API, Sarvam-only clones, first clone free / 25 credits after, billed like Bharat) + call runtime (agent/custom_voice.py, agent/sarvam_clone_tts.py); stock ElevenLabs voices owner-only. UI is `claude/voice-clone-ui`. Needs Railway + BOTH LiveKit workers + orchestrator after merge. See message below.
 - Claude (2026-10-16): branch `claude/voice-clone-ui` (NOT pushed, NOT merged): dashboard half of "Clone your voice" (Voices page section + 5-step dialog, in-browser recorder/upload, consent, Your voices list, cloned voices in agent pickers). Coded against the /voices/custom contract incl. firstCloneFree; tested only against a local mock API. web-demo only, Vercel deploy only, must ship with the server half.
+- Claude (2026-10-16): branch `claude/llm-token-diet` (committed locally, NOT pushed/PR'd/deployed): LLM request harness + history window, contact notes moved to the prompt tail, warm-up sends tools, orchestrator VOICE_STYLE_PROMPT before per-call text. Needs both workers deployed after merge.
+- Claude (2026-10-16, updated 22:55 IST): branch `claude/lead-details-brochure` (local commits 6677701e + 93de8a7c, NOT pushed yet, owner checks ArthaLeads staging first): standard post-call lead facts stored and sent to ArthaLeads with summary/key_points; send_brochure tool. Function-level claim on issue #2 (comment 6220772439), overlap with prompt-cuts/tool-guardrails cleared by that session. Per [RULES] I stop at PR-ready; the SEO session is the deployer (combined release, then `lk agent deploy` on BOTH workers + Railway for one server line). Dependency: ArthaLeads side is on arthaleads staging bc0446c and should reach ArthaLeads main with or before this deploy.
 
 ## Takeover checklist
 
@@ -843,6 +845,11 @@ At the owner's request; same branch and same PR.
 
 **Deploy:** the Vercel build carries the site changes. `help_articles.py` also feeds the dashboard help chat on the server side, so Railway picks up the new wording on its next deploy.
 
+### Claude — 2026-10-15 — onboarding answers set up the first agent (branch `claude/onboarding-first-agent`, PR open, NOT merged)
+
+Changes: new `server/onboarding_agent.py` builds the starter agent's instructions, language, welcome line (Hindi/English only) and after-call fields from the onboarding answers, deterministically (no model call). `calls_db.apply_onboarding_agent` writes them only before onboarding is finished and only onto the untouched starter "Artha" (or the agent a previous run set up; settings key `onboarding_agent_id`). New `POST /onboarding/agent` (finish step, so "Talk to Artha" is tailored); `/onboarding/complete` applies it once more. Admin account "Signup & onboarding" tab gets a "First agent, set up from onboarding" table: answer → setting → value → "As set up" / "Changed by customer" (rebuilt from the stored answers).
+
+Verified: 14 server tests (`test_onboarding_agent.py`, `test_onboarding_profile.py`), tsc, localhost walk-through against a mock that runs the real module (finish step and admin table in both states). Not verified: against a real database; existing accounts are already onboarded so nothing changes for them. Server-only + dashboard: no LiveKit agent deploy needed.
 ### Claude — 2026-10-15 — native sample lines regenerated with Sarvam (PR pending, NOT merged)
 
 Branch `claude/seo-native-samples`. Owner asked for the Indian-language sample conversation lines on public marketing pages to be rewritten by Sarvam so they read as native speech.
@@ -977,6 +984,11 @@ Verified: all 9 new tests fail on origin/main's server files and pass on the bra
 
 Left: merge only after the ArthaLeads side is deployed (otherwise every key save lands as "pending" — harmless, the key is still saved and Send test retries). Then: owner re-saves the key on account 2 and checks ArthaLeads → Auto-call step 1 reads "Connected to Vistrow account 2".
 
+### Claude — 2026-10-16 — admin reset for two-step login (branch `claude/mfa-admin-reset`, PR open, NOT merged)
+
+Changes: new `POST /admin/accounts/{id}/users/{uid}/reset-two-step` (platform owner only; reason required; user must belong to the account and have two-step on; clears it via `calls_db.disable_mfa`, records security event `mfa_reset_by_support`, writes audit `reset_two_step`, emails the user). Admin account Users tab gets a "Two-step login" column with Reset (reason dialog; ReasonModal now shows helper text without a field). Login code step links to support@vistrowvoice.com for users who lost both phone and recovery codes. Customers could already turn it off themselves in Settings → Sign-in & security; the platform owner account can't (required for the admin panel).
+
+Verified: `server/test_admin_reset_two_step.py` (3 tests, route loaded via AST like test_admin_impersonation, no DB), tsc, localhost run against a mock (code screen link; admin Reset dialog → column flips to Off with banner). Not verified: against a real DB or real email send. Server + dashboard only; no agent deploy.
 ### Claude — 2026-10-16 — Widget text chats delivered to integrations (branch `claude/chat-lead-delivery`, PR open, NOT merged)
 
 Problem (verified 2026-10-16): a widget text chat is logged by `calls_db.upsert_widget_chat_call` (call_type `widget`, room `widget-chat-{session}`) but nothing ever delivered it to the account's integrations — voice calls fan out from the agent at call end, a text chat has no agent. A visitor chatted 49 s with name+phone+email and ArthaLeads only got it when the owner pressed "Send to ArthaLeads" 1.5 h later.
@@ -1009,6 +1021,14 @@ Branch `claude/qa-phase1-orchestrator` (PR pending). Files: orchestrator/db.py, 
 - QA false alarm: Testing Lab already forces LiveKit for Lab runs (AgentTestCall.tsx forceLiveKit).
 - Next: merge + Railway deploy of orchestrator, read-only live probe; phase 2 = ignored agent settings + inbound rules on orchestrator.
 
+### Claude — 2026-10-16 — end-to-end test of PR #116 + #131 together (real server, throwaway DB)
+
+Ran main + both branches merged, real `token_api` on a throwaway local Postgres 16 (UTF-8) with a local STARTTLS mail catcher; server copied outside the repo so no production `.env` could load (log confirmed no OpenAI key). Verified in the DB after each step:
+- Onboarding sets up only the untouched starter; re-applies to the same agent when an answer changes; no-op after onboarding (`agentId: null`); owner's agent untouched by the customer's; first-touch attribution not overwritten.
+- Admin mapping table correct; a customer edit (language) flags only that row. Fixed on #116: the row now shows "Now: English / Onboarding set: Hindi" (was ambiguous "Set to").
+- Two-step reset: customer locked out (password alone → mfaRequired); admin Reset clears secret+recovery codes, writes audit `reset_two_step` with reason, security event `mfa_reset_by_support`, email delivered; customer then signs in with password only. Refused correctly: customer session 404, anonymous 401, user of another account 404, already off 400, short reason 400 (and button disabled), unknown account 404 — none changed data.
+- Code screen support link verified (mailto with subject); owner TOTP sign-in still works.
+Both branches had a message-box conflict with main; merged main into each (now MERGEABLE). Not verified: real Resend email delivery, production data.
 ### Claude — 2026-10-16 — QA release (phases 2-4 + billing + auto analysis)
 
 Release branch `claude/qa-release-oct16` merges PRs #125, #134, #135, #136, #137 and `claude/lead-qualified-rule`.
@@ -1060,3 +1080,47 @@ Branch `claude/voice-clone-p1` off `origin/claude/voice-clone-v2` (PR #143 + WIP
 Verified (pgserver throwaway DB, vendors mocked with Sarvam's documented bodies): full server suite 842 passed; it was 808 passed + 9 failed on the WIP. Create now reads data.voice_id + reference_text (the old parser raised "no voice_id" on Sarvam's real 201). Error mapping: 422 asks the customer to re-record, refunded. 401/403/insufficient_quota show "not available right now", refunded, and add an error_events row (ops_alert_worker emails it). 429/5xx/network are retried twice (2 s, 6 s). gender is required (male|female) and sent to Sarvam with style=conversational. All 12 languages are accepted, Assamese included (its preview line still needs a native speaker's review). choose_reference uses a 2x noise floor, a 10 dB dynamic-range check, 10 s of voiced frames overall and in the window, and a 1% clipping limit. clone_allowed_for_account() is used by validate_agent_voice. The Sarvam vendor name is now our row id (vv_<16>). reconcile_once() is hourly, takes one replica's slot in settings, is off unless VOICE_CLONE_RECONCILE=1, and only touches voices whose name matches a row in THIS database.
 Unverified: no live Sarvam call was made. The live script and the reconcile against the real account are still to run.
 Next: owner/parent runs `SARVAM_API_KEY=... python server/scripts/voice_clone_live_check.py ref.wav out.mp3 --gender female`, then phases 2+ (agent/, web-demo).
+### Claude — 2026-10-16 — LLM token diet (branch `claude/llm-token-diet`, local commit, NOT pushed)
+
+Problem: Sarvam pipeline LLM ≈ ₹2.0/call-minute (Oct 1–16 bill: ~12M tokens / ~117 min, ~45% cached).
+
+Measured offline (new `agent/scripts/measure_prompt_tokens.py`, fixtures `agent/scripts/token_fixtures.py`; tiktoken o200k proxy; rebuilds the exact chat-completions request per turn):
+- A request is ~11.5k tokens at turn 1, ~12.4k at turn 10, ~13.4k at turn 20 (custom-prompt tenant, strict 8k KB). Static system prompt + KB + tool schemas ≈ 10.2k of it; per-turn directive ≈ 1.2–1.5k; history only 0.5k (turn 5) to 1.7k (turn 20).
+- Within a call, 86–88% of each request already repeats the previous request byte-for-byte from the start. The billed 45% cache rate is therefore NOT explained by our request order; it is on Sarvam's side, or the bill includes non-call traffic. Hypothesis, unverified.
+- The bill reconciles with ~8 requests per call-minute: harness predicts ₹1.78–2.03/min at 45% cached, ₹1.29–1.45/min if Sarvam cached the whole repeated prefix.
+
+Changed:
+- agent/main.py `_window_history`, `_trimmed_history_note`, `_without_turn_copies`, `RealEstateAgent._llm_request_ctx` (used by llm_node): keep the last 12 caller turns, trimmed in steps of 6 so the request stays append-only between trims; greeting, system messages and every non-log_lead tool call+result kept; a short note says older turns are gone (facts stay in the directive's facts list). Only the request copy is trimmed; history and transcript untouched. `LLM_HISTORY_KEEP_TURNS=0` disables. The directive is now sent once on corrected-fact turns (was twice).
+- agent/main.py entrypoint + `__init__`: contact notes go in the per-call tail (`# This contact`), no longer glued onto system_prompt. Before: every call with lead custom fields made the KB and all platform layers an uncached prefix (shared prefix between two calls 4.4k → 10.4k tokens), and on a built-in-persona agent the notes REPLACED the whole persona.
+- agent/main.py `_warm_llm_prompt_cache`: the warm-up request now carries the agent's tools, like every real request.
+- orchestrator/session.py: VOICE_STYLE_PROMPT placed before caller memory and the date line.
+
+Savings, honestly: tokens −0.7% over a 20-turn call, −4.5% at turn 20. The 50% target is NOT reached without cutting prompt content. Ranked content options (each needs a Testing Lab A/B, none done): per-turn directive 1.2–1.5k tokens uncached on every request (gender block ~600); the two "how you talk" layers 775 + 783; strict-KB rules ~600; the second full request after a log_lead tool call.
+
+Verified: agent and orchestrator suites (counts in the commit message); 11 new tests in agent/test_llm_token_diet.py, 10 fail on origin/main. Not verified: any live call; Sarvam cache behaviour. Next: merge, deploy both workers, then compare per-request promptTokens/cachedTokens in diagnostics and the Sarvam dashboard cache share for a day.
+
+
+### Claude — 2026-10-16 — Lead details parity + brochure request (branch `claude/lead-details-brochure`, LOCAL commit, NOT pushed, no PR)
+
+Problem (verified in code): ArthaLeads' body sent `extracted_data` = property_type/configuration/purpose from log_lead + operator post_call_fields only, so budget, location and timeline never reached ArthaLeads (call 1392: Budget "Not captured"). Agent 17 has no post_call_fields, so no post-call read ran at all for it unless memory was on.
+
+Changed (agent/, one line in server/):
+- New `agent/lead_facts.py`: `parse_inr_budget` (deterministic: lakh/crore/thousand, Hindi/Hinglish/English number words, डेढ़/ढाई/साढ़े/सवा/पौने, ranges, "1 crore 20 lakh"; a bare figure under 10,000 is dropped), mid-call (log_lead) values in the standard shape, `merge_facts` (post-call wins; mid-call fills a key the post-call read left empty; brochure_requested kept only when True), and `extract_lead_facts` — a strict json_schema gpt-5.4-mini pass (same model/settings as `_post_call_analysis`) that returns the caller's budget WORDS, Buy/Invest, ArthaLeads PROPERTY_TYPE/BHK values, configuration, preferred_location, timeline, brochure_requested, summary, key_points. The model never returns numbers.
+- `agent/main.py`: `_call_extracted_data(lead_data, extracted)` replaces `{**_extra_lead_facts(lead_data), **extracted}` at all three sites (calls row insert, CRM payload, post-analysis rewrite), so Vistrow and ArthaLeads hold the same dict. The standard pass runs in parallel with `_post_call_analysis` under the existing 8 s bound (`asyncio.wait`, each keeps its result if the other is slow). CRM lead gains `summary`/`key_points`. `send_brochure` registered for every tenant agent next to log_lead (not for role-play demos). Platform rule 1 now allows the send_brochure wording.
+- `agent/tools.py`: ArthaLeads body adds top-level `summary`/`key_points` (only when present); `crm_outcome.brochure_requested: true` when requested; new `send_brochure(project)` tool: sets lead_data, tells the agent to say "noted, our team will share the brochure with you on WhatsApp shortly" — never "sending now"/"right after this call". `key_points` added to the "details" field group (owner's field choice drops it like summary).
+- `server/integrations_dispatch.py`: same one-tuple field-group change, to keep the agent/server copies identical.
+- Tests: new `agent/test_lead_facts.py` (22); `test_crm_delivery_enrichment.py` source assertion updated to the new merge call.
+
+Verified: agent suite 879 passed / 0 failed (main 857; my export of main showed 854 + 3 that fail only because the export lacked server/); server suite 799 passed (same as main). Throwaway local Postgres only, dropped after. On origin/main main.py/tools.py, 6 of the new tests fail (crm_outcome brochure, 1392 ArthaLeads body, 1392 extracted_data, log_call wiring, send_brochure behaviour + registration); without lead_facts.py the module does not import.
+
+Not verified: the real gpt-5.4-mini output on call 1392's transcript (LLM mocked; the test transcript uses the four quoted caller lines with abridged agent lines; production DB not read); the strict schema against the live API (the shape copies the server's working call_intelligence schema: plain strings, "" for empty); whether the model calls send_brochure at the right times on a live call; ArthaLeads' handling of the new keys (Part B, ArthaLeads repo). `graphify update .` not run (no graphify-out in this worktree).
+
+Left: owner review → push/PR → merge → `lk agent deploy` both workers + Railway (one-line server change). Cost: one extra gpt-5.4-mini request per call where the caller spoke, plus the send_brochure schema on every tenant LLM request (~350 chars).
+
+### Claude — 2026-10-16 22:55 IST — lead details: location/brochure prompt fix + coordination
+
+- Commit 93de8a7c (local): `agent/lead_facts.py` SYSTEM_PROMPT. preferred_location comes only from the caller's own lines, never the project's name or town, and is written in English letters. brochure_requested is also true when the agent offered or promised a brochure and the caller agreed.
+- Evidence: the real gpt-5.4-mini on call 1392's stored transcript plus 3 synthetic transcripts gave 16/16 correct runs (before: location = project town in 2/3 runs, brochure flag 4/5). Unit tests: 31 passed (local placeholder DB).
+- ArthaLeads (other repo): staging bc0446c is pushed. Railway staging and Vercel both report success for that commit. It covers: filling empty lead fields, untouched Apartment/Buy defaults on integration leads, detailsSetByPerson, AI-call status pill, brochure task. ArthaLeads main is not updated.
+- Unverified: staging UI in a browser (no staging login available to the agent), live call behaviour.
+- Next: owner signs in to app-staging so the UI can be checked, then push this branch and open a PR for the deployer.

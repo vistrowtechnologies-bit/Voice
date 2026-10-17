@@ -57,6 +57,7 @@ import widget_avatars
 import widget_chat
 import voice_catalog
 import custom_voices
+import onboarding_agent
 import onboarding_profile
 from help_content import FAQS
 from dotenv import load_dotenv
@@ -2813,6 +2814,24 @@ def accept_consent(request: Request, data: dict = Body(...), user: dict = Depend
     return {"user": _me_payload(user["user_id"])}
 
 
+def _setup_onboarding_agent(user: dict, profile: dict, company: object) -> int | None:
+    """Sets up the starter agent from the answers. The company comes from the
+    request because the onboarding page may not have renamed the workspace
+    yet; the saved workspace name is the fallback."""
+    name = str(company or "").strip()[:120] or (calls_db.get_user_by_id(user["user_id"]) or {}).get("account_name", "")
+    return calls_db.apply_onboarding_agent(user["account_id"], onboarding_agent.agent_from_profile(profile, name))
+
+
+@app.post("/onboarding/agent")
+def setup_onboarding_agent(data: dict | None = Body(None), user: dict = Depends(require_role("admin"))) -> dict:
+    """The onboarding finish step: tailors the starter agent to the answers so
+    the test call there already speaks for the business. Re-run if the owner
+    goes back and changes an answer; a no-op once onboarding is finished."""
+    data = data or {}
+    agent_id = _setup_onboarding_agent(user, onboarding_profile.clean_profile(data.get("profile")), data.get("company"))
+    return {"agentId": agent_id}
+
+
 @app.post("/onboarding/complete")
 def complete_onboarding(data: dict | None = Body(None), user: dict = Depends(current_user)) -> dict:
     """Finishes the full-page onboarding. The dashboard sends the answers
@@ -2823,6 +2842,7 @@ def complete_onboarding(data: dict | None = Body(None), user: dict = Depends(cur
     if profile:
         profile["completedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         calls_db.save_onboarding_profile(user["account_id"], user["user_id"], profile)
+        _setup_onboarding_agent(user, profile, data.get("company"))
     calls_db.save_signup_attribution(user["account_id"], onboarding_profile.clean_attribution(data.get("attribution")))
     calls_db.mark_account_onboarded(user["account_id"])
     return {"user": _me_payload(user["user_id"])}
@@ -3422,6 +3442,35 @@ def admin_set_notes(account_id: int, req: AdminNotesRequest, admin: dict = Depen
     _admin_account_or_404(account_id)
     admin_db.set_account_notes(account_id, req.notes)
     admin_db.write_audit(admin["user_id"], admin["email"], "add_note", account_id, detail="updated internal notes")
+    return admin_db.account_detail(account_id)
+
+
+class AdminReasonRequest(BaseModel):
+    reason: str = ""
+
+
+@app.post("/admin/accounts/{account_id}/users/{user_id}/reset-two-step")
+def admin_reset_two_step(account_id: int, user_id: int, req: AdminReasonRequest, request: Request,
+                         admin: dict = Depends(require_platform_owner)) -> dict:
+    """For a user who lost both their authenticator and their recovery codes:
+    turns two-step login off so they can sign in with their password and set
+    it up again. Audited, and the user is emailed so a reset they didn't ask
+    for is noticed."""
+    reason = _admin_reason(req.reason)
+    _admin_account_or_404(account_id)
+    target = calls_db.get_user_by_id(user_id)
+    if target is None or target.get("account_id") != account_id:
+        raise HTTPException(404, "User not found in this account")
+    if not (calls_db.get_user_mfa(user_id) or {}).get("enabled_at"):
+        raise HTTPException(400, "Two-step login is already off for this user")
+    calls_db.disable_mfa(user_id)
+    calls_db.record_security_event(user_id, "mfa_reset_by_support", user_agent=request.headers.get("user-agent", ""))
+    admin_db.write_audit(admin["user_id"], admin["email"], "reset_two_step", account_id,
+                         detail=f"user {user_id} ({target.get('email') or ''}). {reason}")
+    _email_security_notice(user_id, "Two-step login was reset",
+                           "Vistrow Voice support turned off two-step login on your account at your request, so you "
+                           "can sign in with your password. Turn it back on in Settings, Sign-in & security. If you "
+                           "didn't ask for this, reset your password now and contact support.")
     return admin_db.account_detail(account_id)
 
 
