@@ -93,9 +93,40 @@ class DefaultOpener(unittest.TestCase):
         self.assertIn("Priya", agent._lead_opening)
         self.assertIn("In Hindi", agent._lead_opening)
 
-    def test_operator_openers_stay_untouched(self):
-        self.assertEqual(self._agent(welcome_message_outbound="Namaste, Mira here.")._lead_opening, "")
-        self.assertEqual(self._agent(welcome_message="Hello from Acme.")._lead_opening, "")
+    def test_an_outbound_opener_stays_the_operators_choice(self):
+        agent = self._agent(welcome_message_outbound="Namaste, Mira here.", welcome_message="Hello from Acme.")
+        self.assertEqual(agent._lead_opening, "")
+        self.assertIn("Namaste, Mira here.", agent._welcome_message)
+
+    def test_the_inbound_welcome_does_not_open_a_lead_that_names_its_enquiry(self):
+        # 17 Oct: Siya KHOPOLI (inbound welcome naming Khopoli plots, no
+        # outbound opener) would have greeted an Everglades II lead with it.
+        lead = {"source": "arthaleads", "channel_source": "facebook", "lead_source": "WhatsApp",
+                "ad_headline": "1 BHK PRO Homes from ₹45 Lakhs*", "ad_source_url": "https://wa.me/x"}
+        config = main._apply_lead_context(
+            {**BASE, "welcome_message": "Namaste, Khopoli luxury plots mein interest ke liye dhanyavaad."},
+            _context(lead), "r",
+        )
+        agent = main.RealEstateAgent(config, "Sonu Varyani", direction="outbound", call_type="phone")
+        self.assertEqual(agent._welcome_message, "")
+        self.assertIn('"1 BHK PRO Homes from ₹45 Lakhs*"', agent._lead_opening)
+        self.assertIn("through a WhatsApp ad", agent._lead_opening)
+        self.assertIn("Sonu", agent._lead_opening)
+        self.assertNotIn("Khopoli", agent._lead_opening)
+
+    def test_the_inbound_welcome_still_opens_a_lead_with_no_topic(self):
+        config = main._apply_lead_context(
+            {**BASE, "welcome_message": "Hello from Acme."},
+            _context({"source": "arthaleads", "channel_source": "facebook"}), "r",
+        )
+        agent = main.RealEstateAgent(config, "Priya", direction="outbound", call_type="phone")
+        self.assertEqual(agent._lead_opening, "")
+        self.assertIn("Hello from Acme.", agent._welcome_message)
+
+    def test_inbound_calls_keep_the_inbound_welcome(self):
+        agent = main.RealEstateAgent({**BASE, "welcome_message": "Hello from Acme."}, "Priya",
+                                     direction="inbound", call_type="phone")
+        self.assertIn("Hello from Acme.", agent._welcome_message)
 
     def test_other_calls_get_no_lead_opening(self):
         agent = main.RealEstateAgent(dict(BASE), "Priya", direction="outbound", call_type="phone")
