@@ -331,7 +331,9 @@ export interface AdminPricing {
   voiceTiers: Record<string, number>
   modelTiers: Record<string, number>
   minCreditsPerMinute: number
-  overageMultiplier: number
+  // Minute pricing (17 Oct): overage is a fixed ₹/min per plan; annual = 11 months' price.
+  overagePerMinuteInr: Record<string, number>
+  annualPriceInr: Record<string, number>
 }
 
 export interface AdminAnalytics {

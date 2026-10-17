@@ -55,7 +55,8 @@ function voiceCredits(entry: VoiceEntry): string {
   return creditsPerMinuteLabel(voiceMultiplier(entry) * BHARAT_MODEL_MULTIPLIER)
 }
 
-// Gemini Live bills by model: 2.5 at 2x, 3.1 / 3.8 at 6x (calls_db.model_tier).
+// Vistrow Live bills by model: every version uses 3 minutes per minute
+// (agent/plan_policy.py MODEL_TIER_MULTIPLIERS realtime).
 function liveMultiplier(modelValue: string | undefined): number {
   const key = modelValue && (modelValue === 'gemini-live' || modelValue.includes('2.5')) ? '2.5' : 'default'
   return LIVE_MODEL_MULTIPLIER[key]
@@ -64,11 +65,12 @@ function liveCredits(modelValue: string | undefined): string {
   return creditsPerMinuteLabel(liveMultiplier(modelValue))
 }
 
-// "2x" above a tab name: credits per minute on a Vistrow Bharat agent.
+// "2 min/min" above a tab name: plan minutes one call minute uses on a
+// Vistrow Bharat agent (1 credit = 1 standard minute).
 function CreditBadge({ credits }: { credits: number }) {
   return (
-    <span className="block text-[10px] font-bold leading-none tracking-wide text-primary/80" title={`${formatCredits(credits)} credits per minute`}>
-      {formatCredits(credits)}x credits
+    <span className="block text-[10px] font-bold leading-none tracking-wide text-primary/80" title={`Uses ${formatCredits(credits)} plan minute(s) per call minute`}>
+      {formatCredits(credits)} min/min
     </span>
   )
 }
@@ -111,7 +113,7 @@ const shortModelLabel = (label: string) => label.replace(/^Vistrow /, '').replac
 
 interface Tab {
   key: TabKey
-  // Credits per minute on a Vistrow Bharat agent; tabs are ordered by it.
+  // Plan minutes per call minute on a Vistrow Bharat agent; tabs are ordered by it.
   credits: number
   label: string
   note: string
@@ -174,7 +176,7 @@ function VoiceRow({
   entry: VoiceEntry
   // Replaces the languages line (realtime voices show style and HD voice).
   detail?: string
-  // Credits per minute shown on the row; defaults to this voice on Vistrow Bharat.
+  // Plan minutes per call minute shown on the row; defaults to this voice on Vistrow Bharat.
   credits?: string
   active: boolean
   playing: boolean
@@ -376,8 +378,8 @@ function Spotlight({
             </div>
           )}
           <div className="rounded-xl bg-surface-high px-2 py-2.5">
-            <p className="font-display text-base font-semibold">{voiceCredits(entry).replace(' credits/min', '')}</p>
-            <p className="text-[11px] font-bold text-text-muted">Credits / min</p>
+            <p className="font-display text-base font-semibold">{voiceCredits(entry).replace(' min per min', '')}</p>
+            <p className="text-[11px] font-bold text-text-muted">Minutes / min</p>
           </div>
         </div>
         )}
@@ -557,9 +559,9 @@ export function Voices() {
       },
       {
         key: 'native',
-        credits: 0.5 * BHARAT_MODEL_MULTIPLIER,
+        credits: 1 * BHARAT_MODEL_MULTIPLIER,
         label: 'Native',
-        note: `${creditsPerMinuteLabel(0.5 * BHARAT_MODEL_MULTIPLIER)} · native Indian languages · one language each · a little slower to start`,
+        note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · native Indian languages · one language each · a little slower to start`,
         voices: (data?.voices ?? []).filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
       },
       {

@@ -97,8 +97,6 @@ CREATE INDEX IF NOT EXISTS idx_active_calls_account ON active_calls(account_id);
 CONCURRENT_CALL_LIMITS = {key: value["concurrency"] for key, value in plan_policy.PLANS.items()}
 
 _FREE_TEST_MINUTES = float(os.getenv("FREE_TEST_MINUTES_PER_MONTH", "30"))
-_VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}  # mirrors server/calls_db
-_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime_plus": 6.0}
 _PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
 _PREMIUM_PLUS_MODELS = {"gpt-4.1", "gpt-4o"}
 
@@ -115,9 +113,9 @@ def _model_tier(model: str | None) -> str:
     if not name or name.startswith("groq/"):
         return "standard"
     if name.startswith("sarvam/"):
-        return "premium"
+        return "standard"
     if name.startswith("gemini-live"):
-        return "premium" if name == "gemini-live" or "2.5" in name else "realtime_plus"
+        return "realtime" if name == "gemini-live" or "2.5" in name else "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:
@@ -239,11 +237,9 @@ def _trial_credits_exhausted(conn, account_id: int) -> bool:
     for usage in rows:
         call_type = usage["call_type"] if usage["call_type"] in rates else "browser"
         entry = voice_catalog.get_voice(usage["voice"] or "") or {}
-        voice_mult = _VOICE_TIER_MULTIPLIERS.get(entry.get("tier"), 1.0)
-        model_tier = _model_tier(usage["model"])
-        used += float(usage["m"] or 0) * max(
-            0.75,
-            rates[call_type] * voice_mult * _MODEL_TIER_MULTIPLIERS[model_tier],
+        # Same per-minute formula as server/calls_db.credits_for_call.
+        used += float(usage["m"] or 0) * plan_policy.credits_per_minute(
+            rates[call_type], entry.get("tier"), _model_tier(usage["model"]),
         )
     return used >= credits_total
 

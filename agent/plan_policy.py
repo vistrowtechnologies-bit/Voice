@@ -4,18 +4,90 @@ Keep this module dependency-free. The API imports this file from agent/;
 the LiveKit image ships it alongside db.py. Unknown plans fail closed.
 """
 
+# Minute-based plans (owner decision 2026-10-17). The credit ledger is kept,
+# but 1 credit = 1 standard minute, so "credits" is the plan's monthly minutes.
+# Prices exclude GST. "overage_per_minute_inr" is what an active paid
+# subscription is invoiced per standard minute beyond its allowance.
 PLANS = {
-    "starter": {"price_inr": 2999, "credits": 300, "agents": 1, "concurrency": 5, "knowledge_bases": 1, "storage_gb": 5},
-    "growth": {"price_inr": 5999, "credits": 1000, "agents": 5, "concurrency": 15, "knowledge_bases": 5, "storage_gb": 25},
-    "scale": {"price_inr": 12999, "credits": 2500, "agents": 20, "concurrency": 30, "knowledge_bases": 15, "storage_gb": 100},
+    "starter": {"price_inr": 2999, "credits": 400, "annual_credits_per_month": 500, "overage_per_minute_inr": 7,
+                "agents": 1, "concurrency": 5, "knowledge_bases": 1, "storage_gb": 5},
+    "growth": {"price_inr": 5999, "credits": 1100, "annual_credits_per_month": 1200, "overage_per_minute_inr": 6,
+               "agents": 5, "concurrency": 15, "knowledge_bases": 5, "storage_gb": 25},
+    "scale": {"price_inr": 12999, "credits": 2700, "annual_credits_per_month": 3000, "overage_per_minute_inr": 5,
+              "agents": 20, "concurrency": 30, "knowledge_bases": 15, "storage_gb": 100},
 }
+# Annual plans are billed upfront. PENDING owner recommendation: the default is
+# "pay 11 months, get 12" (Starter 32,989 / Growth 65,989 / Scale 1,42,989).
+# Change ANNUAL_MONTHS_CHARGED, or override a single plan in ANNUAL_PRICE_INR.
+# The Razorpay annual Plans are created by hand in the Razorpay dashboard
+# (server/razorpay_client.py) and must carry these amounts + GST.
+ANNUAL_MONTHS_CHARGED = 11
+ANNUAL_PRICE_INR = {key: plan["price_inr"] * ANNUAL_MONTHS_CHARGED for key, plan in PLANS.items()}
+
+
+def plan_allowance(plan: str, billing_cycle: str = "monthly") -> int:
+    """Credits (= standard minutes) one billing period of this plan includes.
+    An annual period is a year, so it gets 12 months of the annual per-month
+    allowance at once (pooled); a monthly period gets one month. Unknown plans
+    get Starter's, like every other plan lookup in billing."""
+    entry = PLANS.get(str(plan or "").lower(), PLANS["starter"])
+    if str(billing_cycle or "").lower() == "annual":
+        return int(entry["annual_credits_per_month"]) * 12
+    return int(entry["credits"])
+
+
+def public_plans() -> list[dict]:
+    """The plan list the billing screen and pricing copy read (GET /billing/plans).
+    Prices are INR, GST extra. Minutes are standard minutes; Vistrow Live uses
+    LIVE_MINUTES_PER_MINUTE of them per call minute."""
+    return [
+        {
+            "plan": key,
+            "monthlyPrice": plan["price_inr"],
+            "annualPrice": ANNUAL_PRICE_INR[key],
+            "monthlyMinutes": plan["credits"],
+            "annualMinutesPerMonth": plan["annual_credits_per_month"],
+            "annualMinutesPerYear": plan_allowance(key, "annual"),
+            "overagePerMinute": plan["overage_per_minute_inr"],
+            # None until cloned-voice limits land in PLANS (voice-clone branch).
+            "clonedVoicesIncluded": plan.get("cloned_voices"),
+            "agents": plan["agents"],
+            "concurrentCalls": plan["concurrency"],
+            "knowledgeBases": plan["knowledge_bases"],
+            "storageGb": plan["storage_gb"],
+        }
+        for key, plan in PLANS.items()
+    ]
+
+
+# Credits billed per call minute = channel rate x voice tier x model tier, never
+# below MIN_CREDITS_PER_MINUTE. server/calls_db.credits_for_call (billing) and
+# agent/db.py's trial cutoff (admission) both price through credits_per_minute.
+# 1 credit = 1 standard minute: any standard voice (Native, Vistrow HD, Bharat
+# voices, cloned voices) on a standard model, the Vistrow Bharat (Sarvam)
+# pipeline included, bills exactly 1. Vistrow Live (Gemini realtime, every
+# version) bills 3 and ignores the voice tier, since the model speaks itself.
+# Premium voices (2x) and the legacy premium LLM tiers keep their credit-era
+# multipliers: a credit is still worth one GPT + Chirp minute, as before.
+VOICE_TIER_MULTIPLIERS = {"economy": 1.0, "standard": 1.0, "premium": 2.0}
+MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime": 3.0, "realtime_plus": 3.0}
+REALTIME_MODEL_TIERS = frozenset({"realtime", "realtime_plus"})
+MIN_CREDITS_PER_MINUTE = 1.0
+LIVE_MINUTES_PER_MINUTE = MODEL_TIER_MULTIPLIERS["realtime"]
+
+
+def credits_per_minute(call_type_rate: float, voice_tier: str, model_tier: str) -> float:
+    """Credits one call minute bills. An unknown tier bills as 1x."""
+    model_mult = MODEL_TIER_MULTIPLIERS.get(model_tier, 1.0)
+    voice_mult = 1.0 if model_tier in REALTIME_MODEL_TIERS else VOICE_TIER_MULTIPLIERS.get(voice_tier, 1.0)
+    return max(MIN_CREDITS_PER_MINUTE, call_type_rate * voice_mult * model_mult)
+
+
 # Measured worst-case cost of one minute of the default stack (Sarvam STT +
 # Sarvam 105B + Chirp 3 HD), Oct 2026 bills: STT 0.31 + LLM 1.70 + TTS 0.13 +
-# LiveKit 0.85 + EnableX SIP 0.25 = Rs 3.24. That minute bills 2 credits
-# (Sarvam is the premium 2x model tier, server/calls_db.model_tier). Plan
-# prices exclude GST, so credits-per-default-minute x price/credits is our net
-# rate per default minute; test_plan_policy keeps every plan at or above 2x
-# this cost (>= 50% margin).
+# LiveKit 0.85 + EnableX SIP 0.25 = Rs 3.24. That minute bills 1 credit.
+# test_plan_policy keeps every plan's net rate per standard minute (monthly,
+# annual and overage) above this cost.
 COST_PER_DEFAULT_MINUTE_INR = 3.24
 # One-off credit top-ups. Price = the account's plan rate per credit × base credits (+ GST);
 # the bonus is granted on top but never invoiced. Mirrors web-demo/src/lib/plans.ts TOPUP_PACKS.

@@ -132,7 +132,7 @@ function resultChecks(call: CallRecord) {
     { label: 'Language consistency', value: scripts.size > 1 ? 'Mixed-language delivery detected' : 'Single writing system detected', ok: null },
     { label: 'Tool accuracy', value: toolErrors ? `${toolErrors} failed action${toolErrors === 1 ? '' : 's'}` : 'No failed actions recorded', ok: toolErrors === 0 },
     { label: 'First response latency', value: call.firstResponseLatencyMs != null ? `${(call.firstResponseLatencyMs / 1000).toFixed(1)}s` : 'Not measured', ok: call.firstResponseLatencyMs == null ? null : call.firstResponseLatencyMs <= 2500 },
-    { label: 'Estimated cost', value: call.creditsUsed != null ? `${call.creditsUsed.toFixed(2)} credits` : 'Calculated after call finalizes', ok: null },
+    { label: 'Estimated cost', value: call.creditsUsed != null ? `${call.creditsUsed.toFixed(2)} plan minutes` : 'Calculated after call finalizes', ok: null },
     { label: 'Hallucination risk', value: 'Review unsupported claims in transcript', ok: null },
     { label: 'Knowledge grounding', value: 'Review answers against attached sources', ok: null },
   ]

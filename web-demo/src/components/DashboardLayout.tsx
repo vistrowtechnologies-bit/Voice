@@ -505,13 +505,13 @@ function FullPageHeader({
   }, [desktop, mobileNav])
 
   const creditsPill = credits !== null && (
-    <Tooltip content={topupAvailable ? 'Buy credits · plan and invoices' : 'Plan and billing'}><Link
+    <Tooltip content={topupAvailable ? 'Buy minutes · plan and invoices' : 'Plan and billing'}><Link
       to={topupAvailable ? '/dashboard/settings?tab=billing&topup=1' : '/dashboard/settings?tab=billing'}
-      aria-label={topupAvailable ? `${credits} credits remaining. Buy credits` : `${credits} credits remaining. Open plan and billing`}
+      aria-label={topupAvailable ? `${credits} minutes remaining. Buy minutes` : `${credits} minutes remaining. Open plan and billing`}
       className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
     >
       <Icon name="toll" className="text-[15px] text-cyan" />
-      {credits} credits
+      {credits} min
       {topupAvailable && <span className="hidden text-primary sm:inline">· Top up</span>}
     </Link></Tooltip>
   )

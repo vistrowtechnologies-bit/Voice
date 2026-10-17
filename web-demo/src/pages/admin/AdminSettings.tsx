@@ -85,7 +85,9 @@ export function AdminSettings() {
                 <div key={p.plan} className="flex items-center justify-between px-5 py-3 text-sm">
                   <span className="font-semibold capitalize">{p.plan}</span>
                   <span className="tabular-nums text-text-muted">
-                    {fmtINR(p.priceInr)}/mo · {p.credits.toLocaleString('en-IN')} credits
+                    {fmtINR(p.priceInr)}/mo · {p.credits.toLocaleString('en-IN')} min/mo
+                    {pricing?.annualPriceInr?.[p.plan] != null && <> · {fmtINR(pricing.annualPriceInr[p.plan])}/yr</>}
+                    {pricing?.overagePerMinuteInr?.[p.plan] != null && <> · then {fmtINR(pricing.overagePerMinuteInr[p.plan])}/min</>}
                   </span>
                 </div>
               ))}
@@ -97,7 +99,7 @@ export function AdminSettings() {
         </AdminCard>
 
         <AdminCard className="overflow-hidden">
-          <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Credit rates per minute</div>
+          <div className="border-b border-border px-5 py-3 font-display text-base font-semibold">Plan minutes per call minute</div>
           {pricingError ? (
             <ErrorState message={`Couldn't load rates: ${pricingError}`} onRetry={loadPricing} />
           ) : pricing ? (
@@ -121,8 +123,8 @@ export function AdminSettings() {
             </div>
           ) : null}
           <div className="border-t border-border px-5 py-2 text-[11px] text-text-muted">
-            A minute costs channel × voice × model credits, never under {pricing?.minCreditsPerMinute ?? '-'}. Overage bills at{' '}
-            {pricing?.overageMultiplier ?? '-'}× the plan's per-credit price.
+            1 credit = 1 standard minute. A call minute uses channel × voice × model minutes, never under{' '}
+            {pricing?.minCreditsPerMinute ?? '-'}. Overage bills at each plan's own ₹ per minute (Plan pricing above).
           </div>
         </AdminCard>
       </div>

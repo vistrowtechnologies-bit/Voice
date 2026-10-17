@@ -3123,9 +3123,7 @@ def _call_dict(
         rate = credit_rates_by_type.get(call_type, 1.0)
         tier = voice_tier(row["voice"])
         mtier = model_tier(_row_get(row, "model"))
-        credits_per_minute = _credits_per_minute(
-            rate, _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]
-        )
+        credits_per_minute = plan_policy.credits_per_minute(rate, tier, mtier)
         out["creditsUsed"] = round(
             minutes * credits_per_minute,
             2,
@@ -9224,15 +9222,19 @@ def gst_from_total(total_inr: float) -> dict:
     return {"base_inr": base_inr, "gst_inr": round(total_inr - base_inr, 2), "total_inr": total_inr}
 
 
-# Annual billing pays 10 months' worth up front for 12 months of service —
-# matches the "-15%"-ish framing on the marketing pricing page without
-# hardcoding a percentage that drifts from the actual monthly price.
-ANNUAL_MONTHS_CHARGED = 10
-# Usage beyond a plan's included credits isn't blocked (see billing engine
-# design doc) — it's billed at this multiple of the plan's own effective
-# per-credit rate, added as a Razorpay subscription addon on the FOLLOWING
-# cycle's invoice once the period that generated it has fully closed.
-OVERAGE_RATE_MULTIPLIER = 1.4
+# Annual price and per-month allowance live in plan_policy (ANNUAL_PRICE_INR,
+# PLANS[...]["annual_credits_per_month"]).
+ANNUAL_MONTHS_CHARGED = plan_policy.ANNUAL_MONTHS_CHARGED
+
+
+def plan_overage_rate_inr(plan: str) -> float:
+    """Rs per standard minute (= credit) beyond a paid plan's allowance:
+    plan_policy.PLANS overage_per_minute_inr (7/6/5 on Starter/Growth/Scale).
+    Usage past the allowance isn't blocked for an active subscription; it is
+    added as a Razorpay subscription addon on the FOLLOWING cycle's invoice
+    once the period that generated it has fully closed."""
+    entry = plan_policy.PLANS.get(plan, plan_policy.PLANS["starter"])
+    return float(entry["overage_per_minute_inr"])
 # Flat monthly line item per provisioned phone number — EnableX charges
 # Vistrow for every number regardless of tenant usage; this recovers that
 # cost instead of absorbing it silently.
@@ -9284,18 +9286,14 @@ def set_credit_rate(call_type: str, rate: float, account_id: int) -> None:
 # earned Rs2.60 against Rs2.23 of real cost - a 14% margin that one FX move
 # or a month of LiveKit overage erases. 0.75x is still a genuine discount
 # and takes that combo to roughly 43%.
-# economy 0.5 (owner, 2026-10-14): Native = 1 credit/min on Vistrow Bharat. Real
-# cost ~Rs 3.3/min (Google Standard TTS ~Rs 0.15/min); thinner margin on Scale accepted.
-_VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}
-# Hard floor on billable credits per minute, for the same reason: no
-# combination of discounts may price a minute below the fixed cost of
-# serving it. Applied after every multiplier.
-_MIN_CREDITS_PER_MINUTE = 0.75
-
-
-def _credits_per_minute(call_type_rate: float, voice_mult: float, model_mult: float) -> float:
-    """Effective credits charged per minute, never below the fixed-cost floor."""
-    return max(_MIN_CREDITS_PER_MINUTE, call_type_rate * voice_mult * model_mult)
+# economy 0.5 (owner, 2026-10-14): Native = 1 credit/min on Vistrow Bharat.
+# Minute pricing (owner, 2026-10-17): 1 credit = 1 standard minute, so economy
+# is 1x now (Native = 1 minute per minute on any model) and the floor is 1.
+# The tables live in plan_policy so the call worker's trial cutoff uses them too.
+_VOICE_TIER_MULTIPLIERS = plan_policy.VOICE_TIER_MULTIPLIERS
+# Hard floor on billable credits per minute: no combination of discounts may
+# price a minute below the fixed cost of serving it.
+_MIN_CREDITS_PER_MINUTE = plan_policy.MIN_CREDITS_PER_MINUTE
 
 
 def credits_for_call(row, rates: dict, minutes: float) -> float:
@@ -9304,10 +9302,8 @@ def credits_for_call(row, rates: dict, minutes: float) -> float:
     The one place the formula lives: billing_summary, the overage webhook
     and the Usage page all go through here so they can never disagree."""
     call_type = row["call_type"] if row["call_type"] in rates else "browser"
-    return minutes * _credits_per_minute(
-        rates.get(call_type, 1.0),
-        _VOICE_TIER_MULTIPLIERS[voice_tier(row["voice"])],
-        _MODEL_TIER_MULTIPLIERS[model_tier(_row_get(row, "model"))],
+    return minutes * plan_policy.credits_per_minute(
+        rates.get(call_type, 1.0), voice_tier(row["voice"]), model_tier(_row_get(row, "model")),
     )
 # Same Sarvam bulbul:v2 speaker set as agent/main.py's _SARVAM_V2_SPEAKERS and
 # web-demo/src/pages/Agents.tsx's SARVAM_V2_VOICES — duplicated across all
@@ -9364,7 +9360,7 @@ _STANDARD_VOICE_PREFIXES = ("google:chirp3:", "sarvam4:")
 # rather than to bill them punitively. These recover the bulk of the spread
 # while staying legible to an operator; revisit alongside any change to the
 # offered model list.
-_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime_plus": 6.0}
+_MODEL_TIER_MULTIPLIERS = plan_policy.MODEL_TIER_MULTIPLIERS
 # Anything unlisted bills at "standard" - the same don't-guess default
 # voice_tier() uses, so a newly added model can never silently bill as free.
 _PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
@@ -9384,29 +9380,19 @@ def model_tier(model: str | None) -> str:
     # testing, so it must never bill a tenant at a premium rate.
     if name.startswith("groq/"):
         return "standard"
-    # Sarvam ("Vistrow Bharat") bills premium, matching Vistrow Swift.
-    # (It billed standard 1x on 2026-10-12/13 only; the owner reversed that.)
-    #
-    # Prefixed rather than named, because falling through to "standard" is
-    # what happened when it shipped and that was materially wrong: measured on
-    # this product's real 10k-token prompt, a Bharat turn costs ~Rs 0.299
-    # against Swift's ~Rs 0.101. Sarvam does not cache the prompt — usage
-    # comes back with prompt_tokens_details=None and all 10,018 tokens billed
-    # on every turn, where OpenAI caches 9,600 of 9,757 at a quarter rate — so
-    # the vendor cost is roughly 3x Swift's despite lower headline rates.
-    # Billing it at 1x while Swift bills 2x meant charging tenants half for the
-    # option that costs us triple.
-    #
-    # A prefix also means the next Sarvam model cannot silently bill at 1x.
+    # Sarvam ("Vistrow Bharat") is the standard pipeline: 1 credit = 1 standard
+    # minute (owner, minute pricing 2026-10-17). It billed 2x (premium) from
+    # 2026-10-13 because a Bharat turn costs ~3x a cached GPT turn; the plan
+    # minute prices now carry that cost instead (~Rs 2.3-3.2 per minute).
     if name.startswith("sarvam/"):
-        return "premium"
-    # Gemini Live (speech-to-speech) replaces STT+LLM+TTS with one model
-    # billed per audio token. Oct 6-9 bill: 3.1 ~Rs 16.8/min, 2.5 ~Rs 4.6/min.
-    # Unlisted, both fell through to 1x - a loss on every 3.1 minute.
+        return "standard"
+    # Gemini Live ("Vistrow Live", speech-to-speech) replaces STT+LLM+TTS with
+    # one model billed per audio token: 2.5 ~Rs 4.7/min, 3.8 ~Rs 7.0/min,
+    # 3.1 ~Rs 12/min. Every version bills 3 standard minutes per minute; 2.5
+    # is "realtime", 3.1/3.8 "realtime_plus", kept apart for the Usage page
+    # and so the two can be repriced separately.
     if name.startswith("gemini-live"):
-        # Only the 2.5 default ("gemini-live", or an explicit 2.5 model) is
-        # the cheap one; 3.1 and its GA successor 3.8 cost the same.
-        return "premium" if name == "gemini-live" or "2.5" in name else "realtime_plus"
+        return "realtime" if name == "gemini-live" or "2.5" in name else "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:
@@ -9778,8 +9764,7 @@ def billing_summary(account_id: int) -> dict:
         )
         plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
         overage_credits = max(0.0, round(used - credits_total, 1))
-        per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
-        overage_rate_inr = round(per_credit_rate * OVERAGE_RATE_MULTIPLIER, 2)
+        overage_rate_inr = plan_overage_rate_inr(plan)
         overage_amount_inr = round(overage_credits * overage_rate_inr, 2)
 
         phone_row = conn.execute(
@@ -9817,6 +9802,13 @@ def billing_summary(account_id: int) -> dict:
             "phoneNumberCount": phone_row["c"],
             "phoneNumberFeesInr": phone_number_fees_inr,
             "estimatedNextInvoiceInr": round(overage_amount_inr + phone_number_fees_inr, 2),
+            # Minute pricing (2026-10-17): 1 credit = 1 standard minute, so every
+            # credits* figure above is also standard minutes. minutesUsed above
+            # is raw talk time; a Vistrow Live minute uses liveMinutesPerMinute.
+            "creditUnit": "standard_minute",
+            "liveMinutesPerMinute": plan_policy.LIVE_MINUTES_PER_MINUTE,
+            "planAnnualPriceInr": plan_policy.ANNUAL_PRICE_INR.get(plan),
+            "plans": plan_policy.public_plans(),
         }
     finally:
         conn.close()
@@ -9829,7 +9821,7 @@ def billing_summary(account_id: int) -> dict:
 # credits_for_call, cut by the caller's local calendar days.
 
 _USAGE_MAX_DAYS = 366
-_MODEL_TIER_LABELS = {"standard": "Standard", "premium": "Premium", "premium_plus": "Premium Plus", "realtime_plus": "Realtime"}
+_MODEL_TIER_LABELS = {"standard": "Standard", "premium": "Premium", "premium_plus": "Premium Plus", "realtime": "Realtime", "realtime_plus": "Realtime"}
 _DIRECTION_LABELS = {"inbound": "Inbound", "outbound": "Outbound", "web": "Web / widget", "phone": "Phone (direction unknown)"}
 
 
@@ -10564,22 +10556,23 @@ def list_topups(account_id: int, limit: int = 20) -> list[dict]:
         conn.close()
 
 
-def reset_plan_credits(account_id: int, plan: str) -> None:
+def reset_plan_credits(account_id: int, plan: str, billing_cycle: str = "monthly") -> None:
     """Start a paid billing period with exactly that plan's allowance.
 
+    Monthly: the plan's monthly minutes. Annual: the period is a year, so
+    12 x the annual per-month minutes at once (plan_policy.plan_allowance).
     Top-ups are added during the period by ``mark_topup_paid_and_credit`` and are
     therefore part of that period's allowance.  A renewal begins a fresh
     allowance; carrying the previous period's top-ups forward would grant
     them repeatedly.
     """
-    plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 "INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', ?) "
                 "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value",
-                (account_id, str(int(plan_pricing["credits"]))),
+                (account_id, str(plan_policy.plan_allowance(plan, billing_cycle))),
             )
     finally:
         conn.close()
@@ -10616,8 +10609,7 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
         ).fetchone()
         allowance = int(allowance_row["value"]) if allowance_row else plan_pricing["credits"]
         overage_credits = max(0.0, round(used - allowance, 1))
-        per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
-        overage_rate_inr = round(per_credit_rate * OVERAGE_RATE_MULTIPLIER, 2)
+        overage_rate_inr = plan_overage_rate_inr(plan)
         return {
             "creditsUsed": used,
             "overageCredits": overage_credits,
