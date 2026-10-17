@@ -265,7 +265,7 @@ export const SEO_PAGES: SeoPage[] = [
   page(
     '/pricing',
     'Voice AI Pricing | Vistrow Voice',
-    'Review the credit-based Vistrow Voice plans for AI phone and web agents, including call capacity, voice tiers, analytics, and available controls.',
+    'Compare Vistrow Voice plans for AI phone and web agents: monthly or annual billing, included conversation minutes, call capacity, and what each plan includes.',
     'pricing',
     'Vistrow Voice pricing card with a purple real orb and scalable usage meter',
     'pricing',

@@ -49,8 +49,8 @@ const CONCEPTS: { term: string; def: string }[] = [
     def: 'One configured personality: persona, prompt, voice, language, knowledge base, and tools. An agent is what actually takes a call. You can run several - one per brand, location, or campaign.',
   },
   {
-    term: 'Credit',
-    def: 'Roughly one minute of conversation. Phone calls draw at a higher rate than browser calls, since they carry telecom cost. Every channel spends from the same monthly pool.',
+    term: 'Plan minute',
+    def: 'The unit plans are counted in. A minute of conversation with a standard voice uses one plan minute, and Vistrow Live uses three. Phone and browser calls draw from the same monthly allowance.',
   },
   {
     term: 'Knowledge base',

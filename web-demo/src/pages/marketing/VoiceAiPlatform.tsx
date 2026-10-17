@@ -110,7 +110,7 @@ const FAQ = [
   },
   {
     q: 'How is it priced?',
-    a: 'Usage is counted in credits based on call minutes and the voice and model tier you choose, and each plan includes a monthly allowance. Carrier usage and number rental are separate. The pricing page has the current plans.',
+    a: 'Usage is counted in minutes of conversation, and each plan includes a monthly allowance of minutes. Carrier usage and number rental are separate. The pricing page has the current plans.',
   },
 ]
 

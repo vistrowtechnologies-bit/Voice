@@ -803,7 +803,7 @@ export const SOLUTIONS: Solution[] = [
       { q: 'Does it follow RBI guidance on recovery call timings?', a: 'RBI guidance limits recovery calls to between 8 am and 7 pm. Vistrow Voice lets you set the calling hours, active days and timezone, and blocks dials outside them, so you can set the window to match. Which rules apply to your loans is for your compliance team to confirm.' },
       { q: 'What happens if a borrower asks not to be called again?', a: 'The agent adds the number to your Do-Not-Call list itself, and every later dial is checked against that list before it goes out. You can also block numbers by hand or bulk-import a list.' },
       { q: 'Can a borrower speak to a person?', a: 'Yes. Set a transfer number and the agent dials your colleague into the call and stays on until they answer. It can also take a callback request with a preferred time, for disputes or hardship cases you want a person to handle.' },
-      { q: 'Which plan do I need for collections campaigns?', a: 'Outbound campaigns are included on the Growth and Scale plans. Calls use credits by the minute; see the pricing page for plans and what is included.' },
+      { q: 'Which plan do I need for collections campaigns?', a: 'Outbound campaigns are included on the Growth and Scale plans. Calls use plan minutes; see the pricing page for plans and what is included.' },
     ],
     guideSections: [
       {
@@ -847,7 +847,7 @@ export const SOLUTIONS: Solution[] = [
           { icon: 'translate', title: 'Hindi and Hinglish', body: 'Where most reminder calls start. The Hindi page has a written sample of an upcoming-EMI reminder.', to: '/languages/hindi', link: 'Hindi AI voice calling agent' },
           { icon: 'translate', title: 'Tamil and Punjabi', body: 'Reminders that open in the borrower’s own language and follow the English words they mix in.', to: '/languages/tamil', link: 'Tamil AI voice calling agent' },
           { icon: 'translate', title: 'Every supported language', body: 'Marathi, Telugu, Kannada, Bengali, Gujarati, Malayalam, Odia and Punjabi too, plus English.', to: '/languages', link: 'All languages' },
-          { icon: 'payments', title: 'What it costs', body: 'Calls are billed in credits by the minute. See the plans, what each includes, and what is billed separately.', to: '/pricing', link: 'Plans and pricing' },
+          { icon: 'payments', title: 'What it costs', body: 'Calls are billed by the minute of conversation. See the plans, what each includes, and what is billed separately.', to: '/pricing', link: 'Plans and pricing' },
         ],
       },
     ],

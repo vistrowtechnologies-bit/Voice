@@ -45,7 +45,7 @@ const GUIDE_LINKS: Record<string, string[]> = {
   '/product/knowledge-base': ['/help/knowledge-base/add-knowledge', '/help/knowledge-base/live-catalog'],
   '/product/widget': ['/help/website-widget/add-widget', '/help/website-widget/page-rules', '/help/testing-lab/quick-browser-test'],
   '/product/integrations': ['/help/integrations/connect-integrations', '/help/calls', '/help/settings/notifications-and-privacy'],
-  '/pricing': ['/help/billing/how-credits-work', '/help/billing/plans'],
+  '/pricing': ['/help/billing/plans', '/help/calls/find-a-call'],
   '/ai-receptionist': ['/help/appointments', '/help/appointments/manage-appointments', '/help/inbound'],
   '/solutions/healthcare': ['/help/appointments', '/help/compliance/consent-recording-retention'],
   '/ai-telecaller': ['/help/outbound', '/help/contacts/phone-number-format', '/help/calls'],

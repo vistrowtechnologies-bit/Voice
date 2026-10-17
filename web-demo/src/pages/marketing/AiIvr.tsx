@@ -115,7 +115,7 @@ const FAQ = [
   },
   {
     q: 'What does an AI IVR cost?',
-    a: 'You pay for minutes of conversation in credits. The credits per minute depend on the voice tier and model tier you choose, and each plan includes a monthly credit allowance. Carrier usage and number rental are separate from AI credits. Current plans are on the pricing page.',
+    a: 'You pay for minutes of conversation, and each plan includes a monthly allowance of minutes. Carrier usage and number rental are separate from your plan. Current plans are on the pricing page.',
   },
   {
     q: 'Can I keep my existing phone number?',
@@ -404,8 +404,8 @@ export function AiIvr() {
             <SectionEyebrow>Pricing</SectionEyebrow>
             <h2 className="mt-2 font-display text-xl font-bold tracking-tight">Billed by the minute of conversation.</h2>
             <p className="mt-1 max-w-2xl text-sm text-text-muted">
-              Credits are counted from call minutes, multiplied by the voice tier and model tier you pick, so the main
-              cost driver is how long your calls last. Carrier usage and number rental are separate from AI credits.
+              Each plan includes a monthly allowance of conversation minutes, so the main cost driver is how long your
+              calls last. Carrier usage and number rental are separate from your plan.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-3">

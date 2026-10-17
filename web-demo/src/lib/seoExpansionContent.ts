@@ -528,8 +528,8 @@ const BASE_BUYER_GUIDES: BuyerGuide[] = [
       },
       {
         title: 'How Vistrow thinks about pricing',
-        body: 'Vistrow Voice uses credit-based plans so operators can see usage and scale call volume without learning every underlying model price.',
-        bullets: ['Plan-level visibility', 'Call-level credit breakdown', 'Separate voice/model tiers where needed'],
+        body: 'Vistrow Voice plans include a monthly allowance of conversation minutes, so operators can plan call volume without learning every underlying model price.',
+        bullets: ['Minutes as the plan unit', 'Monthly or annual billing', 'A known rate for extra minutes'],
       },
       {
         title: 'Phone calls and website calls cost differently',
@@ -577,7 +577,7 @@ const BASE_BUYER_GUIDES: BuyerGuide[] = [
       { q: 'Why are voice AI calls priced per minute?', a: 'Because live calls consume streaming speech recognition, language-model reasoning, voice synthesis, transport, and storage while the conversation is happening.' },
       { q: 'Can I reduce cost by using a smaller LLM?', a: 'Yes, for structured qualification flows a smaller fast model can work well. You still need to test accuracy, hallucination controls, and latency on real calls.' },
       { q: 'Is a website voice widget cheaper than phone calls?', a: 'Usually, because a browser call needs no phone number or carrier minutes. The AI part of the conversation still costs the same kind of usage, so check how your vendor prices each channel.' },
-      { q: 'Where are Vistrow Voice prices listed?', a: 'Plan prices, the credits each plan includes and how many credits a minute uses are on the pricing page. Each call in the dashboard also shows the credits it used.' },
+      { q: 'Where are Vistrow Voice prices listed?', a: 'Plan prices, the minutes each plan includes and the rate for extra minutes are on the pricing page.' },
     ],
   },
 ]
