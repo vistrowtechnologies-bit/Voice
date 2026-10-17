@@ -117,6 +117,15 @@ class ArthaLeadsLeadNotes(unittest.TestCase):
         self.assertEqual(came_via({"channel_source": "whatsapp"}), "WhatsApp message")
         self.assertEqual(came_via({"channel_source": "whatsapp", "ad_headline": "2 BHK"}), "WhatsApp ad")
         self.assertEqual(came_via({"channel_source": "unknown", "lead_source": "Google Ads"}), "Google ad")
+        # Live lead 17 Oct: a click-to-WhatsApp ad stored as channel_source
+        # "facebook". They messaged on WhatsApp; they never filled a form.
+        sonu = {"channel_source": "facebook", "lead_source": "WhatsApp", "arthaleads_source": "WhatsApp",
+                "ad_headline": "1 BHK PRO Homes from ₹45 Lakhs*",
+                "ad_source_url": "https://wa.me/wamo/status/preview/917713128717/120252541277480286"}
+        self.assertEqual(came_via(sonu), "WhatsApp ad")
+        self.assertEqual(came_via({"channel_source": "facebook", "ad_source_url": "https://wa.me/x"}), "WhatsApp ad")
+        self.assertEqual(came_via({"channel_source": "facebook", "lead_source": "WhatsApp"}), "WhatsApp message")
+        self.assertEqual(came_via({"channel_source": "facebook", "lead_source": "Facebook Ad"}), "Facebook lead form")
         self.assertEqual(came_via({"channel_source": "unknown", "lead_source": "Manual"}), "")
         # Not an ArthaLeads lead: "Came from" stays as it was.
         self.assertEqual(came_via({"lead_source": "Google Ads"}), "")
