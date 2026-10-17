@@ -4234,12 +4234,35 @@ class RealEstateAgent(Agent):
             _compliance, self._reply_language, self._is_platform_demo,
             cloned_voice=self._is_cloned_voice,
         )
+        _typed_welcome = self._welcome_message
         if self._welcome_message:
             self._welcome_message = call_disclosure.with_disclosure(
                 self._welcome_message, self._recording_disclosure, force=self._is_cloned_voice,
             )
+        # A cloned voice reads a romanized line ("Bataiye, main aapki...") with
+        # English pronunciation; swap in the native-script line when it is
+        # ready (custom_voice.native_script). Never waits: if the greeting
+        # starts first, the typed line is spoken as before.
+        if self._is_cloned_voice and custom_voice.needs_native_script(_typed_welcome, self._reply_language):
+            self._start_native_welcome(_typed_welcome)
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
+
+    def _start_native_welcome(self, typed: str) -> None:
+        spoken = self._welcome_message
+
+        async def _swap() -> None:
+            native = await custom_voice.native_script(typed, self._reply_language)
+            if native != typed and self._welcome_message == spoken:
+                self._welcome_message = call_disclosure.with_disclosure(
+                    native, self._recording_disclosure, force=self._is_cloned_voice,
+                )
+                logger.info("cloned voice: welcome line switched to native script")
+
+        try:
+            self._native_welcome_task = asyncio.get_running_loop().create_task(_swap())
+        except RuntimeError:  # no running loop (direct construction in tests)
+            self._native_welcome_task = None
 
     def _warm_llm_prompt_cache(self) -> None:
         """Process this agent's system prompt once, in the background, while
