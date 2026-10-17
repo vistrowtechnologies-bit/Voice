@@ -81,6 +81,8 @@ import realtime_config
 import realtime_timing
 import sarvam_realtime_stt
 import call_disclosure
+import custom_voice
+from sarvam_clone_tts import SarvamCloneTTS
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
@@ -2760,8 +2762,24 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
 _TELEPHONY_SAMPLE_RATE = 8000
 
 
+class _CloneFallbackAdapter(TtsFallbackAdapter):
+    """FallbackAdapter has no update_options; a mid-call language switch
+    (on_user_turn_completed / tools.switch_reply_language) reaches BOTH the
+    cloned voice and its stock backup through this, so a reply the backup
+    takes is in the new language too. Each is updated on its own: the backup
+    refusing a language must not stop the clone switching, or vice versa."""
+
+    def update_options(self, **kwargs) -> None:
+        for target in (self._vistrow_clone, self._vistrow_backup):
+            try:
+                target.update_options(**kwargs)
+            except Exception:
+                logger.warning("cloned-voice adapter: %s update_options failed",
+                               type(target).__name__, exc_info=True)
+
+
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str,
-               is_phone: bool = False, sarvam_latency_lab: bool = False):
+               is_phone: bool = False, sarvam_latency_lab: bool = False, voice_gender: str | None = None):
     """Same fallback pattern as _build_stt, for TTS. Returns (tts, provider)
     — provider identifies the active TTS family, telling the caller which
     update_options kwarg shape to use for mid-call prosody/language updates
@@ -2831,6 +2849,28 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         "output_audio_codec": "linear16",
         "speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000,
     }
+    if speaker.startswith(custom_voice.SARVAM_CLONE_PREFIX):
+        # A customer's Sarvam cloned voice (custom_voice.resolve_row): one
+        # WebSocket for the whole call (sarvam_clone_tts), at the line's own
+        # rate, with the agent's pace. A stock Sarvam voice of the clone's
+        # gender backs it up, so a clone failure (429, 5xx, stall, a language
+        # it cannot speak) changes the voice for that reply instead of going
+        # silent. The clone never retries (SarvamCloneTTS.stream); the backup
+        # keeps the adapter's default retries.
+        clone = SarvamCloneTTS(
+            voice_id=speaker[len(custom_voice.SARVAM_CLONE_PREFIX):], language=reply_language,
+            sample_rate=_TELEPHONY_SAMPLE_RATE if is_phone else 24000, pace=tone.get("pace", 1.0),
+        )
+        backup = _use_clause_tokenizer(_sarvam_v4_tts(
+            voice_catalog.sarvam_v4_speaker("", voice_gender), voice_gender,
+            target_language_code=reply_language,
+            **{**tone, "temperature": min(float(tone.get("temperature", 0.6)), 1.0)},
+            **sarvam_stream_options,
+        ), "sarvam TTS (cloned-voice backup)")
+        adapter = _CloneFallbackAdapter([clone, backup], **_rate)
+        adapter._vistrow_clone = clone
+        adapter._vistrow_backup = backup
+        return adapter, "sarvam-clone"
     if speaker.startswith(_ELEVENLABS_V3_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
         voice_id = speaker[len(_ELEVENLABS_V3_VOICE_PREFIX) :]
         base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
@@ -3221,9 +3261,17 @@ def _disclosure_first_reply_instructions(config: dict) -> str:
         compliance = db.get_compliance_config(config.get("account_id"))
     disclosure = call_disclosure.recording_disclosure(
         compliance, config.get("language") or "hi-IN", bool(config.get("is_platform_demo")),
+        cloned_voice=custom_voice.is_custom(config.get("voice")),
     )
     if not disclosure:
         return ""
+    if disclosure in call_disclosure.AI_ONLY_NOTICES.values():
+        return (
+            "\n\n# AI notice\n"
+            "In your very first reply, before anything else, tell the caller in a few words, in their "
+            f"language, that they are speaking with an AI assistant, for example: \"{disclosure}\". "
+            "Say it once only."
+        )
     return (
         "\n\n# Recording notice\n"
         "In your very first reply, before anything else, tell the caller in a few words, in their "
@@ -3427,6 +3475,25 @@ class RealEstateAgent(Agent):
         config = config or {}
         agent_name = config.get("name") or "Artha"
         voice_value = config.get("voice") or "shubh"
+        # A customer's cloned voice: voice_value stays "custom:vv_..." (call
+        # record, billing, greeting cache); _tts_speaker is what speaks, and
+        # _speaking_voice is the catalog voice behind it when a stock
+        # fallback speaks instead (language switching reads that). The row
+        # comes from _load_runtime_call_context (off the event loop); a
+        # direct construction without it looks it up here.
+        self._is_cloned_voice = custom_voice.is_custom(voice_value)
+        self._clone_resolution = None
+        if self._is_cloned_voice:
+            if "_runtime_custom_voice" in config:
+                self._clone_resolution = custom_voice.resolve_row(
+                    voice_value, config.get("account_id"), config.get("_runtime_custom_voice"))
+            else:
+                self._clone_resolution = custom_voice.resolve(
+                    voice_value, config.get("account_id"), db.get_custom_voice)
+            self._tts_speaker = self._clone_resolution.speaker
+        else:
+            self._tts_speaker = voice_value
+        self._speaking_voice = self._tts_speaker if self._is_cloned_voice else voice_value
         tone_name = config.get("tone") or DEFAULT_TONE
         # Kept for the greeting audio cache's key — a cached clip is only ever
         # replayed for the exact voice it was synthesized with.
@@ -3814,6 +3881,10 @@ class RealEstateAgent(Agent):
         # says "बताता हूँ" instead of "बताती हूँ". Derived from the voice's
         # catalog gender so it's automatic for every voice, no per-agent config.
         _gender = (voice_catalog.get_voice(voice_value) or {}).get("gender")
+        if self._clone_resolution is not None:
+            # A cloned voice: the gender recorded with it (or the stock
+            # fallback's, when that is what speaks).
+            _gender = self._clone_resolution.gender
         # Also reinforced per-turn in on_user_turn_completed — a single
         # system-prompt mention tends to drift over a long conversation
         # (masculine Hindi/Marathi/Gujarati verb forms are simply far more
@@ -3964,9 +4035,10 @@ class RealEstateAgent(Agent):
             )
         else:
             tts, tts_provider = _build_tts(
-                reply_language, voice_value, base_tone, tone_name,
+                reply_language, self._tts_speaker, base_tone, tone_name,
                 is_phone=(call_type or "") == "phone",
                 sarvam_latency_lab=self._sarvam_latency_lab,
+                voice_gender=_gender,
             )
         # Make an explicit voice selection observable in LiveKit logs. This
         # lets us distinguish "the widget loaded a different agent config"
@@ -4156,12 +4228,15 @@ class RealEstateAgent(Agent):
         _compliance = config.get("_compliance_config")
         if _compliance is None:
             _compliance = db.get_compliance_config(config.get("account_id"))
+        # A cloned (real person's) voice always says it is an AI, whatever
+        # the Compliance toggles say.
         self._recording_disclosure = call_disclosure.recording_disclosure(
             _compliance, self._reply_language, self._is_platform_demo,
+            cloned_voice=self._is_cloned_voice,
         )
         if self._welcome_message:
             self._welcome_message = call_disclosure.with_disclosure(
-                self._welcome_message, self._recording_disclosure,
+                self._welcome_message, self._recording_disclosure, force=self._is_cloned_voice,
             )
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
@@ -4760,7 +4835,10 @@ class RealEstateAgent(Agent):
                 # the agent joining and the visitor hearing anything. Misses
                 # (unwarmed process, non-demo voice, warm still in progress)
                 # fall straight through to normal synthesis below.
-                cached = cached_greeting(self._voice_value, self._reply_language, self._voice_gender)
+                cached = (
+                    None if getattr(self, "_is_cloned_voice", False)
+                    else cached_greeting(self._voice_value, self._reply_language, self._voice_gender)
+                )
                 if cached is not None:
                     text, frames = cached
                     logger.info("[latency] greeting served from pre-rendered cache (%s chars)", len(text))
@@ -4770,7 +4848,13 @@ class RealEstateAgent(Agent):
                     _PLATFORM_DEMO_OPENERS_EN if self._reply_language.startswith("en") else _PLATFORM_DEMO_OPENERS
                 )
                 openers = opener_set.get(self._voice_gender) or opener_set["female"]
-                await self.session.say(random.choice(openers))
+                opener = random.choice(openers)
+                if getattr(self, "_is_cloned_voice", False):
+                    # A cloned (real person's) voice always says it is an AI.
+                    opener = call_disclosure.with_disclosure(
+                        opener, getattr(self, "_recording_disclosure", ""), force=True,
+                    )
+                await self.session.say(opener)
                 return
             # Same fix, generalized: every tenant agent without its own
             # welcome_message used to fall through to generate_reply() here
@@ -4793,7 +4877,7 @@ class RealEstateAgent(Agent):
                     greeting = f"Hi {self._visitor_first_name}, " if self._visitor_first_name else "Hi, "
                     template = _DEFAULT_OPENER_EN_BUSINESS
                 await self.session.say(call_disclosure.with_disclosure(
-                    template.format(greeting=greeting, business_name=business_name), getattr(self, "_recording_disclosure", ""),
+                    template.format(greeting=greeting, business_name=business_name), getattr(self, "_recording_disclosure", ""), force=getattr(self, "_is_cloned_voice", False),
                 ))
             else:
                 # No real business name to say (e.g. resolved to the
@@ -4802,7 +4886,7 @@ class RealEstateAgent(Agent):
                 greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
                 template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
                 await self.session.say(call_disclosure.with_disclosure(
-                    template.format(greeting=greeting, agent_name=self._agent_name), getattr(self, "_recording_disclosure", ""),
+                    template.format(greeting=greeting, agent_name=self._agent_name), getattr(self, "_recording_disclosure", ""), force=getattr(self, "_is_cloned_voice", False),
                 ))
         finally:
             # Cold starts / slow TTS providers (Google) can push the opening
@@ -5888,7 +5972,7 @@ class RealEstateAgent(Agent):
                 # for the rest of the call.
                 if candidate in ELEVENLABS_SUPPORTED_LANGUAGES:
                     self.tts.update_options(language=candidate.split("-")[0])
-            elif self._tts_provider == "google-native" and voice_catalog.chirp3_persona(self._voice):
+            elif self._tts_provider == "google-native" and voice_catalog.chirp3_persona(self._speaking_voice):
                 # A Chirp 3 persona follows the caller by changing locale and
                 # keeping its name — hi-IN-Chirp3-HD-Aoede becomes
                 # mr-IN-Chirp3-HD-Aoede, the same person speaking Marathi.
@@ -5900,7 +5984,9 @@ class RealEstateAgent(Agent):
                 # moves to something outside that set keeps the current voice
                 # rather than being handed a silently wrong one — the reply
                 # language still changes, only the voice cannot follow.
-                _persona = voice_catalog.chirp3_persona(self._voice)
+                # _speaking_voice, not _voice: a cloned voice's call record
+                # keeps "custom:...", while its Chirp 3 fallback is what speaks.
+                _persona = voice_catalog.chirp3_persona(self._speaking_voice)
                 if candidate in voice_catalog.CHIRP3_LANGUAGES:
                     _primary = getattr(self.tts, "_vistrow_primary", None)
                     if _primary is None:
@@ -6618,13 +6704,23 @@ async def _load_runtime_call_context(config: dict, caller_phone: str | None) -> 
         add("_runtime_kb_strict", db.is_kb_strict, kb_id)
     if config.get("memory_enabled") and caller_phone and config.get("id"):
         add("_runtime_caller_memory", db.get_caller_memory, config["id"], caller_phone, account_id)
+    if custom_voice.is_custom(config.get("voice")):
+        # The cloned voice's row (and whether the plan still allows it), read
+        # here instead of inside RealEstateAgent.__init__ on the event loop.
+        add("_runtime_custom_voice", db.get_custom_voice,
+            config["voice"][len(custom_voice.PREFIX):], account_id)
 
     if reads:
         values = await asyncio.gather(*(task for _, task in reads), return_exceptions=True)
         for (name, _), value in zip(reads, values):
             if isinstance(value, BaseException):
                 logger.warning("call context read %s failed; using safe default", name, exc_info=value)
-                value = {} if name in ("_compliance_config", "_availability_config") else (False if name == "_runtime_kb_strict" else "")
+                value = (
+                    {} if name in ("_compliance_config", "_availability_config")
+                    else False if name == "_runtime_kb_strict"
+                    else None if name == "_runtime_custom_voice"
+                    else ""
+                )
             config[name] = value
     return config
 

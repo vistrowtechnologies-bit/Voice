@@ -935,6 +935,44 @@ CREATE TABLE IF NOT EXISTS voice_samples (
     PRIMARY KEY (voice_string, lang)
 );
 
+-- A customer's own cloned voice ("Clone your voice", custom_voices.py).
+-- Agents select one as agents.voice = 'custom:<id>'. Vendor ids and storage
+-- keys never leave the server. deleted_at set = gone (row kept for audit).
+CREATE TABLE IF NOT EXISTS custom_voices (
+    id TEXT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    language TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'processing',
+    error TEXT NOT NULL DEFAULT '',
+    sample_key TEXT,
+    consent_key TEXT,
+    consent_transcript TEXT NOT NULL DEFAULT '',
+    consent_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    elevenlabs_voice_id TEXT,
+    sarvam_voice_id TEXT,
+    sarvam_ref_key TEXT,
+    engine_default TEXT,
+    setup_credits_charged INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT {_NOW},
+    deleted_at TEXT,
+    gender TEXT,
+    reference_text TEXT NOT NULL DEFAULT '',
+    vendor_deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_custom_voices_account ON custom_voices(account_id);
+
+-- Preview audio for a cloned voice, cached per (voice, text).
+CREATE TABLE IF NOT EXISTS custom_voice_previews (
+    voice_id TEXT NOT NULL,
+    text_sha TEXT NOT NULL,
+    audio BYTEA NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'audio/mpeg',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (voice_id, text_sha)
+);
+
 -- One row per "Build with AI" LLM request (agent_builder.py). Only counted,
 -- for the per-account daily cap; the drafts themselves are never stored.
 CREATE TABLE IF NOT EXISTS agent_drafts (
@@ -1482,6 +1520,13 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_requested_at TEXT")
             conn.execute("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_reason TEXT DEFAULT ''")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_platform_owner INTEGER DEFAULT 0")
+            # Cloned voices (custom_voices.py, 2026-10-16): the speaker's
+            # gender (required for new clones; NULL on older rows), Sarvam's
+            # ASR transcript of the reference clip, and when the vendor voice
+            # was deleted (NULL on a deleted/failed row = reconcile retries).
+            conn.execute("ALTER TABLE custom_voices ADD COLUMN IF NOT EXISTS gender TEXT")
+            conn.execute("ALTER TABLE custom_voices ADD COLUMN IF NOT EXISTS reference_text TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE custom_voices ADD COLUMN IF NOT EXISTS vendor_deleted_at TEXT")
             # NULL until the first-run onboarding modal is dismissed. Every
             # pre-existing account (created before onboarding existed) should
             # count as already onboarded rather than suddenly seeing the
@@ -4019,7 +4064,7 @@ def _row_get(row, key, default=None):
         return default
 
 
-def _agent_dict(row: dict) -> dict:
+def _agent_dict(row: dict, conn=None) -> dict:
     return {
         "id": row["id"],
         "publicId": _row_get(row, "public_id") or "",
@@ -4035,7 +4080,7 @@ def _agent_dict(row: dict) -> dict:
         # "gpt-4.1-mini"). Resolved here rather than in the frontend because
         # the catalog lives on this side; falls back to the raw string only
         # for a voice no longer in the catalog, which the UI then softens.
-        "voiceName": (voice_catalog.get_voice(row["voice"]) or {}).get("name") or row["voice"],
+        "voiceName": __import__("custom_voices").display_name(_row_get(row, "account_id"), row["voice"], conn) if str(row["voice"] or "").startswith("custom:") else (voice_catalog.get_voice(row["voice"]) or {}).get("name") or row["voice"],
         "sttProvider": _row_get(row, "stt_provider") or "sarvam",
         "language": row["language"],
         "status": row["status"],
@@ -4181,7 +4226,7 @@ def list_agents(account_id: int) -> list[dict]:
     conn = _connect()
     try:
         return [
-            _agent_dict(r)
+            _agent_dict(r, conn)
             for r in conn.execute("SELECT * FROM agents WHERE account_id = ? ORDER BY id", (account_id,)).fetchall()
         ]
     finally:
@@ -4242,7 +4287,7 @@ def create_agent(data: dict, account_id: int) -> dict:
                 ),
             )
         row = conn.execute("SELECT * FROM agents WHERE id = ?", (cur.lastrowid,)).fetchone()
-        return _agent_dict(row)
+        return _agent_dict(row, conn)
     finally:
         conn.close()
 
@@ -4303,7 +4348,7 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
                 (str(agent_id),),
             )
         row = conn.execute("SELECT * FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id)).fetchone()
-        return _agent_dict(row) if row else None
+        return _agent_dict(row, conn) if row else None
     finally:
         conn.close()
 
@@ -8432,7 +8477,7 @@ def get_agent_by_id_unscoped(agent_id: int) -> dict | None:
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
-        return _agent_dict(row) if row else None
+        return _agent_dict(row, conn) if row else None
     finally:
         conn.close()
 
@@ -9414,6 +9459,12 @@ def voice_tier(voice: str | None) -> str:
     the same "don't guess, use the safe default" reasoning as agent/main.py's
     own unconfigured-provider fallback."""
     if not voice:
+        return "standard"
+    # A customer's cloned voice ("custom:vv_<id>", custom_voices.py) has no
+    # per-minute premium (owner, 2026-10-16): it bills exactly like a standard
+    # voice, so a Vistrow Bharat call costs Bharat's rate. Its cost to us
+    # (~Rs 1.1-1.6/min) is recovered by the plan, not a voice multiplier.
+    if voice.startswith("custom:"):
         return "standard"
     if voice in _PREMIUM_VOICES or voice.startswith(_PREMIUM_VOICE_PREFIXES):
         return "premium"

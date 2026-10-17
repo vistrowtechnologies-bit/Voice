@@ -56,6 +56,7 @@ import ops_alert_worker
 import widget_avatars
 import widget_chat
 import voice_catalog
+import custom_voices
 import onboarding_agent
 import onboarding_profile
 from help_content import FAQS
@@ -204,6 +205,8 @@ _SUPPORT_BLOCKED_PATHS = re.compile(
     r"|^/campaigns(/|$)"
     r"|^/telephony/test-call$"
     r"|^/calls/[^/]+/analyze$"
+    # Cloning a person's voice (and paying for it) is the customer's own act.
+    r"|^/voices/custom(/|$)"
 )
 
 # An API key works for the product API (agents, calls, contacts, campaigns...)
@@ -3926,7 +3929,7 @@ def _guard_stt_provider(data: dict | None) -> None:
         raise HTTPException(400, "Unsupported speech-recognition provider.")
 
 
-def _guard_voice_tier(data: dict | None, account_id: int) -> None:
+def _guard_voice_tier(data: dict | None, account_id: int, agent_id: int | None = None) -> None:
     # Confirmed real gap: add_account_voice (the /voices/mine "add to my
     # menu" route) checks allowed_tiers_for_plan, but create_agent and
     # update_agent only ever checked the preview flag - a direct API call
@@ -3939,9 +3942,23 @@ def _guard_voice_tier(data: dict | None, account_id: int) -> None:
     requested_voice = str((data or {}).get("voice") or "")
     if not requested_voice:
         return
+    if custom_voices.is_custom_value(requested_voice):
+        # A cloned voice: only this account's own, ready clone.
+        try:
+            custom_voices.validate_agent_voice(account_id, requested_voice)
+        except custom_voices.CloneError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
+        return
     entry = voice_catalog.get_voice(requested_voice)
     if entry is None:
         raise HTTPException(400, "Select an available catalog voice.")
+    # An agent re-saved with the voice it already has keeps it, even if that
+    # voice has since become owner-only (stock premium voices, 2026-10-16):
+    # agents already using one must keep working.
+    if agent_id is not None:
+        saved = calls_db.get_agent_by_id_unscoped(agent_id)
+        if saved and saved.get("voice") == requested_voice and calls_db.agent_account_id(agent_id) == account_id:
+            return
     is_owner = calls_db.is_platform_owner(account_id)
     if entry.get("preview") and not is_owner:
         raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
@@ -4029,7 +4046,7 @@ def _guard_agent_patch(data: dict, account_id: int, agent_id: int) -> dict:
     and the copilot's agent actions (copilot_tools.AGENT_PATCH_GUARD).
     Raises HTTPException; returns the data with owner-only fields dropped."""
     _guard_stt_provider(data)
-    _guard_voice_tier(data, account_id)
+    _guard_voice_tier(data, account_id, agent_id)
     _guard_realtime_voice(data, account_id, agent_id)
     _guard_admin_only_model(data, account_id)
     for fields, feature in ((('kbId', 'kb_id'), 'knowledge'),
@@ -7035,6 +7052,11 @@ def _epoch_to_iso(epoch: int | None) -> str | None:
 
 
 # ---------------------------------------------------------- voices
+
+# "Clone your voice" (custom_voices.py): /voices/custom/*. Registered before
+# the routes below; none of them overlap.
+app.include_router(custom_voices.build_router(require_role))
+
 
 @app.get("/voices/catalog")
 def voices_catalog(user: dict = Depends(current_user)) -> dict:

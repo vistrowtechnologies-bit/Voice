@@ -163,7 +163,130 @@ export const removeVoice = (voice: string) =>
 // Direct URL for the cached audition audio (same-origin, cookie-authed). First
 // hit for a (voice, lang) synthesizes + caches server-side; later hits are free.
 export const voicePreviewUrl = (voice: string, lang: string) =>
-  `/api/voices/preview?voice=${encodeURIComponent(voice)}&lang=${encodeURIComponent(lang)}`
+  voice.startsWith(CUSTOM_VOICE_PREFIX)
+    ? // Cloned voices take a full code ("hi-IN"); a short one ("hi") falls back to the voice's own language.
+      customVoicePreviewUrl(voice.slice(CUSTOM_VOICE_PREFIX.length), undefined, lang.includes('-') ? lang : undefined)
+    : `/api/voices/preview?voice=${encodeURIComponent(voice)}&lang=${encodeURIComponent(lang)}`
+
+// ------------------------------------------------- cloned voices ("Your voices")
+
+export interface CustomVoiceQuote {
+  // True when the next clone costs nothing (first clone on some plans); setupCredits is then 0.
+  firstCloneFree: boolean
+  setupCredits: number
+  creditsPerMinute: number
+  limit: number
+  used: number
+  canCreate: boolean
+  reason: string
+  balance: number
+  consentSentence: string
+  // Long English and Hindi reading passages. The clone dialog ships its own
+  // short script for each of the 12 languages (lib/voiceClone CLONE_SCRIPTS).
+  script: string
+  scriptHi: string
+}
+
+export interface CustomVoice {
+  id: string
+  name: string
+  language: string
+  status: 'processing' | 'ready' | 'failed'
+  // Speaker's gender from the clone form; "" for voices made before it was asked.
+  gender?: 'male' | 'female' | ''
+  // Language codes this voice can speak ("hi-IN", ...); one recording speaks all of them.
+  speaksLanguages?: string[]
+  error: string
+  createdAt: string
+  creditsPerMinute: number
+  // What an agent stores as its voice: "custom:vv_...".
+  voiceValue: string
+}
+
+async function errorDetail(res: Response, fallback: string): Promise<string> {
+  const detail = await res
+    .json()
+    .then((j) => (typeof j?.detail === 'string' ? j.detail : null))
+    .catch(() => null)
+  return detail || fallback
+}
+
+export const fetchCustomVoiceQuote = () => get<CustomVoiceQuote>('/voices/custom/quote')
+export const fetchCustomVoices = () => get<CustomVoice[]>('/voices/custom')
+export const renameCustomVoice = (id: string, name: string) =>
+  send<CustomVoice>('PATCH', `/voices/custom/${encodeURIComponent(id)}`, { name })
+// 409 carries the server's reason (e.g. the agents still using it) as the error message.
+export const deleteCustomVoice = (id: string) => send<{ ok: boolean }>('DELETE', `/voices/custom/${encodeURIComponent(id)}`)
+
+const CUSTOM_VOICE_PREFIX = 'custom:'
+
+/** Preview of a cloned voice; `language` ("hi-IN") picks the sample's
+ * language, otherwise the server uses the voice's own. */
+function customVoicePreviewUrl(id: string, text?: string, language?: string): string {
+  const params = new URLSearchParams()
+  if (text) params.set('text', text)
+  if (language) params.set('language', language)
+  const qs = params.toString()
+  return `/api/voices/custom/${encodeURIComponent(id)}/preview${qs ? `?${qs}` : ''}`
+}
+
+export async function fetchCustomVoicePreview(id: string, text?: string, language?: string): Promise<Blob> {
+  const res = await fetch(customVoicePreviewUrl(id, text, language), { credentials: 'include', cache: 'no-store' })
+  if (res.status === 401) onUnauthorized()
+  if (!res.ok) throw new Error(await errorDetail(res, 'Could not play this voice. Try again.'))
+  return res.blob()
+}
+
+/** Uploads the sample and spoken consent. XHR rather than fetch so the
+ * upload can report progress (0..1). Rejects with the server's `detail`. */
+export function createCustomVoice(
+  body: {
+    name: string
+    // The language spoken in the recording.
+    language: string
+    gender: 'male' | 'female'
+    // 'record' (in the browser, up to 60 s) or 'upload' (a file, up to 5 min).
+    source: 'record' | 'upload'
+    sample: Blob
+    sampleName: string
+    consent: Blob
+    consentName: string
+  },
+  onProgress?: (fraction: number) => void,
+): Promise<CustomVoice & { creditsCharged: number }> {
+  const form = new FormData()
+  form.append('name', body.name)
+  form.append('language', body.language)
+  form.append('gender', body.gender)
+  form.append('source', body.source)
+  form.append('sample', body.sample, body.sampleName)
+  form.append('consent', body.consent, body.consentName)
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/voices/custom')
+    xhr.withCredentials = true
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
+    }
+    xhr.onerror = () => reject(new Error('Upload failed. Check your connection and try again.'))
+    xhr.onload = () => {
+      if (xhr.status === 401) onUnauthorized()
+      let json: unknown = null
+      try {
+        json = JSON.parse(xhr.responseText)
+      } catch {
+        json = null
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && json) {
+        resolve(json as CustomVoice & { creditsCharged: number })
+        return
+      }
+      const detail = (json as { detail?: unknown } | null)?.detail
+      reject(new Error(typeof detail === 'string' && detail ? detail : 'Could not create the voice. Please try again.'))
+    }
+    xhr.send(form)
+  })
+}
 
 export async function fetchLead(id: string): Promise<CallRecord | undefined> {
   const res = await fetch(`/api/calls/${id}`, { credentials: 'include' })

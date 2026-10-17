@@ -19,14 +19,19 @@ import array
 import asyncio
 import audioop
 import base64
+import io
 import json
+import logging
 import os
+import wave
 from typing import AsyncIterator
 
 import httpx
 from sarvamai import AsyncSarvamAI, AudioOutput, EventResponse
 
 import voice_catalog
+
+logger = logging.getLogger(__name__)
 
 _ELEVEN_API_KEY = os.environ.get("ELEVEN_API_KEY")
 _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
@@ -38,6 +43,12 @@ _GOOGLE_PREFIX = "google:"
 _GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
 _SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 _SARVAM_LANG_DEFAULT = "hi-IN"
+# "sarvamclone:<fallback speaker>:<sarvam voice_id>" — a customer's Sarvam
+# clone, built only by server._cloned_voice_tts when ORCH_SPEAK_CLONES=1.
+_SARVAM_CLONE_PREFIX = "sarvamclone:"
+_SARVAM_CLONE_URL = "https://api.sarvam.ai/voices/clone/stream"
+_SARVAM_CLONE_MAX_CHARS = 1000
+_SARVAM_CLONE_SAMPLE_RATE = 24_000  # linear16 with no rate = raw PCM at 24 kHz (agent/sarvam_clone_tts.py)
 
 _TIMEOUT_S = 20.0
 
@@ -146,6 +157,48 @@ async def _synth_sarvam(
     except (KeyError, IndexError) as e:
         raise TTSError("Unexpected TTS response from Sarvam.") from e
     return base64.b64decode(b64), "audio/wav"
+
+
+def sarvam_clone_voice(voice_id: str, fallback_speaker: str) -> str:
+    """Voice string for a Sarvam clone; fallback_speaker (a stock Sarvam
+    speaker) is spoken when the clone request fails, so a failure is a
+    different voice, never silence — same as agent/'s FallbackAdapter."""
+    return f"{_SARVAM_CLONE_PREFIX}{fallback_speaker}:{voice_id}"
+
+
+async def _synth_sarvam_clone(voice_id: str, language_code: str, text: str) -> tuple[bytes, str]:
+    """One clip from Sarvam's clone endpoint (multipart form; raw audio body,
+    JSON error before the first byte), wrapped as WAV so the phone and
+    browser paths both decode it like any Sarvam reply."""
+    if not _SARVAM_API_KEY:
+        raise TTSError("Voice isn't configured (no Sarvam key).")
+    fields = {
+        "voice_id": voice_id,
+        "text": text[:_SARVAM_CLONE_MAX_CHARS],
+        "language_code": language_code,
+        "output_audio_codec": "linear16",
+    }
+    try:
+        resp = await _get_client().post(
+            _SARVAM_CLONE_URL,
+            headers={"api-subscription-key": _SARVAM_API_KEY},
+            files={k: (None, v) for k, v in fields.items()},
+        )
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise TTSError(f"Sarvam clone returned {e.response.status_code}: {e.response.text[:300]}") from e
+    except httpx.HTTPError as e:
+        raise TTSError(f"Could not reach Sarvam: {e}") from e
+    pcm = resp.content
+    if not pcm or "json" in resp.headers.get("content-type", ""):
+        raise TTSError("Unexpected TTS response from Sarvam clone.")
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(_SARVAM_CLONE_SAMPLE_RATE)
+        wav_file.writeframes(pcm[: len(pcm) - len(pcm) % 2])
+    return buf.getvalue(), "audio/wav"
 
 
 # Matches audio.py's _FADE_SAMPLES (10ms at 8kHz) — same click-prevention
@@ -259,7 +312,7 @@ def synthesize_stream(
     returning either None or the async generator object from
     _synth_sarvam_stream (constructing that doesn't run any of its body
     yet, so this stays a cheap, non-blocking call either way)."""
-    if voice_string.startswith((_ELEVEN_V3_PREFIX, _ELEVEN_PREFIX, _GOOGLE_31_PREFIX, _GOOGLE_PREFIX)):
+    if voice_string.startswith((_ELEVEN_V3_PREFIX, _ELEVEN_PREFIX, _GOOGLE_31_PREFIX, _GOOGLE_PREFIX, _SARVAM_CLONE_PREFIX)):
         return None
     model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"
     return _synth_sarvam_stream(voice_string, model, reply_language or _SARVAM_LANG_DEFAULT, text, pace, pitch)
@@ -333,6 +386,14 @@ async def synthesize(
     limitation) let session.py apply live emotion-reactive delivery, same
     intent as agent/main.py's on_user_turn_completed tts.update_options()
     calls."""
+    if voice_string.startswith(_SARVAM_CLONE_PREFIX):
+        fallback, _, voice_id = voice_string[len(_SARVAM_CLONE_PREFIX):].partition(":")
+        language = reply_language or _SARVAM_LANG_DEFAULT
+        try:
+            return await _synth_sarvam_clone(voice_id, language, text)
+        except TTSError as e:
+            logger.warning("Sarvam clone TTS failed (%s); speaking stock voice %s", e, fallback)
+            return await _synth_sarvam(fallback, "bulbul:v3", language, text, pace, pitch)
     if voice_string.startswith(_ELEVEN_V3_PREFIX):
         lang = reply_language.split("-")[0] if reply_language else None
         return await _synth_elevenlabs(voice_string[len(_ELEVEN_V3_PREFIX):], "eleven_v3", text, lang)

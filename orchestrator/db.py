@@ -174,6 +174,39 @@ def get_agent_config(agent_id: int | None = None, account_id: int | None = None)
         conn.close()
 
 
+def custom_voice(voice: str, account_id: int | None) -> dict | None:
+    """The account's own ready, not-deleted clone behind an agent voice
+    "custom:vv_<id>", as {"elevenlabs_voice_id", "sarvam_voice_id", "gender",
+    "status"} (gender "male"|"female", or "" when unknown). Another account's
+    id, a deleted/unready clone, a non-custom voice, no account or a DB error
+    gives None; the caller then picks a fallback voice, never fails the call."""
+    if not voice.startswith("custom:") or account_id is None:
+        return None
+    conn = None
+    try:
+        conn = dbconn.connect()
+        row = conn.execute(
+            "SELECT elevenlabs_voice_id, sarvam_voice_id, gender, status FROM custom_voices "
+            "WHERE id = ? AND account_id = ? AND deleted_at IS NULL AND status = 'ready'",
+            (voice[len("custom:"):], account_id),
+        ).fetchone()
+        if not row:
+            return None
+        gender = (row["gender"] or "").strip().lower()
+        return {
+            "elevenlabs_voice_id": row["elevenlabs_voice_id"] or "",
+            "sarvam_voice_id": row["sarvam_voice_id"] or "",
+            "gender": gender if gender in ("male", "female") else "",
+            "status": row["status"],
+        }
+    except psycopg.Error:
+        logger.exception("could not read cloned voice for account %s", account_id)
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
     """Knowledge-base text to append to the system prompt.
 

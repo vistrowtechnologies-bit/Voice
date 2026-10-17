@@ -174,3 +174,21 @@ class EndCallNoSilentLoop(unittest.TestCase):
         second, ud = _end(self.TURNS, userdata=ud)
         self.assertTrue(ud.get("ending_call"), second)
         self.assertIn("confirm", second)
+
+class ClonedVoiceFallbackSwitchTests(unittest.TestCase):
+    """A cloned voice that fell back to a stock Chirp voice keeps `_voice` as
+    custom:vv_… (billing) but speaks through `_speaking_voice`. The switch
+    tool must swap the Chirp locale for the voice actually speaking."""
+
+    def test_chirp_fallback_swaps_locale(self):
+        calls = []
+        ctx, agent, _ = _ctx([("user", "मला मराठीतून बोलायचं आहे")], reply_language="hi-IN", provider="google-native")
+        agent._voice = "custom:vv_0123456789abcdef"
+        agent._speaking_voice = "google:chirp3:Achernar"
+        agent.tts = SimpleNamespace(_vistrow_primary=SimpleNamespace(update_options=lambda **k: calls.append(k)))
+        out = asyncio.run(tools.switch_reply_language.__wrapped__(ctx, "Marathi")
+                          if hasattr(tools.switch_reply_language, "__wrapped__")
+                          else tools.switch_reply_language(ctx, "Marathi"))
+        self.assertEqual(agent._reply_language, "mr-IN", out)
+        self.assertEqual(calls, [{"language": "mr-IN", "voice_name": "mr-IN-Chirp3-HD-Achernar"}], out)
+        self.assertNotIn("can't enforce", out)

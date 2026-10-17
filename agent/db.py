@@ -826,6 +826,33 @@ def get_compliance_config(account_id: int | None) -> dict:
     return cfg
 
 
+def get_custom_voice(voice_id: str, account_id: int | None) -> dict | None:
+    """A customer's cloned voice (server/custom_voices.py owns the table),
+    only if it belongs to this call's account and is not deleted. None on
+    any miss or DB error - the caller falls back to a default voice.
+    "plan_allows" says whether the account's plan still includes its clones
+    (plan_policy.clones_allowed)."""
+    if not voice_id or account_id is None:
+        return None
+    conn = None
+    try:
+        conn = dbconn.connect()
+        row = conn.execute(
+            "SELECT id, language, gender, status, engine_default, elevenlabs_voice_id, sarvam_voice_id "
+            "FROM custom_voices WHERE id = ? AND account_id = ? AND deleted_at IS NULL",
+            (voice_id, account_id),
+        ).fetchone()
+        if not row:
+            return None
+        return {**dict(row), "plan_allows": plan_policy.clones_allowed(conn, account_id)}
+    except psycopg.Error:
+        logger.exception("could not read cloned voice %s for account %s", voice_id, account_id)
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 _country_cache: dict[int, tuple[float, str]] = {}
 _COUNTRY_CACHE_TTL_S = 60.0
 

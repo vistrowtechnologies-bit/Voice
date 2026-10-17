@@ -21,7 +21,7 @@ from the same `value` string.
 `value` IS the exact string stored on an agent's `voice` column, passed to
 agent/main.py's _build_tts, AND classified for billing by
 calls_db.voice_tier() — the prefix convention there and here must agree:
-  - "elevenlabs:<id>"     → ElevenLabs Flash v2.5  → tier "premium"      (2x credits)
+  - "elevenlabs:<id>"     → ElevenLabs Flash v2.5  → tier "premium"      (2x credits; owner-only since 2026-10-16)
   - "elevenlabs-v3:<id>"  → ElevenLabs v3          → tier "premium_plus" (2x credits)
   - "google:<voice>"      → Google Cloud locale voice → tier "lite"     (0.5x credits)
   - "google31:<voice>"    → next-generation TTS preview → tier "standard" (1x credits)
@@ -612,6 +612,15 @@ def gemini_backup_persona(value: str) -> str:
     return tail.capitalize()
 
 
+# Owner-only families: marked preview, which list_account_voices,
+# voice_catalog_for_account, add_account_voice, _guard_voice_tier and
+# /voices/preview already restrict to the platform owner (same mechanism as
+# the Expressive voices).
+_OWNER_ONLY_PREFIXES = ("elevenlabs:",)
+for _entry in CATALOG:
+    if _entry["value"].startswith(_OWNER_ONLY_PREFIXES):
+        _entry["preview"] = True
+
 _BY_VALUE: dict[str, dict] = {v["value"]: v for v in CATALOG}
 
 # Which voice tiers each plan may add to its menu. Premium tiers are gated to
@@ -767,7 +776,11 @@ def sample_text(lang: str, gender: str | None = None) -> str | None:
 # 2026-10-06: ElevenLabs is hidden entirely (menu, catalogue and agent picker).
 # The Voices page was 13,000 px tall and no live agent uses one; agents that
 # already point at an "elevenlabs:" voice still resolve it for calls and billing.
-_HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:", "elevenlabs:", "google31:")
+# 2026-10-16 (owner): stock "elevenlabs:" voices return as owner-only (preview,
+# see _OWNER_ONLY_PREFIXES below) so the platform owner can still pick and
+# audition them while customers never see them; customers get their own
+# cloned voices instead (custom_voices.py, "custom:vv_<id>").
+_HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:", "google31:")
 
 # 2026-10-08: voices that failed the speed or quality bar on real calls are not
 # offered either (docs/INTERNATIONAL-EXPANSION-PLAN-2026-10-07.md section 8.1):
@@ -998,6 +1011,12 @@ def is_hidden(value: str) -> bool:
         or value in _HIDDEN_VOICES_EXACT
         or _is_sarvam_v4_content_voice(value)
     )
+
+
+def is_grandfathered(value: str) -> bool:
+    """Owner-only now, but agents that already use it keep taking calls
+    (stock ElevenLabs voices since 2026-10-16)."""
+    return bool(value) and value.startswith(_OWNER_ONLY_PREFIXES)
 
 
 def get_voice(value: str) -> dict | None:
