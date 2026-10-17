@@ -6,6 +6,8 @@ import type { BillingSummary, TopupResult } from '../lib/types'
 import { Icon } from './Icon'
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/** Whole rupees without the ".00", for the compact pack cards. */
+const inrShort = (n: number) => (Number.isInteger(n) ? `₹${n.toLocaleString('en-IN')}` : inr(n))
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 /** Eases a displayed number to its new value (~350 ms) so totals count instead of jumping. */
@@ -63,6 +65,13 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
   // Effective price of a minute once the bonus is counted; the lowest is "Best value".
   const effectiveRate = (p: (typeof TOPUP_PACKS)[number]) => (p.credits * perCredit) / (p.credits + Math.floor((p.credits * p.bonusPct) / 100))
   const bestValueKey = TOPUP_PACKS.reduce((best, p) => (effectiveRate(p) < effectiveRate(best) ? p : best)).key
+  const STEP = 50
+  // −/+ snap to the next multiple of STEP, clamped to the allowed range.
+  const stepCustom = (dir: 1 | -1) => setCustom((n) => {
+    const base = Number.isFinite(n) ? n : TOPUP_MIN_CREDITS
+    const next = dir > 0 ? Math.floor(base / STEP) * STEP + STEP : Math.ceil(base / STEP) * STEP - STEP
+    return Math.min(TOPUP_MAX_CREDITS, Math.max(TOPUP_MIN_CREDITS, next))
+  })
   const shownTotal = useTween(customInvalid ? 0 : base + gst)
   const shownMinutes = useTween(customInvalid ? 0 : credits + bonus)
 
@@ -116,8 +125,8 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
 
   return (
     <div className="topup-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose} role="dialog" aria-modal="true" aria-label="Buy minutes">
-      <div className="topup-panel relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-surface p-4 shadow-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-primary/20 blur-3xl" aria-hidden="true" />
+      <div className="topup-panel relative max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-surface p-4 shadow-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl" aria-hidden="true"><div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-primary/20 blur-3xl" /></div>
         {result ? (
           <div className="relative flex flex-col items-center py-4 text-center">
             <span className="relative grid h-16 w-16 place-items-center">
@@ -156,7 +165,7 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
               <span className="rounded-full bg-surface-high px-2.5 py-1 text-text-muted">Vistrow Live uses {LIVE_MODEL_MULTIPLIER.default} min per min</span>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-2.5 sm:gap-3">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               {TOPUP_PACKS.map((p) => {
                 const b = Math.floor((p.credits * p.bonusPct) / 100)
                 const total = Math.round(p.credits * perCredit * 118) / 100
@@ -167,16 +176,17 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
                     type="button"
                     onClick={() => setChoice(p.key)}
                     aria-pressed={selected}
-                    className="topup-card relative flex flex-col items-start rounded-2xl border border-border bg-surface-high p-3 pt-4 text-left sm:p-4"
+                    className="topup-card relative flex flex-col items-start rounded-xl border border-border bg-surface-high px-3 py-2.5 text-left"
                   >
-                    {p.key === bestValueKey && <span className="absolute -top-2.5 left-4 rounded-full bg-cyan px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-surface">Best value</span>}
-                    {selected
-                      ? <span className="topup-pop absolute right-3 top-3 grid h-5 w-5 place-items-center rounded-full bg-primary text-white"><Icon name="check" className="text-[14px]" /></span>
-                      : b > 0 && <span className="absolute right-3 top-3 rounded-full bg-cyan/15 px-2 py-0.5 text-[10px] font-bold text-cyan">+{b} free</span>}
-                    <span className="mt-3 text-xl font-bold tracking-tight sm:mt-2 sm:text-2xl">{p.credits.toLocaleString('en-IN')}</span>
-                    <span className="text-[11px] text-text-muted">minutes{selected && b > 0 ? ` + ${b} free` : ''}</span>
-                    <span className="mt-3 whitespace-nowrap text-sm font-semibold">{inr(total)} <span className="text-[10px] font-normal text-text-muted">incl. GST</span></span>
-                    <span className="text-[10px] text-text-muted">{b > 0 ? `${inr(effectiveRate(p))}/min with bonus` : `≈ ${liveMinutes(p.credits).toLocaleString('en-IN')} Vistrow Live min`}</span>
+                    {p.key === bestValueKey && <span className="absolute -top-2 left-3 rounded-full bg-cyan px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-surface">Best value</span>}
+                    <span className="flex w-full items-center justify-between gap-1">
+                      <span className="text-base font-bold tracking-tight">{p.credits.toLocaleString('en-IN')} <span className="text-[11px] font-medium text-text-muted">min</span></span>
+                      {selected
+                        ? <span className="topup-pop grid h-4 w-4 place-items-center rounded-full bg-primary text-white"><Icon name="check" className="text-[12px]" /></span>
+                        : b > 0 && <span className="rounded-full bg-cyan/15 px-1.5 py-px text-[10px] font-bold text-cyan">+{b}</span>}
+                    </span>
+                    <span className="mt-1 whitespace-nowrap text-[13px] font-semibold">{inrShort(total)} <span className="text-[10px] font-normal text-text-muted">incl. GST</span></span>
+                    <span className="text-[10px] text-text-muted">{b > 0 ? `+${b} free · ${inr(effectiveRate(p))}/min` : `≈ ${liveMinutes(p.credits).toLocaleString('en-IN')} Vistrow Live min`}</span>
                   </button>
                 )
               })}
@@ -184,49 +194,53 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
                 type="button"
                 onClick={() => setChoice('custom')}
                 aria-pressed={choice === 'custom'}
-                className="topup-card col-span-2 flex items-center justify-between rounded-2xl border border-border bg-surface-high px-4 py-3 text-left"
+                className="topup-card col-span-2 flex items-center justify-between rounded-xl border border-border bg-surface-high px-3 py-2.5 text-left"
               >
                 <span className="flex items-center gap-2 text-sm font-semibold"><Icon name="tune" className="text-[18px] text-primary" />Custom amount</span>
                 <span className="text-[11px] text-text-muted">{TOPUP_MIN_CREDITS}–{TOPUP_MAX_CREDITS.toLocaleString('en-IN')} minutes</span>
               </button>
               {choice === 'custom' && (
-                <div className="topup-rise col-span-2 rounded-2xl border border-border bg-surface-high p-4">
+                <div className="topup-rise col-span-2 rounded-xl border border-border bg-surface-high p-3">
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
                       min={TOPUP_MIN_CREDITS}
                       max={TOPUP_MAX_CREDITS}
-                      step={50}
+                      step={STEP}
                       value={Number.isFinite(custom) ? Math.min(Math.max(custom, TOPUP_MIN_CREDITS), TOPUP_MAX_CREDITS) : TOPUP_MIN_CREDITS}
                       onChange={(e) => setCustom(Number(e.target.value))}
                       className="topup-range min-w-0 flex-1"
                       aria-label="Minutes slider"
                     />
-                    <input
-                      type="number"
-                      min={TOPUP_MIN_CREDITS}
-                      max={TOPUP_MAX_CREDITS}
-                      step={10}
-                      value={custom}
-                      onChange={(e) => setCustom(Number(e.target.value))}
-                      className={`${input.replace('w-full', 'w-28 shrink-0')} text-right font-semibold`}
-                      aria-label="Minutes"
-                    />
+                    <div className="topup-stepper flex shrink-0 items-center rounded-xl border border-border bg-surface">
+                      <button type="button" onClick={() => stepCustom(-1)} disabled={custom <= TOPUP_MIN_CREDITS} aria-label={`${STEP} fewer minutes`} className="grid h-9 w-8 place-items-center text-lg font-bold leading-none text-text-muted disabled:opacity-30">−</button>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={TOPUP_MIN_CREDITS}
+                        max={TOPUP_MAX_CREDITS}
+                        value={custom}
+                        onChange={(e) => setCustom(Number(e.target.value))}
+                        className="w-16 bg-transparent text-center text-sm font-bold tabular-nums outline-none"
+                        aria-label="Minutes"
+                      />
+                      <button type="button" onClick={() => stepCustom(1)} disabled={custom >= TOPUP_MAX_CREDITS} aria-label={`${STEP} more minutes`} className="grid h-9 w-8 place-items-center text-lg font-bold leading-none text-text-muted disabled:opacity-30">+</button>
+                    </div>
                   </div>
                   {customInvalid && <p className="mt-2 text-xs text-destructive">Enter a whole number between {TOPUP_MIN_CREDITS} and {TOPUP_MAX_CREDITS.toLocaleString('en-IN')}.</p>}
                 </div>
               )}
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface-high">
-              <div className="flex items-end justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="mt-4 overflow-hidden rounded-xl border border-border bg-surface-high">
+              <div className="flex items-end justify-between gap-3 border-b border-border px-3 py-2.5">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">You get</p>
-                  <p className="text-2xl font-bold tabular-nums">{Math.round(shownMinutes).toLocaleString('en-IN')} <span className="text-sm font-medium text-text-muted">minutes</span></p>
+                  <p className="text-xl font-bold tabular-nums">{Math.round(shownMinutes).toLocaleString('en-IN')} <span className="text-sm font-medium text-text-muted">minutes</span></p>
                 </div>
                 <p className="pb-1 text-right text-[11px] text-text-muted">≈ {liveMinutes(credits + bonus).toLocaleString('en-IN')} Vistrow Live min</p>
               </div>
-              <div className="flex flex-col gap-1.5 px-4 py-3 text-xs">
+              <div className="flex flex-col gap-1 px-3 py-2.5 text-xs">
                 <div className="flex justify-between text-text-muted"><span>{credits.toLocaleString('en-IN')} minutes × {inr(perCredit)}</span><span className="tabular-nums">{inr(base)}</span></div>
                 {bonus > 0 && <div className="flex justify-between font-semibold text-cyan"><span>Bonus minutes</span><span>+{bonus} free</span></div>}
                 <div className="flex justify-between text-text-muted"><span>GST (18%)</span><span className="tabular-nums">{inr(gst)}</span></div>
@@ -244,7 +258,7 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
 
             {error && <p className="topup-rise mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
 
-            <button onClick={() => void pay()} disabled={busy || customInvalid} className="topup-pay mt-5 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold text-white disabled:opacity-40">
+            <button onClick={() => void pay()} disabled={busy || customInvalid} className="topup-pay mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white disabled:opacity-40">
               {busy
                 ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />Opening secure checkout…</>
                 : <><Icon name="lock" className="text-[18px]" />Pay <span className="tabular-nums">{inr(shownTotal)}</span></>}

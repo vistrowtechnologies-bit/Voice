@@ -1259,3 +1259,14 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
   .topup-pay:hover:not(:disabled)::after { animation: none; }
   .topup-card, .topup-card:hover, .topup-card:active, .topup-pay:active:not(:disabled) { transform: none; }
 }
+.topup-stepper button { transition: color 150ms ease, background-color 150ms ease, transform 120ms ease; border-radius: 0.6rem; }
+.topup-stepper button:hover:not(:disabled) { color: var(--color-primary); background-color: color-mix(in srgb, var(--color-primary) 10%, transparent); }
+.topup-stepper button:active:not(:disabled) { transform: scale(0.88); }
+.topup-stepper:focus-within { border-color: var(--color-primary); }
+/* No native spinner arrows: the − / + buttons replace them. */
+.topup-stepper input { -moz-appearance: textfield; appearance: textfield; }
+.topup-stepper input::-webkit-inner-spin-button,
+.topup-stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .topup-stepper button:active:not(:disabled) { transform: none; }
+}
