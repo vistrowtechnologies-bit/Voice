@@ -703,7 +703,11 @@ def crm_outcome(lead: dict) -> dict:
     visit = lead.get("site_visit") or {}
     callback = lead.get("callback") or {}
     interest = str((lead.get("extracted_data") or {}).get("interest_level") or "").strip().casefold()
-    caller_spoke = any(
+    # A network recording ("please try again later") or a voicemail greeting
+    # is transcribed as a caller turn; the call's own verdict says nobody was
+    # reached (live call 1395 was sent as Contacted).
+    not_reached = bool(lead.get("failure_reason") or lead.get("voicemail_detected"))
+    caller_spoke = not not_reached and any(
         (t.get("role") == "user" and (t.get("text") or "").strip()) for t in (lead.get("transcript") or [])
     )
     if visit.get("date"):
@@ -1774,17 +1778,15 @@ async def _calendar_book(
 async def check_calendar_availability(
     context: RunContext, date: str, duration_minutes: int = 30, requested_time: str = ""
 ) -> str:
-    """Check real open appointment slots on the business's calendar for a date.
-    Call this before offering times so you only offer slots that are actually
-    free. Works for any business (clinic, salon, property visit, consultation).
+    """Check real free slots on the business's calendar for a date. Call it
+    before offering any time, so you only offer slots that are free.
 
     Args:
-        date: The date to check, in YYYY-MM-DD format.
-        duration_minutes: How long the appointment needs to be. Default 30.
-        requested_time: If the caller already named a specific time (24-hour
-            "HH:MM", e.g. "13:00"), pass it here so the tool tells you
-            directly whether THAT exact time is free — don't try to
-            eyeball-match it against the slot list yourself.
+        date: YYYY-MM-DD.
+        duration_minutes: Appointment length in minutes. Default 30.
+        requested_time: If the caller named a time, 24-hour "HH:MM" (e.g.
+            "13:00"); the tool says whether that exact time is free — don't
+            match it against the slot list yourself.
     """
     # A clinic asks what is wrong BEFORE reading out appointment times.
     # This runs FIRST, ahead of the spoken filler and the calendar lookup:
@@ -2063,20 +2065,15 @@ async def record_consent(context: RunContext, granted: bool, words: str = "") ->
 
 @function_tool
 async def do_not_call(context: RunContext, reason: str = "") -> str:
-    """Record that this person does not want to be called again, and stop calling them.
-
-    Call this the moment someone asks not to be contacted — "don't call me
-    again", "remove me from your list", "stop calling", or the same in any
-    language. Do it even if they are annoyed and hang up straight after, and
-    even if the rest of the call went nowhere: this is the one thing that
-    must never be missed.
-
-    Do NOT call this when someone is merely busy, asks to be called later, or
-    says no to the offer but not to being contacted — use request_callback or
-    simply close warmly instead.
+    """Record that this person must not be called again. Call it the moment
+    they ask not to be contacted ("don't call me again", "remove me from your
+    list", "stop calling", any language), even if they are annoyed or hang up
+    straight after — never miss this. Not for someone who is busy, wants a
+    later call, or only declines the offer: use request_callback or close
+    warmly.
 
     Args:
-        reason: Their own words, briefly, if they gave a reason.
+        reason: Their words, briefly, if they gave a reason.
     """
     userdata = context.userdata or {}
     phone = (userdata.get("visitor_phone") or "").strip()
@@ -2143,19 +2140,17 @@ async def request_callback(
     preferred_time: str = "",
     reason: str = "",
 ) -> str:
-    """Take a caller's details so the team can ring them back when a slot opens.
-
-    Call this whenever someone wanted an appointment and could not have one —
-    nothing free on their day, nothing at their preferred time, the calendar
-    unreachable, or the right doctor not working when they need. Do NOT end
-    such a call without either a booking or one of these.
+    """Take the caller's details so the team can call back when a slot opens.
+    Call it whenever they wanted an appointment and could not get one (no
+    free slot on their day or time, calendar unreachable, doctor not
+    available). Never end such a call without a booking or this.
 
     Args:
         name: Caller's name.
-        phone: Their phone number, digits only, as they gave it.
-        preferred_date: The day they wanted, YYYY-MM-DD, if they named one.
-        preferred_time: The time they wanted, "HH:MM", if they named one.
-        reason: Why they are coming in — the complaint or the department.
+        phone: Their phone number, digits only, as given.
+        preferred_date: Day they wanted, YYYY-MM-DD, if named.
+        preferred_time: Time they wanted, "HH:MM", if named.
+        reason: Why they are coming in — complaint or department.
     """
     if not name or not phone:
         return (
@@ -2215,18 +2210,17 @@ async def book_appointment(
     purpose: str = "",
     duration_minutes: int = 30,
 ) -> str:
-    """Book a confirmed appointment on the business's calendar for any business
-    (clinic visit, consultation, property visit, service booking). Only call
-    this after confirming the slot is free with check_calendar_availability and
-    the caller has agreed to a specific time.
+    """Book a confirmed appointment on the business's calendar. Only after
+    check_calendar_availability showed the slot free and the caller agreed to
+    that time.
 
     Args:
-        date: Appointment date in YYYY-MM-DD format.
-        time: Appointment time, 24-hour "HH:MM", e.g. "14:30".
-        name: The customer's name.
-        phone: The customer's phone number.
-        purpose: What the appointment is for, e.g. "dental cleaning", "site visit".
-        duration_minutes: Appointment length in minutes. Default 30.
+        date: YYYY-MM-DD.
+        time: 24-hour "HH:MM", e.g. "14:30".
+        name: Customer's name.
+        phone: Customer's phone number.
+        purpose: What it is for, e.g. "dental cleaning", "site visit".
+        duration_minutes: Length in minutes. Default 30.
     """
     clean_name = (name or "").strip()
     clean_phone = (phone or "").strip()
@@ -2595,16 +2589,16 @@ async def capture_platform_lead(
     use_case: str,
     team_size: str,
 ) -> str:
-    """Log a business lead captured while explaining Vistrow Voice itself
-    (the platform-assistant persona, not a per-tenant sales call).
+    """Log a business lead for Vistrow Voice itself (platform-assistant
+    persona, not a tenant sales call).
 
     Args:
         name: Lead's name.
-        company: The lead's company/business name.
-        contact: Phone number or email the lead gave to be reached at.
-        use_case: What they want to use Vistrow Voice for, e.g. "inbound lead
+        company: Their company/business name.
+        contact: Phone number or email they gave.
+        use_case: What they want Vistrow Voice for, e.g. "inbound lead
             qualification for a real-estate brokerage".
-        team_size: Rough team/company size the lead mentioned, e.g. "11-50".
+        team_size: Rough team size they mentioned, e.g. "11-50".
     """
     # Confirmed real failure (call 787): the caller was never asked for a
     # name or number at all - the call just ended once team size came up -
@@ -2765,15 +2759,11 @@ def _agent_awaiting_reply(context: RunContext) -> bool:
 
 @function_tool
 async def end_call(context: RunContext) -> str:
-    """Call this once the caller has clearly indicated the conversation is
-    over — they thank you with nothing further to ask, say goodbye, or
-    otherwise signal they're done. Do NOT call this for a mere pause, a
-    one-word "okay", or mid-conversation small talk — only on a clear
-    end-of-call signal. A caller asking you to send details, a brochure,
-    a WhatsApp/SMS/e-mail, or to call them back is NOT saying goodbye:
-    acknowledge that request out loud first (confirm the team will send it
-    or call back) and only end after that. main.py watches for the agent's
-    speech to finish after this tool returns, then ends the call.
+    """End the call once the caller clearly signals they are done: thanks
+    with nothing more to ask, goodbye. Not for a pause, a one-word "okay" or
+    small talk. A request to send details, a brochure, WhatsApp/SMS/e-mail or
+    a callback is NOT a goodbye: first confirm out loud that the team will
+    send it or call back, and end only after that.
     """
     # Never hang up on an unanswered question. Call 844 ended while the caller
     # was mid-enquiry: "क्या आप मुझे कल्पतरु में बता सकते हैं? आर्या के बारे
@@ -2821,18 +2811,32 @@ async def end_call(context: RunContext) -> str:
             context.userdata is not None
             and context.userdata.get("end_call_info_request_refused") == _last
         )
-        if not _already_refused:
+        _lead = (context.userdata or {}).get("lead_data") or {}
+        _handled = bool(_lead.get("brochure_requested"))
+        if not _already_refused and not _handled:
             if context.userdata is not None:
                 context.userdata["end_call_info_request_refused"] = _last
             return (
                 "NOT ending the call yet — the caller asked for details to be sent (WhatsApp, "
-                "brochure, SMS, e-mail) or to be called back. That is a next step, not a "
-                "goodbye. Reply out loud now, in the caller's language: confirm you will share "
-                "exactly what they asked for on this number (or that the team will call back). "
-                "Use the brochure/details tool if you have one, otherwise note the request with "
-                "the lead or callback tool. Then ask if there is anything else. Do not say "
-                "goodbye in that reply and do not end the call silently."
+                "brochure, SMS, e-mail) or to be called back. Do not call end_call again now. "
+                "Say this to the caller out loud right now, in their language: confirm you will "
+                "share exactly what they asked for on this number (or that the team will call "
+                "back), and ask if there is anything else. Use the brochure/details tool if you "
+                "have one, otherwise note the request with the lead or callback tool."
             )
+        # The request was refused once (or a brochure tool already recorded
+        # it): end now with a goodbye that confirms it. Skips the "caller
+        # has not said goodbye" checks below — on call 1396 they refused
+        # every retry, the model kept calling end_call instead of speaking,
+        # hit the tool-step limit and left the caller in 20 s of silence.
+        if context.userdata is not None:
+            context.userdata["ending_call"] = True
+            context.userdata["ending_call_from_tool"] = True
+        return (
+            "The caller is done. In one short, warm goodbye line, confirm the team will send "
+            "them what they asked for (or call them back), thank them, and then stop — no "
+            "further questions."
+        )
 
     # Replaying every hangup this system has actually performed showed the
     # question guard above catches only two of seven. The two it misses are
@@ -2974,33 +2978,24 @@ def _script_family(code: str | None) -> str | None:
 @function_tool
 async def switch_reply_language(context: RunContext, language: str) -> str:
     """Change the language you speak. Call it ONLY when (1) the caller asks
-    you to speak a different language — any phrasing, any language ("let's
-    speak in Marathi", "मराठीत बोलूया", "angrezi mein baat karo") — or (2)
-    the caller has clearly switched themselves: their whole message is in
-    another language, not a few borrowed words. Call it before your first
-    reply in the new language (Hindi and Marathi share a script, so only
-    this tool moves your voice's pronunciation).
+    for another language, any phrasing or language ("let's speak in
+    Marathi", "मराठीत बोलूया", "angrezi mein baat karo"), or (2) their whole
+    message is in another language, not a few borrowed words. Call it before
+    your first reply in the new language (Hindi and Marathi share a script;
+    only this tool changes pronunciation).
 
-    Do NOT call it to answer a question, acknowledgement or reply given in
-    the language you are already speaking, when the caller asks ABOUT
-    languages ("how many languages do you speak?" — just answer), for English
-    words inside a Hindi/Marathi sentence, or with the language already
-    active.
+    Not for: the language already active or a message in it, a question ABOUT
+    languages ("how many languages do you speak?" — just answer), or English
+    words inside a Hindi/Marathi sentence.
 
     NEVER tell a caller you cannot speak a language without calling this
-    tool first. THIS TOOL is what knows which languages are available — you
-    do not. If one genuinely is not, it returns a message saying so, and
-    only then do you say anything to the caller about it. There is also no
-    such thing as being locked into one language for the rest of a call: a
-    caller can move you as many times as they like.
+    first: the tool knows which languages exist and says if one is not
+    available. A caller can switch you any number of times.
 
     Args:
-        language: The language's plain English name — "Hindi", "English",
-            "Marathi", "Tamil", "Telugu", "Kannada", "Malayalam",
-            "Gujarati", "Bengali", "Punjabi", "Odia", and on the global
-            voices also "French", "German", "Spanish", "Japanese",
-            "Arabic", "Mandarin" and dozens more. Pass whatever language the
-            caller asked for and let the tool decide.
+        language: Plain English name, e.g. "Hindi", "English", "Marathi",
+            "Tamil", "Gujarati", "French". Pass what the caller asked for;
+            the tool decides.
     """
     # Confirmed real failure behind the "NEVER tell a caller" rule: asked for
     # Bengali, then Marathi, then Japanese, on a voice that speaks all three,
@@ -3587,10 +3582,10 @@ async def _transfer_uris(lkapi, dest: str) -> list[str]:
 
 @function_tool
 async def transfer_call(context: RunContext) -> str:
-    """Transfer the caller to a human team member. Call this ONLY when the
-    caller explicitly asks to speak to a human/agent/manager, or when their
-    request genuinely can't be handled by you and a handoff is the right next
-    step. Do not offer or perform a transfer unprompted for routine questions.
+    """Transfer the caller to a human. Call it ONLY when they explicitly ask
+    for a human/agent/manager, or a handoff is genuinely the right next step
+    for a request you can't handle. Never transfer unprompted for routine
+    questions.
     """
     userdata = context.userdata or {}
     dest = (userdata.get("transfer_phone") or "").strip()

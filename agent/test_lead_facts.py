@@ -80,6 +80,12 @@ class BudgetWordsToRupees(unittest.TestCase):
         "between 50 and 60 lakhs": (50 * LAKH, 60 * LAKH),
         "1 crore 20 lakh": (12 * 10**6, 12 * 10**6),
         "₹1,00,00,000": (CRORE, CRORE),
+        # Speech-recognition spellings (live call 1394: "बजट असी लाख").
+        "बजट असी लाख": (80 * LAKH, 80 * LAKH),
+        "अस्सि लाख": (80 * LAKH, 80 * LAKH),
+        "asi lakh": (80 * LAKH, 80 * LAKH),
+        "सतर लाख": (70 * LAKH, 70 * LAKH),
+        "नबे लाख": (90 * LAKH, 90 * LAKH),
     }
 
     def test_known_phrasings(self):
@@ -128,6 +134,44 @@ class Merge(unittest.TestCase):
         )
         self.assertEqual(merged, {"configuration": "2000 sq ft and above", "timeline": "next year",
                                   "purpose": "Buy"})
+
+    def test_call_1394_caller_budget_beats_a_remembered_one(self):
+        # Siya's log_lead held "around 1 crore" (remembered from an earlier
+        # call); the caller said 80 lakh, transcribed "असी लाख".
+        mid = lead_facts.mid_call_facts({"budget": "around 1 crore", "property_type": "plot"})
+        post, _ = lead_facts.facts_from_response({"budget_text": "असी लाख", "purpose": "Invest"})
+        merged = lead_facts.merge_facts(mid, post)
+        self.assertEqual((merged["budget_min"], merged["budget_max"]), (80 * LAKH, 80 * LAKH))
+        self.assertEqual(merged["budget_text"], "असी लाख")
+
+    def test_unreadable_caller_budget_drops_the_mid_call_numbers(self):
+        mid = lead_facts.mid_call_facts({"budget": "around 1 crore"})
+        post, _ = lead_facts.facts_from_response({"budget_text": "jitna sahi lage"})
+        merged = lead_facts.merge_facts(mid, post)
+        self.assertEqual(merged["budget_text"], "jitna sahi lage")
+        self.assertNotIn("budget_min", merged)
+        self.assertNotIn("budget_max", merged)
+
+    def test_call_1396_agent_location_is_dropped_when_the_caller_named_none(self):
+        mid = lead_facts.mid_call_facts({"location": "Khopoli", "property_type": "plot"})
+        post, _ = lead_facts.facts_from_response({"budget_text": "अराउंड 80 लाख", "purpose": "Invest"})
+        merged = lead_facts.merge_facts(mid, post)
+        self.assertNotIn("preferred_location", merged)
+        self.assertEqual(merged["budget_min"], 80 * LAKH)
+
+    def test_mid_call_location_stands_when_the_post_call_read_did_not_run(self):
+        mid = lead_facts.mid_call_facts({"location": "Panvel"})
+        self.assertEqual(lead_facts.merge_facts(mid, {})["preferred_location"], "Panvel")
+
+    def test_caller_named_location_is_kept(self):
+        mid = lead_facts.mid_call_facts({"location": "Khopoli"})
+        merged = lead_facts.merge_facts(mid, {"preferred_location": "Panvel or Karjat"})
+        self.assertEqual(merged["preferred_location"], "Panvel or Karjat")
+
+    def test_mid_call_budget_stands_when_the_caller_said_none_after_the_call(self):
+        mid = lead_facts.mid_call_facts({"budget": "around 1 crore"})
+        merged = lead_facts.merge_facts(mid, {"purpose": "Buy"})
+        self.assertEqual(merged["budget_min"], CRORE)
 
     def test_post_call_no_overrides_a_misheard_brochure_request(self):
         merged = lead_facts.merge_facts({"brochure_requested": True, "brochure_project": "Khopoli"},

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { AuthShell } from '../pages/AuthShell'
 import { Icon } from './Icon'
@@ -14,21 +14,23 @@ import { AppLoadingScreen } from './AppLoadingScreen'
  * red-bar + sidebar chrome. */
 export function RequireOwner({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
+  const { pathname, search } = useLocation()
+  const here = pathname + search
 
   if (loading) {
     return <AppLoadingScreen message="Loading the admin workspace…" />
   }
 
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" state={{ from: here }} replace />
   if (!user.isPlatformOwner) return <Navigate to="/dashboard" replace />
   // The server refuses /admin without two-step login (security audit
   // 2026-10-12); say what to do instead of showing a page of errors.
-  if (!user.mfaEnabled || !user.mfaVerified) return <AdminNeedsTwoStep enabled={!!user.mfaEnabled} />
+  if (!user.mfaEnabled || !user.mfaVerified) return <AdminNeedsTwoStep enabled={!!user.mfaEnabled} returnTo={here} />
 
   return <AdminLayout>{children}</AdminLayout>
 }
 
-function AdminNeedsTwoStep({ enabled }: { enabled: boolean }) {
+function AdminNeedsTwoStep({ enabled, returnTo }: { enabled: boolean; returnTo: string }) {
   const { logout } = useAuth()
   return (
     <AuthShell
@@ -45,7 +47,8 @@ function AdminNeedsTwoStep({ enabled }: { enabled: boolean }) {
         {enabled ? (
           <button
             type="button"
-            onClick={() => void logout().then(() => { window.location.href = '/login' })}
+            // Back to this admin page after the code, not the tenant dashboard.
+            onClick={() => void logout().then(() => { window.location.href = `/login?next=${encodeURIComponent(returnTo)}` })}
             className="flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-bg hover:opacity-90"
           >
             <Icon name="logout" className="text-[18px]" /> Sign out and sign back in
