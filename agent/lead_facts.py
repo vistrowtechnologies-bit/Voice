@@ -48,11 +48,14 @@ _NUMBER_WORDS = {
     "उन्नीस": 19, "बीस": 20, "पच्चीस": 25, "तीस": 30, "पैंतीस": 35, "चालीस": 40,
     "पैंतालीस": 45, "पचास": 50, "पचपन": 55, "साठ": 60, "पैंसठ": 65, "सत्तर": 70,
     "पचहत्तर": 75, "अस्सी": 80, "पचासी": 85, "नब्बे": 90, "पचानवे": 95,
+    # Spellings speech recognition produces for the same words (live call
+    # 1394 wrote "अस्सी लाख" as "असी लाख").
+    "असी": 80, "असि": 80, "अस्सि": 80, "सतर": 70, "नबे": 90, "चालिस": 40,
     # Hinglish
     "ek": 1, "do": 2, "teen": 3, "tin": 3, "char": 4, "chaar": 4, "paanch": 5, "panch": 5,
     "chhe": 6, "che": 6, "saat": 7, "aath": 8, "nau": 9, "das": 10, "bees": 20, "bis": 20,
     "pachees": 25, "pachchis": 25, "tees": 30, "chalis": 40, "chaalis": 40,
-    "pachas": 50, "pachaas": 50, "saath": 60, "sattar": 70, "assi": 80, "nabbe": 90,
+    "pachas": 50, "pachaas": 50, "saath": 60, "sattar": 70, "assi": 80, "asi": 80, "nabbe": 90,
     # English
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
     "eight": 8, "nine": 9, "ten": 10, "fifteen": 15, "twenty": 20, "thirty": 30,
@@ -240,12 +243,21 @@ def _empty(value) -> bool:
 def merge_facts(mid_call: dict, post_call: dict) -> dict:
     """The call's extracted_data: the post-call read wins, and a mid-call
     value stands only where the post-call read returned nothing for that
-    key. brochure_requested is kept only when True."""
+    key, except the budget numbers (see below). brochure_requested is kept
+    only when True."""
     merged = dict(mid_call)
     for key, value in (post_call or {}).items():
         if _empty(value) and key in merged:
             continue
         merged[key] = value
+    # The caller's own budget words are the record. If they could not be
+    # read as a number, no number is better than the mid-call one, which can
+    # be a figure the agent remembered from an earlier call (live call 1394:
+    # caller said 80 lakh, log_lead held "around 1 crore").
+    post = post_call or {}
+    if not _empty(post.get("budget_text")) and _empty(post.get("budget_min")) and _empty(post.get("budget_max")):
+        merged.pop("budget_min", None)
+        merged.pop("budget_max", None)
     if merged.get("brochure_requested") is not True:
         merged.pop("brochure_requested", None)
         merged.pop("brochure_project", None)
