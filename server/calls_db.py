@@ -8566,6 +8566,60 @@ def idle_widget_chats(idle_seconds: int = 180, max_age_days: int = 7) -> list[di
         conn.close()
 
 
+def stale_delivered_widget_chats(idle_seconds: int = 180, max_age_days: int = 7) -> list[dict]:
+    """Widget text chats already sent to ArthaLeads that got more turns
+    afterwards and have since gone quiet. The first delivery can fire mid-chat
+    (an end beacon from a page that later kept chatting), and ArthaLeads only
+    had the turns up to then. ArthaLeads updates the same call on a re-send
+    (keyed by call_id), so these can be re-sent safely; each send records the
+    ended_at it covered, so a chat is picked again only for newer turns."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, account_id FROM calls "
+            "WHERE call_type = 'widget' AND room_name LIKE ? AND account_id IS NOT NULL "
+            "AND integrations_delivered_at IS NOT NULL AND arthaleads_status = 'sent' "
+            # upTo is the chat's ended_at as read before the last send (see
+            # integrations_dispatch.deliver_widget_chat); rows delivered before
+            # it was recorded fall back to the second-precision delivery stamp.
+            "AND ended_at::timestamp > COALESCE((integrations_delivery_json::json->>'upTo')::timestamp, "
+            "integrations_delivered_at::timestamp) "
+            "AND ended_at::timestamp < (now() AT TIME ZONE 'UTC') - make_interval(secs => ?) "
+            "AND started_at::timestamp > (now() AT TIME ZONE 'UTC') - make_interval(days => ?) "
+            "ORDER BY id",
+            ("widget-chat-%", idle_seconds, max_age_days),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def widget_chat_ended_at(call_id: int, account_id: int) -> str | None:
+    """The chat's last-turn time, exactly as stored (upsert_widget_chat_call
+    rewrites it every turn)."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT ended_at FROM calls WHERE id = ? AND account_id = ?", (call_id, account_id)).fetchone()
+        return row["ended_at"] if row else None
+    finally:
+        conn.close()
+
+
+def restamp_widget_chat_delivery(call_id: int, account_id: int, results: dict) -> None:
+    """Records a re-send: delivered_at moves to now and the results (with the
+    upTo it covered) replace the previous ones."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE calls SET integrations_delivered_at = {_NOW}, integrations_delivery_json = ? "
+                "WHERE id = ? AND account_id = ?",
+                (json.dumps(results), call_id, account_id),
+            )
+    finally:
+        conn.close()
+
+
 def widget_chat_call(site_id: int, session_id: str) -> dict | None:
     """{id, account_id} of the chat row the widget identifies by its session
     id, scoped to the site whose key the widget presented."""

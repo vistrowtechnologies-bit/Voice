@@ -419,6 +419,13 @@ def _deliver_idle_widget_chats() -> None:
             logger.info("widget chat %s delivered: %s", chat["id"], results)
         except Exception:
             logger.exception("widget chat %s delivery failed", chat["id"])
+    # Chats ArthaLeads got only part of (sent mid-chat, more turns after).
+    for chat in calls_db.stale_delivered_widget_chats():
+        try:
+            results = integrations_dispatch.resync_widget_chat_arthaleads(chat)
+            logger.info("widget chat %s re-sent to ArthaLeads: %s", chat["id"], results)
+        except Exception:
+            logger.exception("widget chat %s re-send failed", chat["id"])
 
 
 # Automatic conversation intelligence (owner decision 2026-10-16): every real
