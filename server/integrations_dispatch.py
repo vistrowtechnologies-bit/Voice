@@ -424,7 +424,7 @@ _INTEGRATION_FIELDS = {
     "agent": ("agent_name", "agent_id"),
     "language": ("language",),
     "duration": ("duration_seconds",),
-    "details": ("extracted_data", "summary", "use_case", "message"),
+    "details": ("extracted_data", "summary", "key_points", "use_case", "message"),
     "transcript": ("transcript",),
     "page": ("page_path",),
     "recording": ("recording_url", "recording_mime_type"),

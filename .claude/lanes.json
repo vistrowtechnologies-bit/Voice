@@ -1,0 +1,63 @@
+{
+  "_about": "Who owns which files. Read by scripts/hooks/pre_edit_guard.py before every edit. The most specific matching path wins. A session declares its lane(s) in .claude/lane.local (gitignored, one line, comma-separated lane names). Editing another lane's file is blocked unless your branch has an open [CLAIM] on issue #2 that names the file; otherwise send the owning session a request (SendMessage to its name + a [REQUEST] comment on issue #2).",
+  "lanes": {
+    "seo": {
+      "session": "Vistrow Voice SEO/Voice clone",
+      "paths": [
+        "web-demo/src/pages/marketing/",
+        "web-demo/src/components/MarketingLayout.tsx",
+        "web-demo/src/components/MarketingBits.tsx",
+        "web-demo/src/components/SeoRelatedLinks.tsx",
+        "web-demo/src/lib/seoPages.ts",
+        "web-demo/src/lib/marketingContent.ts",
+        "web-demo/src/lib/seoExpansionContent.ts",
+        "web-demo/src/lib/voiceBlog.ts",
+        "web-demo/src/lib/ivrBlogPosts.ts",
+        "web-demo/public/",
+        "web-demo/scripts/check-seo-pages.mts",
+        "web-demo/scripts/check-blog-seo.ts",
+        "web-demo/scripts/check-keyword-placement.py",
+        "web-demo/scripts/audit-seo-content.py",
+        "web-demo/scripts/indexnow.mjs",
+        "docs/SEO-"
+      ]
+    },
+    "voice-clone": {
+      "session": "Vistrow Voice SEO/Voice clone",
+      "paths": [
+        "server/custom_voices.py",
+        "server/test_custom_voices.py",
+        "server/scripts/voice_clone_live_check.py",
+        "agent/custom_voice.py",
+        "agent/sarvam_clone_tts.py",
+        "agent/test_custom_voice.py",
+        "web-demo/src/components/VoiceClone.tsx",
+        "web-demo/src/components/ClonedVoiceOptions.tsx",
+        "web-demo/src/lib/voiceClone.ts",
+        "web-demo/src/lib/useAudioRecorder.ts",
+        "web-demo/scripts/test-voice-clone.mts"
+      ]
+    },
+    "dashboard": {
+      "session": "vistrow voice Dashboard fix",
+      "paths": ["web-demo/", "widget/"]
+    },
+    "runtime": {
+      "session": "Vistrow Voice",
+      "paths": ["agent/", "orchestrator/", "server/"]
+    },
+    "video": {
+      "session": "Vistrow Voice Video",
+      "paths": ["promo-video-starter/", "marketing-assets-listings/"]
+    }
+  },
+  "shared": [
+    "docs/AGENT-MESSAGE-BOX.md",
+    "graphify-out/",
+    "CLAUDE.md",
+    "AGENTS.md",
+    ".claude/",
+    "scripts/agent_overlap.py",
+    "scripts/hooks/"
+  ]
+}
