@@ -149,3 +149,28 @@ class SwitchReplyLanguageGuards(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EndCallNoSilentLoop(unittest.TestCase):
+    """Live call 1396: the caller asked for WhatsApp, send_brochure ran, then
+    end_call was refused five times in a row (the older no-goodbye checks),
+    the model never spoke and the caller sat in 20 s of silence."""
+
+    TURNS = [
+        ("assistant", "क्या मैं आपको प्रोजेक्ट की details भेज दूँ?"),
+        ("user", "मुझे व्हाट्सएप पे भेज दीजिए व्हाट्सएप।"),
+    ]
+
+    def test_brochure_already_recorded_ends_with_confirmation(self):
+        out, ud = _end(self.TURNS, userdata={"lead_data": {"brochure_requested": True}})
+        self.assertTrue(ud.get("ending_call"), out)
+        self.assertIn("confirm", out)
+
+    def test_refuses_once_then_ends_even_with_own_question_pending(self):
+        ud = {"lead_data": {}}
+        first, ud = _end(self.TURNS, userdata=ud)
+        self.assertIn("NOT ending", first)
+        self.assertIn("Do not call end_call again now", first)
+        second, ud = _end(self.TURNS, userdata=ud)
+        self.assertTrue(ud.get("ending_call"), second)
+        self.assertIn("confirm", second)

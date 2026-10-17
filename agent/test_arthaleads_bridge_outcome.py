@@ -28,6 +28,24 @@ SPOKE = [{"role": "assistant", "text": "Namaskaram"}, {"role": "user", "text": "
 
 
 class CrmOutcome(unittest.TestCase):
+    def test_carrier_recording_is_not_a_contact(self):
+        # Live call 1395: the network's "please try again later" recording was
+        # transcribed as a caller turn; Vistrow had classified it carrier_unavailable.
+        carrier = [{"role": "user", "text": "कृपया थोड्या वेळानंतर पुन्हा।"}]
+        out = tools.crm_outcome({"transcript": carrier, "direction": "outbound",
+                                 "failure_reason": "carrier_unavailable"})
+        self.assertEqual(out, {"booking": "Not Reachable"})
+
+    def test_voicemail_greeting_is_not_a_contact(self):
+        out = tools.crm_outcome({"transcript": SPOKE, "direction": "outbound", "voicemail_detected": True})
+        self.assertNotIn("status", out)
+        self.assertEqual(out.get("booking"), "Not Reachable")
+
+    def test_a_real_conversation_is_still_contacted(self):
+        out = tools.crm_outcome({"transcript": SPOKE, "direction": "outbound", "failure_reason": "",
+                                 "voicemail_detected": False})
+        self.assertEqual(out.get("status"), "Contacted")
+
     def check_vocabulary(self, out):
         self.assertIn(out.get("booking", ""), ARTHALEADS_BOOKING)
         if "status" in out:

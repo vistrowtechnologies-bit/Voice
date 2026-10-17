@@ -152,6 +152,22 @@ class Merge(unittest.TestCase):
         self.assertNotIn("budget_min", merged)
         self.assertNotIn("budget_max", merged)
 
+    def test_call_1396_agent_location_is_dropped_when_the_caller_named_none(self):
+        mid = lead_facts.mid_call_facts({"location": "Khopoli", "property_type": "plot"})
+        post, _ = lead_facts.facts_from_response({"budget_text": "अराउंड 80 लाख", "purpose": "Invest"})
+        merged = lead_facts.merge_facts(mid, post)
+        self.assertNotIn("preferred_location", merged)
+        self.assertEqual(merged["budget_min"], 80 * LAKH)
+
+    def test_mid_call_location_stands_when_the_post_call_read_did_not_run(self):
+        mid = lead_facts.mid_call_facts({"location": "Panvel"})
+        self.assertEqual(lead_facts.merge_facts(mid, {})["preferred_location"], "Panvel")
+
+    def test_caller_named_location_is_kept(self):
+        mid = lead_facts.mid_call_facts({"location": "Khopoli"})
+        merged = lead_facts.merge_facts(mid, {"preferred_location": "Panvel or Karjat"})
+        self.assertEqual(merged["preferred_location"], "Panvel or Karjat")
+
     def test_mid_call_budget_stands_when_the_caller_said_none_after_the_call(self):
         mid = lead_facts.mid_call_facts({"budget": "around 1 crore"})
         merged = lead_facts.merge_facts(mid, {"purpose": "Buy"})

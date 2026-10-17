@@ -258,6 +258,11 @@ def merge_facts(mid_call: dict, post_call: dict) -> dict:
     if not _empty(post.get("budget_text")) and _empty(post.get("budget_min")) and _empty(post.get("budget_max")):
         merged.pop("budget_min", None)
         merged.pop("budget_max", None)
+    # Location only from the caller's own words: when the post-call read ran
+    # and found none, a mid-call location is the agent's (live call 1396:
+    # log_lead saved "Khopoli", the project's town, which the caller never said).
+    if post and _empty(post.get("preferred_location")):
+        merged.pop("preferred_location", None)
     if merged.get("brochure_requested") is not True:
         merged.pop("brochure_requested", None)
         merged.pop("brochure_project", None)
