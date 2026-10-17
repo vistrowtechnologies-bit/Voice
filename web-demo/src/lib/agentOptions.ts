@@ -123,13 +123,13 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => {
       // Warned rather than hidden: they are cheaper and some tenants may be on
       // one already, so an operator picking one deserves to know before a live
       // call rather than after.
-      note: '0.5x credits · one language each · a little slower to start',
+      note: '1 min per min · one language each · a little slower to start',
       voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
     },
     {
       key: 'sarvam4',
       label: 'Bharat',
-      note: '1x credits · Indian persona voices · switches language live',
+      note: '1 min per min · Indian persona voices · switches language live',
       // New persona voices first, then the classic ids (priya, shubh, ...).
       voices: [
         ...stable.filter((v) => v.tier === 'standard' && v.value.startsWith('sarvam4:')),
@@ -139,31 +139,31 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => {
     {
       key: 'chirp3-hd',
       label: 'Vistrow HD',
-      note: '1x credits · fastest voices · switches language mid-call',
+      note: '1 min per min · fastest voices · switches language mid-call',
       voices: stable.filter((v) => v.tier === 'standard' && isChirp(v)),
     },
     {
       key: 'expressive',
       label: 'Vistrow Expressive',
-      note: '2x credits · follows the caller’s emotion · switches languages live',
+      note: '2 min per min · follows the caller’s emotion · switches languages live',
       voices: stable.filter((v) => v.tier === 'premium' && v.multilingual),
     },
     {
       key: 'gemini38-lite',
       label: 'Studio Lite',
-      note: '2x credits · lower latency and cost · test before live calls',
+      note: '2 min per min · lower latency and cost · test before live calls',
       voices: voices.filter((v) => v.preview && v.value.startsWith('google38:')),
     },
     {
       key: 'gemini38-flash',
       label: 'Studio',
-      note: '2x credits · richer expression and voice fidelity · test before live calls',
+      note: '2 min per min · richer expression and voice fidelity · test before live calls',
       voices: voices.filter((v) => v.preview && v.value.startsWith('google38flash:')),
     },
     {
       key: 'premium',
       label: 'Premium',
-      note: '2x credits · natural conversational voices',
+      note: '2 min per min · natural conversational voices',
       voices: stable.filter((v) => v.tier === 'premium' && !v.multilingual),
     },
   ]
