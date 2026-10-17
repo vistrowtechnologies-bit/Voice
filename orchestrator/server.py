@@ -439,6 +439,35 @@ async def _build_session_for_test_call(
     )
 
 
+# Stock voices used in place of a cloned voice this pipeline won't speak.
+# Both are Sarvam bulbul:v3 Standard speakers (tts.synthesize/_stream route
+# any bare name there), which cover every reply language this pipeline uses,
+# so one per gender serves all agent languages. Unknown gender keeps the
+# long-standing default.
+_CLONE_FALLBACK_VOICES = {"female": "priya", "male": "shubh"}
+_CLONE_FALLBACK_DEFAULT = "shubh"
+
+
+def _cloned_voice_tts(saved_voice: str, clone: dict | None) -> tuple[str, str]:
+    """(tts voice string, clone gender) for an agent voice "custom:vv_<id>",
+    given db.custom_voice's row (None = missing / not ready / another
+    account's / DB error). An ElevenLabs clone is spoken as itself. A Sarvam
+    clone is spoken only when ORCH_SPEAK_CLONES=1 (Sarvam's clone endpoint is
+    limited to 10 requests/min per account, too few for live calls); otherwise
+    it gets a stock voice of the clone's gender. Never raises."""
+    gender = (clone or {}).get("gender") or ""
+    fallback = _CLONE_FALLBACK_VOICES.get(gender, _CLONE_FALLBACK_DEFAULT)
+    if clone and clone.get("elevenlabs_voice_id"):
+        return f"elevenlabs:{clone['elevenlabs_voice_id']}", gender
+    if clone and clone.get("sarvam_voice_id") and os.environ.get("ORCH_SPEAK_CLONES") == "1":
+        return tts.sarvam_clone_voice(clone["sarvam_voice_id"], fallback), gender
+    logger.warning(
+        "cloned voice %s not spoken on the orchestrator pipeline (%s); using %s voice %s",
+        saved_voice, "found" if clone else "missing or not ready", gender or "default", fallback,
+    )
+    return fallback, gender
+
+
 async def _build_session(
     account_id: int,
     agent_id: int,
@@ -477,12 +506,10 @@ async def _build_session(
         custom_fields = {}
     saved_voice = cfg.get("voice") or "shubh"
     tts_voice = saved_voice
+    clone_gender = ""
     if saved_voice.startswith("custom:"):
-        # A customer's cloned voice. This pipeline speaks only ElevenLabs
-        # clones; anything else falls back to the default voice, never fails.
-        tts_voice = await asyncio.to_thread(db.custom_voice_tts, saved_voice, account_id or None) or "shubh"
-        if tts_voice == "shubh":
-            logger.warning("cloned voice %s not usable on the orchestrator pipeline; using default", saved_voice)
+        clone = await asyncio.to_thread(db.custom_voice, saved_voice, account_id or None)
+        tts_voice, clone_gender = _cloned_voice_tts(saved_voice, clone)
     sess = session_module.Session(
         account_id=account_id or None,
         agent_id=agent_id or None,
@@ -525,6 +552,11 @@ async def _build_session(
         crm_integration_keys=_str_list(cfg.get("crm_integration_keys")),
         agent_webhook_url=(cfg.get("webhook_url") or "").strip(),
     )
+    if clone_gender:
+        # Session derives voice_gender from the catalog, which has no
+        # "custom:" or clone entries; the clone's own gender drives the
+        # first-person grammar (Hindi etc.) instead.
+        sess.voice_gender = clone_gender
     session_module.build_tools_for_session(sess, cfg.get("custom_functions"), cfg.get("enabled_functions"))
     # Compliance -> record_calls / announce_recording, read once per call so
     # the announcement and the recorder (_recording_config, in the stream
