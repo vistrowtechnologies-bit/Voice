@@ -96,6 +96,20 @@ def _is_noise(key: str) -> bool:
     return key in _SKIP_KEYS or key.startswith(_SKIP_PREFIXES) or key == "id" or key.endswith("_id")
 
 
+def _came_on_whatsapp(custom_fields: dict) -> bool:
+    """The lead itself came in on WhatsApp, whatever channel the ad ran on."""
+    said = {str(custom_fields.get(k) or "").strip().casefold() for k in ("lead_source", "arthaleads_source")}
+    return "whatsapp" in said or "wa.me/" in str(custom_fields.get("ad_source_url") or "").casefold()
+
+
+def lead_topic(custom_fields: dict | None) -> str:
+    """What the lead enquired about, as they would recognise it: the project,
+    else the ad they responded to. "" when neither is known."""
+    if not isinstance(custom_fields, dict):
+        return ""
+    return (_clean(custom_fields.get("project"), 80) or _ad_name(custom_fields)[:80]).replace('"', "'")
+
+
 def came_via(custom_fields: dict) -> str:
     """How an ArthaLeads lead reached us, as a person would say it, or "".
 
@@ -104,7 +118,12 @@ def came_via(custom_fields: dict) -> str:
     if "channel_source" not in custom_fields:
         return ""
     channel = str(custom_fields.get("channel_source") or "").strip().casefold()
-    if channel == "whatsapp":
+    # A click-to-WhatsApp ad runs on Facebook, so ArthaLeads can store it with
+    # channel_source "facebook" while the person only ever messaged us on
+    # WhatsApp (live lead 17 Oct: lead_source WhatsApp, ad link wa.me/...).
+    # Calling that a "Facebook lead form" has the agent mention a form they
+    # never filled in.
+    if channel == "whatsapp" or _came_on_whatsapp(custom_fields):
         clicked_an_ad = any(_clean(custom_fields.get(k)) for k in ("ad_headline", "ad_body", "ad_source_url", "ad_name"))
         return "WhatsApp ad" if clicked_an_ad else "WhatsApp message"
     if channel == "facebook":
@@ -205,7 +224,7 @@ def lead_opening_instruction(custom_fields: dict | None, first_name: str | None,
     kind = str(custom_fields.get("follow_up_kind") or "")
     if kind not in FOLLOW_UP_KINDS and custom_fields.get("source") != "arthaleads":
         return ""
-    topic = (_clean(custom_fields.get("project"), 80) or _ad_name(custom_fields)[:80]).replace('"', "'")
+    topic = lead_topic(custom_fields)
     about = f' about "{topic}"' if topic else ""
     who = f"by their first name, {first_name}" if first_name else "warmly"
     tail = (

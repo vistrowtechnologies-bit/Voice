@@ -66,7 +66,7 @@ import follow_ups
 import plan_policy
 import retry_rules
 import worker_heartbeat
-from contact_notes import FOLLOW_UP_KINDS, build_contact_notes, lead_opening_instruction
+from contact_notes import FOLLOW_UP_KINDS, build_contact_notes, lead_opening_instruction, lead_topic
 import numpy as np
 import recording
 import storage_gate
@@ -4110,11 +4110,26 @@ class RealEstateAgent(Agent):
         # opener has to ask permission before it pitches — a compliance point,
         # not a style one. Falls back to the inbound line when a tenant has
         # not written a separate one.
-        self._welcome_message = (
+        _outbound_opener = (
             (config.get("welcome_message_outbound") or "").strip()
             if self._direction == "outbound"
             else ""
-        ) or (config.get("welcome_message") or "").strip()
+        )
+        self._welcome_message = _outbound_opener or (config.get("welcome_message") or "").strip()
+        # A fresh ArthaLeads lead that names what it enquired about does not
+        # get the INBOUND line: that was written for people who rang this
+        # agent and usually names the agent's own project, which may not be
+        # the one this lead asked about (17 Oct: Siya KHOPOLI would have
+        # greeted an Everglades II lead with "Khopoli luxury plots"). It opens
+        # with the lead's own enquiry instead (lead_opening_instruction below).
+        # An opener written for outbound calls is still the operator's choice.
+        if (
+            self._direction == "outbound"
+            and not _outbound_opener
+            and (config.get("_lead_fields") or {}).get("source") == "arthaleads"
+            and lead_topic(config.get("_lead_fields"))
+        ):
+            self._welcome_message = ""
         # A scheduled follow-up call (callback at the asked time, site-visit
         # reminder, nurture — see follow_ups.py) opens with why we are
         # calling back, even when the operator wrote an outbound opener:
