@@ -76,10 +76,8 @@ OWNER_CLONE_LIMIT = 100
 # A cloned voice bills like any standard voice: what a call costs per minute
 # on the default Vistrow Bharat model (1 credit = 1 standard minute).
 BHARAT_CREDITS_PER_MINUTE = round(
-    calls_db._credits_per_minute(
-        1.0,
-        calls_db._VOICE_TIER_MULTIPLIERS[calls_db.voice_tier(None)],
-        calls_db._MODEL_TIER_MULTIPLIERS[calls_db.model_tier("sarvam/sarvam-105b-conversations")],
+    calls_db.plan_policy.credits_per_minute(
+        1.0, calls_db.voice_tier(None), calls_db.model_tier("sarvam/sarvam-105b-conversations"),
     ),
     2,
 )
