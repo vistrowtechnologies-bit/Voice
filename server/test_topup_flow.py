@@ -21,15 +21,16 @@ class TopupQuoteTests(unittest.TestCase):
     def test_pack_prices_the_base_and_grants_the_bonus(self):
         import calls_db
         q = calls_db.topup_quote("starter", pack_key="500")
-        # Minute pricing: Starter 2,999 / 400 minutes = 7.50 per minute (credit).
-        self.assertEqual((q["credits"], q["bonusCredits"], q["perCreditInr"]), (500, 50, 7.5))
-        self.assertEqual((q["baseInr"], q["gstInr"], q["totalInr"]), (3750.0, 675.0, 4425.0))
+        # A top-up minute costs the plan's per-minute rate: Starter ₹7.
+        self.assertEqual((q["credits"], q["bonusCredits"], q["perCreditInr"]), (500, 50, 7.0))
+        self.assertEqual((q["baseInr"], q["gstInr"], q["totalInr"]), (3500.0, 630.0, 4130.0))
         self.assertEqual(calls_db.topup_quote("growth", pack_key="1000")["bonusCredits"], 150)
-        self.assertEqual(calls_db.topup_quote("scale", 50)["baseInr"], 240.5)
+        self.assertEqual(calls_db.topup_quote("scale", 50)["baseInr"], 250.0)
+        self.assertEqual(calls_db.topup_quote("growth", 100)["perCreditInr"], 6.0)
 
     def test_unknown_plan_uses_the_starter_rate(self):
         import calls_db
-        self.assertEqual(calls_db.topup_quote("trial", 100)["perCreditInr"], 7.5)
+        self.assertEqual(calls_db.topup_quote("trial", 100)["perCreditInr"], 7.0)
 
     def test_outside_the_range_or_unknown_pack_is_rejected(self):
         import calls_db
@@ -161,9 +162,9 @@ class TopupFlowTests(unittest.TestCase):
 
     def test_pack_bonus_is_credited_but_only_the_base_is_invoiced(self):
         session = self.order(pack="500")
-        self.assertEqual((session["credits"], session["bonusCredits"], session["amountInr"]), (500, 50, 4425.0))
+        self.assertEqual((session["credits"], session["bonusCredits"], session["amountInr"]), (500, 50, 4130.0))
         inv = self.invoice_for(session["orderId"])
-        self.assertEqual((inv["credits"], inv["bonus_credits"], float(inv["amount_inr"])), (500, 50, 4425.0))
+        self.assertEqual((inv["credits"], inv["bonus_credits"], float(inv["amount_inr"])), (500, 50, 4130.0))
         self.assertEqual(self.razorpay.create_order.call_args.kwargs["notes"]["bonus"], "50")
         self.assertEqual(self.verify(session["orderId"])["credits"], 550)
         self.assertEqual(self.credits(self.a), 650)

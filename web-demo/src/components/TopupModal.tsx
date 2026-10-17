@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchBillingProfile, invoiceDocumentUrl, saveBillingProfile, startTopup, verifyTopupPayment, type BillingProfile } from '../lib/api'
 import { loadRazorpayCheckout } from '../lib/razorpay'
-import { LIVE_MODEL_MULTIPLIER, PLANS, TOPUP_MAX_CREDITS, TOPUP_MIN_CREDITS, TOPUP_PACKS } from '../lib/plans'
+import { LIVE_MODEL_MULTIPLIER, TOPUP_MAX_CREDITS, TOPUP_MIN_CREDITS, TOPUP_PACKS } from '../lib/plans'
 import type { BillingSummary, TopupResult } from '../lib/types'
 import { Icon } from './Icon'
 
@@ -22,10 +22,12 @@ export function TopupModal({ billing, onClose, onSuccess }: { billing: BillingSu
 
   useEffect(() => { fetchBillingProfile().then(setProfile).catch(() => setProfile(null)) }, [])
 
-  // Must match server/calls_db.py's topup_quote: the plan's price over the PLAN's fixed
-  // credit count, rounded to the paisa, not this account's possibly-overridden creditsTotal.
-  const plan = PLANS.find((p) => p.key === billing.plan) || PLANS[0]
-  const perCredit = Math.round((billing.planPriceInr / plan.creditsNum) * 100) / 100
+  // Must match server/calls_db.py's topup_quote: the plan's per-minute rate (overagePerMinute,
+  // ₹7/6/5); trial and unknown plans pay the Starter rate. The fallback mirrors
+  // agent/plan_policy.py for a summary from a server that predates `plans`.
+  const serverPlans = billing.plans || []
+  const ratePlan = serverPlans.find((p) => p.plan === billing.plan) || serverPlans.find((p) => p.plan === 'starter')
+  const perCredit = ratePlan?.overagePerMinute ?? ({ growth: 6, scale: 5 } as Record<string, number>)[billing.plan] ?? 7
   const pack = TOPUP_PACKS.find((p) => p.key === choice)
   const credits = pack ? pack.credits : custom
   const bonus = pack ? Math.floor((pack.credits * pack.bonusPct) / 100) : 0
