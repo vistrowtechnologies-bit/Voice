@@ -1048,6 +1048,12 @@ Files: web-demo/src/lib/leadDetails.ts (new arthaleadsOrigin / visibleLeadEntrie
 - Evidence: npm run test:leads passes (new cases), tsc -b --noEmit, lint (exit 0, nothing in touched files), full npm run build pass.
 - Not verified: the page in a real browser against a real ArthaLeads contact. Next: review + merge (Vercel only), then open contact 9 of workspace 1 and check the card.
 
+
+### Claude — 2026-10-16 — website chats reached ArthaLeads cut off (branch `claude/chat-delivery-full-transcript`, PR open)
+
+Live test on shaporjipallonji.com (chat 1393, owner's number): ArthaLeads got only the first exchange. Cause: widget.ts sent `/widget/chat/end` on `visibilitychange=hidden` (tab/app switch), the server delivers each chat once, so later turns never left Vistrow. ArthaLeads attached it to the existing lead with that phone (its dedupe), which is why no new "Vistrow Voice" row appeared.
+Fix: (1) widget no longer ends a chat on visibilitychange (End chat, closing the panel and pagehide still do; a visitor who never returns is delivered by the 3-min idle sweep). server/static/widget.js rebuilt; the build of unmodified main reproduces the committed bundle byte for byte, and the only bundle diff is that listener. (2) Safety net: each delivery records `upTo` (the chat's ended_at read before the send); the dialer tick re-sends to ArthaLeads only (it updates the same call by call_id) any chat with turns after `upTo` once idle 3 min; logged as `call_updated` ("Chat updated" on the integration page). Sheets/webhooks are not re-sent (they would add a duplicate row).
+Verified: test_widget_chat_delivery.py 10/10 on a throwaway Postgres (3 new; the re-send test fails on unfixed main), full server suite 645 passed with only the 2 pre-existing test_instant_lead_calls failures, web-demo tsc. Real browser check on a local page serving the new bundle: hidden mid-chat sent no end signal; End chat sent exactly one, after the second message. Not verified in production yet. Chat 1393 (owner's test, ArthaLeads has 3 of 5 turns) is within the 7-day window and will be re-sent automatically after deploy.
 ### Claude — 2026-10-16 — LLM token diet (branch `claude/llm-token-diet`, local commit, NOT pushed)
 
 Problem: Sarvam pipeline LLM ≈ ₹2.0/call-minute (Oct 1–16 bill: ~12M tokens / ~117 min, ~45% cached).

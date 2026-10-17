@@ -151,7 +151,9 @@ class WidgetChatDeliveryTests(unittest.TestCase):
 
         row = self.row(call_id)
         self.assertTrue(row["integrations_delivered_at"])
-        self.assertEqual(json.loads(row["integrations_delivery_json"]), {"webhook": "ok", "arthaleads": "ok"})
+        stored = json.loads(row["integrations_delivery_json"])
+        self.assertEqual({k: stored[k] for k in ("webhook", "arthaleads")}, {"webhook": "ok", "arthaleads": "ok"})
+        self.assertTrue(stored["upTo"], "records the last turn the delivery covered")
         self.assertEqual(row["arthaleads_status"], "sent")
 
         self.dialer._deliver_idle_widget_chats()
@@ -169,7 +171,7 @@ class WidgetChatDeliveryTests(unittest.TestCase):
         self.assertEqual(self.posts_for(call_id), [])
         row = self.row(call_id)
         self.assertTrue(row["integrations_delivered_at"])
-        self.assertEqual(json.loads(row["integrations_delivery_json"]), {"skipped": "no_contact"})
+        self.assertEqual(json.loads(row["integrations_delivery_json"])["skipped"], "no_contact")
         self.assertIsNone(row["arthaleads_status"])
 
     def test_chat_older_than_seven_days_is_left_alone(self):
@@ -207,6 +209,74 @@ class WidgetChatDeliveryTests(unittest.TestCase):
         self.assertEqual(len(artha), 2)
         self.assertEqual(artha[0]["call_id"], artha[1]["call_id"])
         self.assertEqual(self.row(call_id)["arthaleads_status"], "sent")
+
+    def more_turns(self, call_id, session, ended_ago_s):
+        """The visitor kept chatting after the first delivery."""
+        self.db.upsert_widget_chat_call(
+            self.site, {"id": self.agent}, session,
+            (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)).isoformat(),
+            [{"role": "assistant", "content": "Hi, how can I help?"},
+             {"role": "user", "content": "Do you have 2BHK in Khopoli?"},
+             {"role": "assistant", "content": "Yes, from 45 lakh."},
+             {"role": "user", "content": "My budget is 1 crore."},
+             {"role": "assistant", "content": "Noted, 1 crore."}],
+            {"name": "Ravi", "phone": "9876543210", "email": ""},
+        )
+        conn = self.db._connect()
+        with conn:
+            conn.execute("UPDATE calls SET ended_at = ? WHERE id = ?", (
+                (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=ended_ago_s)).isoformat(),
+                call_id,
+            ))
+        conn.close()
+
+    def test_turns_after_an_early_delivery_are_resent_to_arthaleads_only(self):
+        # Live case 16 Oct (chat 1393): the end beacon fired after the first
+        # message, the visitor kept typing, and ArthaLeads never got the rest.
+        call_id, session = self.chat(ended_ago_s=1000)
+        asyncio.run(self.end_route(_request({"siteKey": self.site["siteKey"], "sessionId": session})))
+        self.assertEqual(len(self.posts_for(call_id)), 2)
+
+        self.more_turns(call_id, session, ended_ago_s=30)
+        self.dialer._deliver_idle_widget_chats()
+        self.assertEqual(len(self.posts_for(call_id)), 2, "not while the visitor may still be typing")
+
+        self.more_turns(call_id, session, ended_ago_s=600)
+        self.dialer._deliver_idle_widget_chats()
+        posts = self.posts_for(call_id)
+        self.assertEqual(len(posts), 3)
+        url, resent = posts[-1]
+        self.assertEqual(url, self.dispatch._ARTHALEADS_URL, "webhooks/Sheets would get a duplicate row")
+        self.assertEqual(resent["call_id"], call_id)
+        self.assertEqual(resent["transcript"][3], {"speaker": "Caller", "text": "My budget is 1 crore."})
+        stored = json.loads(self.row(call_id)["integrations_delivery_json"])
+        self.assertEqual((stored["arthaleads"], stored["resent"]), ("ok", True))
+
+        conn = self.db._connect()
+        logged = conn.execute(
+            "SELECT event_type, status FROM integration_deliveries WHERE call_id = ? ORDER BY id DESC LIMIT 1", (call_id,)
+        ).fetchone()
+        conn.close()
+        self.assertEqual((logged["event_type"], logged["status"]), ("call_updated", "sent"))
+
+        self.dialer._deliver_idle_widget_chats()
+        self.assertEqual(len(self.posts_for(call_id)), 3, "no new turns, no new send")
+
+    def test_a_chat_delivered_complete_is_never_resent(self):
+        call_id, session = self.chat(ended_ago_s=1000)
+        asyncio.run(self.end_route(_request({"siteKey": self.site["siteKey"], "sessionId": session})))
+        for _ in range(2):
+            self.dialer._deliver_idle_widget_chats()
+        self.assertEqual(len(self.posts_for(call_id)), 2)
+
+    def test_a_failed_arthaleads_delivery_is_left_to_the_manual_button(self):
+        self.dispatch._post_json = lambda url, payload, timeout=8: (False, "HTTP 500")
+        call_id, session = self.chat(ended_ago_s=1000)
+        asyncio.run(self.end_route(_request({"siteKey": self.site["siteKey"], "sessionId": session})))
+        self.dispatch._post_json = self._fake_post
+        self.more_turns(call_id, session, ended_ago_s=600)
+        self.dialer._deliver_idle_widget_chats()
+        self.assertEqual(self.posts_for(call_id), [])
 
 
 if __name__ == "__main__":

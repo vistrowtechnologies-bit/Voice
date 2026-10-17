@@ -1396,10 +1396,11 @@ function init(): void {
     if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, body)) return
     void fetch(url, { method: 'POST', body, keepalive: true }).catch(() => undefined)
   }
+  // Not on visibilitychange: a visitor who switches apps or tabs mid-chat
+  // comes back and keeps typing, and the first send would leave the CRM
+  // with half the conversation. If they never return, the server's
+  // 3-minute idle sweep delivers the whole chat.
   window.addEventListener('pagehide', endChatSession)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') endChatSession()
-  })
 
   function appendChatBubble(text: string, role: 'user' | 'assistant'): HTMLDivElement {
     const emptyState = chatMessagesEl.querySelector('.av-transcript-empty')
