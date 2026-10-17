@@ -20,6 +20,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16): branch `claude/contact-arthaleads-details` (PR open, NOT merged): contact page Lead details card hides ArthaLeads internal keys/tags, shows "From ArthaLeads" line + link; display only, web-demo only, Vercel deploy only.
 - Claude (2026-10-16): branch `claude/llm-token-diet` (committed locally, NOT pushed/PR'd/deployed): LLM request harness + history window, contact notes moved to the prompt tail, warm-up sends tools, orchestrator VOICE_STYLE_PROMPT before per-call text. Needs both workers deployed after merge.
 - Claude (2026-10-16, updated 22:55 IST): branch `claude/lead-details-brochure` (local commits 6677701e + 93de8a7c, NOT pushed yet, owner checks ArthaLeads staging first): standard post-call lead facts stored and sent to ArthaLeads with summary/key_points; send_brochure tool. Function-level claim on issue #2 (comment 6220772439), overlap with prompt-cuts/tool-guardrails cleared by that session. Per [RULES] I stop at PR-ready; the SEO session is the deployer (combined release, then `lk agent deploy` on BOTH workers + Railway for one server line). Dependency: ArthaLeads side is on arthaleads staging bc0446c and should reach ArthaLeads main with or before this deploy.
+- Claude (2026-10-17): branch `claude/tool-desc-ab` (local commit, NOT pushed/PR'd/deployed): tools.py tool DESCRIPTIONS only (8 tools; log_lead cut reverted after it broke lead capture). Tool block measured by Sarvam itself = 29–33% of tenant requests; cut saves ~385 tokens/request (~₹26–47 per 1,000 call-min). A/B 2×30: tool accuracy 22/26 vs 21/26, no new wrong end_call/switch. docs/TOOL-DESC-AB-2026-10-17.md. Needs both workers deployed after merge.
 
 ## Takeover checklist
 
@@ -1098,3 +1099,10 @@ Left: owner review → push/PR → merge → `lk agent deploy` both workers + Ra
 - ArthaLeads (other repo): staging bc0446c is pushed. Railway staging and Vercel both report success for that commit. It covers: filling empty lead fields, untouched Apartment/Buy defaults on integration leads, detailsSetByPerson, AI-call status pill, brochure task. ArthaLeads main is not updated.
 - Unverified: staging UI in a browser (no staging login available to the agent), live call behaviour.
 - Next: owner signs in to app-staging so the UI can be checked, then push this branch and open a PR for the deployer.
+
+### Claude — 2026-10-17 IST — tool descriptions: size verified, cut, A/B
+
+- Branch `claude/tool-desc-ab` from main 322c9ba3. Files: `agent/tools.py` (docstrings of switch_reply_language, end_call, do_not_call, request_callback, book_appointment, check_calendar_availability, transfer_call, capture_platform_lead; no logic/name/schema change), `docs/TOOL-DESC-AB-2026-10-17.md`.
+- Verified: Sarvam's own prompt_tokens with vs without tools: tool block 2,625–2,735 tokens = 29–33% on agents 3/17/19/26, 9.8% on agent 4 (the old "23%" was the offline fixture before prompt cuts). After: 2,249–2,346 (−376…−389/request). A/B 2×30 real turns (read-only DB, accounts 1+2, PII masked): right tool 22/26 vs 21/26, no-tool 28/34 both, wrong end_call 0 vs 1, switch 2 vs 2, TTFT p50 266 both. Agent suite 899 passed / 0 failed (placeholder DB). A shortened log_lead dropped #26 log_lead to 2/5 and 0/5 → fully reverted (5/5). Spend ≈ ₹61 billed-rate estimate.
+- Not verified: do_not_call/transfer_call/booking completion turns (none in the replay set); non-Indian language switch on global voices; live call.
+- Next: owner review → push/PR → deployer merges and runs `lk agent deploy` on both workers. No line overlap with PR #153 (switch_reply_language logic).
