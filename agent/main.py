@@ -8620,6 +8620,8 @@ async def entrypoint(ctx: JobContext) -> None:
                     "recording_mime_type": "audio/wav",
                     # For tools.crm_outcome / the ArthaLeads bridge.
                     "direction": call_context.get("direction") or "",
+                    "failure_reason": userdata.get("failure_reason") or "",
+                    "voicemail_detected": bool(userdata.get("voicemail_detected")),
                     "arthaleads_lead_id": str(
                         (call_context.get("custom_fields") or {}).get("arthaleads_lead_id") or ""
                     ),
