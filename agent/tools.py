@@ -2821,18 +2821,32 @@ async def end_call(context: RunContext) -> str:
             context.userdata is not None
             and context.userdata.get("end_call_info_request_refused") == _last
         )
-        if not _already_refused:
+        _lead = (context.userdata or {}).get("lead_data") or {}
+        _handled = bool(_lead.get("brochure_requested"))
+        if not _already_refused and not _handled:
             if context.userdata is not None:
                 context.userdata["end_call_info_request_refused"] = _last
             return (
                 "NOT ending the call yet — the caller asked for details to be sent (WhatsApp, "
-                "brochure, SMS, e-mail) or to be called back. That is a next step, not a "
-                "goodbye. Reply out loud now, in the caller's language: confirm you will share "
-                "exactly what they asked for on this number (or that the team will call back). "
-                "Use the brochure/details tool if you have one, otherwise note the request with "
-                "the lead or callback tool. Then ask if there is anything else. Do not say "
-                "goodbye in that reply and do not end the call silently."
+                "brochure, SMS, e-mail) or to be called back. Do not call end_call again now. "
+                "Say this to the caller out loud right now, in their language: confirm you will "
+                "share exactly what they asked for on this number (or that the team will call "
+                "back), and ask if there is anything else. Use the brochure/details tool if you "
+                "have one, otherwise note the request with the lead or callback tool."
             )
+        # The request was refused once (or a brochure tool already recorded
+        # it): end now with a goodbye that confirms it. Skips the "caller
+        # has not said goodbye" checks below — on call 1396 they refused
+        # every retry, the model kept calling end_call instead of speaking,
+        # hit the tool-step limit and left the caller in 20 s of silence.
+        if context.userdata is not None:
+            context.userdata["ending_call"] = True
+            context.userdata["ending_call_from_tool"] = True
+        return (
+            "The caller is done. In one short, warm goodbye line, confirm the team will send "
+            "them what they asked for (or call them back), thank them, and then stop — no "
+            "further questions."
+        )
 
     # Replaying every hangup this system has actually performed showed the
     # question guard above catches only two of seven. The two it misses are
