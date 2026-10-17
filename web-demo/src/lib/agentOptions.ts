@@ -98,64 +98,80 @@ export const voiceLabel = (voice: string) =>
 // A voice belongs to exactly one group: the old tier-first implementation
 // duplicated Google multilingual voices inside Premium, then showed their
 // 2x group again *after* two 1x groups.
-export const voicePickerGroups = (voices: VoiceEntry[]) => [
-  {
-    key: 'expressive',
-    label: 'Vistrow Expressive',
-    note: '2x credits · most expressive · switches languages live',
-    voices: voices.filter((v) => v.tier === 'premium' && v.multilingual && !v.preview),
-  },
-  {
-    key: 'premium',
-    label: 'Premium',
-    note: '2x credits · natural conversational voices',
-    voices: voices.filter((v) => v.tier === 'premium' && !v.multilingual && !v.preview),
-  },
-  {
-    key: 'standard',
-    label: 'Standard',
-    note: '1x credits',
-    voices: voices.filter(
-      (v) => v.tier === 'standard' && !v.multilingual && !v.preview && !v.value.toLowerCase().includes('chirp3'),
-    ),
-  },
-  {
-    key: 'chirp3-hd',
-    label: 'Vistrow HD',
-    note: '1x credits · fast HD · switches languages live',
-    voices: voices.filter((v) => v.value.toLowerCase().includes('chirp3') && !v.preview),
-  },
-  {
-    key: 'gemini38-lite',
-    label: 'Studio Lite',
-    note: '2x credits · lower latency and cost · test before live calls',
-    voices: voices.filter((v) => v.preview && v.value.startsWith('google38:')),
-  },
-  {
-    key: 'gemini38-flash',
-    label: 'Studio',
-    note: '2x credits · richer expression and voice fidelity · test before live calls',
-    voices: voices.filter((v) => v.preview && v.value.startsWith('google38flash:')),
-  },
-  {
-    key: 'native-lite',
-    label: 'Vistrow Native',
-    // FIXED 2026-10-14 (PR #93): the distortion below was Google answering a PCM
-    // request with MP3; main.py now asks for LINEAR16 (clean on call 1278).
-    // Measured on call 885 (agent 26 set to google:hi-IN-Standard-A / Aditi):
-    // audible distortion, 402ms TTS TTFB, and NOT ONE caller turn transcribed
-    // across the whole call — the agent checked in twice and hung up on a
-    // caller who was talking to it. Google rejects this whole family on the
-    // streaming endpoint ("only Chirp 3: HD voices are supported for
-    // streaming synthesis"), so main.py runs them through a StreamAdapter
-    // sentence-chunking workaround, and that is what the caller hears.
-    // Warned rather than hidden: they are cheaper and some tenants may be on
-    // one already, so an operator picking one deserves to know before a live
-    // call rather than after.
-    note: '0.5x credits · one language each · a little slower to start',
-    voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
-  },
-]
+// The agent's voice picker groups voices exactly as the Voices page tabs do,
+// so a voice added there always shows here under the same name. The old
+// fixed groups had no slot for Bharat (sarvam4:) voices, which are standard
+// AND multilingual, so every one an owner added silently vanished from the
+// picker (17 Oct). "Other" catches anything a future voice family adds
+// before it gets a group of its own: a voice the owner added is never hidden.
+export const voicePickerGroups = (voices: VoiceEntry[]) => {
+  const stable = voices.filter((v) => !v.preview)
+  const isChirp = (v: VoiceEntry) => v.value.toLowerCase().includes('chirp3')
+  const groups: { key: string; label: string; note: string; voices: VoiceEntry[] }[] = [
+    {
+      key: 'native',
+      label: 'Vistrow Native',
+      // FIXED 2026-10-14 (PR #93): the distortion below was Google answering a PCM
+      // request with MP3; main.py now asks for LINEAR16 (clean on call 1278).
+      // Measured on call 885 (agent 26 set to google:hi-IN-Standard-A / Aditi):
+      // audible distortion, 402ms TTS TTFB, and NOT ONE caller turn transcribed
+      // across the whole call — the agent checked in twice and hung up on a
+      // caller who was talking to it. Google rejects this whole family on the
+      // streaming endpoint ("only Chirp 3: HD voices are supported for
+      // streaming synthesis"), so main.py runs them through a StreamAdapter
+      // sentence-chunking workaround, and that is what the caller hears.
+      // Warned rather than hidden: they are cheaper and some tenants may be on
+      // one already, so an operator picking one deserves to know before a live
+      // call rather than after.
+      note: '0.5x credits · one language each · a little slower to start',
+      voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
+    },
+    {
+      key: 'sarvam4',
+      label: 'Bharat',
+      note: '1x credits · Indian persona voices · switches language live',
+      // New persona voices first, then the classic ids (priya, shubh, ...).
+      voices: [
+        ...stable.filter((v) => v.tier === 'standard' && v.value.startsWith('sarvam4:')),
+        ...stable.filter((v) => v.tier === 'standard' && !isChirp(v) && !v.value.startsWith('sarvam4:')),
+      ],
+    },
+    {
+      key: 'chirp3-hd',
+      label: 'Vistrow HD',
+      note: '1x credits · fastest voices · switches language mid-call',
+      voices: stable.filter((v) => v.tier === 'standard' && isChirp(v)),
+    },
+    {
+      key: 'expressive',
+      label: 'Vistrow Expressive',
+      note: '2x credits · follows the caller’s emotion · switches languages live',
+      voices: stable.filter((v) => v.tier === 'premium' && v.multilingual),
+    },
+    {
+      key: 'gemini38-lite',
+      label: 'Studio Lite',
+      note: '2x credits · lower latency and cost · test before live calls',
+      voices: voices.filter((v) => v.preview && v.value.startsWith('google38:')),
+    },
+    {
+      key: 'gemini38-flash',
+      label: 'Studio',
+      note: '2x credits · richer expression and voice fidelity · test before live calls',
+      voices: voices.filter((v) => v.preview && v.value.startsWith('google38flash:')),
+    },
+    {
+      key: 'premium',
+      label: 'Premium',
+      note: '2x credits · natural conversational voices',
+      voices: stable.filter((v) => v.tier === 'premium' && !v.multilingual),
+    },
+  ]
+  const placed = new Set(groups.flatMap((g) => g.voices.map((v) => v.value)))
+  const rest = voices.filter((v) => !placed.has(v.value))
+  if (rest.length) groups.push({ key: 'other', label: 'Other voices', note: 'added on the Voices page', voices: rest })
+  return groups
+}
 // Vistrow tier name + quality tag is the primary label (see
 // platform_assistant.py - the vendor never gets named to a prospect on a
 // live call), but the dashboard's own model picker shows the raw model
