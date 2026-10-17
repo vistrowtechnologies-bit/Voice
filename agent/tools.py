@@ -3013,7 +3013,7 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
         _GOOGLE_NAME_TO_LANGUAGE_CODE
         if is_google_multilingual(provider)
         else _CHIRP3_NAME_TO_LANGUAGE_CODE
-        if provider == "google-native" and voice_catalog.chirp3_persona(getattr(agent, "_voice", "") or "")
+        if provider == "google-native" and voice_catalog.chirp3_persona(getattr(agent, "_speaking_voice", None) or getattr(agent, "_voice", "") or "")
         else _NAME_TO_LANGUAGE_CODE
     )
     code = _names.get(language.strip().lower())
@@ -3138,7 +3138,7 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                 # through here: the text became Marathi, then Malayalam, then
                 # Gujarati, while the voice stayed on the Hindi locale reading
                 # it, which is why it sounded wrong.
-                _persona = voice_catalog.chirp3_persona(getattr(agent, "_voice", "") or "")
+                _persona = voice_catalog.chirp3_persona(getattr(agent, "_speaking_voice", None) or getattr(agent, "_voice", "") or "")
                 _primary = getattr(agent.tts, "_vistrow_primary", None)
                 if _persona and code in voice_catalog.CHIRP3_LANGUAGES and _primary is not None:
                     _primary.update_options(
