@@ -3838,6 +3838,8 @@ def push_call_to_arthaleads(call_id: int, user: dict = Depends(require_role("adm
 
 @app.get("/dashboard/intelligence")
 def dashboard_intelligence(days: int = 30, user: dict = Depends(current_user)) -> dict:
+    # Analytics tab only: Growth and Scale.
+    calls_db.require_feature(user["account_id"], "analytics")
     return calls_db.intelligence_summary(user["account_id"], days=days)
 
 
@@ -3871,9 +3873,17 @@ def dashboard_period_comparison(days: int = 14, user: dict = Depends(current_use
     return calls_db.period_comparison(user["account_id"], days=days)
 
 
+# Breakdowns only the Analytics tab shows (Growth and Scale). The Overview's
+# funnel and channel tiles read this same response on every plan.
+ANALYTICS_TAB_ONLY = {"languages": [], "peakHours": [], "durationTrend": [], "byAgent": [], "sentiment": {"positive": 0, "neutral": 0, "negative": 0}}
+
+
 @app.get("/dashboard/analytics")
 def dashboard_analytics(user: dict = Depends(current_user)) -> dict:
-    return calls_db.analytics(user["account_id"])
+    result = calls_db.analytics(user["account_id"])
+    if not calls_db.account_features(user["account_id"]).get("analytics"):
+        result.update(ANALYTICS_TAB_ONLY)
+    return result
 
 
 @app.get("/dashboard/launch-readiness")

@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import '../lib/chart-setup'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
-import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
 import { StatTile } from '../components/ui/StatTile'
@@ -17,6 +16,7 @@ import {
   fetchCalls,
   fetchContacts,
   fetchDashboardSummary,
+  fetchEntitlements,
   fetchFeedbackSummary,
   fetchIntelligence,
   fetchIntegrations,
@@ -43,6 +43,22 @@ const CALL_STATUS_STYLES: Record<string, string> = {
   completed: 'bg-cyan/20 text-cyan border-cyan/30',
   failed: 'bg-destructive/20 text-destructive border-destructive/30',
 }
+
+const CHECKLIST_KEY = 'vv-launch-checklist-dismissed'
+
+function checklistDismissedLocally(): boolean {
+  try { return window.localStorage.getItem(CHECKLIST_KEY) === '1' } catch { return false }
+}
+
+const ANALYTICS_FEATURES = [
+  'Calls and qualified leads by agent and channel',
+  'Language mix and peak call hours',
+  'Caller sentiment and agent QA scores',
+  'Top reasons leads do not qualify',
+]
+
+// Rounded, slim bars for the Analytics tiles.
+const BAR_STYLE = { borderRadius: 8, borderSkipped: false, maxBarThickness: 28 } as const
 
 // Attention items shown before "Show all", so the tile stays the height of its neighbours.
 const ATTENTION_PREVIEW = 4
@@ -117,6 +133,8 @@ export function Dashboard() {
   const [customizing, setCustomizing] = useState(false)
   const [openKpi, setOpenKpi] = useState<string | null>(null)
   const [showAllAttention, setShowAllAttention] = useState(false)
+  // The Analytics tab is Growth and Scale (plan_policy 'analytics'); null while loading.
+  const [analyticsAllowed, setAnalyticsAllowed] = useState<boolean | null>(null)
 
   const { user } = useAuth()
   // Re-render (and recompute chart colors) when the header toggles the theme.
@@ -125,11 +143,12 @@ export function Dashboard() {
   void theme
   const GRID = { color: t.grid }
   const TICKS = { color: t.tick, font: { size: 11 } }
+  const LEGEND = { display: true, align: 'end' as const, labels: { color: t.tick, boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } } }
 
   useEffect(() => {
     fetchDashboardSummary().then(setSummary).catch(() => setSummary(null))
     fetchAnalytics().then(setAnalytics).catch(() => setAnalytics(null))
-    fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
+    fetchEntitlements().then((e) => setAnalyticsAllowed(Boolean(e.features.analytics))).catch(() => setAnalyticsAllowed(true))
     fetchCalls().then((calls) => setRecentCalls(calls.slice(0, 5))).catch(() => setRecentCalls([]))
     fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
     fetchFeedbackSummary().then(setFeedback).catch(() => setFeedback(null))
@@ -140,14 +159,23 @@ export function Dashboard() {
     fetchAppointments().then(setAppointments).catch(() => setAppointments([]))
     apiProfilePreferences()
       .then((preferences) => {
-        setChecklistDismissed(Boolean(preferences.dashboard_checklist_dismissed))
+        const dismissedHere = checklistDismissedLocally()
+        setChecklistDismissed(Boolean(preferences.dashboard_checklist_dismissed) || dismissedHere)
+        // Dismissed on this device while the save failed: save it now.
+        if (dismissedHere && !preferences.dashboard_checklist_dismissed) {
+          apiUpdateProfilePreferences({ dashboard_checklist_dismissed: true }).catch(() => undefined)
+        }
         try {
           const parsed = JSON.parse(preferences.dashboard_hidden_cards || '[]')
           setHiddenCards(new Set(Array.isArray(parsed) ? parsed : []))
         } catch { setHiddenCards(new Set()) }
       })
-      .catch(() => setChecklistDismissed(false))
+      .catch(() => setChecklistDismissed(checklistDismissedLocally()))
   }, [])
+
+  useEffect(() => {
+    if (analyticsAllowed) fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
+  }, [analyticsAllowed])
 
   useEffect(() => {
     fetchUsageTrends(rangeDays).then(setTrends).catch(() => setTrends(null))
@@ -218,10 +246,14 @@ export function Dashboard() {
     if (dismissingChecklist) return
     setDismissingChecklist(true)
     setChecklistDismissed(true)
+    // Remembered on this device too: if the save fails (a network blip, or the
+    // API restarting during a deploy) the checklist stays closed and the save
+    // is retried on the next visit, instead of the checklist coming back.
+    try { window.localStorage.setItem(CHECKLIST_KEY, '1') } catch { /* storage blocked */ }
     try {
       await apiUpdateProfilePreferences({ dashboard_checklist_dismissed: true })
     } catch {
-      setChecklistDismissed(false)
+      /* stays hidden; retried on the next visit */
     } finally {
       setDismissingChecklist(false)
     }
@@ -241,7 +273,7 @@ export function Dashboard() {
                 tab === t ? 'text-text' : 'text-text-muted hover:text-text'
               }`}
             >
-              {t}
+              <span className="flex items-center gap-1.5">{t}{t === 'analytics' && analyticsAllowed === false && <Icon name="lock" className="text-[15px]" />}</span>
               {tab === t && <span className="absolute -bottom-px left-0 h-0.5 w-full bg-primary" />}
             </button>
           ))}
@@ -706,233 +738,203 @@ export function Dashboard() {
           </>
         )}
 
-        {tab === 'analytics' && (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card className="lg:col-span-2">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Icon name="auto_awesome" className="text-[18px] text-cyan" />
-                <h3 className="text-sm font-semibold">Conversation intelligence</h3>
-                <span className="text-xs text-text-muted">· last 30 days</span>
-              </div>
-              {!intel || intel.analyzed === 0 ? (
-                <EmptyState icon="auto_awesome" text="Analyze calls from any call's detail page to build sentiment, outcome, and QA insights here." />
-              ) : (
-                <div className="flex flex-col gap-5">
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <IntelStat label="Calls analyzed" value={String(intel.analyzed)} />
-                    <IntelStat label="Avg agent QA" value={intel.avgQaScore != null ? `${intel.avgQaScore}/100` : '-'} tone="text-primary" />
-                    <IntelStat label="Positive" value={String(intel.sentiment.positive)} tone="text-success" />
-                    <IntelStat label="Negative" value={String(intel.sentiment.negative)} tone="text-destructive" />
-                  </div>
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                    <div>
-                      <p className="mb-2 text-xs font-semibold text-text-muted">Outcomes</p>
-                      <div className="flex flex-col gap-1.5">
-                        {intel.outcomes.map((o) => {
-                          const max = Math.max(...intel.outcomes.map((x) => x.count), 1)
-                          return (
-                            <div key={o.outcome} className="flex items-center gap-2 text-xs">
-                              <span className="w-28 shrink-0 capitalize text-text-muted">{o.outcome.replace(/_/g, ' ')}</span>
-                              <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-high">
-                                <div className="h-full bg-cyan" style={{ width: `${(o.count / max) * 100}%` }} />
-                              </div>
-                              <span className="w-6 text-right tabular-nums">{o.count}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="mb-2 text-xs font-semibold text-text-muted">Top disqualification reasons</p>
-                      {intel.topDisqualifications.length === 0 ? (
-                        <p className="text-xs text-text-muted">None recorded.</p>
-                      ) : (
-                        <div className="flex flex-col gap-1.5">
-                          {intel.topDisqualifications.map((r) => (
-                            <div key={r.reason} className="flex items-center justify-between gap-2 text-xs">
-                              <span className="truncate capitalize text-text">{r.reason}</span>
-                              <span className="shrink-0 rounded-full bg-surface-high px-2 py-0.5 tabular-nums text-text-muted">{r.count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+        {tab === 'analytics' && analyticsAllowed === false && (
+          <section className="bento-tile bento-hero flex flex-col items-start gap-5 sm:p-8">
+            <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">Growth and Scale plans</span>
+            <h2 className="bento-title max-w-2xl text-[28px] leading-tight sm:text-4xl">See why calls convert, not just how many</h2>
+            <p className="max-w-xl text-[15px] leading-relaxed text-white/80">
+              Analytics breaks every call down by agent, channel, language and hour, scores conversations for sentiment and quality, and shows the top reasons leads don&apos;t qualify.
+            </p>
+            <ul className="grid gap-x-8 gap-y-2.5 text-sm sm:grid-cols-2">
+              {ANALYTICS_FEATURES.map((feature) => (
+                <li key={feature} className="flex items-center gap-2"><Icon name="check_circle" className="text-[18px] text-white/90" />{feature}</li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to="/dashboard/settings?tab=billing" className="bento-pill bento-pill-light">Upgrade to Growth →</Link>
+              <span className="text-xs text-white/70">Your call data is kept; Analytics opens as soon as you upgrade.</span>
+            </div>
+          </section>
+        )}
+
+        {tab === 'analytics' && analyticsAllowed && (
+          <>
+            <div className="bento-grid">
+              <section className="bento-tile bento-w4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan/12 text-cyan"><Icon name="auto_awesome" className="text-[19px]" /></span>
+                  <div>
+                    <h3 className="bento-title text-[15px]">Conversation intelligence</h3>
+                    <p className="text-xs text-text-muted">Last 30 days</p>
                   </div>
                 </div>
-              )}
-            </Card>
+                {!intel || intel.analyzed === 0 ? (
+                  <EmptyState icon="auto_awesome" text="Analyze calls from any call's detail page to build sentiment, outcome, and QA insights here." />
+                ) : (
+                  <div className="mt-5 flex flex-col gap-6">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      <IntelStat label="Calls analyzed" value={String(intel.analyzed)} />
+                      <IntelStat label="Avg agent QA" value={intel.avgQaScore != null ? `${intel.avgQaScore}/100` : '-'} tone="text-primary" />
+                      <IntelStat label="Positive" value={String(intel.sentiment.positive)} tone="text-success" />
+                      <IntelStat label="Negative" value={String(intel.sentiment.negative)} tone="text-destructive" />
+                    </div>
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div>
+                        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">Outcomes</p>
+                        <div className="flex flex-col gap-2.5">
+                          {intel.outcomes.map((o) => {
+                            const max = Math.max(...intel.outcomes.map((x) => x.count), 1)
+                            return (
+                              <div key={o.outcome} className="flex items-center gap-3 text-xs">
+                                <span className="w-28 shrink-0 capitalize text-text-muted">{o.outcome.replace(/_/g, ' ')}</span>
+                                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-surface-high">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-primary to-cyan" style={{ width: `${(o.count / max) * 100}%` }} />
+                                </div>
+                                <span className="w-7 text-right font-bold tabular-nums">{o.count}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">Top disqualification reasons</p>
+                        {intel.topDisqualifications.length === 0 ? (
+                          <p className="text-xs text-text-muted">None recorded.</p>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            {intel.topDisqualifications.map((r) => (
+                              <div key={r.reason} className="flex items-center justify-between gap-2 rounded-xl bg-surface-high/50 px-3 py-2 text-xs">
+                                <span className="truncate capitalize">{r.reason}</span>
+                                <span className="shrink-0 font-bold tabular-nums text-text-muted">{r.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Calls by channel</h3>
-              <div className="h-[200px]">
+              <AnalyticsTile title="Calls by channel">
                 {analytics && analytics.byChannel && analytics.byChannel.length > 0 ? (
                   <Bar
                     data={{
                       labels: analytics.byChannel.map((c) => c.channel),
                       datasets: [
-                        { label: 'Calls', data: analytics.byChannel.map((c) => c.calls), backgroundColor: '#A855F7', borderRadius: 4 },
-                        { label: 'Qualified', data: analytics.byChannel.map((c) => c.qualified), backgroundColor: '#22D3EE', borderRadius: 4 },
+                        { label: 'Calls', data: analytics.byChannel.map((c) => c.calls), backgroundColor: '#A855F7', ...BAR_STYLE },
+                        { label: 'Qualified', data: analytics.byChannel.map((c) => c.qualified), backgroundColor: '#22D3EE', ...BAR_STYLE },
                       ],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: true, labels: { color: t.tick, boxWidth: 10, font: { size: 11 } } } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
-                    }}
+                    options={{ maintainAspectRatio: false, plugins: { legend: LEGEND }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
                   />
                 ) : (
                   <EmptyState icon="bar_chart" text="Channel split appears after the first calls - Web, Website Widget, and Phone." />
                 )}
-              </div>
-            </Card>
+              </AnalyticsTile>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Calls by agent</h3>
-              <div className="h-[200px]">
+              <AnalyticsTile title="Calls by agent">
                 {analytics && analytics.byAgent && analytics.byAgent.length > 0 ? (
                   <Bar
                     data={{
                       labels: analytics.byAgent.map((a) => a.agent),
                       datasets: [
-                        { label: 'Calls', data: analytics.byAgent.map((a) => a.calls), backgroundColor: '#FF3D9A', borderRadius: 4 },
-                        { label: 'Qualified', data: analytics.byAgent.map((a) => a.qualified), backgroundColor: '#22D3EE', borderRadius: 4 },
+                        { label: 'Calls', data: analytics.byAgent.map((a) => a.calls), backgroundColor: '#FF3D9A', ...BAR_STYLE },
+                        { label: 'Qualified', data: analytics.byAgent.map((a) => a.qualified), backgroundColor: '#22D3EE', ...BAR_STYLE },
                       ],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: true, labels: { color: t.tick, boxWidth: 10, font: { size: 11 } } } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
-                    }}
+                    options={{ maintainAspectRatio: false, plugins: { legend: LEGEND }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
                   />
                 ) : (
                   <EmptyState icon="bar_chart" text="Per-agent stats appear after the first calls." />
                 )}
-              </div>
-            </Card>
+              </AnalyticsTile>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Calls by language</h3>
-              <div className="h-[200px]">
+              <AnalyticsTile title="Calls by language">
                 {analytics && analytics.languages.length > 0 ? (
                   <Bar
                     data={{
                       labels: analytics.languages.map((l) => LANGUAGE_NAMES[l.language] ?? l.language),
-                      datasets: [{ data: analytics.languages.map((l) => l.count), backgroundColor: '#A855F7', borderRadius: 4 }],
+                      datasets: [{ data: analytics.languages.map((l) => l.count), backgroundColor: '#A855F7', ...BAR_STYLE }],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
-                    }}
+                    options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
                   />
                 ) : (
                   <EmptyState icon="translate" text="Language mix appears after the first calls." />
                 )}
-              </div>
-            </Card>
+              </AnalyticsTile>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Average call duration - last 14 days</h3>
-              <div className="h-[200px]">
+              <AnalyticsTile title="Average call duration" subtitle="Last 14 days">
                 {analytics && analytics.durationTrend.length > 0 ? (
                   <Line
                     data={{
-                      labels: analytics.durationTrend.map((d) => d.day),
-                      datasets: [
-                        {
-                          data: analytics.durationTrend.map((d) => Math.round(d.avgSeconds)),
-                          borderColor: '#22D3EE',
-                          backgroundColor: 'rgba(34,211,238,0.08)',
-                          fill: true,
-                          tension: 0.35,
-                        },
-                      ],
+                      labels: analytics.durationTrend.map((d) => shortDay(d.day)),
+                      datasets: [{ data: analytics.durationTrend.map((d) => Math.round(d.avgSeconds)), borderColor: '#22D3EE', backgroundColor: 'rgba(34,211,238,0.10)', fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5 }],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, callback: (v) => `${v}s` } } },
-                    }}
+                    options={{ maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { ...TICKS, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } }, y: { grid: GRID, ticks: { ...TICKS, callback: (v) => `${v}s` } } } }}
                   />
                 ) : (
                   <EmptyState icon="timer" text="Duration trend appears after the first calls." />
                 )}
-              </div>
-            </Card>
+              </AnalyticsTile>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Qualification funnel</h3>
-              {analytics ? (
-                <div className="flex flex-col gap-3 py-2">
-                  <FunnelBar label="Answered" value={analytics.funnel.answered} max={analytics.funnel.answered} color="#6B647F" />
-                  <FunnelBar label="Engaged (4+ turns)" value={analytics.funnel.engaged} max={analytics.funnel.answered} color="#A855F7" />
-                  <FunnelBar label="Qualified" value={analytics.funnel.qualified} max={analytics.funnel.answered} color="#22D3EE" />
-                  <FunnelBar label="Appointment booked" value={analytics.funnel.visitBooked} max={analytics.funnel.answered} color="#FBBF24" />
-                </div>
-              ) : (
-                <EmptyState icon="filter_alt" text="Funnel appears after the first calls." />
-              )}
-            </Card>
-
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Caller sentiment</h3>
-              {analytics && (analytics.sentiment.positive + analytics.sentiment.neutral + analytics.sentiment.negative) > 0 ? (
-                <div className="flex items-center gap-6 py-2">
-                  <div className="h-[140px] w-[140px]">
-                    <Doughnut
-                      data={{
-                        labels: ['Positive', 'Neutral', 'Negative'],
-                        datasets: [
-                          {
-                            data: [analytics.sentiment.positive, analytics.sentiment.neutral, analytics.sentiment.negative],
-                            backgroundColor: ['#22D3EE', t.muted, '#F43F5E'],
-                            borderColor: t.surface,
-                            borderWidth: 3,
-                          },
-                        ],
-                      }}
-                      options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '70%' }}
-                    />
+              <AnalyticsTile title="Qualification funnel" chart={false}>
+                {analytics ? (
+                  <div className="flex flex-col gap-3.5 py-1">
+                    <FunnelBar label="Answered" value={analytics.funnel.answered} max={analytics.funnel.answered} color="#6B647F" />
+                    <FunnelBar label="Engaged (4+ turns)" value={analytics.funnel.engaged} max={analytics.funnel.answered} color="#A855F7" />
+                    <FunnelBar label="Qualified" value={analytics.funnel.qualified} max={analytics.funnel.answered} color="#22D3EE" />
+                    <FunnelBar label="Appointment booked" value={analytics.funnel.visitBooked} max={analytics.funnel.answered} color="#FBBF24" />
                   </div>
-                  <div className="flex flex-col gap-1.5 text-[11px] text-text-muted">
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan" />Positive · {analytics.sentiment.positive}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-muted" />Neutral · {analytics.sentiment.neutral}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#F43F5E' }} />Negative · {analytics.sentiment.negative}</span>
-                  </div>
-                </div>
-              ) : (
-                <EmptyState icon="mood" text="Sentiment split appears after the first calls." />
-              )}
-            </Card>
+                ) : (
+                  <EmptyState icon="filter_alt" text="Funnel appears after the first calls." />
+                )}
+              </AnalyticsTile>
 
-            <Card className="lg:col-span-2">
-              <h3 className="mb-4 text-sm font-semibold">Peak call hours</h3>
-              <div className="h-[180px]">
+              <AnalyticsTile title="Caller sentiment" chart={false}>
+                {analytics && (analytics.sentiment.positive + analytics.sentiment.neutral + analytics.sentiment.negative) > 0 ? (
+                  <div className="flex flex-wrap items-center gap-6 py-1">
+                    <div className="h-[150px] w-[150px]">
+                      <Doughnut
+                        data={{
+                          labels: ['Positive', 'Neutral', 'Negative'],
+                          datasets: [{ data: [analytics.sentiment.positive, analytics.sentiment.neutral, analytics.sentiment.negative], backgroundColor: ['#22D3EE', t.muted, '#F43F5E'], borderColor: t.surface, borderWidth: 3 }],
+                        }}
+                        options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '72%' }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2.5 text-[13px]">
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-cyan" /><span className="text-text-muted">Positive</span><b className="tabular-nums">{analytics.sentiment.positive}</b></span>
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-muted" /><span className="text-text-muted">Neutral</span><b className="tabular-nums">{analytics.sentiment.neutral}</b></span>
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#F43F5E' }} /><span className="text-text-muted">Negative</span><b className="tabular-nums">{analytics.sentiment.negative}</b></span>
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState icon="mood" text="Sentiment split appears after the first calls." />
+                )}
+              </AnalyticsTile>
+
+              <AnalyticsTile title="Peak call hours" subtitle="Times shown in IST (Indian Standard Time)" wide>
                 {analytics && analytics.peakHours.length > 0 ? (
                   <Bar
                     data={{
                       labels: analytics.peakHours.map((h) => `${h.hour}:00`),
-                      datasets: [{ data: analytics.peakHours.map((h) => h.count), backgroundColor: '#22D3EE', borderRadius: 4 }],
+                      datasets: [{ data: analytics.peakHours.map((h) => h.count), backgroundColor: '#22D3EE', ...BAR_STYLE }],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
-                    }}
+                    options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
                   />
                 ) : (
                   <EmptyState icon="schedule" text="Hourly distribution appears after the first calls." />
                 )}
-              </div>
-              <p className="mt-2 text-[11px] text-text-muted">Times shown in IST (Indian Standard Time).</p>
-            </Card>
+              </AnalyticsTile>
+            </div>
 
             {summary && (
-              <p className="text-xs text-text-muted lg:col-span-2">
+              <p className="text-xs text-text-muted">
                 Based on {summary.totalCalls} logged calls · avg duration {formatDuration(summary.avgDurationSeconds)}
               </p>
             )}
-          </div>
+          </>
         )}
       </section>
     </DashboardLayout>
@@ -956,10 +958,20 @@ function FunnelBar({ label, value, max, color }: { label: string; value: number;
 
 function IntelStat({ label, value, tone = 'text-text' }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-surface-high/40 p-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
-      <p className={`mt-1 text-lg font-bold ${tone}`}>{value}</p>
+    <div className="rounded-2xl bg-surface-high/50 p-4">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">{label}</p>
+      <p className={`bento-num mt-2 text-2xl ${tone}`}>{value}</p>
     </div>
+  )
+}
+
+function AnalyticsTile({ title, subtitle, wide = false, chart = true, children }: { title: string; subtitle?: string; wide?: boolean; chart?: boolean; children: ReactNode }) {
+  return (
+    <section className={`bento-tile ${wide ? 'bento-w4' : 'bento-w2'}`}>
+      <h3 className="bento-title text-[15px]">{title}</h3>
+      {subtitle && <p className="mt-0.5 text-xs text-text-muted">{subtitle}</p>}
+      <div className={chart ? 'mt-4 h-[220px]' : 'mt-4'}>{children}</div>
+    </section>
   )
 }
 

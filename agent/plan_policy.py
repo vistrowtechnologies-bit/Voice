@@ -108,10 +108,13 @@ FEATURE_MIN_PLAN = {
     "live_catalog": "growth", "basic_inbound": "starter",
     # Dashboard copilot actions (confirmed writes). Read-only answers stay on every plan.
     "copilot_actions": "growth",
+    # The dashboard's Analytics tab (owner, 17 Oct): Growth and Scale. The
+    # Overview's funnel and channel tiles stay on every plan.
+    "analytics": "growth",
     # Already promised on every paid plan. Security/privacy are never upsells.
     "widget": "starter", "recording": "starter", "extraction": "starter",
     "transfer": "starter", "functions": "starter", "memory": "starter",
-    "calendar": "starter", "analytics": "starter", "testing": "starter",
+    "calendar": "starter", "testing": "starter",
     "contacts": "starter", "background_sound": "starter",
 }
 
