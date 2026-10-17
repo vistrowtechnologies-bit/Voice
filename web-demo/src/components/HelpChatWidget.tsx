@@ -17,7 +17,7 @@ type PageHelp = { label: string; questions: string[] }
 const GLOBAL_SUGGESTIONS = [
   'How many calls came in today?',
   'Who are my hottest leads right now?',
-  'How many credits do I have left?',
+  'How many minutes do I have left?',
   'Which integrations are connected?',
 ]
 
@@ -100,7 +100,7 @@ const PAGE_SUGGESTIONS: Record<string, PageHelp> = {
   },
   '/dashboard/billing': {
     label: 'Billing',
-    questions: ['How many credits do I have left?'],
+    questions: ['How many minutes do I have left?'],
   },
   '/dashboard': {
     label: 'Dashboard',
