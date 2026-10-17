@@ -525,53 +525,66 @@ function FullPageHeader({
     </Link>
   )
 
+  // The top bar holds only what every page shares (search, Watch how,
+  // credits, alerts, account). A page's own buttons (Back, Test agent, New
+  // Agent, agent ID...) sit in a row at the top of the page instead, so the
+  // bar never changes shape from page to page (owner, 17 Oct).
+  const pageActions = (children || newAgent) && (
+    <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4 sm:px-6">
+      {children}
+      {newAgent}
+    </div>
+  )
+
   if (!desktop) {
     // Phone and tablet: one app bar (menu, title, search, alerts, account)
-    // and a single swipeable row for credits and the page's own actions.
+    // and a swipeable row for credits and Watch how.
     return (
-      <header className="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur-xl">
-        <div className="flex h-14 items-center gap-0.5 px-1.5">
-          <button type="button" aria-label="Open navigation" onClick={() => mobileNav?.openNav()} className={appBarIconBtn}>
-            <Icon name="menu" className="text-[22px]" />
-          </button>
-          <div className="flex min-w-0 flex-1 items-center gap-2 px-1">
-            <img src={vistrowMark} alt="" className="h-7 w-7 shrink-0 rounded-lg" />
-            <h1 className="truncate text-[17px] font-semibold tracking-tight">{title}</h1>
+      <>
+        <header className="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur-xl">
+          <div className="flex h-14 items-center gap-0.5 px-1.5">
+            <button type="button" aria-label="Open navigation" onClick={() => mobileNav?.openNav()} className={appBarIconBtn}>
+              <Icon name="menu" className="text-[22px]" />
+            </button>
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-1">
+              <img src={vistrowMark} alt="" className="h-7 w-7 shrink-0 rounded-lg" />
+              <h1 className="truncate text-[17px] font-semibold tracking-tight">{title}</h1>
+            </div>
+            <button type="button" aria-label="Search and commands" aria-haspopup="dialog" onClick={openCommandMenu} className={appBarIconBtn}>
+              <Icon name="search" className="text-[21px]" />
+            </button>
+            <NotificationBell />
+            <span className="pl-1 pr-1.5">
+              <HeaderAvatarMenu />
+            </span>
           </div>
-          <button type="button" aria-label="Search and commands" aria-haspopup="dialog" onClick={openCommandMenu} className={appBarIconBtn}>
-            <Icon name="search" className="text-[21px]" />
-          </button>
-          <NotificationBell />
-          <span className="pl-1 pr-1.5">
-            <HeaderAvatarMenu />
-          </span>
-        </div>
-        <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {creditsPill}
-          {watchHow}
-          {children}
-          {newAgent}
-        </div>
-      </header>
+          <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {creditsPill}
+            {watchHow}
+          </div>
+        </header>
+        {pageActions}
+      </>
     )
   }
 
   return (
-    <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:px-6 xl:flex-row xl:items-center">
-      <div className="min-w-0 flex-1">
-        <h1 className="text-lg font-semibold leading-tight">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-xs leading-snug text-text-muted sm:truncate">{subtitle}</p>}
-      </div>
-      <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
-        <CommandMenuButton />
-        {watchHow}
-        {creditsPill}
-        <NotificationBell />
-        <HeaderAvatarMenu />
-        {children}
-        {newAgent}
-      </div>
-    </header>
+    <>
+      <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:px-6 xl:flex-row xl:items-center">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-semibold leading-tight">{title}</h1>
+          {subtitle && <p className="mt-0.5 text-xs leading-snug text-text-muted sm:truncate">{subtitle}</p>}
+        </div>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
+          <CommandMenuButton />
+          {watchHow}
+          {creditsPill}
+          <NotificationBell />
+          <HeaderAvatarMenu />
+        </div>
+      </header>
+      {pageActions}
+    </>
   )
 }
 
