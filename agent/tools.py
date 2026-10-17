@@ -703,7 +703,11 @@ def crm_outcome(lead: dict) -> dict:
     visit = lead.get("site_visit") or {}
     callback = lead.get("callback") or {}
     interest = str((lead.get("extracted_data") or {}).get("interest_level") or "").strip().casefold()
-    caller_spoke = any(
+    # A network recording ("please try again later") or a voicemail greeting
+    # is transcribed as a caller turn; the call's own verdict says nobody was
+    # reached (live call 1395 was sent as Contacted).
+    not_reached = bool(lead.get("failure_reason") or lead.get("voicemail_detected"))
+    caller_spoke = not not_reached and any(
         (t.get("role") == "user" and (t.get("text") or "").strip()) for t in (lead.get("transcript") or [])
     )
     if visit.get("date"):
