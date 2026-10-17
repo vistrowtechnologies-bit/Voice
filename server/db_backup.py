@@ -26,6 +26,7 @@ from botocore.client import Config
 import admin_db
 import calls_db
 import email_sender
+import worker_leader
 
 logger = logging.getLogger("vistrow-db-backup")
 
@@ -149,7 +150,7 @@ def _loop() -> None:
         try:
             now = datetime.datetime.now(datetime.timezone.utc)
             today = now.strftime("%Y-%m-%d")
-            if now.hour >= _TARGET_HOUR_UTC and _last_ok_date != today and (
+            if now.hour >= _TARGET_HOUR_UTC and _last_ok_date != today and worker_leader.is_leader() and (
                 calls_db.get_setting(_LAST_RUN_SETTING, calls_db.PLATFORM_ACCOUNT_ID) != today
             ):
                 run_backup_now()

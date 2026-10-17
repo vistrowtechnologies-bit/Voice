@@ -35,6 +35,7 @@ import calls_db
 import email_sender
 import env_guard
 import vendor_health
+import worker_leader
 
 logger = logging.getLogger("vistrow-ops-alerts")
 
@@ -307,7 +308,8 @@ def _loop() -> None:
     logger.info("ops alert worker started (every %ss)", _CHECK_INTERVAL_S)
     while True:
         try:
-            run_once()
+            if worker_leader.is_leader():  # one sender across overlapping deploys
+                run_once()
         except Exception:
             logger.exception("ops alert tick failed")
         time.sleep(_CHECK_INTERVAL_S)

@@ -25,6 +25,7 @@ import time
 
 import calls_db
 import email_sender
+import worker_leader
 
 logger = logging.getLogger("vistrow-notify")
 
@@ -232,7 +233,8 @@ def _loop() -> None:
     logger.info("notification worker started (every %ss)", _CHECK_INTERVAL_S)
     while True:
         try:
-            run_once()
+            if worker_leader.is_leader():  # one sender across overlapping deploys
+                run_once()
         except Exception:
             logger.exception("notification tick failed")
         time.sleep(_CHECK_INTERVAL_S)
