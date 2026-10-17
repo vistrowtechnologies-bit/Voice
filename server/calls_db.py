@@ -6447,7 +6447,8 @@ def _arthaleads_agent_route(account_id: int, agent_ref: str, source: str) -> tup
     auto_call is true and only with agent_id, no fallback). agent_ref is the
     agent id our picker gave ArthaLeads (internal id; the public Agent ID is
     accepted too). The caller number is the agent's own assigned number,
-    else the number of a Voice-side ArthaLeads route for the same agent.
+    else the number of a Voice-side ArthaLeads route for the same agent,
+    else the workspace's only active number.
     Returns (route, "") or (None, reason)."""
     ref = str(agent_ref or "").strip()
     if not ref or len(ref) > 40:
@@ -6482,6 +6483,18 @@ def _arthaleads_agent_route(account_id: int, agent_ref: str, source: str) -> tup
                 ).fetchone():
                     from_number = str(route.get("fromNumber"))
                     break
+        if not from_number:
+            # An agent with no number of its own (a second agent for WhatsApp
+            # leads, say) in a workspace with exactly ONE active number calls
+            # from that number. Two or more numbers: which one is ambiguous, so
+            # refuse as before. Live 17 Oct: agent 223 got a WhatsApp lead and
+            # was refused although the workspace has one number.
+            only = conn.execute(
+                "SELECT number FROM phone_numbers WHERE account_id = ? AND status = 'active' ORDER BY id LIMIT 2",
+                (account_id,),
+            ).fetchall()
+            if len(only) == 1:
+                from_number = only[0]["number"]
         if not from_number:
             return None, "agent_has_no_caller_number"
         return {"source": source or "arthaleads", "match": f"agent:{agent['id']}",
