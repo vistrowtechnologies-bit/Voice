@@ -74,7 +74,7 @@ CLONE_EXTRA_CREDITS = 25
 # Owner and platform accounts have no plan limit; reported as this number.
 OWNER_CLONE_LIMIT = 100
 # A cloned voice bills like any standard voice: what a call costs per minute
-# on the default Vistrow Bharat model (standard voice x premium model = 2).
+# on the default Vistrow Bharat model (1 credit = 1 standard minute).
 BHARAT_CREDITS_PER_MINUTE = round(
     calls_db._credits_per_minute(
         1.0,

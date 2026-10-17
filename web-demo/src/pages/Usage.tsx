@@ -157,14 +157,14 @@ export function Usage() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Usage" subtitle="Where your credits go - by day, channel, agent, voice and model, in your timezone." />
+      <PageHeader title="Usage" subtitle="Where your plan minutes go - by day, channel, agent, voice and model, in your timezone." />
 
       <div className="space-y-5">
         {activeCalls.length > 0 && (
           <Card variant="flat" padding="sm" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <span className="flex items-center gap-2 font-semibold">
               <span className="pulse-dot h-2.5 w-2.5 rounded-full bg-cyan" />
-              {activeCalls.length} live {activeCalls.length === 1 ? 'call' : 'calls'} · credits accruing
+              {activeCalls.length} live {activeCalls.length === 1 ? 'call' : 'calls'} · minutes accruing
             </span>
             {activeCalls.map((c) => (
               <span key={c.room} className="text-xs text-text-muted">
@@ -206,12 +206,12 @@ export function Usage() {
         {error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">{error}</p>}
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <StatTile label="Credits used" value={totals ? fmt(totals.credits) : '…'} icon="toll" tone="primary" hint={totals && totals.testOverageCredits > 0 ? `incl. ${fmt(totals.testOverageCredits)} for test calls past the free minutes` : 'in this range'} />
+          <StatTile label="Plan minutes used" value={totals ? fmt(totals.credits) : '…'} icon="toll" tone="primary" hint={totals && totals.testOverageCredits > 0 ? `incl. ${fmt(totals.testOverageCredits)} for test calls past the free minutes` : 'in this range'} />
           <StatTile label="Minutes" value={totals ? fmt(totals.minutes) : '…'} icon="timer" tone="cyan" hint="billable call minutes" />
           <StatTile label="Calls" value={totals ? String(totals.calls) : '…'} icon="call" tone="magenta" hint="dashboard test calls excluded" />
-          <StatTile label="Avg credits / min" value={totals ? fmt(totals.avgCreditsPerMinute, 2) : '…'} icon="speed" tone="amber" hint="across every call in range" />
+          <StatTile label="Plan min per call min" value={totals ? fmt(totals.avgCreditsPerMinute, 2) : '…'} icon="speed" tone="amber" hint="across every call in range" />
           <StatTile
-            label="Credits left"
+            label="Minutes left"
             value={balance ? fmt(balance.creditsRemaining) : '…'}
             icon="account_balance_wallet"
             tone={balance && balance.creditsTotal > 0 && balance.creditsRemaining / balance.creditsTotal < 0.1 ? 'destructive' : 'success'}
@@ -221,10 +221,10 @@ export function Usage() {
 
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Credits and minutes per day</h3>
+            <h3 className="text-sm font-semibold">Plan minutes and call minutes per day</h3>
             <span className="flex items-center gap-3 text-[11px] text-text-muted">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-primary" /> Credits</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-cyan" /> Minutes</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-primary" /> Plan minutes</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-cyan" /> Call minutes</span>
             </span>
           </div>
           <div className="h-[220px]">
@@ -233,8 +233,8 @@ export function Usage() {
                 data={{
                   labels: report.daily.map((d) => d.date.slice(5)),
                   datasets: [
-                    { label: 'Credits', data: report.daily.map((d) => d.credits), backgroundColor: '#A855F7', borderRadius: 3 },
-                    { label: 'Minutes', data: report.daily.map((d) => d.minutes), backgroundColor: '#22D3EE', borderRadius: 3 },
+                    { label: 'Plan minutes', data: report.daily.map((d) => d.credits), backgroundColor: '#A855F7', borderRadius: 3 },
+                    { label: 'Call minutes', data: report.daily.map((d) => d.minutes), backgroundColor: '#22D3EE', borderRadius: 3 },
                   ],
                 }}
                 options={{
@@ -261,7 +261,7 @@ export function Usage() {
           <BreakdownCard title="By phone number" icon="dialpad" rows={report?.byNumber ?? []} />
         </div>
 
-        <SectionCard title="Top calls by credits" subtitle="The ten most expensive calls in this range. Click one to open it.">
+        <SectionCard title="Top calls by plan minutes" subtitle="The ten most expensive calls in this range. Click one to open it.">
           <div className="overflow-x-auto">
             <DataTable
               columns={topCallColumns}
@@ -277,7 +277,7 @@ export function Usage() {
 
         <p className="text-xs text-text-muted">
           <Icon name="info" className="mr-1 align-[-3px] text-[14px]" />
-          How credits are counted: credits = call minutes × channel rate × voice multiplier × model multiplier (never below 0.75/min). Rates and your plan are on{' '}
+          How plan minutes are counted: call minutes × voice multiplier × model multiplier, never below 1 per call minute (standard voices 1, premium voices 2, Vistrow Live 3). Rates and your plan are on{' '}
           <Link to="/dashboard/billing" className="font-semibold text-cyan hover:underline">Plan &amp; billing</Link>.
         </p>
       </div>

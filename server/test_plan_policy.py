@@ -272,21 +272,25 @@ class PlansKeepTheirMargin(unittest.TestCase):
     def _credits_per_default_minute(self):
         # The real billing formula at the base (1.0) channel rate.
         import calls_db
-        return calls_db._credits_per_minute(
-            1.0,
-            calls_db._VOICE_TIER_MULTIPLIERS[calls_db.voice_tier(self.DEFAULT_VOICE)],
-            calls_db._MODEL_TIER_MULTIPLIERS[calls_db.model_tier(self.DEFAULT_MODEL)],
+        return calls_db.credits_for_call(
+            {"call_type": "phone", "voice": self.DEFAULT_VOICE, "model": self.DEFAULT_MODEL}, {"phone": 1.0}, 1.0
         )
 
-    def test_a_default_minute_bills_two_credits(self):
-        self.assertEqual(self._credits_per_default_minute(), 2.0)
+    def test_a_default_minute_bills_one_credit(self):
+        # Minute pricing (owner, 2026-10-17): 1 credit = 1 standard minute.
+        self.assertEqual(self._credits_per_default_minute(), 1.0)
 
-    def test_every_plan_earns_at_least_twice_the_default_minute_cost(self):
-        # Prices exclude GST, so price/credits is the net rate per credit.
+    def test_every_plan_earns_more_than_the_default_minute_cost(self):
+        # Prices exclude GST, so price/credits is the net rate per credit. The
+        # owner-set minute prices no longer hold the old 2x margin on Scale
+        # (12,999 / 2,700 = Rs 4.81 per minute against Rs 3.24); this keeps
+        # every plan, monthly and annual, above cost.
         per_default_minute_credits = self._credits_per_default_minute()
         for key, plan in plan_policy.PLANS.items():
-            per_minute = plan["price_inr"] / plan["credits"] * per_default_minute_credits
-            self.assertGreaterEqual(per_minute, 2 * plan_policy.COST_PER_DEFAULT_MINUTE_INR, key)
+            for price, minutes in ((plan["price_inr"], plan["credits"]),
+                                   (plan_policy.ANNUAL_PRICE_INR[key], plan_policy.plan_allowance(key, "annual"))):
+                per_minute = price / minutes * per_default_minute_credits
+                self.assertGreater(per_minute, plan_policy.COST_PER_DEFAULT_MINUTE_INR, key)
 
 
 

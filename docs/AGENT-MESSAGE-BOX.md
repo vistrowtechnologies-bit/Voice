@@ -1132,6 +1132,14 @@ Left: owner review → push/PR → merge → `lk agent deploy` both workers + Ra
 - Unverified: staging UI in a browser (no staging login available to the agent), live call behaviour.
 - Next: owner signs in to app-staging so the UI can be checked, then push this branch and open a PR for the deployer.
 
+### Claude — 2026-10-17 — minute-based plans (branch `claude/minute-pricing`, LOCAL commit, NOT pushed)
+
+Owner decision: Starter ₹2,999 = 400 min, Growth ₹5,999 = 1,100, Scale ₹12,999 = 2,700 per month; annual 500/1,200/3,000 per month at a PENDING price (default pay 11 for 12: 32,989 / 65,989 / 1,42,989); 1 standard minute = 1; Vistrow Live = 3; overage ₹7/6/5.
+- Mapping: credit ledger kept, 1 credit = 1 standard minute. agent/plan_policy.py now owns PLANS (credits = monthly minutes, annual_credits_per_month, overage_per_minute_inr), ANNUAL_MONTHS_CHARGED/ANNUAL_PRICE_INR, plan_allowance(), public_plans(), and the tier tables + credits_per_minute() that server/calls_db.credits_for_call AND agent/db.py's trial cutoff both use. Sarvam/Bharat model tier = standard (was premium 2x); Live 2.5 = "realtime" 3x, 3.1/3.8 = "realtime_plus" 3x (was 2x/6x), Live ignores voice tier; economy voices 1x (was 0.5x); floor 1.0 (was 0.75). Premium voices 2x and legacy LLM tiers unchanged.
+- Existing balances: credits_total untouched (no migration). Usage is recomputed at current rates, so mid-period Bharat usage halves on deploy and Live 2.5 usage rises 1.5x.
+- New: GET /billing/plans; billing_summary adds creditUnit/liveMinutesPerMinute/planAnnualPriceInr/plans; reset_plan_credits takes billing_cycle (annual = 12 x annual monthly minutes, pooled); overage = plan's per-minute rate; /admin/pricing drops overageMultiplier for overagePerMinuteInr + annualPriceInr.
+- Verified: server suite 826 passed, 1 failed = VoicesPageCreditsTests (reads web-demo/src/lib/plans.ts BHARAT_MODEL_MULTIPLIER=2 / LIVE {2.5:2, default:6}; must become 1 / {3,3} in the dashboard lane before merge). New server/test_minute_pricing.py 12/13 fail on origin/main.
+- NEEDS (other lanes): web-demo plans.ts (creditsNum 400/1100/2700, multipliers, TopupModal per-credit), AdminSettings overageMultiplier; Razorpay annual Plans with the new amounts + GST; voice-clone-release also edits the PLANS rows (trivial merge conflict: add cloned_voices).
 ### Claude — 2026-10-17 IST — tool descriptions: size verified, cut, A/B
 
 - Branch `claude/tool-desc-ab` from main 322c9ba3. Files: `agent/tools.py` (docstrings of switch_reply_language, end_call, do_not_call, request_callback, book_appointment, check_calendar_availability, transfer_call, capture_platform_lead; no logic/name/schema change), `docs/TOOL-DESC-AB-2026-10-17.md`.

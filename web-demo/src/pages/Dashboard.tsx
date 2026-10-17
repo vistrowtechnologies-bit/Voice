@@ -505,7 +505,7 @@ export function Dashboard() {
             <div className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-text-muted">
               Connected apps: <span className="font-semibold text-text">{connectedIntegrations.length}</span>
               {' · '}Upcoming appointments: <span className="font-semibold text-text">{upcomingAppointments.length}</span>
-              {' · '}Credits remaining: <span className={`font-semibold ${lowCredits ? 'text-destructive' : 'text-text'}`}>{billing?.creditsRemaining ?? '—'}</span>
+              {' · '}Minutes remaining: <span className={`font-semibold ${lowCredits ? 'text-destructive' : 'text-text'}`}>{billing?.creditsRemaining ?? '—'}</span>
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

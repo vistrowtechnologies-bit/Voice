@@ -109,7 +109,7 @@ const TAB_GROUPS: TabGroup[] = [
   {
     label: 'Billing & usage',
     tabs: [
-      { id: 'billing', label: 'Plan & billing', description: 'Your plan, credits, payments and invoices', icon: 'credit_card' },
+      { id: 'billing', label: 'Plan & billing', description: 'Your plan, minutes, payments and invoices', icon: 'credit_card' },
       { id: 'storage', label: 'Storage', description: 'Recording storage, cleanup and plan limits', icon: 'inventory_2' },
     ],
   },
@@ -302,7 +302,7 @@ function GeneralTab() {
         <div className="grid gap-2 sm:grid-cols-2">
           {[
             { to: '/dashboard/integrations', icon: 'extension', label: 'Integrations', description: 'Connect your CRM, Slack, Google Sheets and webhooks.' },
-            { to: '/dashboard/billing', icon: 'credit_card', label: 'Billing & credits', description: 'Plan, credits, invoices and usage.' },
+            { to: '/dashboard/billing', icon: 'credit_card', label: 'Billing & minutes', description: 'Plan, minutes, invoices and usage.' },
             { to: '/dashboard/numbers', icon: 'dialpad', label: 'Phone numbers', description: 'Assign and manage calling numbers.' },
             { to: '/dashboard/website-widget', icon: 'widgets', label: 'Website widget', description: 'Control the embed and visitor experience.' },
           ].map((item) => (
@@ -690,7 +690,7 @@ function PreferencesTab() {
     <SettingsCard title="Notifications" subtitle="Choose the operational emails you receive personally.">
       <div className="flex flex-col gap-2"><Toggle field="notify_leads" label="Qualified leads" description="An email when your agents capture new leads, grouped every couple of minutes." /><Toggle field="notify_calls" label="Delivery issues" description="When a connected CRM or integration stops receiving your leads." /><Toggle field="notify_billing" label="Low credits" description="When your call credits drop below 10% of your allocation." /></div>
     </SettingsCard>
-    <SettingsCard title="In the dashboard" subtitle="What the bell at the top shows you, and how it gets your attention. Alerts about credits, payments, storage and failures always show.">
+    <SettingsCard title="In the dashboard" subtitle="What the bell at the top shows you, and how it gets your attention. Alerts about minutes, payments, storage and failures always show.">
       <div className="flex flex-col gap-2">
         <Toggle field="bell_calls" label="New calls" description="Website widget, web and inbound phone calls as they come in." />
         <Toggle field="bell_appointments" label="New bookings" description="When your agent books an appointment." />

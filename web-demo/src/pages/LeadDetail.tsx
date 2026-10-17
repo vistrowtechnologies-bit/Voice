@@ -734,7 +734,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
               {call.failureReason && <Row label="Failure reason" value={call.failureReason} />}
               {call.creditsUsed != null && (
                 <Row
-                  label="Credits breakdown"
+                  label="Plan minutes used"
                   value={`${call.creditsUsed}${call.creditsPerMinute != null ? ` (${call.creditsPerMinute}/min)` : ''}`}
                 />
               )}
