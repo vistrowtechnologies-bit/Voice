@@ -29,6 +29,7 @@ import urllib.error
 import urllib.request
 
 import calls_db
+import custom_voices
 import voice_catalog
 
 logger = logging.getLogger("agent-builder")
@@ -93,7 +94,8 @@ def _account_options(account_id: int) -> dict:
     """Voices and languages this account may use. Plan and owner flag are
     read for THIS account only; the voice list is the account's own menu
     (the only voices the agent page's picker offers), filtered to tiers its
-    plan allows."""
+    plan allows, plus its own ready cloned voices ("custom:vv_<id>") when
+    its plan allows them - the same rule an agent save checks."""
     plan = calls_db.get_account_plan(account_id)
     is_owner = calls_db.is_platform_owner(account_id)
     allowed_tiers = voice_catalog.allowed_tiers_for_plan(plan, is_owner)
@@ -108,6 +110,7 @@ def _account_options(account_id: int) -> dict:
     default = voice_catalog.get_voice(DEFAULT_VOICE)
     if default and not any(v["value"] == DEFAULT_VOICE for v in voices):
         voices.insert(0, {"value": DEFAULT_VOICE, "name": default["name"], "gender": default.get("gender", "female")})
+    voices.extend(custom_voices.agent_voice_options(account_id))
     return {"voices": voices, "languages": dict(voice_catalog.LANGUAGE_LABELS)}
 
 
@@ -419,6 +422,16 @@ def greeting_audio(body: dict, account_id: int, user_id: int) -> tuple[bytes, st
     lang = body.get("language") if body.get("language") in voice_catalog.LANGUAGE_LABELS else DEFAULT_LANGUAGE
     if calls_db.count_agent_drafts(account_id, "greeting") >= DAILY_GREETING_LIMIT:
         raise BuilderError(429, "You've played today's greeting previews. Try again tomorrow.")
+    if custom_voices.is_custom_value(voice):
+        # A cloned voice: through its own preview (cache + preview limits).
+        # A language clones can't speak falls back to the voice's own.
+        try:
+            audio = custom_voices.preview(account_id, voice[len(custom_voices.VOICE_PREFIX):], text,
+                                          lang if lang in custom_voices.LANGUAGES else None, max_chars=300)
+        except custom_voices.CloneError as exc:
+            raise BuilderError(exc.status, exc.detail) from exc
+        calls_db.record_agent_draft(account_id, user_id, "greeting")
+        return audio
     try:
         audio = voice_preview.synthesize(voice, lang, text)
     except voice_preview.PreviewError as exc:

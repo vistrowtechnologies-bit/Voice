@@ -148,7 +148,8 @@ class WiredIntoBothProviders(unittest.TestCase):
         import main
 
         src = inspect.getsource(main._build_tts)
-        self.assertEqual(src.count("_use_clause_tokenizer("), 2, src.count("_use_clause_tokenizer("))
+        # Sarvam primary, the Google-path safety net, and the cloned-voice backup.
+        self.assertEqual(src.count("_use_clause_tokenizer("), 3, src.count("_use_clause_tokenizer("))
 
 
 class TheSplitIsWiredIn(unittest.TestCase):

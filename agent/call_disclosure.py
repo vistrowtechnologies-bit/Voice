@@ -20,6 +20,13 @@ DEFAULT_NOTICES = {
     "en": "Just so you know, this call is recorded and I'm an AI assistant.",
 }
 
+# Said on a cloned-voice call when the account does not record: the caller
+# hears a real person's voice, so they must still be told it is an AI.
+AI_ONLY_NOTICES = {
+    "hi": "आप AI असिस्टेंट से बात कर रहे हैं।",
+    "en": "Just so you know, I'm an AI assistant.",
+}
+
 # An opener that already talks about recording was written by an owner who
 # disclosed it themselves; adding ours would say it twice.
 _MENTIONS_RECORDING = re.compile(r"record|रिकॉर्ड|रेकॉर्ड", re.IGNORECASE)
@@ -29,7 +36,8 @@ _BOUNDARY = re.compile(r"(?<=[.!?।])\s+|\s+—\s+")
 _ENDS_SENTENCE = re.compile(r"[.!?।]$")
 
 
-def recording_disclosure(compliance: dict | None, reply_language: str, is_platform_demo: bool = False) -> str:
+def recording_disclosure(compliance: dict | None, reply_language: str, is_platform_demo: bool = False,
+                         cloned_voice: bool = False) -> str:
     """The sentence to speak, or "" when nothing should be announced.
 
     Only while the account records calls: an account with recording off
@@ -37,6 +45,14 @@ def recording_disclosure(compliance: dict | None, reply_language: str, is_platfo
     (its widget shows a written notice and consent screen first, and its
     pre-rendered greetings are cached audio)."""
     compliance = compliance or {}
+    lang = (reply_language or "").lower()
+    if cloned_voice:
+        # A customer's cloned voice: the disclosure is always on, whatever the
+        # Compliance toggles or the demo flag say. It never claims recording
+        # when the account does not record.
+        if not compliance.get("record_calls"):
+            return AI_ONLY_NOTICES["hi"] if lang.startswith("hi") else AI_ONLY_NOTICES["en"]
+        return DEFAULT_NOTICES["hi"] if lang.startswith("hi") else DEFAULT_NOTICES["en"]
     if is_platform_demo or not compliance.get("record_calls"):
         return ""
     if not compliance.get("announce_recording", True):
@@ -44,7 +60,6 @@ def recording_disclosure(compliance: dict | None, reply_language: str, is_platfo
     custom = " ".join(str(compliance.get("recording_notice") or "").split())
     if custom:
         return custom
-    lang = (reply_language or "").lower()
     return DEFAULT_NOTICES["hi"] if lang.startswith("hi") else DEFAULT_NOTICES["en"]
 
 
@@ -52,15 +67,16 @@ def mentions_recording(text: str) -> bool:
     return bool(_MENTIONS_RECORDING.search(text or ""))
 
 
-def with_disclosure(opener: str, disclosure: str) -> str:
+def with_disclosure(opener: str, disclosure: str, force: bool = False) -> str:
     """Fold the disclosure into an opening line.
 
     It goes just before a closing question ("how can I help you?") so the
     caller is still answering the question, not the disclosure; otherwise it
     is appended. Unchanged when there is nothing to say or the opener already
-    mentions recording."""
+    mentions recording - unless `force` (cloned-voice calls must always say
+    they are an AI)."""
     opener = (opener or "").strip()
-    if not disclosure or not opener or mentions_recording(opener):
+    if not disclosure or not opener or (mentions_recording(opener) and not force):
         return opener
     if opener.endswith("?"):
         boundaries = list(_BOUNDARY.finditer(opener))
@@ -81,6 +97,11 @@ def instruction(disclosure: str) -> str:
     """For openings the model words itself (no fixed opener to edit)."""
     if not disclosure:
         return ""
+    if disclosure in AI_ONLY_NOTICES.values():
+        return (
+            " In that same opening, also tell them, in their language and in a few words, that they "
+            f"are speaking with an AI assistant, for example: \"{disclosure}\""
+        )
     return (
         " In that same opening, also tell them, in their language and in a few words, that this call "
         f"is recorded and that they are speaking with an AI assistant, for example: \"{disclosure}\""

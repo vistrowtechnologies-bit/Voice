@@ -188,11 +188,22 @@ _BOUNDARY = re.compile(r"(?<=[.!?।])\s+|\s+—\s+")
 _ENDS_SENTENCE = re.compile(r"[.!?।]$")
 
 
-def recording_disclosure(cfg: dict | None, reply_language: str, is_platform_demo: bool = False) -> str:
+AI_ONLY_NOTICES = {
+    "hi": "आप AI असिस्टेंट से बात कर रहे हैं।",
+    "en": "Just so you know, I'm an AI assistant.",
+}
+
+
+def recording_disclosure(cfg: dict | None, reply_language: str, is_platform_demo: bool = False,
+                         cloned_voice: bool = False) -> str:
     """The sentence to speak, or "" — only while this call is actually
     recorded (records_call), so a caller never hears "this call is recorded"
-    on a call that isn't."""
+    on a call that isn't. A customer's cloned voice always says it is an AI."""
     cfg = cfg or {}
+    if cloned_voice:
+        lang = (reply_language or "").lower()
+        notices = DEFAULT_NOTICES if records_call(cfg) else AI_ONLY_NOTICES
+        return notices["hi"] if lang.startswith("hi") else notices["en"]
     if is_platform_demo or not records_call(cfg):
         return ""
     if not cfg.get("announce_recording", True):
@@ -204,11 +215,12 @@ def recording_disclosure(cfg: dict | None, reply_language: str, is_platform_demo
     return DEFAULT_NOTICES["hi"] if lang.startswith("hi") else DEFAULT_NOTICES["en"]
 
 
-def with_disclosure(opener: str, disclosure: str) -> str:
+def with_disclosure(opener: str, disclosure: str, force: bool = False) -> str:
     """Fold the disclosure into an opening line, before a closing question
-    when there is one; unchanged when the opener already mentions recording."""
+    when there is one; unchanged when the opener already mentions recording
+    (unless `force`, for cloned voices)."""
     opener = (opener or "").strip()
-    if not disclosure or not opener or _MENTIONS_RECORDING.search(opener):
+    if not disclosure or not opener or (_MENTIONS_RECORDING.search(opener) and not force):
         return opener
     if opener.endswith("?"):
         boundaries = list(_BOUNDARY.finditer(opener))
@@ -230,6 +242,13 @@ def first_reply_instruction(disclosure: str) -> str:
     let the caller speak first has no opener, so its first reply says it."""
     if not disclosure:
         return ""
+    if disclosure in AI_ONLY_NOTICES.values():
+        return (
+            "\n\n# AI notice\n"
+            "In your very first reply, before anything else, tell the caller in a few words, in their "
+            f"language, that they are speaking with an AI assistant, for example: \"{disclosure}\". "
+            "Say it once only."
+        )
     return (
         "\n\n# Recording notice\n"
         "In your very first reply, before anything else, tell the caller in a few words, in their "

@@ -12,8 +12,12 @@ class HiddenVoices(unittest.TestCase):
                          (root / "server/voice_catalog.py").read_bytes())
 
     def test_slow_and_bad_voices_are_hidden(self):
-        for value in ("google31:kore", "elevenlabs:zT03pEAEi0VHKciJODfn"):
-            self.assertTrue(vc.is_hidden(value), value)
+        self.assertTrue(vc.is_hidden("google31:kore"))
+        # Stock ElevenLabs voices: owner-only since 2026-10-16 (preview, not
+        # hidden), so the platform owner can still pick them.
+        value = "elevenlabs:zT03pEAEi0VHKciJODfn"
+        self.assertFalse(vc.is_hidden(value))
+        self.assertTrue(vc.get_voice(value)["preview"])
 
     def test_native_voices_are_offered_to_customers(self):
         # Owner, 2026-10-14: open to every plan after the audio fix (call 1278).

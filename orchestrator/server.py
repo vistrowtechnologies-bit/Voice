@@ -439,6 +439,35 @@ async def _build_session_for_test_call(
     )
 
 
+# Stock voices used in place of a cloned voice this pipeline won't speak.
+# Both are Sarvam bulbul:v3 Standard speakers (tts.synthesize/_stream route
+# any bare name there), which cover every reply language this pipeline uses,
+# so one per gender serves all agent languages. Unknown gender keeps the
+# long-standing default.
+_CLONE_FALLBACK_VOICES = {"female": "priya", "male": "shubh"}
+_CLONE_FALLBACK_DEFAULT = "shubh"
+
+
+def _cloned_voice_tts(saved_voice: str, clone: dict | None) -> tuple[str, str]:
+    """(tts voice string, clone gender) for an agent voice "custom:vv_<id>",
+    given db.custom_voice's row (None = missing / not ready / another
+    account's / DB error). An ElevenLabs clone is spoken as itself. A Sarvam
+    clone is spoken only when ORCH_SPEAK_CLONES=1 (Sarvam's clone endpoint is
+    limited to 10 requests/min per account, too few for live calls); otherwise
+    it gets a stock voice of the clone's gender. Never raises."""
+    gender = (clone or {}).get("gender") or ""
+    fallback = _CLONE_FALLBACK_VOICES.get(gender, _CLONE_FALLBACK_DEFAULT)
+    if clone and clone.get("elevenlabs_voice_id"):
+        return f"elevenlabs:{clone['elevenlabs_voice_id']}", gender
+    if clone and clone.get("sarvam_voice_id") and os.environ.get("ORCH_SPEAK_CLONES") == "1":
+        return tts.sarvam_clone_voice(clone["sarvam_voice_id"], fallback), gender
+    logger.warning(
+        "cloned voice %s not spoken on the orchestrator pipeline (%s); using %s voice %s",
+        saved_voice, "found" if clone else "missing or not ready", gender or "default", fallback,
+    )
+    return fallback, gender
+
+
 async def _build_session(
     account_id: int,
     agent_id: int,
@@ -475,11 +504,18 @@ async def _build_session(
             custom_fields = {}
     except (ValueError, TypeError):
         custom_fields = {}
+    saved_voice = cfg.get("voice") or "shubh"
+    tts_voice = saved_voice
+    clone_gender = ""
+    if saved_voice.startswith("custom:"):
+        clone = await asyncio.to_thread(db.custom_voice, saved_voice, account_id or None)
+        tts_voice, clone_gender = _cloned_voice_tts(saved_voice, clone)
     sess = session_module.Session(
         account_id=account_id or None,
         agent_id=agent_id or None,
         call_type=call_type,
-        voice=cfg.get("voice") or "shubh",
+        voice=tts_voice,
+        billed_voice=saved_voice if saved_voice != tts_voice else "",
         reply_language=cfg.get("language") or "hi-IN",
         agent_name=cfg.get("name") or "Artha",
         business_name=cfg.get("name") or "this business",
@@ -516,6 +552,11 @@ async def _build_session(
         crm_integration_keys=_str_list(cfg.get("crm_integration_keys")),
         agent_webhook_url=(cfg.get("webhook_url") or "").strip(),
     )
+    if clone_gender:
+        # Session derives voice_gender from the catalog, which has no
+        # "custom:" or clone entries; the clone's own gender drives the
+        # first-person grammar (Hindi etc.) instead.
+        sess.voice_gender = clone_gender
     session_module.build_tools_for_session(sess, cfg.get("custom_functions"), cfg.get("enabled_functions"))
     # Compliance -> record_calls / announce_recording, read once per call so
     # the announcement and the recorder (_recording_config, in the stream
@@ -523,8 +564,9 @@ async def _build_session(
     # session.py is not changed here, hence the plain attribute.
     rec_cfg = await asyncio.to_thread(compliance.recording_config, account_id)
     sess.compliance_config = rec_cfg
+    cloned = saved_voice.startswith("custom:")
     disclosure = compliance.recording_disclosure(
-        rec_cfg, sess.reply_language, bool(cfg.get("is_platform_demo")),
+        rec_cfg, sess.reply_language, bool(cfg.get("is_platform_demo")), cloned_voice=cloned,
     )
     if disclosure and sess.first_speaker == "user":
         # No opener to carry it, so the model says it in its first reply
@@ -541,7 +583,7 @@ async def _build_session(
             greeting = f"Hi {sess.visitor_name.split()[0]}," if sess.visitor_name else "Hi,"
             template = session_module._DEFAULT_OPENERS.get(sess.reply_language, session_module._DEFAULT_OPENER_EN)
             opener = template.format(greeting=greeting, agent_name=sess.agent_name)
-        sess.welcome_message = compliance.with_disclosure(opener, disclosure)
+        sess.welcome_message = compliance.with_disclosure(opener, disclosure, force=cloned)
     return sess
 
 
