@@ -3137,7 +3137,8 @@ def admin_pricing(admin: dict = Depends(require_platform_owner)) -> dict:
         "voiceTiers": dict(calls_db._VOICE_TIER_MULTIPLIERS),
         "modelTiers": dict(calls_db._MODEL_TIER_MULTIPLIERS),
         "minCreditsPerMinute": calls_db._MIN_CREDITS_PER_MINUTE,
-        "overageMultiplier": calls_db.OVERAGE_RATE_MULTIPLIER,
+        "overagePerMinuteInr": {k: calls_db.plan_overage_rate_inr(k) for k in plan_policy.PLANS},
+        "annualPriceInr": dict(plan_policy.ANNUAL_PRICE_INR),
     }
 
 
@@ -6001,6 +6002,17 @@ def billing(user: dict = Depends(current_user)) -> dict:
     return calls_db.billing_summary(user["account_id"])
 
 
+@app.get("/billing/plans")
+def billing_plans(user: dict = Depends(current_user)) -> dict:
+    """Minute-based plan list for the billing screen (prices INR, GST extra)."""
+    return {
+        "plans": plan_policy.public_plans(),
+        "creditUnit": "standard_minute",
+        "liveMinutesPerMinute": plan_policy.LIVE_MINUTES_PER_MINUTE,
+        "gstRate": calls_db.GST_RATE,
+    }
+
+
 def _usage_timezone(user: dict, tz: str | None) -> str:
     """Days on the Usage page follow the caller's own preference unless the
     request names a zone; Asia/Kolkata when nothing is stored."""
@@ -6462,7 +6474,7 @@ def _process_razorpay_event(event: dict) -> dict:
                 current_period_end=_epoch_to_iso(sub.get("current_end")),
             )
             if not existing or existing.get("status") != "active":
-                calls_db.reset_plan_credits(account_id, plan)
+                calls_db.reset_plan_credits(account_id, plan, existing["billing_cycle"] if existing else "monthly")
             admin_db.change_plan(account_id, plan)
         else:
             # Confirmed real gap: this used to fall through silently — a real
@@ -6531,7 +6543,7 @@ def _process_razorpay_event(event: dict) -> dict:
                 sub.get("customer_id"), sub["id"], status="active",
                 current_period_start=new_period_start, current_period_end=new_period_end,
             )
-            calls_db.reset_plan_credits(account_id, plan)
+            calls_db.reset_plan_credits(account_id, plan, existing["billing_cycle"] if existing else "monthly")
             admin_db.change_plan(account_id, plan)
         else:
             logger.warning("razorpay subscription.charged: no account for subscription %s", sub.get("id"))
