@@ -126,6 +126,12 @@ class MidCallValuesInTheStandardShape(unittest.TestCase):
         self.assertEqual(out, {"purpose": "abhi soch rahe", "property_type": "farmhouse"})
 
 
+class TimelineIsNotACallbackTime(unittest.TestCase):
+    def test_prompt_tells_the_model_a_callback_time_is_not_a_timeline(self):
+        # Live call 1399 saved timeline "today 1 pm" (the callback slot).
+        self.assertIn("Never a callback, meeting or site-visit time", lead_facts.SYSTEM_PROMPT)
+
+
 class Merge(unittest.TestCase):
     def test_post_call_wins_and_mid_call_fills_gaps(self):
         merged = lead_facts.merge_facts(
