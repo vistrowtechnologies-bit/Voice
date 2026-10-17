@@ -770,6 +770,15 @@ def _new_id() -> str:
     return "vv_" + "".join(secrets.choice(alphabet) for _ in range(16))
 
 
+# Launch gate (owner, 2026-10-17): until VOICE_CLONE_OPEN=1, only the platform
+# owner can create clones, so the feature is tried on a real call first.
+_COMING_SOON = "Voice cloning is coming soon."
+
+
+def launched_for(owner: bool) -> bool:
+    return owner or os.environ.get("VOICE_CLONE_OPEN", "0").strip() == "1"
+
+
 def _plan_owner(conn, account_id: int) -> tuple[str, bool]:
     return calls_db._account_plan_and_owner(conn, account_id)
 
@@ -872,7 +881,9 @@ def quote(account_id: int) -> dict:
     finally:
         conn.close()
     reason = ""
-    if limit <= 0:
+    if not launched_for(owner):
+        reason = _COMING_SOON
+    elif limit <= 0:
         reason = "Voice cloning is available on the Growth and Scale plans."
     elif used >= limit:
         reason = (f"Your plan includes {limit} cloned voice{'s' if limit != 1 else ''}. "
@@ -1050,6 +1061,8 @@ def start_create(account_id: int, user_id: int | None, name: str, language: str,
     conn = calls_db._connect()
     try:
         plan, owner = _plan_owner(conn, account_id)
+        if not launched_for(owner):
+            raise CloneError(403, _COMING_SOON)
         if _limit(plan, owner) <= 0:
             raise CloneError(403, "Voice cloning is available on the Growth and Scale plans.")
     finally:

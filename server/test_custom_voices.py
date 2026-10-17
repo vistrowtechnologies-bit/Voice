@@ -208,6 +208,11 @@ class Client:
         return start["status"], data, dict(start["headers"])
 
 
+# The launch gate (VOICE_CLONE_OPEN) is tested on its own below; every other
+# test exercises the launched feature.
+os.environ.setdefault("VOICE_CLONE_OPEN", "1")
+
+
 @unittest.skipUnless(TEST_DB, "set TEST_DATABASE_URL to a throwaway Postgres database")
 class CustomVoiceTests(unittest.TestCase):
     @classmethod
@@ -335,6 +340,19 @@ class CustomVoiceTests(unittest.TestCase):
         self.assertIn("Co growth", q["consentSentence"])
         self.assertTrue(q["script"] and q["scriptHi"])
         self.assertEqual(q["balance"], 1000)
+
+    def test_launch_gate_blocks_customers_until_open(self):
+        os.environ["VOICE_CLONE_OPEN"] = "0"
+        try:
+            status, q = self.call(self.client("growth", "member"), "GET", "/voices/custom/quote")
+            self.assertEqual((status, q["canCreate"], q["reason"]), (200, False, "Voice cloning is coming soon."))
+            status, body = self.create("growth")
+            self.assertEqual(status, 403)
+            self.assertIn("coming soon", json.dumps(body))
+            self.assertTrue(self.cv.launched_for(True))   # the platform owner can always clone
+            self.assertFalse(self.cv.launched_for(False))
+        finally:
+            os.environ["VOICE_CLONE_OPEN"] = "1"
 
     def test_first_clone_free_then_25_once(self):
         aid = self.accounts["scale"]["account_id"]
