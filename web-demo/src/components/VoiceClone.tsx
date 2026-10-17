@@ -18,11 +18,12 @@ import {
   CONSENT_MAX_SECONDS,
   PREVIEW_MAX_CHARS,
   RECORD_AUTO_STOP_SECONDS,
-  SAMPLE_IDEAL_SECONDS,
   SAMPLE_MIN_SECONDS,
+  SPEECH_TARGET_SECONDS,
   UPLOAD_ACCEPT,
   VOICE_NAME_MAX,
   checkConsentDuration,
+  checkRecordedSample,
   checkSampleDuration,
   checkUploadFile,
   cloneLanguageLabel,
@@ -34,6 +35,7 @@ import {
   meterLevel,
   micCheckVerdict,
   recordingPhase,
+  talkSeconds,
   voiceInitials,
 } from '../lib/voiceClone'
 import type { CloneGender, LevelFrame } from '../lib/voiceClone'
@@ -44,7 +46,7 @@ const POLL_LIMIT_MS = 3 * 60 * 1000
 const LANGUAGE_COUNT = CLONE_LANGUAGES.length
 
 const fmtCredits = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2 })
-const perMinute = (n: number) => `${fmtCredits(n)} credits/min`
+const perMinute = (n: number) => `${fmtCredits(n)} min per min`
 const FREE_LINE = 'Your first cloned voice is included in your plan.'
 const setupLine = (q: CustomVoiceQuote) =>
   q.firstCloneFree || q.setupCredits <= 0 ? FREE_LINE : `${fmtCredits(q.setupCredits)} credits once to set it up.`
@@ -233,7 +235,8 @@ function Waveform({ frames, active }: { frames: readonly LevelFrame[]; active: b
 /** Big round record button inside a ring that fills up to the ideal 15 s. */
 function RecordButton({ rec, label }: { rec: Recorder; label: string }) {
   const recording = rec.state === 'recording'
-  const { ring, phase } = recordingPhase(recording || rec.state === 'done' ? rec.seconds : 0)
+  const active = recording || rec.state === 'done'
+  const { ring, phase } = recordingPhase(active ? rec.seconds : 0, active ? talkSeconds(rec.frames, rec.seconds) : 0)
   const r = 52
   const c = 2 * Math.PI * r
   return (
@@ -318,10 +321,10 @@ function MicCheck({ rec }: { rec: Recorder }) {
 function SampleRecorder({ rec, language }: { rec: Recorder; language: string }) {
   const recording = rec.state === 'recording'
   const done = rec.state === 'done'
-  const phase = recordingPhase(rec.seconds)
+  const talk = talkSeconds(rec.frames, rec.seconds)
+  const phase = recordingPhase(rec.seconds, talk)
   const live = levelHints(rec.frames, recording)
-  const result = done ? checkSampleDuration(rec.seconds, 'record') : null
-  const lowSpeech = done && result?.ok && rec.frames.length > 0 && live.speechSeconds < SAMPLE_MIN_SECONDS
+  const result = done ? checkRecordedSample(rec.seconds, talk) : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -335,13 +338,21 @@ function SampleRecorder({ rec, language }: { rec: Recorder; language: string }) 
         <p className="mt-2 text-xs text-text-muted">
           Read it the way your agent should sound on calls. Not your language? Go back and change the recording language.
         </p>
+        <p className="mt-2 text-xs font-semibold text-primary">
+          Reached the end? Start again from the top and keep reading until the ring is full.
+        </p>
       </div>
 
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface-high/40 p-4">
         <RecordButton rec={rec} label="your voice" />
         <p className="font-display text-2xl font-semibold tabular-nums">
           {formatClock(rec.seconds)}
-          <span className="text-sm font-medium text-text-muted"> / {formatClock(SAMPLE_IDEAL_SECONDS)} ideal</span>
+          {(recording || done) && (
+            <span className="text-sm font-medium text-text-muted">
+              {' '}
+              · {Math.min(Math.floor(talk), SPEECH_TARGET_SECONDS)} of {SPEECH_TARGET_SECONDS} s talking
+            </span>
+          )}
         </p>
         <p
           className={`text-sm font-bold ${
@@ -360,7 +371,7 @@ function SampleRecorder({ rec, language }: { rec: Recorder; language: string }) 
         </p>
         <Waveform frames={rec.frames} active={recording || rec.state === 'monitoring'} />
         <p className="text-center text-[11px] text-text-muted">
-          At least {SAMPLE_MIN_SECONDS} seconds, {SAMPLE_IDEAL_SECONDS} is ideal. Stops by itself at {RECORD_AUTO_STOP_SECONDS} seconds.
+          The ring fills as you talk: about {SPEECH_TARGET_SECONDS} seconds of talking. Stops by itself at {RECORD_AUTO_STOP_SECONDS} seconds.
         </p>
       </div>
 
@@ -381,17 +392,60 @@ function SampleRecorder({ rec, language }: { rec: Recorder; language: string }) 
         <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-3">
           <p className="text-sm font-bold">Listen back</p>
           <audio controls src={rec.url} className="h-10 w-full" aria-label="Play back your recording" />
-          {lowSpeech && (
-            <p className="text-xs font-semibold text-amber">
-              We heard less than {SAMPLE_MIN_SECONDS} seconds of talking. You can continue, or record again and read the whole script.
-            </p>
-          )}
           <button type="button" onClick={rec.reset} className={`${ghostBtn} h-9 self-start text-xs`}>
             <Icon name="refresh" className="text-[16px]" />
             Record again
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+const CREATE_STAGES = ['Uploading your recording', 'Checking the sound', 'Checking your consent', 'Creating your voice', 'Almost done']
+const CREATE_STAGE_MS = 2500
+
+/** While a voice is being created: moving sound bars and a step list, so a
+ * wait of several seconds never looks frozen. Upload progress is real; the
+ * later steps advance on a timer and stop at "Almost done". */
+function CreatingProgress({ progress }: { progress: number }) {
+  const uploaded = progress >= 1
+  const [stage, setStage] = useState(0)
+  useEffect(() => {
+    if (!uploaded) return
+    setStage(1)
+    const id = window.setInterval(() => setStage((s) => Math.min(s + 1, CREATE_STAGES.length - 1)), CREATE_STAGE_MS)
+    return () => window.clearInterval(id)
+  }, [uploaded])
+  return (
+    <div className="flex flex-col items-center gap-4 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-6 text-center" role="status" aria-live="polite">
+      <div className="flex h-12 items-end gap-1.5" aria-hidden="true">
+        {[0.55, 0.9, 0.7, 1, 0.6, 0.85, 0.5].map((h, i) => (
+          <span
+            key={i}
+            className="w-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
+            style={{ height: `${h * 100}%`, animationDelay: `${i * 140}ms`, animationDuration: '900ms' }}
+          />
+        ))}
+      </div>
+      <div>
+        <p className="font-display text-lg font-semibold">
+          {CREATE_STAGES[stage]}
+          {stage === 0 ? `, ${Math.round(progress * 100)}%` : '…'}
+        </p>
+        <p className="mt-1 text-xs text-text-muted">This can take up to half a minute. Please keep this window open.</p>
+      </div>
+      <ol className="flex w-full max-w-xs flex-col gap-1.5 text-left text-sm">
+        {CREATE_STAGES.map((label, i) => (
+          <li key={label} className={`flex items-center gap-2 ${i > stage ? 'text-text-muted' : ''}`}>
+            <Icon
+              name={i < stage ? 'check_circle' : i === stage ? 'progress_activity' : 'radio_button_unchecked'}
+              className={`text-[18px] ${i < stage ? 'text-success' : i === stage ? 'animate-spin text-primary motion-reduce:animate-none' : ''}`}
+            />
+            {label}
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
@@ -694,7 +748,7 @@ function CloneVoiceDialog({
 
   const recorded = mode === 'record' && sample.state === 'done' && !!sample.blob
   const sampleCheck = recorded
-    ? checkSampleDuration(sample.seconds, 'record')
+    ? checkRecordedSample(sample.seconds, talkSeconds(sample.frames, sample.seconds))
     : mode === 'upload' && upload && !upload.error && upload.seconds !== null
       ? checkSampleDuration(upload.seconds, 'upload')
       : null
@@ -1092,16 +1146,7 @@ function CloneVoiceDialog({
                 {callPriceLine(quote)} It speaks all {LANGUAGE_COUNT} languages.
               </p>
             </div>
-            {submitting && (
-              <div className="flex flex-col gap-1.5" role="status" aria-live="polite">
-                <div className="h-2 overflow-hidden rounded-full bg-surface-high">
-                  <div className="h-full rounded-full bg-primary transition-[width] duration-200" style={{ width: `${Math.round(progress * 100)}%` }} />
-                </div>
-                <p className="text-xs text-text-muted">
-                  {progress < 1 ? `Uploading, ${Math.round(progress * 100)}%` : 'Uploaded. Checking your recording, this takes a few seconds.'}
-                </p>
-              </div>
-            )}
+            {submitting && <CreatingProgress progress={progress} />}
             {submitError && <Alert>{submitError}</Alert>}
             {submitError && blocked && (
               <Link to={BILLING_PATH} className={linkBtn}>

@@ -8,6 +8,15 @@
 export const SAMPLE_MIN_SECONDS = 10
 export const SAMPLE_IDEAL_SECONDS = 15
 export const SAMPLE_PERFECT_MAX_SECONDS = 20
+// Talking (not clock time) a recording needs. The scripts take 9-12 s to read
+// once, and a reader pauses between phrases, so one read is often under 10 s of
+// speech (owner's live test 17 Oct): the recorder asks to keep reading until
+// SPEECH_TARGET_SECONDS. The server needs 10 s overall (custom_voices.py);
+// SPEECH_NEEDED_SECONDS adds a margin for the rougher browser estimate.
+export const SPEECH_NEEDED_SECONDS = 11
+export const SPEECH_TARGET_SECONDS = 12
+// Past this much clock time while recording: "That is plenty".
+export const RECORD_PLENTY_SECONDS = 25
 // The in-browser recorder stops itself here (the server allows up to 60 s).
 export const RECORD_AUTO_STOP_SECONDS = 30
 export const UPLOAD_MAX_SECONDS = 300
@@ -154,13 +163,30 @@ export interface RecordingPhase {
   ring: number
 }
 
-/** What the record button says while recording, by elapsed seconds. */
-export function recordingPhase(seconds: number): RecordingPhase {
+/** What the record button says while recording, by seconds of talking heard
+ * (the ring fills at SPEECH_TARGET_SECONDS) and elapsed clock time. */
+export function recordingPhase(seconds: number, speechSeconds: number): RecordingPhase {
   const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
-  const ring = Math.min(1, s / SAMPLE_IDEAL_SECONDS)
-  if (s < SAMPLE_MIN_SECONDS) return { phase: 'short', label: 'Keep going', ring }
-  if (s <= SAMPLE_PERFECT_MAX_SECONDS) return { phase: 'perfect', label: 'Perfect', ring }
+  const talk = Number.isFinite(speechSeconds) ? Math.max(0, speechSeconds) : 0
+  const ring = Math.min(1, talk / SPEECH_TARGET_SECONDS)
+  if (s < SAMPLE_MIN_SECONDS || talk < SPEECH_NEEDED_SECONDS) return { phase: 'short', label: 'Keep reading', ring }
+  if (s <= RECORD_PLENTY_SECONDS) return { phase: 'perfect', label: 'Perfect. You can stop now.', ring }
   return { phase: 'plenty', label: 'That is plenty. Tap stop.', ring }
+}
+
+/** A finished recording: long enough on the clock and enough talking in it. */
+export function checkRecordedSample(seconds: number, speechSeconds: number): DurationCheck {
+  const clock = checkSampleDuration(seconds, 'record')
+  if (!clock.ok) return clock
+  const talk = Number.isFinite(speechSeconds) ? Math.max(0, speechSeconds) : 0
+  if (talk < SPEECH_NEEDED_SECONDS) {
+    return {
+      ok: false,
+      level: 'short',
+      message: `We heard about ${Math.floor(talk)} seconds of talking and need ${SPEECH_NEEDED_SECONDS}. Record again and keep reading until the ring is full.`,
+    }
+  }
+  return clock
 }
 
 /** Is the spoken consent long enough to contain the sentence? */
@@ -307,4 +333,10 @@ export function levelHints(frames: readonly LevelFrame[], live = true): LevelSum
     }
   }
   return { hints, speechSeconds: Math.round(speechSeconds * 10) / 10 }
+}
+
+/** Seconds of talking in a recording. Without level readings (no analyser in
+ * this browser) the clock time stands in, so the person is never stuck. */
+export function talkSeconds(frames: readonly LevelFrame[], seconds: number): number {
+  return frames.length >= 20 ? levelHints(frames, false).speechSeconds : seconds
 }

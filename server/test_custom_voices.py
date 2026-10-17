@@ -1065,6 +1065,18 @@ class ReferenceChooser(unittest.TestCase):
         detail = self.refused(synth(16.0, bursts(0.5, 9.5), noise=40))
         self.assertIn("seconds of you speaking", detail)
 
+    def test_normal_reading_with_pauses_accepted(self):
+        # Owner's live test 17 Oct: a person reading aloud pauses between
+        # phrases. 0.9 s phrases with 0.6 s pauses (60% voiced) over 20 s;
+        # refused while the clip needed 10 s of speech.
+        start, end = self.cv.choose_reference(synth(20.0, bursts(0.5, 19.5, on=0.9, off=0.6), noise=40))
+        self.assertGreaterEqual((end - start) / RATE, 12.0)
+
+    def test_refusal_logs_numbers_only(self):
+        with self.assertLogs("custom_voices", level="INFO") as logs:
+            self.refused(synth(16.0, bursts(0.5, 9.5), noise=40))
+        self.assertRegex(logs.output[-1], r"voice sample refused \(too little speech\): 16\.0 s long, [0-9.]+ s of speech")
+
     def test_digital_silence_refused(self):
         self.refused(b"\0\0" * RATE * 20, self.cv._TOO_LITTLE_SPEECH.format(secs=0))
         self.refused(b"", self.cv._TOO_LITTLE_SPEECH.format(secs=0))

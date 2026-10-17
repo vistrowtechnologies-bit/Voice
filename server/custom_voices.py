@@ -121,6 +121,11 @@ _PCM_RATE = 24000
 REF_MIN_S = 12.0
 REF_MAX_S = 15.0
 SPEECH_MIN_S = 10.0
+# Speech needed inside the chosen <=15 s clip. Sarvam asks for a 10-15 s clean
+# clip and sets no voiced-share rule; people reading aloud pause between phrases
+# (60-70% of 50 ms frames voiced), so 10 s here refused normal readings (owner
+# test 17 Oct). 8 s is still more than half the clip.
+WINDOW_SPEECH_MIN_S = 8.0
 _FRAME_S = 0.05                 # analysis frame: 50 ms
 _FRAME = int(_PCM_RATE * _FRAME_S)
 _ABS_SPEECH_RMS = 150.0         # ~ -47 dBFS: quieter than this is never speech
@@ -634,6 +639,13 @@ def _window_score(voiced: list[bool], clipped: list[bool]) -> float:
     return sum(voiced) / n - 2.0 * (sum(clipped) / n) - 0.1 * excess_pause
 
 
+def _log_refusal(reason: str, frames: list, voiced_total: int, voiced_window: int | None = None) -> None:
+    """Numbers only (never audio): how close a refused recording came."""
+    window = "" if voiced_window is None else f", {voiced_window * _FRAME_S:.1f} s in the best clip"
+    logger.info("voice sample refused (%s): %.1f s long, %.1f s of speech%s",
+                reason, len(frames) * _FRAME_S, voiced_total * _FRAME_S, window)
+
+
 def choose_reference(pcm: bytes) -> tuple[int, int]:
     """(start, end) sample offsets of the reference clip: leading and
     trailing silence trimmed, then - if more than 15 s is left - the
@@ -644,7 +656,7 @@ def choose_reference(pcm: bytes) -> tuple[int, int]:
     floor = the quietest 10% of frames). Raises CloneError when the
     recording is silent, is only steady background sound (loud and quiet
     frames differ by under 10 dB), has under 10 s of speech frames overall
-    or inside the chosen window, or more than 1% of the window is clipped."""
+    or under 8 s inside the chosen window, or more than 1% of the window is clipped."""
     frames = _frame_stats(pcm)
     if not frames:
         raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=0))
@@ -661,6 +673,7 @@ def choose_reference(pcm: bytes) -> tuple[int, int]:
     voiced = [r >= thr for r in rms]
     total = sum(voiced)
     if total * _FRAME_S < SPEECH_MIN_S:
+        _log_refusal("too little speech", frames, total)
         raise CloneError(400, _TOO_LITTLE_SPEECH.format(secs=f"{total * _FRAME_S:.0f}"))
     first = voiced.index(True)
     last = len(voiced) - 1 - voiced[::-1].index(True)
@@ -687,7 +700,8 @@ def choose_reference(pcm: bytes) -> tuple[int, int]:
                 break
         while end - start > min_n and not voiced[end - 1]:
             end -= 1
-    if sum(voiced[start:end]) * _FRAME_S < SPEECH_MIN_S:
+    if sum(voiced[start:end]) * _FRAME_S < WINDOW_SPEECH_MIN_S:
+        _log_refusal("not continuous", frames, total, sum(voiced[start:end]))
         raise CloneError(400, _NOT_CONTINUOUS)
     if sum(clipped[start:end]) > _MAX_CLIPPED_FRACTION * (end - start):
         raise CloneError(400, _CLIPPED)
