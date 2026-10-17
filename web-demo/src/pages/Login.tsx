@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { BRAND } from '../lib/brand'
@@ -11,12 +11,35 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_unverified_email: "That account's email isn't verified. Verify it with your sign-in provider first.",
 }
 
+const NEXT_KEY = 'vv-login-next'
+
+/** Only a path inside this app ("/admin"), never another site: a crafted
+ * link must not be able to send someone elsewhere after they sign in. */
+function safeNext(path: unknown): string {
+  return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/\\') ? path : ''
+}
+
 export function Login() {
   const { login, verifyMfa } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const from = (location.state as { from?: string } | null)?.from || '/dashboard'
+  // Where to land after signing in: the page that sent them here, or ?next=
+  // (e.g. /login?next=/admin). Kept for this tab so it survives the Google
+  // round-trip and the two-step code step.
+  const requested = safeNext((location.state as { from?: string } | null)?.from) || safeNext(searchParams.get('next'))
+  useEffect(() => {
+    if (!requested) return
+    try { sessionStorage.setItem(NEXT_KEY, requested) } catch { /* storage blocked: this page load still knows it */ }
+  }, [requested])
+  const goNext = () => {
+    let next = requested
+    try {
+      next = next || safeNext(sessionStorage.getItem(NEXT_KEY))
+      sessionStorage.removeItem(NEXT_KEY)
+    } catch { /* storage blocked */ }
+    navigate(next || '/dashboard', { replace: true })
+  }
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -40,7 +63,7 @@ export function Login() {
     setBusy(true)
     try {
       await verifyMfa(code.trim())
-      navigate(from, { replace: true })
+      goNext()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That code didn’t work.')
       if (err instanceof Error && /timed out|sign in again/i.test(err.message)) setMfaStep(false)
@@ -110,7 +133,7 @@ export function Login() {
         setMfaStep(true)
         return
       }
-      navigate(from, { replace: true })
+      goNext()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
       if (message.startsWith('Verify your email')) {
