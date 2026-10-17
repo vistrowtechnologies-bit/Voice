@@ -1091,6 +1091,11 @@ STARTER_AGENT_DESCRIPTION = "Default sales agent — qualifies leads and books a
 ONBOARDING_AGENT_SETTING = "onboarding_agent_id"
 
 
+# Free trial minutes on a new account, and what the billing views assume when
+# an account has no credits_total row at all.
+TRIAL_CREDITS = 10
+
+
 def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
     """Starter state for a brand-new (non-legacy) account: one default agent
     to test with, its own copy of the well-known integrations, and its own
@@ -1108,7 +1113,7 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
     for key, value in (
         # Free trial allowance for a brand-new signup — deliberately small;
         # an operator upgrades the account's plan for more.
-        ("credits_total", "10"),
+        ("credits_total", str(TRIAL_CREDITS)),
         # All three channels burn credits at the same rate. Phone was 1.5x
         # on the reasoning quoted here for a long time - "they carry an
         # EnableX telephony cost the others don't" - but telephony is the
@@ -2021,8 +2026,9 @@ def create_account_with_owner(
                 # integrations rows under account_id=1 from the old SQLite
                 # migrations — only top up whichever keys a from-scratch
                 # install wouldn't have yet.
+                # credits_total is not seeded here: provision_account_defaults
+                # gives account 1 the same free trial as every other signup.
                 for key, value in (
-                    ("credits_total", "300"),
                     ("credit_rate_browser", "1"),
                     ("credit_rate_phone", "1"),
                     ("credit_rate_widget", "1"),
@@ -9231,8 +9237,10 @@ TOPUP_MAX_CREDITS = plan_policy.TOPUP_MAX_CREDITS
 
 
 def topup_quote(plan: str, credits: int | None = None, pack_key: str | None = None) -> dict:
-    """Price of a one-off credit purchase at the plan's own per-credit rate
-    (trial/no-plan accounts pay the Starter rate). A pack sets the credits
+    """Price of a one-off credit purchase at the plan's per-minute rate,
+    plan_overage_rate_inr (₹7/6/5; trial/no-plan accounts pay the Starter
+    rate). Owner, 17 Oct: a top-up minute costs the same as an overage minute,
+    not price ÷ plan minutes (which made Starter ₹7.50). A pack sets the credits
     and a bonus percentage; the bonus is granted, only the base is billed.
     Raises ValueError for an unknown pack or credits outside the allowed range."""
     bonus_pct = 0
@@ -9243,9 +9251,7 @@ def topup_quote(plan: str, credits: int | None = None, pack_key: str | None = No
         credits, bonus_pct = pack["credits"], pack["bonus_pct"]
     if not isinstance(credits, int) or isinstance(credits, bool) or not TOPUP_MIN_CREDITS <= credits <= TOPUP_MAX_CREDITS:
         raise ValueError(f"credits must be between {TOPUP_MIN_CREDITS} and {TOPUP_MAX_CREDITS}")
-    plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
-    # Rounded first so the rate shown (₹10.00/credit) times the credits is the invoice base.
-    per_credit = round(plan_pricing["price_inr"] / plan_pricing["credits"], 2)
+    per_credit = plan_overage_rate_inr(plan)
     pricing = with_gst(credits * per_credit)
     return {
         "credits": credits,
@@ -9790,7 +9796,7 @@ def billing_summary(account_id: int) -> dict:
         total_row = conn.execute(
             "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'", (account_id,)
         ).fetchone()
-        credits_total = int(total_row["value"]) if total_row else 300
+        credits_total = int(total_row["value"]) if total_row else TRIAL_CREDITS
         rates = credit_rates(account_id, conn=conn)
 
         sub = conn.execute(
@@ -9995,7 +10001,7 @@ def usage_report(account_id: int, from_date: str | None, to_date: str | None, ti
         total_row = conn.execute(
             "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'", (account_id,)
         ).fetchone()
-        credits_total = int(total_row["value"]) if total_row else 300
+        credits_total = int(total_row["value"]) if total_row else TRIAL_CREDITS
         sub = conn.execute(
             "SELECT current_period_start, current_period_end FROM subscriptions WHERE account_id = ?", (account_id,)
         ).fetchone()
