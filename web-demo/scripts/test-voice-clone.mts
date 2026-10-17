@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import {
   CLIP_PEAK, CLONE_GENDERS, CLONE_LANGUAGES, CLONE_SCRIPTS, RECORD_AUTO_STOP_SECONDS, SAMPLE_IDEAL_SECONDS, SAMPLE_MIN_SECONDS,
   checkConsentDuration, checkSampleDuration, checkUploadFile, cloneLanguageLabel, cloneScript, extensionForMime, formatClock,
-  htmlLang, isClonedVoiceValue, levelHints, meterLevel, micCheckVerdict, micErrorMessage, pickRecorderMime, recordingPhase,
+  htmlLang, isClonedVoiceValue, levelHints, talkSeconds, checkRecordedSample, SPEECH_NEEDED_SECONDS, meterLevel, micCheckVerdict, micErrorMessage, pickRecorderMime, recordingPhase,
   voiceInitials,
 } from '../src/lib/voiceClone.ts'
 import type { LevelFrame } from '../src/lib/voiceClone.ts'
@@ -42,17 +42,32 @@ assert.equal(checkConsentDuration(8).ok, true)
 assert.equal(checkConsentDuration(31).ok, false)
 
 // ---- Recording states: "Keep going" < 10 s, "Perfect" 10-20 s, then "plenty"; ring full at 15 s.
-assert.deepEqual([recordingPhase(0).phase, recordingPhase(0).label, recordingPhase(0).ring], ['short', 'Keep going', 0])
-assert.equal(recordingPhase(9.9).phase, 'short')
-assert.equal(recordingPhase(10).phase, 'perfect')
-assert.equal(recordingPhase(10).label, 'Perfect')
-assert.equal(recordingPhase(20).phase, 'perfect')
-assert.equal(recordingPhase(20.1).phase, 'plenty')
-assert.equal(recordingPhase(7.5).ring, 0.5)
-assert.equal(recordingPhase(15).ring, 1)
-assert.equal(recordingPhase(29).ring, 1)
-assert.equal(recordingPhase(-3).ring, 0)
-assert.equal(recordingPhase(NaN).phase, 'short')
+// The recorder goes by talking heard, not clock time (owner's live test 17 Oct:
+// one read of the script is under 10 s of talking).
+assert.deepEqual([recordingPhase(0, 0).phase, recordingPhase(0, 0).label, recordingPhase(0, 0).ring], ['short', 'Keep reading', 0])
+assert.equal(recordingPhase(18, 8).phase, 'short') // 18 s on the clock, only 8 s of talking
+assert.equal(recordingPhase(9, 9).phase, 'short') // under the 10 s clock minimum
+assert.equal(recordingPhase(16, SPEECH_NEEDED_SECONDS).phase, 'perfect')
+assert.equal(recordingPhase(26, 14).phase, 'plenty')
+assert.equal(recordingPhase(20, 6).ring, 0.5)
+assert.equal(recordingPhase(30, 40).ring, 1)
+// A finished recording: the clock check, then the talking check.
+assert.equal(checkRecordedSample(7, 7).ok, false)
+assert.match(checkRecordedSample(7, 7).message, /3 s more/)
+const thin = checkRecordedSample(18, 7.6)
+assert.deepEqual([thin.ok, thin.level], [false, 'short'])
+assert.match(thin.message, /about 7 seconds of talking and need 11/)
+assert.deepEqual([checkRecordedSample(16, 12).ok, checkRecordedSample(16, 12).message], [true, 'Perfect length.'])
+assert.equal(checkRecordedSample(24, 14).ok, true)
+assert.equal(checkRecordedSample(NaN, 20).ok, false)
+// No level readings (no analyser): clock time stands in for talking.
+assert.equal(talkSeconds([], 16), 16)
+const talking = Array.from({ length: 160 }, (_, i) => ({ rms: i % 4 === 3 ? 0.002 : 0.1, peak: 0.3 }))
+assert.equal(talkSeconds(talking, 16), 12)
+assert.equal(recordingPhase(15, 12).ring, 1)
+assert.equal(recordingPhase(29, 29).ring, 1)
+assert.equal(recordingPhase(-3, -3).ring, 0)
+assert.equal(recordingPhase(NaN, NaN).phase, 'short')
 
 // ---- Upload: type and 20 MB cap.
 const MB = 1024 * 1024
