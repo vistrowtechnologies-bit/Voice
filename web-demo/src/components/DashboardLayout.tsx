@@ -314,7 +314,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </button></Tooltip>
         )}
       </div>
-      <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto pb-3 [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
+      <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 vv-quiet-scroll overflow-x-hidden overflow-y-auto pb-3">
         {NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly).map((group) => group.standalone ? (
           <div key={group.title} className={group.showHeading ? 'mb-3' : 'mb-3 border-b border-border pb-3'}>
             {group.showHeading && <p className="mb-1.5 px-3 pt-2 text-[11px] font-bold tracking-[0.12em] text-text-muted">{group.title}</p>}
@@ -745,7 +745,7 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
 
       {mobileNavOpen && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
-          <div className="flex w-64 flex-col overflow-x-hidden overflow-y-auto bg-surface p-4">
+          <div className="vv-quiet-scroll flex w-64 flex-col overflow-x-hidden overflow-y-auto bg-surface p-4">
             <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
           </div>
           <button
