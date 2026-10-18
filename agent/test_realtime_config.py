@@ -112,3 +112,38 @@ def test_native_language_hints_are_model_scoped():
     assert config.input_transcription(config.DEFAULT_MODEL, "en-US").language_codes == ["en-US"]
     assert config.input_transcription(config.DEFAULT_MODEL, "auto").language_codes is None
     assert config.input_transcription(config.MODEL_31, "hi-IN").language_codes is None
+
+
+def _compression(chars, **kw):
+    cfg = config.context_compression("x" * chars, **kw)
+    return cfg.trigger_tokens, cfg.sliding_window.target_tokens, chars // 4 + 1
+
+
+def test_compression_engages_within_first_minute_for_demo_sized_prompt():
+    # Oct 17 2026 bill: caller audio re-billed ~8x because the old
+    # instruction + 10k trigger was never reached in a 5-minute call.
+    trigger, target, instruction_tokens = _compression(55_000)
+    assert trigger - instruction_tokens <= 4_000
+    assert target < trigger
+
+
+def test_compression_target_below_trigger_and_above_instruction():
+    for chars in (0, 1, 500, 55_000, 200_000):
+        trigger, target, instruction_tokens = _compression(chars)
+        assert instruction_tokens < target < trigger
+
+
+def test_compression_keep_seconds_scales_target():
+    _, t60, _ = _compression(55_000, keep_seconds=60)
+    _, t90, _ = _compression(55_000)
+    _, t120, _ = _compression(55_000, keep_seconds=120)
+    assert t90 - t60 == 30 * config.AUDIO_TOKENS_PER_SECOND
+    assert t120 - t90 == 30 * config.AUDIO_TOKENS_PER_SECOND
+
+
+def test_compression_tiny_instruction_is_sane():
+    trigger, target, instruction_tokens = _compression(10)
+    assert instruction_tokens == 3
+    assert target == 3 + 25 * 90
+    assert trigger == 3 + 25 * 90 + 1_500
+    assert 0 < target < trigger
