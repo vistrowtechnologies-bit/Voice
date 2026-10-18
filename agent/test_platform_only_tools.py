@@ -61,3 +61,25 @@ class PlatformOnlyTools(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class DemoOpensInEnglishAndOffersAnyLanguage(unittest.TestCase):
+    """Owner, 18 Oct 2026: widget calls 1406-1408 (a Portuguese speaker) opened
+    in Hindi. The platform demo now defaults to English and its openers say any
+    language is fine."""
+
+    def test_demo_defaults_to_english_when_no_language_saved(self):
+        cfg = dict(TENANT, is_platform_demo=True)
+        cfg.pop("language", None)
+        agent = main.RealEstateAgent(cfg)
+        self.assertTrue(agent._reply_language.startswith("en"), agent._reply_language)
+
+    def test_tenant_still_defaults_to_hindi(self):
+        cfg = dict(TENANT)
+        cfg.pop("language", None)
+        self.assertEqual(main.RealEstateAgent(cfg)._reply_language, "hi-IN")
+
+    def test_every_english_opener_offers_any_language(self):
+        for gender, lines in main._PLATFORM_DEMO_OPENERS_EN.items():
+            for line in lines:
+                self.assertIn("any language", line, (gender, line[:40]))
