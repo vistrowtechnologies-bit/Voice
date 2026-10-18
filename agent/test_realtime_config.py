@@ -147,3 +147,15 @@ def test_compression_tiny_instruction_is_sane():
     assert target == 3 + 25 * 90
     assert trigger == 3 + 25 * 90 + 1_500
     assert 0 < target < trigger
+
+
+def test_38_live_is_a_supported_primary_model_on_the_31_profile():
+    """Owner, 18 Oct 2026: gemini-3.8-live is the primary realtime model (Google GA,
+    same price as 3.1); 3.1 retires. 3.8 must resolve through the verified 3.1
+    profile (LOW end sensitivity, 700 ms silence) and get context compression."""
+    import realtime_config as rc
+    assert rc.MODEL_38 in rc.API_MODELS
+    ad = rc.activity_detection(rc.MODEL_38).automatic_activity_detection
+    assert ad.silence_duration_ms == 700 and ad.prefix_padding_ms == 200
+    cc = rc.context_compression("x" * 12000)
+    assert cc.trigger_tokens > cc.sliding_window.target_tokens
