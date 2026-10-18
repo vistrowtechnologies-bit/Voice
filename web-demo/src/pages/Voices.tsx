@@ -91,7 +91,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
 }
 
 // Realtime tabs are one per Live model: `rt:<model value>`.
-type TabKey = 'sarvam4' | 'expressive' | 'hd' | 'native' | 'gemini' | 'premium' | `rt:${string}`
+type TabKey = 'sarvam4' | 'expressive' | 'hd' | 'native' | 'gemini38-lite' | 'gemini38-flash' | 'premium' | `rt:${string}`
 type FilterKey = 'all' | 'added' | 'female' | 'male'
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -565,14 +565,25 @@ export function Voices() {
         note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · native Indian languages · one language each · a little slower to start`,
         voices: (data?.voices ?? []).filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
       },
+      // Two tabs, the same split as the agent voice picker (agentOptions.ts
+      // gemini38-lite / gemini38-flash): Studio Lite = Gemini 3.8 Flash-Lite TTS
+      // ("google38:"), Studio = Gemini 3.8 Flash TTS ("google38flash:"). Both are
+      // text-to-speech for normal agents, not the realtime Live models. They are
+      // flagged "preview" (owner-only), so they come from the full list rather
+      // than from `all`, which drops previews.
       {
-        key: 'gemini',
+        key: 'gemini38-lite',
+        credits: 2 * BHARAT_MODEL_MULTIPLIER,
+        label: 'Studio Lite',
+        note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · lower cost · text-to-speech for normal agents · not the realtime Live models`,
+        voices: (data?.voices ?? []).filter((v) => v.value.startsWith('google38:')),
+      },
+      {
+        key: 'gemini38-flash',
         credits: 2 * BHARAT_MODEL_MULTIPLIER,
         label: 'Studio',
-        note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · text-to-speech for normal agents · not the realtime Live models`,
-        // These are flagged "preview" (owner-only), so they come from the full list
-        // rather than from `all`, which drops previews.
-        voices: (data?.voices ?? []).filter((v) => v.value.startsWith('google38:') || v.value.startsWith('google38flash:')),
+        note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · richer expression and voice fidelity · text-to-speech for normal agents · not the realtime Live models`,
+        voices: (data?.voices ?? []).filter((v) => v.value.startsWith('google38flash:')),
       },
       {
         key: 'premium',
