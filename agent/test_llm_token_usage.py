@@ -82,7 +82,7 @@ class SetCallLlmUsage(unittest.TestCase):
         sql, params = conn.calls[0]
         self.assertIn("llm_prompt_tokens", sql)
         self.assertIn("llm_completion_tokens", sql)
-        self.assertEqual(params, (4, 50_000, 0, 160, 77))
+        self.assertEqual(params, (4, 50_000, 0, 160, None, None, None, None, 77))
         self.assertTrue(conn.closed)
 
     def test_missing_column_never_raises(self):

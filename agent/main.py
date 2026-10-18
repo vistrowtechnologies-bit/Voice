@@ -3298,6 +3298,28 @@ def _add_llm_usage(usage: dict, metric) -> None:
         usage[key] = usage.get(key, 0) + max(0, int(getattr(metric, attr, 0) or 0))
 
 
+def _add_realtime_usage(usage: dict, metric) -> None:
+    """Adds one LiveKit RealtimeModelMetrics (Gemini Live generation) to the
+    same running totals as _add_llm_usage, plus the text/audio split the bill
+    is priced on: audio tokens cost several times text tokens, and the totals
+    alone cannot show which one a call burned. One metric = one generation."""
+    usage["requests"] = usage.get("requests", 0) + 1
+    if getattr(metric, "cancelled", False):
+        usage["cancelledRequests"] = usage.get("cancelledRequests", 0) + 1
+    in_details = getattr(metric, "input_token_details", None)
+    out_details = getattr(metric, "output_token_details", None)
+    for key, obj, attr in (
+        ("promptTokens", metric, "input_tokens"),
+        ("cachedTokens", in_details, "cached_tokens"),
+        ("completionTokens", metric, "output_tokens"),
+        ("rtTextIn", in_details, "text_tokens"),
+        ("rtAudioIn", in_details, "audio_tokens"),
+        ("rtTextOut", out_details, "text_tokens"),
+        ("rtAudioOut", out_details, "audio_tokens"),
+    ):
+        usage[key] = usage.get(key, 0) + max(0, int(getattr(obj, attr, 0) or 0))
+
+
 def _build_tools(config: dict) -> list:
     """The agent's live tool set. Core lead-capture + KB tools are always on
     (they're how the call does its job); enabled_functions only gates the
@@ -8440,6 +8462,36 @@ async def entrypoint(ctx: JobContext) -> None:
         # record still says what served the turn.
         if not label:
             label = (getattr(metric, "label", "") or "").strip()
+        if metric_type == "realtime_model_metrics":
+            # Token accounting for every generation, cancelled ones included
+            # (they were billed). Until this landed the calls.llm_* columns
+            # stayed NULL for realtime calls, so the ₹8.5/min Google bill
+            # against a ₹1.35 list price could not be traced per call.
+            usage = timings.setdefault("llmUsage", _new_llm_usage())
+            _add_realtime_usage(usage, metric)
+            rt_in = getattr(metric, "input_token_details", None)
+            rt_out = getattr(metric, "output_token_details", None)
+            rt_prompt = int(getattr(metric, "input_tokens", 0) or 0)
+            rt_cached = int(getattr(rt_in, "cached_tokens", 0) or 0)
+            rt_completion = int(getattr(metric, "output_tokens", 0) or 0)
+            logger.info(
+                "[rt-usage] model=%s in=%s (text=%s audio=%s cached=%s) out=%s (text=%s audio=%s) room=%s",
+                model, rt_prompt,
+                getattr(rt_in, "text_tokens", 0), getattr(rt_in, "audio_tokens", 0), rt_cached,
+                rt_completion,
+                getattr(rt_out, "text_tokens", 0), getattr(rt_out, "audio_tokens", 0),
+                ctx.room.name,
+            )
+            _record_diagnostic(
+                "metric", "llm", "AI response started", "info",
+                observedAtOffsetMs=collected_offset_ms,
+                provider=provider,
+                model=model,
+                promptTokens=rt_prompt,
+                cachedTokens=rt_cached,
+                completionTokens=rt_completion,
+                cancelled=bool(getattr(metric, "cancelled", False)),
+            )
         if metric_type == "eou_metrics":
             samples = (
                 ("endpointing", "eouMs", "Caller turn detected", metric.end_of_utterance_delay),
