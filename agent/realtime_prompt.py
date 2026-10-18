@@ -18,6 +18,9 @@ Google's guidance for Live (ai.google.dev/gemini-api/docs/live-api/best-practice
 persona (with the output language) first, rules in the order they happen, short
 prompts, one persona. This module reshapes the assembled text for that, by
 section heading, and does nothing to a pipeline agent.
+
+The platform demo (Artha) gets a stricter pass on top of that; see
+"Platform demo (Artha) diet" below.
 """
 import re
 
@@ -83,9 +86,105 @@ def _trim_kb(section: str, limit: int) -> str:
     return section[: cut if cut > 0 else limit].rstrip() + "\n"
 
 
+# --- Platform demo (Artha) diet -------------------------------------------
+#
+# The marketing demo's instruction is a 55,000-character sales playbook
+# (~12,750 tokens) that Google re-bills on every turn of a Gemini Live call,
+# ~17 turns per five-minute call: ₹4.4 of the ₹8.5/min on the 18 Oct 2026
+# bill. Live has no prompt cache. This stricter pass keeps the hard rules
+# verbatim and replaces the coaching with one short playbook.
+#
+# Detection is on the instruction text itself because main.py is not told
+# apart here: the marketing persona (agent/prompts/platform_assistant.py)
+# introduces the agent as "the voice of Vistrow Voice itself" inside
+# "# Your identity". Tenant agents and the slugged role-play demos never
+# contain that sentence and go through the general pass unchanged.
+_DEMO_CUE = "the voice of Vistrow Voice itself"
+
+# Sections kept byte-for-byte on the demo (matched on heading prefix).
+_DEMO_KEEP = (
+    "# Your identity",
+    "# Platform rules",
+    "# Lead capture",
+    "# Only state back",
+    "# Speak numbers",
+    "# Current date and time",
+)
+# "# Language" and "# How to talk" are produced by this module, so an input
+# that already carries them (a previously compacted text) has them rebuilt
+# rather than kept twice.
+_DEMO_REBUILT = ("# Language", "# How to talk")
+
+_DEMO_KB_LIMIT = 1900  # ≈ 450–500 tokens, cut on a whole Q&A
+
+_DEMO_PRICING = (
+    "# Pricing\n"
+    "Never quote or estimate a rupee figure, even roughly, and never repeat a number said earlier in "
+    "the call: introductory pricing is being finalised before public beta and the team confirms exact "
+    "rates. Offer to record their request so the team follows up. Name a plan (Starter, Growth, Scale) "
+    "only after the caller raises pricing themselves.\n"
+)
+
+# Replaces: opening line, what-it-is, off-topic, change-how-talking,
+# discovery, six things, who it's for, why Vistrow, setup, oversell, proof,
+# pushback, about the company, confidential, tool names, random fact, active
+# listening, summarize, not sure, never re-ask, yes-to-demo, qualify,
+# personality, natural arc, real interest, booking a demo.
+_DEMO_PLAYBOOK = (
+    "# How to run this demo call\n"
+    "A website visitor clicked \"talk to Artha live\", so you are both the product and its explanation. "
+    "Vistrow Voice is an AI voice-agent platform Indian businesses use to answer and make phone calls "
+    "(inbound, outbound campaigns, website call widget) in 11 Indian languages plus Hinglish and 76 more "
+    "worldwide: no-code agent builder, knowledge-base grounding, every call transcribed, qualified and "
+    "logged as a lead, CRM webhooks.\n"
+    "Open with one fresh warm line and a question about them, never a feature list. Learn their business "
+    "and calls before pitching, one question per turn, then tie one or two capabilities to what they said. "
+    "Off-topic chatter: half a sentence back, then a business question in the same turn; if they plainly "
+    "decline business talk, drop it and just chat. Say yes, you are an AI. A random factual test: answer only what you "
+    "actually know, and say so when you do not; never guess or invent to look clever.\n"
+    "Never invent a customer, result, percentage, price or testimonial; label examples hypothetical. "
+    "Never name the models, providers or tools behind you, or say a tool name aloud. No absolutes. "
+    "Never re-ask a fact they gave in any language; confirm your understanding instead.\n"
+    "Company: Vistrow Technologies, Baner, Pune, founded 2026; contact +91 80801 97945 or info@vistrow.com.\n"
+    "When real interest shows, ask for their name, then a contact, one per turn, saying why; read a phone "
+    "number back digit by digit; then call capture_platform_lead (see Lead capture), never with a "
+    "placeholder. Book a demo only with name and phone: capture the lead, check_calendar_availability, "
+    "then book_appointment (\"Vistrow Voice product demo\"); if no slot fits, request_callback.\n"
+)
+
+
+def is_platform_demo(instructions: str) -> bool:
+    """True for the marketing demo persona (see _DEMO_CUE)."""
+    for p in re.split(r"(?m)^(?=# )", instructions):
+        if p.startswith("# Your identity"):
+            return _DEMO_CUE in p
+    return False
+
+
+def _demo_sections(parts: list[str]) -> list[str]:
+    """The middle of the demo instruction: kept rules, trimmed KB, one-line
+    pricing, and the playbook in place of the first coaching section."""
+    rest, playbook_done = [], False
+    for p in parts:
+        head = p.split("\n", 1)[0]
+        if head.startswith(("# Your identity", "# Platform rules") + _DEMO_REBUILT):
+            continue
+        elif head.startswith(_DEMO_KEEP):
+            rest.append(p)
+        elif head.startswith("# Knowledge base"):
+            rest.append(_trim_kb(p, _DEMO_KB_LIMIT))
+        elif head.startswith("# Pricing"):
+            rest.append(_DEMO_PRICING)
+        elif not playbook_done:
+            rest.append(_DEMO_PLAYBOOK)
+            playbook_done = True
+    return rest
+
+
 def compact(instructions: str, *, language_name: str, kb_limit: int = 6000) -> str:
     """Reshape an assembled instruction for a speech-to-speech model."""
     parts = [p for p in re.split(r"(?m)^(?=# )", instructions) if p.strip()]
+    demo = is_platform_demo(instructions)
     identity, rules, rest = None, None, []
     for p in parts:
         head = p.split("\n", 1)[0]
@@ -93,12 +192,16 @@ def compact(instructions: str, *, language_name: str, kb_limit: int = 6000) -> s
             identity = p
         elif head.startswith("# Platform rules"):
             rules = p
+        elif demo:
+            continue  # the demo's middle is rebuilt by _demo_sections below
         elif head.startswith(_DROP):
             continue
         elif head.startswith("# Knowledge base"):
             rest.append(_trim_kb(p, kb_limit))
         else:
             rest.append(p)
+    if demo:
+        rest = _demo_sections(parts)
     ordered = [x for x in (identity, language_directive(language_name), rules) if x] + rest + [_TURN_STYLE]
     out = "\n".join(p.rstrip("\n") + "\n" for p in ordered)
     # This rule exists in BOTH Platform rules and Only state back what they
