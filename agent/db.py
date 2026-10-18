@@ -285,6 +285,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS consent_json TEXT DEFAULT ''")
             # Mirrors server/calls_db.py: what became of this call's recording.
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS recording_status TEXT DEFAULT ''")
+            # Mirrors server/calls_db.py: realtime (Gemini Live) token split
+            # written by set_call_llm_usage below.
+            for column in ("llm_rt_text_in", "llm_rt_audio_in", "llm_rt_text_out", "llm_rt_audio_out"):
+                conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} INTEGER")
     finally:
         conn.close()
 
@@ -2061,18 +2065,31 @@ def set_call_llm_usage(call_id: int | None, usage: dict | None) -> None:
     hiccup must never disturb call teardown."""
     if call_id is None or not usage or not usage.get("requests"):
         return
+
+    def _rt(key: str) -> int | None:
+        # Realtime (Gemini Live) text/audio split; NULL for a call that never
+        # ran a realtime generation, so a text-LLM call is not misread as
+        # "zero audio tokens".
+        value = usage.get(key)
+        return None if value is None else int(value)
+
     try:
         conn = dbconn.connect()
         try:
             with conn:
                 conn.execute(
                     "UPDATE calls SET llm_requests = ?, llm_prompt_tokens = ?, llm_cached_tokens = ?, "
-                    "llm_completion_tokens = ? WHERE id = ?",
+                    "llm_completion_tokens = ?, llm_rt_text_in = ?, llm_rt_audio_in = ?, "
+                    "llm_rt_text_out = ?, llm_rt_audio_out = ? WHERE id = ?",
                     (
                         int(usage.get("requests") or 0),
                         int(usage.get("promptTokens") or 0),
                         int(usage.get("cachedTokens") or 0),
                         int(usage.get("completionTokens") or 0),
+                        _rt("rtTextIn"),
+                        _rt("rtAudioIn"),
+                        _rt("rtTextOut"),
+                        _rt("rtAudioOut"),
                         call_id,
                     ),
                 )
