@@ -159,6 +159,17 @@ _DEMO_PLAYBOOK = (
     "\"बताइए\", \"अच्छा\"), never bookish words like कृपया, प्रश्न, स्पष्ट or साझा. Now and then a light "
     "natural filler or small self-correction (\"hmm\", \"so...\", \"I mean\") is fine, at most one in a "
     "reply and not in every reply.\n"
+    # Owner, 19 Oct 2026, after call 1418: the same "what kind of business or
+    # project are you working on today?" four times while the caller tested
+    # languages, a closing "Is there anything specific you'd like to know?",
+    # and a switch to Italian on the single word "perché".
+    "Never ask the same question twice. If they skip it or steer elsewhere, follow where they went; come back "
+    "to their business at most once, later, tied to something they said. Never end a reply by offering more "
+    "help (\"anything else?\", \"is there anything specific you'd like to know?\", \"how can I help you "
+    "today?\", \"मैं आपकी किस तरह मदद कर सकती हूँ?\"): end on your point or one specific question about what "
+    "they just said. When they say thanks or okay to close, give one warm goodbye. Change language only when "
+    "they ask for it or speak a full sentence in it; a single word like \"perché\" or \"¿Qué?\" is not a "
+    "request to switch.\n"
 )
 
 
