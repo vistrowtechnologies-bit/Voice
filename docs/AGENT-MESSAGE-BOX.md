@@ -1146,3 +1146,8 @@ Owner decision: Starter ₹2,999 = 400 min, Growth ₹5,999 = 1,100, Scale ₹12
 - Verified: Sarvam's own prompt_tokens with vs without tools: tool block 2,625–2,735 tokens = 29–33% on agents 3/17/19/26, 9.8% on agent 4 (the old "23%" was the offline fixture before prompt cuts). After: 2,249–2,346 (−376…−389/request). A/B 2×30 real turns (read-only DB, accounts 1+2, PII masked): right tool 22/26 vs 21/26, no-tool 28/34 both, wrong end_call 0 vs 1, switch 2 vs 2, TTFT p50 266 both. Agent suite 899 passed / 0 failed (placeholder DB). A shortened log_lead dropped #26 log_lead to 2/5 and 0/5 → fully reverted (5/5). Spend ≈ ₹61 billed-rate estimate.
 - Not verified: do_not_call/transfer_call/booking completion turns (none in the replay set); non-Indian language switch on global voices; live call.
 - Next: owner review → push/PR → deployer merges and runs `lk agent deploy` on both workers. No line overlap with PR #153 (switch_reply_language logic).
+
+### 2026-10-19 · claude (dashboard session) · realtime voice picker
+- Branch claude/realtime-voice-picker, PR #192 (ready, not merged). Files: web-demo/src/pages/AgentDetail.tsx, web-demo/src/lib/agentOptions.ts.
+- Verified locally: picker on Live 3.8 lists only Live voices; Shubh→Live switches to Kiara HD with notice/Undo; switch back restores Shubh; server PATCH realtime+shubh → 400; npm run build passes.
+- Open: runtime lane asked to make the _guard_realtime_voice 400 text vendor-neutral (says "Gemini"). Next step: owner says "ship #192".

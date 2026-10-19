@@ -325,11 +325,10 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
   // Re-listed at the platform owner's request for a controlled retest. Keep
   // this owner-only: prior calls showed slower audio and turn-handling errors.
   // Owner, 18 Oct 2026: 3.8 Live is the primary realtime model (Google GA,
-  // same price as 3.1); 3.1 is legacy (Google shutdown from 17 Nov 2026) and
-  // 2.5 retired. Both stay selectable only so existing rows still display.
+  // same price as 3.1). 3.1 (Google shutdown from 17 Nov 2026) and 2.5 are
+  // retired and, from 19 Oct, no longer offered; RETIRED_MODELS keeps their
+  // names for call history (no agent used either on 19 Oct).
   { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · primary realtime model · speech-to-speech in about 1-2 s' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 (retired)', tag: 'Owner-only · retired 18 Oct 2026, use 3.8' },
-  { value: 'gemini-live', label: 'Vistrow Live 2.5 (retired)', tag: 'Owner-only · retired, use 3.8' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
@@ -354,6 +353,30 @@ export const geminiLiveVoiceName = (value: string): string | null => {
   return GEMINI_LIVE_VOICES.has(persona) ? persona.charAt(0).toUpperCase() + persona.slice(1) : null
 }
 
+/** Whether an agent on this model can speak with this voice. The one rule the
+ *  voice picker uses; the server enforces the same on save
+ *  (token_api._guard_realtime_voice). */
+export const voiceWorksWithModel = (model: string, voice: string) =>
+  !isRealtimeModel(model) || geminiLiveVoiceName(voice) !== null
+
+/** The voice to switch to when the model changes and the current voice can't
+ *  be used: the same voice if it works, else one of the same gender, else
+ *  the first that works. null when none of the voices work with the model. */
+export const nearestVoiceFor = (
+  model: string,
+  currentVoice: string,
+  currentGender: VoiceEntry['gender'] | undefined,
+  voices: readonly VoiceEntry[],
+): VoiceEntry | null => {
+  const usable = voices.filter((v) => voiceWorksWithModel(model, v.value))
+  return (
+    usable.find((v) => v.value === currentVoice) ??
+    usable.find((v) => currentGender && v.gender === currentGender) ??
+    usable[0] ??
+    null
+  )
+}
+
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
 // under a name instead of leaking the raw vendor string at a tenant.
 const RETIRED_ADMIN_MODELS = [
@@ -374,6 +397,10 @@ export const modelOptionsFor = (isPlatformOwner: boolean) =>
 const RETIRED_MODELS = [
   { value: 'gpt-4.1-mini', label: 'Vistrow Swift' },
   { value: 'gpt-4.1', label: 'Vistrow Prime' },
+  // GPT-5 successors (plan_policy.OPENAI_MODEL_SUCCESSORS) that retired GPT-4
+  // agents are rewritten to: same names, still not offered for new picks.
+  { value: 'gpt-5.4-nano', label: 'Vistrow Swift' },
+  { value: 'gpt-5.4-mini', label: 'Vistrow Prime' },
   { value: 'gpt-4o', label: 'Vistrow Pro' },
   { value: 'gemini-3.6-flash', label: 'Vistrow Flash' },
   { value: 'gpt-4o-mini', label: 'Vistrow Standard' },
@@ -383,6 +410,7 @@ const RETIRED_MODELS = [
   // the lead tool, and premature hangups. It is now exposed only to the platform owner
   // for a controlled retest; tenant accounts cannot select it.
   { value: 'gemini-live', label: 'Vistrow Live 2.5 (retired)' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 (retired)' },
 ] as const
 
 export const modelLabel = (value: string) =>
