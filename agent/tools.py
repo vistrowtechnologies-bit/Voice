@@ -2544,6 +2544,11 @@ async def log_lead(
 _PLACEHOLDER_VALUES = PLACEHOLDER_VALUES
 
 
+_EMAIL_RE = re.compile(r"[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}")
+# Our own addresses: a caller's contact is never one of these.
+_OUR_EMAIL_DOMAINS = frozenset({"vistrow.com", "vistrowvoice.com", "arthaleads.com"})
+
+
 def _looks_like_valid_indian_mobile(digits: str) -> bool:
     """10 digits, first digit 6-9 — the actual shape of a real Indian mobile
     number once a leading +91/91/0 is stripped."""
@@ -2624,17 +2629,33 @@ async def capture_platform_lead(
             "applicable' or leave it blank."
         )
     # Confirmed real failure (call 762): caller said "808019794" - nine
-    # digits, not a real Indian mobile number - and it was recorded and
-    # thanked without question. An unreachable number defeats the entire
-    # point of capturing a lead. Only phone-shaped contacts are checked;
-    # an email address (has an "@") is accepted as-is.
-    if "@" not in contact_stripped:
-        digits = re.sub(r"\D", "", contact_stripped)
-        if not digits or not _looks_like_valid_indian_mobile(digits):
+    # digits - and it was recorded and thanked without question. Call 1408
+    # (18 Oct 2026): our OWN address info@vistrow.com was saved as an Angolan
+    # prospect's contact, and his +244 number could not have been saved at
+    # all (only Indian mobiles were accepted). Emails are now checked for
+    # shape and against our own domains; phones use the international-aware
+    # _looks_like_a_phone_number.
+    email = ""
+    if "@" in contact_stripped:
+        email = contact_stripped.lower()
+        if not _EMAIL_RE.fullmatch(email):
             return (
-                f"That number ('{contact}') doesn't look like a complete 10-digit Indian mobile number - "
-                "nothing was recorded. Ask the caller to repeat their phone number, digit by digit if "
-                "needed, then call this tool again with the corrected number."
+                f"'{contact}' is not a complete email address - nothing was recorded. Ask the caller to "
+                "spell their email address, read it back to confirm, then call this tool again."
+            )
+        if email.rsplit("@", 1)[1] in _OUR_EMAIL_DOMAINS:
+            return (
+                f"'{contact}' is OUR company's address, not the caller's - nothing was recorded. Ask "
+                "the caller for their own email address (or phone number with country code), read "
+                "it back to confirm, then call this tool again."
+            )
+    else:
+        digits = re.sub(r"\D", "", contact_stripped)
+        if not _looks_like_a_phone_number(digits):
+            return (
+                f"That number ('{contact}') doesn't look like a complete phone number - nothing was "
+                "recorded. Ask the caller to repeat it with the country code, digit by digit if needed, "
+                "read it back to confirm, then call this tool again."
             )
     logger.info(
         "platform lead captured: name=%s company=%s contact=%s use_case=%s team_size=%s",
@@ -2642,7 +2663,11 @@ async def capture_platform_lead(
     )
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
-        lead_data.update(name=name, phone=contact, company=company, use_case=use_case, team_size=team_size)
+        lead_data.update(name=name, company=company, use_case=use_case, team_size=team_size)
+        if email:
+            lead_data["email"] = email
+        else:
+            lead_data["phone"] = contact
         if context.userdata is not None:
             context.userdata["lead_captured"] = True
     event = {
@@ -2650,7 +2675,8 @@ async def capture_platform_lead(
         "name": name,
         "company": company,
         "contact": contact,
-        "phone": contact,
+        "phone": "" if email else contact,
+        "email": email,
         "use_case": use_case,
         "team_size": team_size,
     }
@@ -2658,7 +2684,11 @@ async def capture_platform_lead(
         await _publish_event(context, event)
         await _post_webhook(context, event)
         await _fan_out_integrations(context, event)
-    return "Lead details recorded."
+    return (
+        "Recorded for the team. You may now tell the caller their request is recorded and the team "
+        "will contact them at the confirmed address or number. This saved a request only: nothing "
+        "was emailed or booked, so do not say it was."
+    )
 
 
 # A turn that is asking for something. Deliberately broad on the Indian

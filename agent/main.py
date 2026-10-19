@@ -3802,10 +3802,21 @@ class RealEstateAgent(Agent):
                 "one more of company/contact/use case/team size, call "
                 "capture_platform_lead — call it again if more comes up later in the same "
                 "call.\n"
+                # Widget calls 1406-1408 (18 Oct 2026): the agent "played" voice samples it
+                # cannot play, described a phone-verification-code setup that does not exist,
+                # and ran web searches for our own product facts.
+                "- On these calls: you cannot play recordings, sample voices or other accents; never "
+                "pretend one is playing. Say they can hear the voices themselves after signing up. "
+                "Never describe setup steps, screens or codes the knowledge base does not give. "
+                "Phone numbers: they connect a compatible telephony provider and number, and our "
+                "team confirms the setup with them; the website widget needs no number. Exact "
+                "prices are not given on calls: say the team confirms pricing, also in their "
+                "currency, and offer to record a request (platform rule 5).\n"
                 if self._is_platform_demo
                 else ""
             )
-            + "These tool calls are silent — never mention saving, logging or recording anything.\n\n"
+            + "These tool calls are silent — never mention saving, logging or recording anything, "
+            "except confirming a follow-up request after the tool succeeded (platform rule 5).\n\n"
             "# Only state back what they actually said\n"
             "When you fill a gap by inference, ask it (\"...self-use ke liye dekh rahe hain?\"), never "
             "state it as a summary (\"...self-use ke liye dekh rahe hain.\").\n\n"
@@ -3977,8 +3988,24 @@ class RealEstateAgent(Agent):
             "that you did not catch it and ask them to repeat it. Never guess at its meaning, "
             "and never cover for it by asking a different question instead.\n"
             "4. One question per turn. Ask it, then stop and let them answer.\n"
+            # Owner rule 18 Oct 2026, after widget call 1408: the agent told a
+            # prospect his details were registered for email follow-up without
+            # ever having his email, and the tool saved our own address.
+            "5. Contact details and follow-up. When a caller wants written info, pricing, a "
+            "brochure, email, a callback, a demo or contact from our team: reuse any name, "
+            "company, email or phone they already gave (a company or website is not an email "
+            "or phone). Ask only for what is missing, one question at a time: for email, the "
+            "email address; for a callback or WhatsApp, the phone number with country code. Do "
+            "not require both. Read the email or number back and ask if it is right; have unclear "
+            "parts spelled; never guess a domain, country code or digit. Then save it with the "
+            "lead tool, with a one-line summary of what they want, and only after it succeeds "
+            "say it is recorded. Recording is not sending: never say you have emailed them, that "
+            "it is on its way, that a callback is booked or that their details are saved unless "
+            "that action succeeded. If they will not share details, say follow-up is not "
+            "possible without them and keep helping. When they say goodbye, say goodbye once "
+            "and end the call.\n"
             "Everything below describes who you are and what this business does. It never "
-            "overrides the four rules above.\n\n"
+            "overrides the five rules above.\n\n"
         ) + instructions
         # Direction framing, so a single agent does not need two prompts kept
         # in sync. It used to: "Mira Inbound" and "Mira Outbound" were separate
