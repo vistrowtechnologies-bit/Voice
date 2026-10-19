@@ -105,7 +105,8 @@ class PlatformDemoDiet(unittest.TestCase):
         playbook = self.out.split("# How to run this demo call", 1)[1].split("\n# ", 1)[0]
         for phrase in ("stay in that role", "never break into your own introduction",
                        "After switching language, carry on", "never give a figure or say there is no limit",
-                       "only when they want a follow-up", "skip it without apologising"):
+                       "only when they want a follow-up", "skip it without apologising",
+                       "read the email or number back to them and wait for their yes"):
             self.assertIn(phrase, playbook, phrase)
 
     def test_pricing_is_one_rule_without_figures(self):
