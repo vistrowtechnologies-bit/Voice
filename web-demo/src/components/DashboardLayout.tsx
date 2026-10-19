@@ -462,11 +462,14 @@ function FullPageHeader({
   subtitle,
   children,
   refreshSignal = 0,
+  ownWatchHow = false,
 }: {
   title: string
   subtitle?: string
   children?: ReactNode
   refreshSignal?: number
+  /** The page shows its own Watch how in its toolbar (the Dashboard). */
+  ownWatchHow?: boolean
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
@@ -474,7 +477,7 @@ function FullPageHeader({
   // duplicated Quick actions and displaced dashboard-specific controls.
   const showNewAgent = pathname === '/dashboard/agents'
   const videoSlug = helpVideoFor(pathname)
-  const watchHow = videoSlug && <WatchHowButton slug={videoSlug} />
+  const watchHow = videoSlug && !ownWatchHow && <WatchHowButton slug={videoSlug} />
 
   // "· Top up" only where it can work: checkout switched on for this
   // deployment and an admin who may pay. Everyone else keeps the plain pill.
@@ -525,12 +528,14 @@ function FullPageHeader({
     </Link>
   )
 
-  // The top bar holds only what every page shares (search, Watch how,
-  // credits, alerts, account). A page's own buttons (Back, Test agent, New
-  // Agent, agent ID...) sit in a row at the top of the page instead, so the
-  // bar never changes shape from page to page (owner, 17 Oct).
-  const pageActions = (children || newAgent) && (
+  // The top bar holds only what every page shares (search, credits,
+  // alerts, account). A page's own buttons (Back, Test agent, New Agent,
+  // agent ID, its Watch how video...) sit in a row at the top of the page
+  // instead, so the bar never changes shape from page to page (owner, 17 and
+  // 19 Oct).
+  const pageActions = (children || newAgent || watchHow) && (
     <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4 sm:px-6">
+      {watchHow}
       {children}
       {newAgent}
     </div>
@@ -538,7 +543,7 @@ function FullPageHeader({
 
   if (!desktop) {
     // Phone and tablet: one app bar (menu, title, search, alerts, account)
-    // and a swipeable row for credits and Watch how.
+    // and a row for the minutes pill.
     return (
       <>
         <header className="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur-xl">
@@ -560,7 +565,6 @@ function FullPageHeader({
           </div>
           <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {creditsPill}
-            {watchHow}
           </div>
         </header>
         {pageActions}
@@ -577,7 +581,6 @@ function FullPageHeader({
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
           <CommandMenuButton />
-          {watchHow}
           {creditsPill}
           <NotificationBell />
           <HeaderAvatarMenu />
@@ -588,7 +591,7 @@ function FullPageHeader({
   )
 }
 
-type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number }
+type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number; ownWatchHow?: boolean }
 
 /** The page title bar. Inside a Settings tab the tab itself is the title, so only the page's own
  * action buttons and its one-line description are kept. */
