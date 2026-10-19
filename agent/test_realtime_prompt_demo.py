@@ -44,7 +44,7 @@ class PlatformDemoDiet(unittest.TestCase):
         # ≈ 3,700 tokens at the 4.3 chars/token this prompt measured at: the
         # 18 Oct diet (~13,000 chars) plus the Personality section and the
         # spoken-register line restored 19 Oct (owner, after call 1415).
-        self.assertLessEqual(len(self.out), 16_000, len(self.out))
+        self.assertLessEqual(len(self.out), 16_700, len(self.out))
 
     def test_kept_headings_and_key_phrases(self):
         heads = "\n".join(self.heads())
@@ -77,7 +77,7 @@ class PlatformDemoDiet(unittest.TestCase):
                      "Never name the models", "Never re-ask", "capture_platform_lead",
                      "Book a demo only with name and phone", "No absolutes"):
             self.assertIn(rule, playbook, rule)
-        self.assertLess(len(playbook), 2_300)
+        self.assertLess(len(playbook), 3_000)
 
     def test_personality_and_spoken_register_survive(self):
         # Owner, 19 Oct 2026: call 1415 on 3.8 without these came out formal
@@ -86,6 +86,16 @@ class PlatformDemoDiet(unittest.TestCase):
             self.assertIn(phrase, self.out, phrase)
         playbook = self.out.split("# How to run this demo call", 1)[1].split("\n# ", 1)[0]
         for phrase in ("react first, warmly", "casual Hinglish", "never bookish words", "at most one in a reply"):
+            self.assertIn(phrase, playbook, phrase)
+
+    def test_no_repeated_question_no_help_offer_no_one_word_switch(self):
+        # Owner, 19 Oct 2026, call 1418: "what kind of business..." asked four
+        # times, a closing "Is there anything specific you'd like to know?",
+        # and Italian after the single word "perché".
+        playbook = self.out.split("# How to run this demo call", 1)[1].split("\n# ", 1)[0]
+        for phrase in ("Never ask the same question twice", "Never end a reply by offering more help",
+                       "is there anything specific you'd like to know?", "one warm goodbye",
+                       "a single word like \"perché\""):
             self.assertIn(phrase, playbook, phrase)
 
     def test_pricing_is_one_rule_without_figures(self):
