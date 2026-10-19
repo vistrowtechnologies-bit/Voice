@@ -31,7 +31,14 @@ def activity_detection(model: str) -> types.RealtimeInputConfig:
         raise ValueError(f"{key} must be an integer between 200 and 2000 ms") from None
     return types.RealtimeInputConfig(
         automatic_activity_detection=types.AutomaticActivityDetection(
-            start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
+            # Call 1421 (19 Oct, 3.8): with HIGH, room noise and breaths started
+            # caller turns that the transcript showed as "¿Qué?", "Ouais", "da":
+            # 6 of 29 billed turns, each cutting Artha off mid-sentence. LOW
+            # for 3.x; 2.5 keeps Google's default.
+            start_of_speech_sensitivity=(
+                types.StartSensitivity.START_SENSITIVITY_HIGH if model == DEFAULT_MODEL
+                else types.StartSensitivity.START_SENSITIVITY_LOW
+            ),
             end_of_speech_sensitivity=(
                 types.EndSensitivity.END_SENSITIVITY_HIGH if model == DEFAULT_MODEL
                 else types.EndSensitivity.END_SENSITIVITY_LOW
@@ -113,7 +120,7 @@ AUDIO_TOKENS_PER_SECOND = 25  # Google's own figure on the Live API pricing page
 
 
 def context_compression(
-    instructions: str, *, keep_seconds: int = 60
+    instructions: str, *, keep_seconds: int = 45
 ) -> types.ContextWindowCompressionConfig:
     """Cap the conversation history Google re-bills on every turn.
 
@@ -148,7 +155,12 @@ def context_compression(
     # never cuts into the conversation.
     instruction_tokens = len(instructions) // 3 + 1
     keep_tokens = AUDIO_TOKENS_PER_SECOND * keep_seconds
-    trigger_tokens = instruction_tokens + max(2_000, keep_tokens + 1_500)
+    # Call 1421 (19 Oct, 60 s kept, 1,500 headroom): audio built up to ~3,800
+    # tokens per turn before each trim, ~Rs 5/min of re-billed caller audio.
+    # 45 s kept (call 1421 still remembered company and name after a trim at
+    # 60 s; 45 s holds the last several exchanges) and trimming 750 tokens
+    # (~30 s) past the target keep the average history far smaller.
+    trigger_tokens = instruction_tokens + max(1_500, keep_tokens + 750)
     target_tokens = instruction_tokens + keep_tokens
     assert instruction_tokens < target_tokens < trigger_tokens
     return types.ContextWindowCompressionConfig(

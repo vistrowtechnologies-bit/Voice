@@ -144,15 +144,17 @@ def test_compression_keep_seconds_scales_target():
 def test_compression_tiny_instruction_is_sane():
     trigger, target, instruction_tokens = _compression(10)
     assert instruction_tokens == 4
-    assert target == 4 + 25 * 60
-    assert trigger == 4 + 25 * 60 + 1_500
+    assert target == 4 + 25 * 45
+    assert trigger == 4 + 25 * 45 + 750
     assert 0 < target < trigger
 
 
-def test_compression_keeps_60_seconds_by_default():
-    # 30 s (19 Oct, after call 1415) made Artha forget the call (1420).
-    _, target, instruction_tokens = _compression(55_000)
-    assert target - instruction_tokens == 60 * config.AUDIO_TOKENS_PER_SECOND
+def test_compression_keeps_45_seconds_and_trims_30_seconds_later():
+    # 30 s with a low instruction estimate wiped the call (1420); 60 s with
+    # 1,500 tokens of headroom let audio pile up to ~3,800 per turn (1421).
+    trigger, target, instruction_tokens = _compression(55_000)
+    assert target - instruction_tokens == 45 * config.AUDIO_TOKENS_PER_SECOND
+    assert trigger - target == 750
 
 
 def test_compression_never_trims_into_a_hindi_heavy_instruction():
@@ -161,7 +163,7 @@ def test_compression_never_trims_into_a_hindi_heavy_instruction():
     # the full keep after a trim, or the conversation is wiped.
     chars, real_tokens = 17_200, 4_808
     trigger, target, _ = _compression(chars)
-    assert target - real_tokens >= 60 * config.AUDIO_TOKENS_PER_SECOND
+    assert target - real_tokens >= 45 * config.AUDIO_TOKENS_PER_SECOND
     assert trigger > target
 
 
@@ -175,3 +177,13 @@ def test_38_live_is_a_supported_primary_model_on_the_31_profile():
     assert ad.silence_duration_ms == 700 and ad.prefix_padding_ms == 200
     cc = rc.context_compression("x" * 12000)
     assert cc.trigger_tokens > cc.sliding_window.target_tokens
+
+
+def test_3x_models_ignore_noise_as_speech_start():
+    # Call 1421: HIGH start sensitivity turned room noise into caller turns
+    # transcribed as "¿Qué?" (6 of 29 billed turns).
+    for m in (config.MODEL_38, config.MODEL_31):
+        ad = config.activity_detection(m).automatic_activity_detection
+        assert ad.start_of_speech_sensitivity == config.types.StartSensitivity.START_SENSITIVITY_LOW
+    ad25 = config.activity_detection(config.DEFAULT_MODEL).automatic_activity_detection
+    assert ad25.start_of_speech_sensitivity == config.types.StartSensitivity.START_SENSITIVITY_HIGH
