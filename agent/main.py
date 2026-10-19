@@ -4700,7 +4700,7 @@ class RealEstateAgent(Agent):
             _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
         elif answered and getattr(self, "_lead_opening", ""):
             _greet += " " + self._lead_opening
-        if self._is_platform_demo and not _opener:
+        if getattr(self, "_is_platform_demo", False) and not _opener:
             # Owner, 18 Oct 2026: a visitor from Angola got a Hindi opener and
             # had to ask for his language. The demo tells every caller, in its
             # first line, that any language is fine.
