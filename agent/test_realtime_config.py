@@ -116,7 +116,7 @@ def test_native_language_hints_are_model_scoped():
 
 def _compression(chars, **kw):
     cfg = config.context_compression("x" * chars, **kw)
-    return cfg.trigger_tokens, cfg.sliding_window.target_tokens, chars // 4 + 1
+    return cfg.trigger_tokens, cfg.sliding_window.target_tokens, chars // 3 + 1
 
 
 def test_compression_engages_within_first_minute_for_demo_sized_prompt():
@@ -143,17 +143,26 @@ def test_compression_keep_seconds_scales_target():
 
 def test_compression_tiny_instruction_is_sane():
     trigger, target, instruction_tokens = _compression(10)
-    assert instruction_tokens == 3
-    assert target == 3 + 25 * 30
-    assert trigger == 3 + 25 * 30 + 1_500
+    assert instruction_tokens == 4
+    assert target == 4 + 25 * 60
+    assert trigger == 4 + 25 * 60 + 1_500
     assert 0 < target < trigger
 
 
-def test_compression_keeps_30_seconds_by_default():
-    # Owner, 19 Oct 2026, after call 1415: audio-in re-billed with 90 s kept
-    # was over half the cost; keep 30 s.
+def test_compression_keeps_60_seconds_by_default():
+    # 30 s (19 Oct, after call 1415) made Artha forget the call (1420).
     _, target, instruction_tokens = _compression(55_000)
-    assert target - instruction_tokens == 30 * config.AUDIO_TOKENS_PER_SECOND
+    assert target - instruction_tokens == 60 * config.AUDIO_TOKENS_PER_SECOND
+
+
+def test_compression_never_trims_into_a_hindi_heavy_instruction():
+    # Call 1420: a ~17,200-char Artha instruction really cost 4,808 tokens
+    # (~3.6 chars/token). The window must still hold the instruction plus
+    # the full keep after a trim, or the conversation is wiped.
+    chars, real_tokens = 17_200, 4_808
+    trigger, target, _ = _compression(chars)
+    assert target - real_tokens >= 60 * config.AUDIO_TOKENS_PER_SECOND
+    assert trigger > target
 
 
 def test_38_live_is_a_supported_primary_model_on_the_31_profile():
