@@ -39,6 +39,7 @@ import storage_usage
 from storage import b2_client
 import campaign_window
 import lead_quality
+import budget_parse
 import retry_rules
 from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
@@ -1737,6 +1738,13 @@ def init_tables() -> None:
             # contact whose call is still live (room in active_calls) from one
             # whose agent job never ran or crashed before reconciling it.
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS room_name TEXT")
+            # When the dialer first dialled this contact (speed_to_lead). last_attempt_at
+            # is overwritten by every retry, so it cannot answer "how fast was the first call".
+            conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS first_attempt_at TEXT")
+            # Who the lead was, for every source (speed_to_lead, missed_money_queue):
+            # only ArthaLeads leads get a contacts row at intake.
+            conn.execute("ALTER TABLE inbound_lead_events ADD COLUMN IF NOT EXISTS name TEXT")
+            conn.execute("ALTER TABLE inbound_lead_events ADD COLUMN IF NOT EXISTS phone TEXT")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS consent_basis TEXT DEFAULT ''")
             # When the CRM was told this contact ran out of attempts (the
             # dialer's "Not Reachable" report to ArthaLeads), so it is sent once.
@@ -4054,6 +4062,362 @@ _AGENT_CAMEL_TO_SNAKE = {
     "followUpPolicy": "follow_up_policy",
 }
 
+
+# --- Speed to lead and the missed-money queue (owner, 19 Oct) -------------
+# Both read leads that reached us through inbound_lead_events (ArthaLeads,
+# Facebook Lead Ads, the inbound-lead API) and what the dialer did with them.
+_FOLLOW_UP_LABELS = {
+    "callback": "Callback they asked for",
+    "visit_reminder": "Appointment reminder",
+    "nurture": "Follow-up on their interest",
+}
+# A queued contact the dialer has not touched this long after it was due is
+# stuck (campaign paused, outside the calling window, worker down), not waiting.
+_QUEUE_STUCK_AFTER = "15 minutes"
+
+
+# inbound_lead_events.source -> how a person would name it.
+_SOURCE_LABELS = {
+    "facebook_lead_ads": "Facebook lead", "facebook_lead_ads_native": "Facebook lead",
+    "whatsapp": "WhatsApp lead", "website": "Website lead", "api": "API lead", "arthaleads": "CRM lead",
+}
+
+
+def _lead_channel_label(fields: dict, source: str = "") -> str:
+    """'WhatsApp lead', 'Facebook lead', ... for a lead's custom fields. A
+    click-to-WhatsApp ad runs on Facebook, so ArthaLeads can store it as
+    channel_source 'facebook' while the person only messaged on WhatsApp;
+    same rule as agent/contact_notes.py _came_on_whatsapp."""
+    said = {str(fields.get(k) or "").strip().casefold() for k in ("lead_source", "arthaleads_source")}
+    if "whatsapp" in said or "wa.me/" in str(fields.get("ad_source_url") or "").casefold() \
+            or str(fields.get("channel_source") or "").casefold() == "whatsapp":
+        return "WhatsApp lead"
+    channel = str(fields.get("channel_source") or fields.get("lead_source") or "").replace("_", " ").strip()
+    if channel and channel.casefold() not in ("unknown", "arthaleads"):
+        return f"{channel[:1].upper()}{channel[1:]} lead"
+    return _SOURCE_LABELS.get(str(source or "").casefold(), "New lead")
+
+
+def speed_to_lead(account_id: int, days: int = 14) -> dict:
+    """How fast new leads got their first call: seconds from the lead
+    reaching us to the first dial. The first dial is first_attempt_at; rows
+    older than that column fall back to the call the contact produced, or to
+    last_attempt_at when there was only one attempt. A lead that was never
+    queued or never dialled counts as received but not called."""
+    days = max(1, min(int(days or 14), 90))
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT EXTRACT(EPOCH FROM (
+                       COALESCE(cc.first_attempt_at::timestamp, ca.started_at::timestamp,
+                                CASE WHEN cc.attempts = 1 THEN cc.last_attempt_at::timestamp END)
+                       - e.created_at::timestamp)) AS seconds
+            FROM inbound_lead_events e
+            LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
+            LEFT JOIN calls ca ON ca.id = cc.call_id AND ca.account_id = e.account_id
+            WHERE e.account_id = ?
+              AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - (? || ' days')::interval
+            """,
+            (account_id, days),
+        ).fetchall()
+    finally:
+        conn.close()
+    times = sorted(max(0.0, float(r["seconds"])) for r in rows if r["seconds"] is not None)
+    called = len(times)
+
+    def pct(q: float) -> int | None:
+        if not times:
+            return None
+        return round(times[min(called - 1, int(q * (called - 1) + 0.5))])
+
+    return {
+        "days": days,
+        "received": len(rows),
+        "called": called,
+        "notCalled": len(rows) - called,
+        "medianSeconds": pct(0.5),
+        "p90Seconds": pct(0.9),
+        "withinMinutePct": round(100 * sum(1 for t in times if t <= 60) / called) if called else None,
+    }
+
+
+def _queue_name(name: str | None, phone: str | None, fallback: str) -> str:
+    """A contact's name, unless it is a placeholder ('Unknown', 'n/a') that a
+    call saved before the caller gave one; then the phone number."""
+    clean = (name or "").strip()
+    if clean and clean.casefold() not in lead_quality.PLACEHOLDER_VALUES:
+        return clean
+    return (phone or "").strip() or fallback
+
+
+def missed_money_queue(account_id: int, limit: int = 20) -> dict:
+    """People worth calling now, most urgent first: leads that came in but
+    were never called, follow-ups (callbacks, visit reminders, nurture calls)
+    whose time passed without a dial, phone calls that dropped with no call
+    since, and follow-ups the AI will place in the next 24 hours. Each section
+    is best-effort, so one bad row never blanks the queue."""
+    limit = max(1, min(int(limit or 20), 50))
+    items: list[dict] = []
+    conn = _connect()
+    try:
+        # 1. New leads never called (7 days), unless the person has been on a
+        #    call since the lead arrived.
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT DISTINCT ON (COALESCE(NULLIF(e.phone, ''), ct.phone))
+                       ct.id AS contact_id, COALESCE(NULLIF(ct.name, ''), e.name) AS name,
+                       COALESCE(NULLIF(e.phone, ''), ct.phone) AS phone,
+                       COALESCE(ct.custom_fields, cc.custom_fields) AS custom_fields, e.source, e.created_at AS at
+                FROM inbound_lead_events e
+                LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
+                LEFT JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL AND (
+                     (COALESCE(e.phone, '') <> '' AND ct.phone = e.phone)
+                     OR (COALESCE(e.phone, '') = '' AND ct.custom_fields LIKE ?
+                         AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id))
+                WHERE e.account_id = ?
+                  AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'
+                  AND COALESCE(NULLIF(e.phone, ''), ct.phone) IS NOT NULL
+                  AND (cc.id IS NULL OR (COALESCE(cc.attempts, 0) = 0 AND cc.status = 'pending'
+                       AND COALESCE(cc.next_attempt_at::timestamp, e.created_at::timestamp)
+                           < (now() AT TIME ZONE 'UTC') - INTERVAL '{_QUEUE_STUCK_AFTER}'))
+                  AND NOT EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                                  AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                                  AND l.started_at::timestamp >= e.created_at::timestamp)
+                ORDER BY COALESCE(NULLIF(e.phone, ''), ct.phone), e.created_at DESC
+                """,
+                ("{%", account_id),
+            ).fetchall()
+            for r in rows:
+                fields = _load_json_field(r["custom_fields"], {})
+                channel = _lead_channel_label(fields, r["source"])
+                topic = str(fields.get("project") or fields.get("ad_headline") or fields.get("ad_name") or "").strip()
+                items.append({
+                    "kind": "uncalled_lead", "priority": 1,
+                    "title": _queue_name(r["name"], r["phone"], "New lead"),
+                    "name": r["name"] or "", "phone": r["phone"] or "",
+                    "detail": " · ".join(x for x in (channel, topic[:60]) if x) + " · not called yet",
+                    "at": r["at"], "contactId": r["contact_id"], "callId": None,
+                })
+        except Exception:
+            logger.warning("missed_money_queue: uncalled-leads section failed", exc_info=True)
+
+        # 2 + 4. Follow-ups: overdue ones are missed money, the next 24 hours
+        #    are what the AI will place on its own.
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT cc.name, cc.phone, cc.next_attempt_at AS at, cc.custom_fields,
+                       cc.next_attempt_at::timestamp < (now() AT TIME ZONE 'UTC') - INTERVAL '{_QUEUE_STUCK_AFTER}' AS overdue,
+                       ct.id AS contact_id
+                FROM campaign_contacts cc
+                LEFT JOIN contacts ct ON ct.account_id = cc.account_id AND ct.phone = cc.phone AND ct.deleted_at IS NULL
+                WHERE cc.account_id = ? AND cc.status = 'pending' AND cc.next_attempt_at IS NOT NULL
+                  AND cc.custom_fields LIKE ?
+                  AND cc.next_attempt_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'
+                  AND cc.next_attempt_at::timestamp < (now() AT TIME ZONE 'UTC') + INTERVAL '24 hours'
+                ORDER BY cc.next_attempt_at
+                """,
+                (account_id, "%follow_up_kind%"),
+            ).fetchall()
+            for r in rows:
+                fields = _load_json_field(r["custom_fields"], {})
+                label = _FOLLOW_UP_LABELS.get(str(fields.get("follow_up_kind") or ""), "Follow-up call")
+                items.append({
+                    "kind": "overdue_follow_up" if r["overdue"] else "upcoming_follow_up",
+                    "priority": 2 if r["overdue"] else 4,
+                    "title": _queue_name(r["name"], r["phone"], "Follow-up"),
+                    "name": r["name"] or "", "phone": r["phone"] or "",
+                    "detail": label + (" · time has passed, not called" if r["overdue"] else " · the AI will call"),
+                    "at": r["at"], "contactId": r["contact_id"], "callId": None,
+                })
+        except Exception:
+            logger.warning("missed_money_queue: follow-ups section failed", exc_info=True)
+
+        # 3. Phone calls that dropped without a conversation (3 days) with no
+        #    call to or from that number since. Same rule as the bell's
+        #    "ended without a conversation" item.
+        try:
+            rows = conn.execute(
+                """
+                SELECT c.id, c.lead_phone, c.direction, c.started_at AS at, ct.id AS contact_id, ct.name
+                FROM calls c
+                LEFT JOIN contacts ct ON ct.account_id = c.account_id AND ct.phone = c.lead_phone AND ct.deleted_at IS NULL
+                WHERE c.account_id = ? AND c.call_type = 'phone' AND COALESCE(c.lead_phone, '') <> ''
+                  AND COALESCE(c.test_run_id, '') = ''
+                  AND COALESCE(c.duration_seconds, 0) < 10 AND c.lead_name IS NULL
+                  AND COALESCE(json_array_length(NULLIF(c.transcript_json, '')::json), 0) < 2
+                  AND c.started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '3 days'
+                  AND NOT EXISTS (SELECT 1 FROM calls l WHERE l.account_id = c.account_id AND l.id <> c.id
+                                  AND l.lead_phone = c.lead_phone AND l.started_at::timestamp > c.started_at::timestamp)
+                ORDER BY c.started_at DESC LIMIT 20
+                """,
+                (account_id,),
+            ).fetchall()
+            for r in rows:
+                items.append({
+                    "kind": "dropped_call", "priority": 3,
+                    "title": _queue_name(r["name"], r["lead_phone"], "Phone call"),
+                    "name": r["name"] or "", "phone": r["lead_phone"] or "",
+                    "detail": ("Our call" if r["direction"] == "outbound" else "Their call") + " dropped before a conversation · no call since",
+                    "at": r["at"], "contactId": r["contact_id"], "callId": r["id"],
+                })
+        except Exception:
+            logger.warning("missed_money_queue: dropped-calls section failed", exc_info=True)
+    finally:
+        conn.close()
+    items.sort(key=lambda i: (i["priority"], str(i["at"] or "")), reverse=False)
+    # Inside a priority, newest first for leads and drops; follow-ups keep due order.
+    ordered: list[dict] = []
+    for priority in (1, 2, 3, 4):
+        group = [i for i in items if i["priority"] == priority]
+        if priority in (1, 3):
+            group.sort(key=lambda i: str(i["at"] or ""), reverse=True)
+        ordered.extend(group)
+    counts = {k: sum(1 for i in items if i["kind"] == k) for k in ("uncalled_lead", "overdue_follow_up", "dropped_call", "upcoming_follow_up")}
+    return {
+        "items": [{k: v for k, v in i.items() if k != "priority"} for i in ordered[:limit]],
+        "counts": counts,
+        "toCall": counts["uncalled_lead"] + counts["overdue_follow_up"] + counts["dropped_call"],
+    }
+
+
+
+def _contact_budget_inr(fields: dict) -> int | None:
+    """A contact's form budget: numeric budget_min/budget_max when the form
+    sent them, else its free-text budget."""
+    try:
+        low, high = float(fields.get("budget_min") or 0), float(fields.get("budget_max") or 0)
+    except (TypeError, ValueError):
+        low = high = 0
+    if low or high:
+        return round(((low or high) + (high or low)) / 2)
+    return budget_parse.budget_midpoint_inr(str(fields.get("budget") or ""))
+
+
+def _ad_label(fields: dict, source: str = "") -> str:
+    for key in ("ad_headline", "ad_name", "campaign_name", "utm_campaign", "form_name",
+                "project", "product", "service", "interested_in"):
+        value = str(fields.get(key) or "").strip()
+        if value:
+            return value[:80]
+    return _lead_channel_label(fields, source)
+
+
+def growth_insights(account_id: int, days: int = 30) -> dict:
+    """The Analytics tab's business view (Growth and Scale): buyer budget
+    qualified and booked, which ads bring leads that qualify, how each
+    language performs, and the best and worst scored call of the period."""
+    days = max(1, min(int(days or 30), 90))
+    since = "(now() AT TIME ZONE 'UTC') - (? || ' days')::interval"
+    conn = _connect()
+    try:
+        qualified = conn.execute(
+            f"""
+            SELECT DISTINCT ON (COALESCE(NULLIF(c.lead_phone, ''), c.room_name))
+                   c.lead_budget, COALESCE(c.site_visit_json, '') <> '' AS booked, ct.custom_fields
+            FROM calls c
+            LEFT JOIN contacts ct ON ct.account_id = c.account_id AND ct.phone = c.lead_phone AND ct.deleted_at IS NULL
+            WHERE c.account_id = ? AND COALESCE(c.test_run_id, '') = '' AND {lead_quality.QUALIFIED_SQL}
+              AND c.started_at::timestamp >= {since}
+            ORDER BY COALESCE(NULLIF(c.lead_phone, ''), c.room_name),
+                     (COALESCE(c.site_visit_json, '') <> '') DESC, (COALESCE(c.lead_budget, '') <> '') DESC, c.started_at DESC
+            """,
+            (account_id, days),
+        ).fetchall()
+        pipeline = {"qualifiedLeads": len(qualified), "withBudget": 0, "totalInr": 0, "bookedLeads": 0, "bookedInr": 0}
+        for r in qualified:
+            value = budget_parse.budget_midpoint_inr(r["lead_budget"]) or _contact_budget_inr(_load_json_field(r["custom_fields"], {}))
+            if r["booked"]:
+                pipeline["bookedLeads"] += 1
+            if value:
+                pipeline["withBudget"] += 1
+                pipeline["totalInr"] += value
+                if r["booked"]:
+                    pipeline["bookedInr"] += value
+
+        ads: dict[str, dict] = {}
+        lead_rows = conn.execute(
+            f"""
+            SELECT e.source, COALESCE(ct.custom_fields, cc.custom_fields) AS custom_fields,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                           AND l.started_at::timestamp >= e.created_at::timestamp) AS called,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                           AND l.started_at::timestamp >= e.created_at::timestamp
+                           AND {lead_quality.QUALIFIED_SQL.replace('lead_', 'l.lead_')}) AS qualified,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                           AND l.started_at::timestamp >= e.created_at::timestamp
+                           AND COALESCE(l.site_visit_json, '') <> '') AS booked
+            FROM inbound_lead_events e
+            LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
+                LEFT JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL AND (
+                     (COALESCE(e.phone, '') <> '' AND ct.phone = e.phone)
+                     OR (COALESCE(e.phone, '') = '' AND ct.custom_fields LIKE ?
+                         AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id))
+            WHERE e.account_id = ? AND e.created_at::timestamp >= {since}
+            """,
+            ("{%", account_id, days),
+        ).fetchall()
+        for r in lead_rows:
+            label = _ad_label(_load_json_field(r["custom_fields"], {}), r["source"])
+            row = ads.setdefault(label, {"ad": label, "leads": 0, "called": 0, "qualified": 0, "booked": 0})
+            row["leads"] += 1
+            row["called"] += int(bool(r["called"]))
+            row["qualified"] += int(bool(r["qualified"]))
+            row["booked"] += int(bool(r["booked"]))
+
+        languages = [
+            {"language": r["lang"], "calls": r["calls"], "qualified": r["qualified"] or 0,
+             "avgSeconds": round(float(r["avg_seconds"] or 0))}
+            for r in conn.execute(
+                f"""
+                SELECT COALESCE(NULLIF(reply_language, ''), 'unknown') AS lang, COUNT(*) AS calls,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
+                       AVG(COALESCE(duration_seconds, 0)) AS avg_seconds
+                FROM calls
+                WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::timestamp >= {since}
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 12
+                """,
+                (account_id, days),
+            ).fetchall()
+        ]
+
+        scored = []
+        for r in conn.execute(
+            f"""
+            SELECT id, lead_name, lead_phone, started_at, duration_seconds, intelligence_json,
+                   COALESCE(recording_key, '') <> '' AS has_recording
+            FROM calls
+            WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND intelligence_json LIKE ?
+              AND started_at::timestamp >= {since}
+            """,
+            (account_id, "%qa_score%", days),
+        ).fetchall():
+            intel = _load_json_field(r["intelligence_json"], {})
+            score = intel.get("qa_score") if isinstance(intel, dict) else None
+            if isinstance(score, (int, float)) and not isinstance(score, bool):
+                scored.append({
+                    "id": r["id"], "title": _queue_name(r["lead_name"], r["lead_phone"], f"Call #{r['id']}"),
+                    "qaScore": round(score), "summary": str(intel.get("summary") or "")[:220],
+                    "durationSeconds": round(float(r["duration_seconds"] or 0)),
+                    "hasRecording": bool(r["has_recording"]), "at": r["started_at"],
+                })
+    finally:
+        conn.close()
+    scored.sort(key=lambda c: (c["qaScore"], str(c["at"])))
+    return {
+        "days": days,
+        "pipeline": pipeline,
+        "ads": sorted(ads.values(), key=lambda a: (-a["leads"], a["ad"]))[:8],
+        "languages": languages,
+        "bestCall": scored[-1] if scored else None,
+        "worstCall": scored[0] if len(scored) > 1 else None,
+        "scoredCalls": len(scored),
+    }
 
 def _load_json_field(raw: str | None, default):
     if not raw:
@@ -6663,6 +7027,25 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
         conn.close()
 
 
+def _record_lead_event(account_id: int, source: str, external_id: str, name: str, phone: str) -> None:
+    """A lead that arrived but could not be queued for a call (no running
+    auto-call campaign): recorded so the dashboard still counts it. Best-effort."""
+    try:
+        conn = _connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT (account_id, source, external_id) DO NOTHING",
+                    (account_id, source, external_id or f"auto:{secrets.token_hex(8)}", (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or (phone or "").strip()),
+                )
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("could not record unqueued lead for account %s", account_id, exc_info=True)
+
+
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
     external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
@@ -6713,6 +7096,8 @@ def ingest_inbound_lead(
         # carrier circuit breaker; that pause wins.
         no_call_reason = "auto_call_campaign_paused"
     if campaign_id is None and source != "arthaleads":
+        # Not queued, but it is still a lead that came in and was not called.
+        _record_lead_event(account_id, source, external_id, name, phone)
         return {"ok": False, "reason": "auto_call_not_ready_or_paused"}
     fields["source"] = source
     if external_id:
@@ -6722,10 +7107,11 @@ def ingest_inbound_lead(
         with conn:
             if external_id:
                 reserved = conn.execute(
-                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id) "
-                    "VALUES (?, ?, ?, NULL) ON CONFLICT (account_id, source, external_id) DO NOTHING "
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT (account_id, source, external_id) DO NOTHING "
                     "RETURNING external_id",
-                    (account_id, source, external_id),
+                    (account_id, source, external_id, (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or phone.strip()),
                 ).fetchone()
                 if not reserved:
                     prior = conn.execute(
@@ -6799,6 +7185,15 @@ def ingest_inbound_lead(
                     "UPDATE inbound_lead_events SET campaign_contact_id = ? "
                     "WHERE account_id = ? AND source = ? AND external_id = ?",
                     (contact_id, account_id, source, external_id),
+                )
+            elif not external_id and not deduped:
+                # A source that sends no lead id (a plain webhook, Zapier) is
+                # still a lead to time and to follow up; its own row, no dedupe.
+                conn.execute(
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (account_id, source, f"auto:{secrets.token_hex(8)}", contact_id, (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or phone.strip()),
                 )
             if source == "arthaleads":
                 contact_phone = canonical_contact_phone(phone, account_id)
@@ -7358,7 +7753,8 @@ def claim_next_campaign_contact(campaign_id: int) -> dict | None:
             # same contact. Losing the race claims nothing this tick.
             cur = conn.execute(
                 f"UPDATE campaign_contacts SET status = 'calling', attempts = attempts + 1, "
-                f"last_attempt_at = {_NOW}, room_name = NULL WHERE id = ? AND status = ?",
+                f"last_attempt_at = {_NOW}, first_attempt_at = COALESCE(first_attempt_at, {_NOW}), "
+                f"room_name = NULL WHERE id = ? AND status = ?",
                 (row["id"], row["status"]),
             )
             if cur.rowcount != 1:

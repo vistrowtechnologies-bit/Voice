@@ -56,6 +56,13 @@ class AnalyticsGateTests(unittest.TestCase):
             route("dashboard_intelligence", db)(days=30, user={"account_id": 7})
         db.intelligence_summary.assert_not_called()
 
+    def test_business_insights_are_refused_without_the_feature(self):
+        db = MagicMock()
+        db.require_feature.side_effect = plan_policy.EntitlementError("This feature requires the Growth plan.")
+        with self.assertRaises(plan_policy.EntitlementError):
+            route("dashboard_insights", db)(days=30, user={"account_id": 7})
+        db.growth_insights.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

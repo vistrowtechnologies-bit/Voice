@@ -228,6 +228,38 @@ export interface DashboardPeriodSnapshot {
   bookingRate: number
 }
 
+/** GET /dashboard/speed-to-lead: seconds from a lead reaching us to its first call. */
+export interface SpeedToLead {
+  days: number
+  received: number
+  called: number
+  notCalled: number
+  medianSeconds: number | null
+  p90Seconds: number | null
+  withinMinutePct: number | null
+}
+
+/** GET /dashboard/insights (Growth and Scale): the Analytics tab's business view. */
+export interface InsightCall { id: number; title: string; qaScore: number; summary: string; durationSeconds: number; hasRecording: boolean; at: string | null }
+export interface GrowthInsights {
+  days: number
+  pipeline: { qualifiedLeads: number; withBudget: number; totalInr: number; bookedLeads: number; bookedInr: number }
+  ads: { ad: string; leads: number; called: number; qualified: number; booked: number }[]
+  languages: { language: string; calls: number; qualified: number; avgSeconds: number }[]
+  bestCall: InsightCall | null
+  worstCall: InsightCall | null
+  scoredCalls: number
+}
+
+export type MissedMoneyKind = 'uncalled_lead' | 'overdue_follow_up' | 'dropped_call' | 'upcoming_follow_up'
+
+/** GET /dashboard/missed-money: people worth calling now, most urgent first. */
+export interface MissedMoneyQueue {
+  items: { kind: MissedMoneyKind; title: string; detail: string; at: string | null; contactId: number | null; callId: number | null; name: string; phone: string }[]
+  counts: Record<MissedMoneyKind, number>
+  toCall: number
+}
+
 export interface DashboardPeriodComparison {
   days: number
   current: DashboardPeriodSnapshot

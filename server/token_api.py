@@ -2481,7 +2481,7 @@ def update_profile_preferences(req: PreferencesRequest, user: dict = Depends(cur
             hidden_cards = json.loads(values["dashboard_hidden_cards"])
         except (TypeError, ValueError):
             raise HTTPException(400, "Dashboard card preferences must be a JSON list")
-        allowed_cards = {"attention", "quick_actions", "funnel", "followups", "appointments", "channels", "feedback"}
+        allowed_cards = {"attention", "quick_actions", "funnel", "followups", "appointments", "channels", "feedback", "speed_to_lead", "missed_money"}
         if not isinstance(hidden_cards, list) or len(hidden_cards) > len(allowed_cards) or any(card not in allowed_cards for card in hidden_cards):
             raise HTTPException(400, "Unknown dashboard card preference")
         values["dashboard_hidden_cards"] = json.dumps(list(dict.fromkeys(hidden_cards)))
@@ -3884,6 +3884,23 @@ def dashboard_analytics(user: dict = Depends(current_user)) -> dict:
     if not calls_db.account_features(user["account_id"]).get("analytics"):
         result.update(ANALYTICS_TAB_ONLY)
     return result
+
+
+@app.get("/dashboard/speed-to-lead")
+def dashboard_speed_to_lead(days: int = 14, user: dict = Depends(current_user)) -> dict:
+    return calls_db.speed_to_lead(user["account_id"], days=days)
+
+
+@app.get("/dashboard/insights")
+def dashboard_insights(days: int = 30, user: dict = Depends(current_user)) -> dict:
+    # Analytics tab only: Growth and Scale.
+    calls_db.require_feature(user["account_id"], "analytics")
+    return calls_db.growth_insights(user["account_id"], days=days)
+
+
+@app.get("/dashboard/missed-money")
+def dashboard_missed_money(user: dict = Depends(current_user)) -> dict:
+    return calls_db.missed_money_queue(user["account_id"])
 
 
 @app.get("/dashboard/launch-readiness")
