@@ -135,7 +135,7 @@ def test_compression_target_below_trigger_and_above_instruction():
 
 def test_compression_keep_seconds_scales_target():
     _, t60, _ = _compression(55_000, keep_seconds=60)
-    _, t90, _ = _compression(55_000)
+    _, t90, _ = _compression(55_000, keep_seconds=90)
     _, t120, _ = _compression(55_000, keep_seconds=120)
     assert t90 - t60 == 30 * config.AUDIO_TOKENS_PER_SECOND
     assert t120 - t90 == 30 * config.AUDIO_TOKENS_PER_SECOND
@@ -144,9 +144,16 @@ def test_compression_keep_seconds_scales_target():
 def test_compression_tiny_instruction_is_sane():
     trigger, target, instruction_tokens = _compression(10)
     assert instruction_tokens == 3
-    assert target == 3 + 25 * 90
-    assert trigger == 3 + 25 * 90 + 1_500
+    assert target == 3 + 25 * 30
+    assert trigger == 3 + 25 * 30 + 1_500
     assert 0 < target < trigger
+
+
+def test_compression_keeps_30_seconds_by_default():
+    # Owner, 19 Oct 2026, after call 1415: audio-in re-billed with 90 s kept
+    # was over half the cost; keep 30 s.
+    _, target, instruction_tokens = _compression(55_000)
+    assert target - instruction_tokens == 30 * config.AUDIO_TOKENS_PER_SECOND
 
 
 def test_38_live_is_a_supported_primary_model_on_the_31_profile():
