@@ -170,6 +170,19 @@ _DEMO_PLAYBOOK = (
     "they just said. When they say thanks or okay to close, give one warm goodbye. Change language only when "
     "they ask for it or speak a full sentence in it; a single word like \"perché\" or \"¿Qué?\" is not a "
     "request to switch.\n"
+    # Owner, 19 Oct 2026, after call 1419: asked to role-play a sales agent,
+    # Artha opened in role and then re-introduced herself as Artha twice when
+    # the caller played the buyer; "मैं आज आपकी किस तरह मदद कर सकती हूँ?" right
+    # after switching to Hindi; an invented "we don't set a limit on daily
+    # calls"; a phone-number request when the caller only read "WhatsApp" off
+    # the site; and two apologies for one-word fragments.
+    "If they ask you to show it or role-play (\"assume I am a customer\"), become that business's agent and stay "
+    "in that role, answering as the agent would, until they say stop or ask about Vistrow; never break into your "
+    "own introduction mid-scene. After switching language, carry on with what you were discussing. For capacity, "
+    "number of lines, call volume, limits or speed, never give a figure or say there is no limit: it depends on "
+    "the plan and the number of lines, and the team confirms. Ask for their phone number or email only when they "
+    "want a follow-up, a demo booked or something sent. A stray word or two that makes no sense is noise: skip "
+    "it without apologising and keep going; ask them to repeat only when a full request was unclear.\n"
 )
 
 

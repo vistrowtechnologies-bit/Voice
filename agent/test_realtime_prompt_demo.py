@@ -44,7 +44,7 @@ class PlatformDemoDiet(unittest.TestCase):
         # ≈ 3,700 tokens at the 4.3 chars/token this prompt measured at: the
         # 18 Oct diet (~13,000 chars) plus the Personality section and the
         # spoken-register line restored 19 Oct (owner, after call 1415).
-        self.assertLessEqual(len(self.out), 16_700, len(self.out))
+        self.assertLessEqual(len(self.out), 17_500, len(self.out))
 
     def test_kept_headings_and_key_phrases(self):
         heads = "\n".join(self.heads())
@@ -77,7 +77,7 @@ class PlatformDemoDiet(unittest.TestCase):
                      "Never name the models", "Never re-ask", "capture_platform_lead",
                      "Book a demo only with name and phone", "No absolutes"):
             self.assertIn(rule, playbook, rule)
-        self.assertLess(len(playbook), 3_000)
+        self.assertLess(len(playbook), 3_800)
 
     def test_personality_and_spoken_register_survive(self):
         # Owner, 19 Oct 2026: call 1415 on 3.8 without these came out formal
@@ -96,6 +96,16 @@ class PlatformDemoDiet(unittest.TestCase):
         for phrase in ("Never ask the same question twice", "Never end a reply by offering more help",
                        "is there anything specific you'd like to know?", "one warm goodbye",
                        "a single word like \"perché\""):
+            self.assertIn(phrase, playbook, phrase)
+
+    def test_role_play_capacity_contact_and_fragments(self):
+        # Owner, 19 Oct 2026, call 1419: role-play broken mid-scene, an invented
+        # "no limit on daily calls", a phone request on "WhatsApp contact", and
+        # apologies for one-word fragments.
+        playbook = self.out.split("# How to run this demo call", 1)[1].split("\n# ", 1)[0]
+        for phrase in ("stay in that role", "never break into your own introduction",
+                       "After switching language, carry on", "never give a figure or say there is no limit",
+                       "only when they want a follow-up", "skip it without apologising"):
             self.assertIn(phrase, playbook, phrase)
 
     def test_pricing_is_one_rule_without_figures(self):
