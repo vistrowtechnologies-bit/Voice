@@ -117,7 +117,7 @@ class RealtimeIgnoresThePipeline(unittest.TestCase):
                 assert conf.output_audio_transcription is not None
                 aad = conf.realtime_input_config.automatic_activity_detection
                 assert aad.end_of_speech_sensitivity.value == ("END_SENSITIVITY_HIGH" if name == realtime_config.DEFAULT_MODEL else "END_SENSITIVITY_LOW")
-                assert aad.prefix_padding_ms == (20 if name == realtime_config.DEFAULT_MODEL else 200)
+                assert aad.prefix_padding_ms == (20 if name == realtime_config.DEFAULT_MODEL else 400)
                 wire = conf.model_dump(by_alias=True, exclude_none=True)
                 assert wire["inputAudioTranscription"] == ({"languageCodes": ["hi-IN", "en-IN"]} if name == realtime_config.DEFAULT_MODEL else {})
                 assert conf.realtime_input_config.automatic_activity_detection.silence_duration_ms == silence
@@ -125,7 +125,7 @@ class RealtimeIgnoresThePipeline(unittest.TestCase):
                     SimpleNamespace(vertexai=False), types.LiveConnectParameters(model=name, config=conf).model_dump(exclude_none=True)
                 ))["setup"]
                 assert payload["inputAudioTranscription"] == ({"language_codes": ["hi-IN", "en-IN"]} if name == realtime_config.DEFAULT_MODEL else {})
-                assert payload["realtimeInputConfig"]["automatic_activity_detection"]["prefix_padding_ms"] == (20 if name == realtime_config.DEFAULT_MODEL else 200)
+                assert payload["realtimeInputConfig"]["automatic_activity_detection"]["prefix_padding_ms"] == (20 if name == realtime_config.DEFAULT_MODEL else 400)
                 thinking = conf.generation_config.thinking_config
                 assert not thinking.include_thoughts
                 if name == realtime_config.DEFAULT_MODEL:

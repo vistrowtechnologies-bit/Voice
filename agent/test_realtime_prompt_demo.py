@@ -206,3 +206,14 @@ class TenantUnchanged(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DemoLanguageFollowsTheCaller(unittest.TestCase):
+    def test_one_word_okay_does_not_flip_back_to_english(self):
+        # Call 1426: Hindi caller, Artha in Hinglish, then "Okay." -> English.
+        out = rp.compact(ARTHA, language_name="English")
+        lang = out.split("# Language", 1)[1].split("\n# ", 1)[0]
+        self.assertIn("Open in English", lang)
+        self.assertIn("one-word reply", lang)
+        self.assertIn("natural Hinglish", lang)
+        self.assertNotIn("UNMISTAKABLY IN ENGLISH", out)
