@@ -113,7 +113,7 @@ AUDIO_TOKENS_PER_SECOND = 25  # Google's own figure on the Live API pricing page
 
 
 def context_compression(
-    instructions: str, *, keep_seconds: int = 90
+    instructions: str, *, keep_seconds: int = 30
 ) -> types.ContextWindowCompressionConfig:
     """Cap the conversation history Google re-bills on every turn.
 
@@ -127,9 +127,10 @@ def context_compression(
     roughly the number of turns kept in history, so compression must engage
     within the first minute of a call: the trigger sits at the instruction
     plus ~1 minute of audio (plus headroom), and the sliding window keeps
-    the instruction plus ``keep_seconds`` of audio (~3-4 recent turns at
-    the default 90 s, ~2,250 audio tokens plus transcripts), which should
-    bring the audio re-bill factor to ~2x. Google always retains the system
+    the instruction plus ``keep_seconds`` of audio (~1-2 recent turns at
+    the default 30 s, ~750 audio tokens plus transcripts). Call 1415 (19 Oct,
+    3.8, 90 s kept) still billed audio-in at ~Rs 3.5/min, over half the
+    call's cost; the owner chose 30 s. Google always retains the system
     instruction and keeps the most recent turns. Facts already saved through
     the lead tools are unaffected.
     """

@@ -109,6 +109,10 @@ _DEMO_KEEP = (
     "# Only state back",
     "# Speak numbers",
     "# Current date and time",
+    # Owner, 19 Oct 2026: on 3.8 without this section (call 1415) Artha
+    # came out formal and bookish ("कृपया स्पष्ट कर सकते हैं", "कोई और
+    # प्रश्न?") where the 3.1 calls with it were warm ("अरे वाह", "बढ़िया!").
+    "# Personality",
 )
 # "# Language" and "# How to talk" are produced by this module, so an input
 # that already carries them (a previously compacted text) has them rebuilt
@@ -129,7 +133,7 @@ _DEMO_PRICING = (
 # discovery, six things, who it's for, why Vistrow, setup, oversell, proof,
 # pushback, about the company, confidential, tool names, random fact, active
 # listening, summarize, not sure, never re-ask, yes-to-demo, qualify,
-# personality, natural arc, real interest, booking a demo.
+# natural arc, real interest, booking a demo.
 _DEMO_PLAYBOOK = (
     "# How to run this demo call\n"
     "A website visitor clicked \"talk to Artha live\", so you are both the product and its explanation. "
@@ -150,6 +154,11 @@ _DEMO_PLAYBOOK = (
     "number back digit by digit; then call capture_platform_lead (see Lead capture), never with a "
     "placeholder. Book a demo only with name and phone: capture the lead, check_calendar_availability, "
     "then book_appointment (\"Vistrow Voice product demo\"); if no slot fits, request_callback.\n"
+    "Sound like a friend on a phone call, not a form: react first, warmly (\"अरे वाह\", \"बढ़िया!\", "
+    "\"oh nice\", \"got it\"), then ask. Use everyday spoken words; in Hindi, casual Hinglish (\"देखिए\", "
+    "\"बताइए\", \"अच्छा\"), never bookish words like कृपया, प्रश्न, स्पष्ट or साझा. Now and then a light "
+    "natural filler or small self-correction (\"hmm\", \"so...\", \"I mean\") is fine, at most one in a "
+    "reply and not in every reply.\n"
 )
 
 

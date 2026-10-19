@@ -16,7 +16,7 @@ ARTHA = open(os.path.join(HERE, "testdata", "artha_rt_instructions.txt"), encodi
 KEEP_HEADINGS = (
     "# Your identity", "# Language", "# Platform rules", "# How to run this demo call", "# Pricing",
     "# Knowledge base", "# Lead capture", "# Only state back", "# Speak numbers",
-    "# Current date and time", "# How to talk",
+    "# Current date and time", "# How to talk", "# Personality",
 )
 DROPPED_HEADINGS = (
     "# Opening line", "# What Vistrow Voice is", "# Off-topic", "# If the caller directly asks",
@@ -24,7 +24,7 @@ DROPPED_HEADINGS = (
     "# Never oversell", "# Customer examples", "# Handling common pushback", "# About the company",
     "# What stays confidential", "# Never speak internal tool names", "# When challenged",
     "# Active listening", "# Summarize once", "# When they're not sure", "# Never re-ask",
-    "# When they say yes", "# Qualify before", "# Personality", "# The natural arc",
+    "# When they say yes", "# Qualify before", "# The natural arc",
     "# If real interest", "# Booking a real demo",
 )
 
@@ -41,8 +41,10 @@ class PlatformDemoDiet(unittest.TestCase):
         self.assertFalse(rp.is_platform_demo(ARTHA.replace("the voice of Vistrow Voice itself", "a clinic's voice")))
 
     def test_fits_the_per_turn_budget(self):
-        # ~13,000 chars ≈ 3,000 tokens at the 4.3 chars/token this prompt measured at.
-        self.assertLessEqual(len(self.out), 13_500, len(self.out))
+        # ≈ 3,700 tokens at the 4.3 chars/token this prompt measured at: the
+        # 18 Oct diet (~13,000 chars) plus the Personality section and the
+        # spoken-register line restored 19 Oct (owner, after call 1415).
+        self.assertLessEqual(len(self.out), 16_000, len(self.out))
 
     def test_kept_headings_and_key_phrases(self):
         heads = "\n".join(self.heads())
@@ -56,7 +58,7 @@ class PlatformDemoDiet(unittest.TestCase):
     def test_kept_sections_are_verbatim(self):
         sections = {p.split("\n", 1)[0]: p.strip() for p in re.split(r"(?m)^(?=# )", ARTHA) if p.strip()}
         for head in ("# Your identity", "# Platform rules", "# Lead capture", "# Only state back",
-                     "# Speak numbers", "# Current date and time"):
+                     "# Speak numbers", "# Current date and time", "# Personality"):
             section = next(v for k, v in sections.items() if k.startswith(head))
             self.assertIn(section, self.out, head)
 
@@ -75,7 +77,16 @@ class PlatformDemoDiet(unittest.TestCase):
                      "Never name the models", "Never re-ask", "capture_platform_lead",
                      "Book a demo only with name and phone", "No absolutes"):
             self.assertIn(rule, playbook, rule)
-        self.assertLess(len(playbook), 1_750)
+        self.assertLess(len(playbook), 2_300)
+
+    def test_personality_and_spoken_register_survive(self):
+        # Owner, 19 Oct 2026: call 1415 on 3.8 without these came out formal
+        # ("कृपया स्पष्ट कर सकते हैं"); 3.1 calls with them were warm.
+        for phrase in ("Warm, sharp, confidently funny", "best-friend energy", "comic timing"):
+            self.assertIn(phrase, self.out, phrase)
+        playbook = self.out.split("# How to run this demo call", 1)[1].split("\n# ", 1)[0]
+        for phrase in ("react first, warmly", "casual Hinglish", "never bookish words", "at most one in a reply"):
+            self.assertIn(phrase, playbook, phrase)
 
     def test_pricing_is_one_rule_without_figures(self):
         pricing = self.out.split("\n# Pricing\n", 1)[1].split("\n# ", 1)[0]
