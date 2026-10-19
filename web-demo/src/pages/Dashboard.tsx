@@ -507,7 +507,7 @@ export function Dashboard() {
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan/12 text-cyan"><Icon name="bolt" className="text-[19px]" /></span>
                   </div>
                   {!speed || speed.received === 0 ? (
-                    <p className="mt-4 text-sm leading-relaxed text-text-muted">No new leads in this period. Leads from ArthaLeads, Facebook Lead Ads or the lead API are timed from the moment they reach us to the first call.</p>
+                    <p className="mt-4 text-sm leading-relaxed text-text-muted">No new leads in this period. Leads from your connected sources (CRM, ad forms, website forms or the lead API) are timed from the moment they reach us to the first call.</p>
                   ) : (
                     <div className="mt-4 flex flex-1 flex-col justify-between gap-4">
                       <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
@@ -546,9 +546,13 @@ export function Dashboard() {
                     <div className="mt-3 flex flex-col">
                       {(showAllQueue ? queue.items : queue.items.slice(0, QUEUE_PREVIEW)).map((item, index) => {
                         const meta = QUEUE_KIND[item.kind]
-                        const to = item.contactId ? `/dashboard/contacts/${item.contactId}` : item.callId ? `/dashboard/calls/${item.callId}` : '/dashboard/contacts'
+                        // No contact yet (a lead from a source that does not create one):
+                        // open Add contact with the name and number filled in, passed as
+                        // route state so the number stays out of the address bar.
+                        const to = item.contactId ? `/dashboard/contacts/${item.contactId}` : item.callId ? `/dashboard/calls/${item.callId}` : '/dashboard/contacts?add=1'
+                        const state = item.contactId || item.callId ? undefined : { prefill: { name: item.name, phone: item.phone } }
                         return (
-                          <Link key={`${item.kind}-${item.contactId ?? item.callId ?? index}-${item.at ?? index}`} to={to} aria-label={`${item.title}: ${item.detail}`} className="bento-row flex items-center gap-3 rounded-xl px-2 py-2.5">
+                          <Link key={`${item.kind}-${item.contactId ?? item.callId ?? item.phone ?? index}-${item.at ?? index}`} to={to} state={state} aria-label={`${item.title}: ${item.detail}`} className="bento-row flex items-center gap-3 rounded-xl px-2 py-2.5">
                             <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${meta.tone}`}><Icon name={meta.icon} className="text-[19px]" /></span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-semibold">{item.title}</span>
@@ -897,7 +901,7 @@ export function Dashboard() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="bento-title text-[15px]">Pipeline value</h3>
-                    <p className="mt-0.5 text-xs text-text-muted">Buyer budget from qualified leads · last 30 days</p>
+                    <p className="mt-0.5 text-xs text-text-muted">Budget mentioned by qualified leads · last 30 days</p>
                   </div>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/12 text-success"><Icon name="trending_up" className="text-[19px]" /></span>
                 </div>
@@ -912,12 +916,12 @@ export function Dashboard() {
                     <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
                       <div>
                         <p className="bento-num text-5xl leading-none">{formatInrShort(insights.pipeline.totalInr)}</p>
-                        <p className="mt-2 text-xs font-bold text-text-muted">qualified buyer budget</p>
+                        <p className="mt-2 text-xs font-bold text-text-muted">qualified pipeline</p>
                       </div>
                       {insights.pipeline.bookedInr > 0 && (
                         <div className="pb-0.5">
                           <p className="bento-num text-2xl leading-none">{formatInrShort(insights.pipeline.bookedInr)}</p>
-                          <p className="mt-1.5 text-xs text-text-muted">with a visit booked</p>
+                          <p className="mt-1.5 text-xs text-text-muted">with an appointment booked</p>
                         </div>
                       )}
                     </div>
@@ -956,12 +960,12 @@ export function Dashboard() {
               </section>
 
               <section className="bento-tile bento-w4">
-                <h3 className="bento-title text-[15px]">Which ad works</h3>
-                <p className="mt-0.5 text-xs text-text-muted">Leads by the ad or project they came from, and what happened next · last 30 days</p>
+                <h3 className="bento-title text-[15px]">Which lead source works</h3>
+                <p className="mt-0.5 text-xs text-text-muted">Leads by the ad, campaign or form they came from, and what happened next · last 30 days</p>
                 {insights && insights.ads.length > 0 ? (
                   <div className="mt-4 flex flex-col gap-2">
                     <div className="hidden grid-cols-[minmax(0,2.4fr)_repeat(4,minmax(0,1fr))] gap-3 px-3 text-[11px] font-bold uppercase tracking-wide text-text-muted md:grid">
-                      <span>Ad or project</span><span className="text-right">Leads</span><span className="text-right">Called</span><span className="text-right">Qualified</span><span className="text-right">Booked</span>
+                      <span>Source, ad or campaign</span><span className="text-right">Leads</span><span className="text-right">Called</span><span className="text-right">Qualified</span><span className="text-right">Booked</span>
                     </div>
                     {insights.ads.map((ad) => {
                       const rate = ad.leads ? Math.round((ad.qualified * 100) / ad.leads) : 0
@@ -987,7 +991,7 @@ export function Dashboard() {
                     })}
                   </div>
                 ) : (
-                  <p className="mt-4 text-sm leading-relaxed text-text-muted">Leads from ArthaLeads, Facebook Lead Ads or the lead API are grouped by the ad or project they came from.</p>
+                  <p className="mt-4 text-sm leading-relaxed text-text-muted">Leads from your connected sources are grouped by the ad, campaign or form they came from.</p>
                 )}
               </section>
 

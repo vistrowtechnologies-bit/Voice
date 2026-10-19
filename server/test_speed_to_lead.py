@@ -136,6 +136,24 @@ class SpeedToLeadTests(unittest.TestCase):
         self.assertEqual(order, sorted(order, key=ranks.get))
         self.assertEqual(queue["toCall"], queue["counts"]["uncalled_lead"] + queue["counts"]["overdue_follow_up"] + queue["counts"]["dropped_call"])
 
+    def test_any_lead_source_is_counted_and_listed_without_a_contact_row(self):
+        """Not ArthaLeads-only: a Facebook webhook lead with no lead id and no
+        auto-call campaign is still recorded, timed and listed."""
+        account = self.db.create_account_with_owner("F", "F", f"stl-f-{os.urandom(4).hex()}@example.com", "h", email_verified=True)["account_id"]
+        result = self.db.ingest_inbound_lead(account, "Meera Joshi", "+91 98765 11122", source="facebook_lead_ads", external_id="")
+        self.assertFalse(result["ok"])  # nothing to call it with yet
+        result = self.db.ingest_inbound_lead(account, "Ravi Kumar", "+91 98765 11133", source="facebook_lead_ads_native", external_id="fb-123")
+        self.assertFalse(result["ok"])
+        stats = self.db.speed_to_lead(account)
+        self.assertEqual((stats["received"], stats["called"], stats["notCalled"]), (2, 0, 2))
+        # Never queued, so listed at once, with name and number for "Add contact".
+        items = {i["title"]: i for i in self.db.missed_money_queue(account)["items"]}
+        self.assertEqual(set(items), {"Meera Joshi", "Ravi Kumar"})
+        meera = items["Meera Joshi"]
+        self.assertEqual((meera["kind"], meera["contactId"], meera["name"]), ("uncalled_lead", None, "Meera Joshi"))
+        self.assertTrue(meera["phone"].endswith("9876511122"))
+        self.assertTrue(meera["detail"].startswith("Facebook lead"))
+
     def test_queue_never_shows_another_accounts_rows(self):
         self.lead(f"q-other-{os.urandom(3).hex()}", 5, account=self.other, name="Other Tenant Lead")
         titles = [i["title"] for i in self.db.missed_money_queue(self.a)["items"]]

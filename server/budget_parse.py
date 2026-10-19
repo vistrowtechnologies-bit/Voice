@@ -47,6 +47,7 @@ _HINDI = {_nfc(k): v for k, v in _HINDI.items()}
 _HALF = tuple(_nfc(h) for h in _HALF)
 _RANGE_SPLIT = re.compile(r"\s+(?:to|se|से|till|upto|up to)\s+|\s*[-–—]\s*|\s*~\s*", re.IGNORECASE)
 _MIN_INR, _MAX_INR = 1_000, 1_000 * 10**7
+_FOREIGN = re.compile(r"[$€£¥]|\b(?:usd|eur|gbp|aed|dollars?|euros?|pounds?|dirhams?)\b", re.IGNORECASE)
 
 
 def _words_to_number(words: list[str]) -> float | None:
@@ -94,6 +95,9 @@ def parse_budget_inr(text: str | None) -> tuple[int, int] | None:
     if not text:
         return None
     clean = _nfc(str(text)).translate(_DEVANAGARI_DIGITS)
+    # Another currency would be added to rupees as if it were rupees: skip it.
+    if _FOREIGN.search(clean):
+        return None
     clean = re.sub(r"(?i)\b(?:inr|rs\.?|rupees?|रुपए|रुपये|रुपया)\b|₹", " ", clean)
     clean = re.sub(r"(?i)\b(?:around|about|approx(?:imately)?|roughly|nearly|almost|करीब|लगभग|तक|ke|ka|the|budget)\b", " ", clean)
     clean = re.sub(r"\s+", " ", clean).strip()

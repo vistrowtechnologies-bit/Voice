@@ -1741,6 +1741,10 @@ def init_tables() -> None:
             # When the dialer first dialled this contact (speed_to_lead). last_attempt_at
             # is overwritten by every retry, so it cannot answer "how fast was the first call".
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS first_attempt_at TEXT")
+            # Who the lead was, for every source (speed_to_lead, missed_money_queue):
+            # only ArthaLeads leads get a contacts row at intake.
+            conn.execute("ALTER TABLE inbound_lead_events ADD COLUMN IF NOT EXISTS name TEXT")
+            conn.execute("ALTER TABLE inbound_lead_events ADD COLUMN IF NOT EXISTS phone TEXT")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS consent_basis TEXT DEFAULT ''")
             # When the CRM was told this contact ran out of attempts (the
             # dialer's "Not Reachable" report to ArthaLeads), so it is sent once.
@@ -4064,12 +4068,19 @@ _AGENT_CAMEL_TO_SNAKE = {
 # Facebook Lead Ads, the inbound-lead API) and what the dialer did with them.
 _FOLLOW_UP_LABELS = {
     "callback": "Callback they asked for",
-    "visit_reminder": "Site-visit reminder",
+    "visit_reminder": "Appointment reminder",
     "nurture": "Follow-up on their interest",
 }
 # A queued contact the dialer has not touched this long after it was due is
 # stuck (campaign paused, outside the calling window, worker down), not waiting.
 _QUEUE_STUCK_AFTER = "15 minutes"
+
+
+# inbound_lead_events.source -> how a person would name it.
+_SOURCE_LABELS = {
+    "facebook_lead_ads": "Facebook lead", "facebook_lead_ads_native": "Facebook lead",
+    "whatsapp": "WhatsApp lead", "website": "Website lead", "api": "API lead", "arthaleads": "CRM lead",
+}
 
 
 def _lead_channel_label(fields: dict, source: str = "") -> str:
@@ -4081,10 +4092,10 @@ def _lead_channel_label(fields: dict, source: str = "") -> str:
     if "whatsapp" in said or "wa.me/" in str(fields.get("ad_source_url") or "").casefold() \
             or str(fields.get("channel_source") or "").casefold() == "whatsapp":
         return "WhatsApp lead"
-    channel = str(fields.get("channel_source") or fields.get("lead_source") or source or "").replace("_", " ").strip()
-    if not channel or channel.casefold() in ("unknown", "arthaleads"):
-        return "New lead"
-    return f"{channel[:1].upper()}{channel[1:]} lead"
+    channel = str(fields.get("channel_source") or fields.get("lead_source") or "").replace("_", " ").strip()
+    if channel and channel.casefold() not in ("unknown", "arthaleads"):
+        return f"{channel[:1].upper()}{channel[1:]} lead"
+    return _SOURCE_LABELS.get(str(source or "").casefold(), "New lead")
 
 
 def speed_to_lead(account_id: int, days: int = 14) -> dict:
@@ -4155,20 +4166,26 @@ def missed_money_queue(account_id: int, limit: int = 20) -> dict:
         try:
             rows = conn.execute(
                 f"""
-                SELECT DISTINCT ON (ct.id) ct.id AS contact_id, ct.name, ct.phone, ct.custom_fields,
-                       e.source, e.created_at AS at
+                SELECT DISTINCT ON (COALESCE(NULLIF(e.phone, ''), ct.phone))
+                       ct.id AS contact_id, COALESCE(NULLIF(ct.name, ''), e.name) AS name,
+                       COALESCE(NULLIF(e.phone, ''), ct.phone) AS phone,
+                       COALESCE(ct.custom_fields, cc.custom_fields) AS custom_fields, e.source, e.created_at AS at
                 FROM inbound_lead_events e
                 LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
-                JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL
-                     AND ct.custom_fields LIKE ? AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id
+                LEFT JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL AND (
+                     (COALESCE(e.phone, '') <> '' AND ct.phone = e.phone)
+                     OR (COALESCE(e.phone, '') = '' AND ct.custom_fields LIKE ?
+                         AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id))
                 WHERE e.account_id = ?
                   AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'
+                  AND COALESCE(NULLIF(e.phone, ''), ct.phone) IS NOT NULL
                   AND (cc.id IS NULL OR (COALESCE(cc.attempts, 0) = 0 AND cc.status = 'pending'
                        AND COALESCE(cc.next_attempt_at::timestamp, e.created_at::timestamp)
                            < (now() AT TIME ZONE 'UTC') - INTERVAL '{_QUEUE_STUCK_AFTER}'))
                   AND NOT EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
-                                  AND l.lead_phone = ct.phone AND l.started_at::timestamp >= e.created_at::timestamp)
-                ORDER BY ct.id, e.created_at DESC
+                                  AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                                  AND l.started_at::timestamp >= e.created_at::timestamp)
+                ORDER BY COALESCE(NULLIF(e.phone, ''), ct.phone), e.created_at DESC
                 """,
                 ("{%", account_id),
             ).fetchall()
@@ -4179,6 +4196,7 @@ def missed_money_queue(account_id: int, limit: int = 20) -> dict:
                 items.append({
                     "kind": "uncalled_lead", "priority": 1,
                     "title": _queue_name(r["name"], r["phone"], "New lead"),
+                    "name": r["name"] or "", "phone": r["phone"] or "",
                     "detail": " · ".join(x for x in (channel, topic[:60]) if x) + " · not called yet",
                     "at": r["at"], "contactId": r["contact_id"], "callId": None,
                 })
@@ -4210,6 +4228,7 @@ def missed_money_queue(account_id: int, limit: int = 20) -> dict:
                     "kind": "overdue_follow_up" if r["overdue"] else "upcoming_follow_up",
                     "priority": 2 if r["overdue"] else 4,
                     "title": _queue_name(r["name"], r["phone"], "Follow-up"),
+                    "name": r["name"] or "", "phone": r["phone"] or "",
                     "detail": label + (" · time has passed, not called" if r["overdue"] else " · the AI will call"),
                     "at": r["at"], "contactId": r["contact_id"], "callId": None,
                 })
@@ -4240,6 +4259,7 @@ def missed_money_queue(account_id: int, limit: int = 20) -> dict:
                 items.append({
                     "kind": "dropped_call", "priority": 3,
                     "title": _queue_name(r["name"], r["lead_phone"], "Phone call"),
+                    "name": r["name"] or "", "phone": r["lead_phone"] or "",
                     "detail": ("Our call" if r["direction"] == "outbound" else "Their call") + " dropped before a conversation · no call since",
                     "at": r["at"], "contactId": r["contact_id"], "callId": r["id"],
                 })
@@ -4277,7 +4297,8 @@ def _contact_budget_inr(fields: dict) -> int | None:
 
 
 def _ad_label(fields: dict, source: str = "") -> str:
-    for key in ("ad_headline", "project", "ad_name", "campaign_name", "form_name"):
+    for key in ("ad_headline", "ad_name", "campaign_name", "utm_campaign", "form_name",
+                "project", "product", "service", "interested_in"):
         value = str(fields.get(key) or "").strip()
         if value:
             return value[:80]
@@ -4319,18 +4340,24 @@ def growth_insights(account_id: int, days: int = 30) -> dict:
         ads: dict[str, dict] = {}
         lead_rows = conn.execute(
             f"""
-            SELECT e.source, ct.custom_fields,
-                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id AND l.lead_phone = ct.phone
+            SELECT e.source, COALESCE(ct.custom_fields, cc.custom_fields) AS custom_fields,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
                            AND l.started_at::timestamp >= e.created_at::timestamp) AS called,
-                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id AND l.lead_phone = ct.phone
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
                            AND l.started_at::timestamp >= e.created_at::timestamp
                            AND {lead_quality.QUALIFIED_SQL.replace('lead_', 'l.lead_')}) AS qualified,
-                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id AND l.lead_phone = ct.phone
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
                            AND l.started_at::timestamp >= e.created_at::timestamp
                            AND COALESCE(l.site_visit_json, '') <> '') AS booked
             FROM inbound_lead_events e
-            JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL
-                 AND ct.custom_fields LIKE ? AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id
+            LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
+                LEFT JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL AND (
+                     (COALESCE(e.phone, '') <> '' AND ct.phone = e.phone)
+                     OR (COALESCE(e.phone, '') = '' AND ct.custom_fields LIKE ?
+                         AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id))
             WHERE e.account_id = ? AND e.created_at::timestamp >= {since}
             """,
             ("{%", account_id, days),
@@ -7000,6 +7027,25 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
         conn.close()
 
 
+def _record_lead_event(account_id: int, source: str, external_id: str, name: str, phone: str) -> None:
+    """A lead that arrived but could not be queued for a call (no running
+    auto-call campaign): recorded so the dashboard still counts it. Best-effort."""
+    try:
+        conn = _connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT (account_id, source, external_id) DO NOTHING",
+                    (account_id, source, external_id or f"auto:{secrets.token_hex(8)}", (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or (phone or "").strip()),
+                )
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("could not record unqueued lead for account %s", account_id, exc_info=True)
+
+
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
     external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
@@ -7050,6 +7096,8 @@ def ingest_inbound_lead(
         # carrier circuit breaker; that pause wins.
         no_call_reason = "auto_call_campaign_paused"
     if campaign_id is None and source != "arthaleads":
+        # Not queued, but it is still a lead that came in and was not called.
+        _record_lead_event(account_id, source, external_id, name, phone)
         return {"ok": False, "reason": "auto_call_not_ready_or_paused"}
     fields["source"] = source
     if external_id:
@@ -7059,10 +7107,11 @@ def ingest_inbound_lead(
         with conn:
             if external_id:
                 reserved = conn.execute(
-                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id) "
-                    "VALUES (?, ?, ?, NULL) ON CONFLICT (account_id, source, external_id) DO NOTHING "
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT (account_id, source, external_id) DO NOTHING "
                     "RETURNING external_id",
-                    (account_id, source, external_id),
+                    (account_id, source, external_id, (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or phone.strip()),
                 ).fetchone()
                 if not reserved:
                     prior = conn.execute(
@@ -7136,6 +7185,15 @@ def ingest_inbound_lead(
                     "UPDATE inbound_lead_events SET campaign_contact_id = ? "
                     "WHERE account_id = ? AND source = ? AND external_id = ?",
                     (contact_id, account_id, source, external_id),
+                )
+            elif not external_id and not deduped:
+                # A source that sends no lead id (a plain webhook, Zapier) is
+                # still a lead to time and to follow up; its own row, no dedupe.
+                conn.execute(
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (account_id, source, f"auto:{secrets.token_hex(8)}", contact_id, (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or phone.strip()),
                 )
             if source == "arthaleads":
                 contact_phone = canonical_contact_phone(phone, account_id)

@@ -52,6 +52,11 @@ class BudgetParseTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIsNone(parse_budget_inr(text))
 
+    def test_other_currencies_are_not_counted_as_rupees(self):
+        for text in ("$5,000", "5000 USD", "€20,000", "AED 50,000", "10k dollars"):
+            with self.subTest(text=text):
+                self.assertIsNone(parse_budget_inr(text))
+
     def test_midpoint(self):
         self.assertEqual(budget_midpoint_inr("80 lakh to 1 crore"), 90 * L)
         self.assertIsNone(budget_midpoint_inr("basic"))

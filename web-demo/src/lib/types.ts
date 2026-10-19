@@ -255,7 +255,7 @@ export type MissedMoneyKind = 'uncalled_lead' | 'overdue_follow_up' | 'dropped_c
 
 /** GET /dashboard/missed-money: people worth calling now, most urgent first. */
 export interface MissedMoneyQueue {
-  items: { kind: MissedMoneyKind; title: string; detail: string; at: string | null; contactId: number | null; callId: number | null }[]
+  items: { kind: MissedMoneyKind; title: string; detail: string; at: string | null; contactId: number | null; callId: number | null; name: string; phone: string }[]
   counts: Record<MissedMoneyKind, number>
   toCall: number
 }

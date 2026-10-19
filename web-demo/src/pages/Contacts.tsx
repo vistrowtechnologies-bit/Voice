@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -131,14 +131,19 @@ export function Contacts() {
 
   // The command menu links here with ?add=1 or ?import=1. Open the matching
   // dialog once, then drop the parameter so a refresh does not reopen it.
+  // The dashboard's People to call list can pass a lead's name and number as
+  // route state (never in the URL), to fill the Add contact form.
+  const location = useLocation()
   useEffect(() => {
     const add = searchParams.get('add') === '1'
     const imp = searchParams.get('import') === '1'
     if (!add && !imp) return
+    const prefill = (location.state as { prefill?: { name?: string; phone?: string } } | null)?.prefill
+    if (add && prefill) setForm((f) => ({ ...f, name: prefill.name || f.name, phone: prefill.phone || f.phone }))
     if (add) setShowAdd(true)
     if (imp) { setImportError(''); setShowImport(true) }
     setSearchParams({}, { replace: true })
-  }, [searchParams, setSearchParams])
+  }, [searchParams, setSearchParams, location.state])
 
   const reload = () => fetchContacts().then(setContacts).catch(() => setContacts([]))
 
