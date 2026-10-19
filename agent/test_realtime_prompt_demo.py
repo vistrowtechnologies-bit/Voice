@@ -44,7 +44,7 @@ class PlatformDemoDiet(unittest.TestCase):
         # 19 Oct cost pass: identity, lead capture, numbers and personality
         # rebuilt short and the playbook tightened, while the knowledge base
         # now carries every approved answer (it had 1 of 19).
-        self.assertLessEqual(len(self.out), 14_600, len(self.out))
+        self.assertLessEqual(len(self.out), 14_800, len(self.out))
 
     def test_kept_headings_and_key_phrases(self):
         heads = "\n".join(self.heads())
@@ -99,7 +99,7 @@ class PlatformDemoDiet(unittest.TestCase):
                      "Never name the models", "Never re-ask", "capture_platform_lead",
                      "Book a demo only with name and phone", "No absolutes"):
             self.assertIn(rule, playbook, rule)
-        self.assertLess(len(playbook), 2_500)
+        self.assertLess(len(playbook), 2_650)
 
     def test_personality_and_spoken_register_survive(self):
         # Owner, 19 Oct 2026: call 1415 on 3.8 without these came out formal
@@ -217,3 +217,18 @@ class DemoLanguageFollowsTheCaller(unittest.TestCase):
         self.assertIn("one-word reply", lang)
         self.assertIn("natural Hinglish", lang)
         self.assertNotIn("UNMISTAKABLY IN ENGLISH", out)
+
+
+class DemoDoesNotChaseContactDetails(unittest.TestCase):
+    def test_contact_only_on_request_and_identifiers_keep_the_language(self):
+        # Call 1427: name/company asked twice, email/phone four times, and an
+        # English email address flipped a Hindi call to English.
+        out = rp.compact(ARTHA, language_name="English")
+        playbook = out.split("# How to run this demo call\n", 1)[1]
+        self.assertTrue(playbook.startswith("Never ask for their name, company, email or phone unless"))
+        self.assertIn("never ask to \"send you more information\"", playbook)
+        self.assertNotIn("Once you have their name plus one more", out)
+        lead = out.split("\n# Lead capture\n", 1)[1].split("\n# ", 1)[0]
+        self.assertIn("only when the caller asked for a follow-up", lead)
+        lang = out.split("# Language", 1)[1].split("\n# ", 1)[0]
+        self.assertIn("name, company name, email, phone number or spelled letters", lang)

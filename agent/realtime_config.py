@@ -87,11 +87,24 @@ def input_transcription(model: str, language: str) -> types.AudioTranscriptionCo
     """Hint 2.5's native recognition, without forcing the speech output language.
 
     Hints are not a language lock; English remains available for mixed speech.
-    Do not change 3.1's already tested automatic language detection.
+    Do not change 3.1's already tested automatic language detection; 3.8
+    gets Hindi + English hints (call 1427).
     """
     if model not in API_MODELS:
         raise ValueError(f"Unsupported realtime model: {model}")
     supported = {"hi", "en", "mr", "ta", "te", "kn", "ml", "bn", "gu", "pa", "ur"}
+    if model == MODEL_38:
+        # Call 1427 (19 Oct): with automatic detection, 3.8 captioned the
+        # caller's Hinglish as Spanish ("Pucharon con Pune", "Es guay"); the
+        # model still understood, but transcripts and lead summaries read the
+        # captions. Google accepted language_codes on gemini-3.8-live (live
+        # setup test, 19 Oct). Indian callers mix Hindi and English, so an
+        # English agent is hinted both ways.
+        base = language.split("-")[0].lower()
+        if base in supported:
+            hints = [language] + (["hi-IN"] if base == "en" else ["en-IN"])
+            return types.AudioTranscriptionConfig(language_codes=hints)
+        return types.AudioTranscriptionConfig()
     if model == DEFAULT_MODEL and language.split("-")[0].lower() in supported:
         hints = [language]
         if language.split("-")[0].lower() != "en":
