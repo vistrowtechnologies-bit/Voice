@@ -3936,10 +3936,18 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
 # median against 1,058ms over eight comparable calls.
 _ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live")
 _ADMIN_ONLY_MODELS = {"gpt-5-nano"}
+# Owner, 19 Oct 2026: Vistrow Live 3.8 opens to every plan, billed 2 credits
+# per call minute (plan_policy). Measured on real calls that day: ~Rs 3.3-3.7
+# per minute on the website and ~Rs 3.7-4.1 on a phone line at a normal pace,
+# with prompts held to ~1,000 tokens and the realtime KB capped. The retired
+# 3.1 and 2.5 ids stay owner-only.
+_TENANT_REALTIME_MODELS = {"gemini-live:gemini-3.8-live"}
 
 
 def _guard_admin_only_model(data: dict | None, account_id: int) -> None:
     model = str((data or {}).get("model") or "")
+    if model in _TENANT_REALTIME_MODELS:
+        return
     if (model.startswith(_ADMIN_ONLY_MODEL_PREFIXES) or model in _ADMIN_ONLY_MODELS) and not calls_db.is_platform_owner(account_id):
         raise HTTPException(400, "That model is available only to the Vistrow admin account.")
 

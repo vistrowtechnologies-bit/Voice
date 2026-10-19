@@ -79,3 +79,27 @@ class RealtimeVoiceGuard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveOpenToTenants(unittest.TestCase):
+    """Owner, 19 Oct 2026: Vistrow Live 3.8 opens to every plan; retired ids stay owner-only."""
+
+    def test_guard_lets_tenants_pick_live_38_only(self):
+        import ast
+        import os
+        from fastapi import HTTPException
+
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "token_api.py"), encoding="utf-8").read()
+        names = ("_guard_admin_only_model", "_ADMIN_ONLY_MODEL_PREFIXES", "_ADMIN_ONLY_MODELS", "_TENANT_REALTIME_MODELS")
+        nodes = [n for n in ast.parse(src).body
+                 if (isinstance(n, ast.FunctionDef) and n.name in names)
+                 or (isinstance(n, ast.Assign) and any(getattr(t, "id", None) in names for t in n.targets))]
+        ns = {"HTTPException": HTTPException,
+              "calls_db": type("C", (), {"is_platform_owner": staticmethod(lambda account_id: account_id == 1)})}
+        exec(compile(ast.Module(body=nodes, type_ignores=[]), "token_api.py", "exec"), ns)
+        guard = ns["_guard_admin_only_model"]
+        guard({"model": "gemini-live:gemini-3.8-live"}, 99)  # tenant: allowed
+        for retired in ("gemini-live", "gemini-live:gemini-3.1-flash-live-preview", "gpt-5-nano", "groq/x"):
+            with self.assertRaises(HTTPException, msg=retired):
+                guard({"model": retired}, 99)
+            guard({"model": retired}, 1)  # owner: allowed

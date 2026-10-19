@@ -142,7 +142,7 @@ export function Billing() {
               </p>
             )}
             <p className="mt-2 text-xs text-text-muted">
-              {billing ? `${billing.minutesUsed} call minutes used this cycle. Standard voices use 1 minute per call minute, premium voices 2, Vistrow Live ${billing.liveMinutesPerMinute ?? 3}.` : 'Loading usage…'}
+              {billing ? `${billing.minutesUsed} call minutes used this cycle. Standard voices use 1 minute per call minute, premium voices 2, Vistrow Live ${billing.liveMinutesPerMinute ?? 2}.` : 'Loading usage…'}
             </p>
             {billing && billing.overageCredits > 0 && (
               <p className="mt-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
@@ -313,7 +313,7 @@ export function Billing() {
                       </span>
                       {sp && (
                         <span className="text-text-muted">
-                          Then ₹{sp.overagePerMinute}/min · Vistrow Live uses {billing?.liveMinutesPerMinute ?? 3} min per min
+                          Then ₹{sp.overagePerMinute}/min · Vistrow Live uses {billing?.liveMinutesPerMinute ?? 2} min per min
                         </span>
                       )}
                     </div>
