@@ -22,6 +22,8 @@ import {
   fetchIntegrations,
   fetchNotifications,
   fetchLaunchReadiness,
+  fetchMissedMoney,
+  fetchSpeedToLead,
   fetchPeriodComparison,
   fetchUsageTrends,
   formatDateTime,
@@ -30,7 +32,7 @@ import {
 } from '../lib/api'
 import { apiProfilePreferences, apiUpdateProfilePreferences, useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
-import type { ActiveCallInfo, Analytics, AppNotification, Appointment, BillingSummary, CallRecord, Contact, DashboardPeriodComparison, DashboardSummary, FeedbackSummary, Integration, LaunchReadiness, UsageTrends } from '../lib/types'
+import type { ActiveCallInfo, Analytics, AppNotification, Appointment, BillingSummary, CallRecord, Contact, DashboardPeriodComparison, DashboardSummary, FeedbackSummary, Integration, LaunchReadiness, MissedMoneyKind, MissedMoneyQueue, SpeedToLead, UsageTrends } from '../lib/types'
 import { Tooltip } from '../components/ui/Tooltip'
 
 const AGENT_STATE_STYLES: Record<string, string> = {
@@ -60,6 +62,44 @@ const ANALYTICS_FEATURES = [
 // Rounded, slim bars for the Analytics tiles.
 const BAR_STYLE = { borderRadius: 8, borderSkipped: false, maxBarThickness: 28 } as const
 
+// Missed-money queue rows shown before "Show N".
+const QUEUE_PREVIEW = 5
+
+const QUEUE_KIND: Record<MissedMoneyKind, { icon: string; tone: string }> = {
+  uncalled_lead: { icon: 'person_add', tone: 'bg-primary/12 text-primary' },
+  overdue_follow_up: { icon: 'schedule', tone: 'bg-amber/12 text-amber' },
+  dropped_call: { icon: 'call_missed', tone: 'bg-destructive/10 text-destructive' },
+  upcoming_follow_up: { icon: 'event', tone: 'bg-cyan/12 text-cyan' },
+}
+
+// Server timestamps are UTC, some without a zone ("2026-10-19 05:27:24").
+function parseUtc(at: string | null): Date | null {
+  if (!at) return null
+  const iso = /[zZ]$|[+-]\d\d:?\d\d$/.test(at) ? at : `${at.replace(' ', 'T')}Z`
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function whenLabel(kind: MissedMoneyKind, at: string | null): string {
+  const date = parseUtc(at)
+  if (!date) return ''
+  if (kind === 'upcoming_follow_up') {
+    const sameDay = date.toDateString() === new Date().toDateString()
+    return date.toLocaleString('en-IN', { weekday: sameDay ? undefined : 'short', hour: 'numeric', minute: '2-digit' })
+  }
+  const seconds = Math.max(0, (Date.now() - date.getTime()) / 1000)
+  const ago = seconds < 3600 ? `${Math.max(1, Math.round(seconds / 60))} min ago` : seconds < 86400 ? `${Math.round(seconds / 3600)} h ago` : `${Math.round(seconds / 86400)} d ago`
+  return kind === 'overdue_follow_up' ? `due ${ago}` : ago
+}
+
+// 5 -> "5 s", 240 -> "4 min", 5400 -> "1.5 h".
+function formatSeconds(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)} s`
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1).replace(/\.0$/, '')} h`
+  return `${(seconds / 86400).toFixed(1).replace(/\.0$/, '')} d`
+}
+
 // Attention items shown before "Show all", so the tile stays the height of its neighbours.
 const ATTENTION_PREVIEW = 4
 
@@ -70,6 +110,8 @@ const RANGE_OPTIONS = [
 ]
 
 const DASHBOARD_CARDS = [
+  { key: 'speed_to_lead', label: 'Speed to lead' },
+  { key: 'missed_money', label: 'People to call' },
   { key: 'attention', label: 'Needs attention' },
   { key: 'quick_actions', label: 'Quick actions' },
   { key: 'funnel', label: 'Conversion funnel' },
@@ -135,6 +177,9 @@ export function Dashboard() {
   const [showAllAttention, setShowAllAttention] = useState(false)
   // The Analytics tab is Growth and Scale (plan_policy 'analytics'); null while loading.
   const [analyticsAllowed, setAnalyticsAllowed] = useState<boolean | null>(null)
+  const [speed, setSpeed] = useState<SpeedToLead | null>(null)
+  const [queue, setQueue] = useState<MissedMoneyQueue | null>(null)
+  const [showAllQueue, setShowAllQueue] = useState(false)
 
   const { user } = useAuth()
   // Re-render (and recompute chart colors) when the header toggles the theme.
@@ -155,6 +200,7 @@ export function Dashboard() {
     fetchBilling().then(setBilling).catch(() => setBilling(null))
     fetchIntegrations().then(setIntegrations).catch(() => setIntegrations([]))
     fetchNotifications().then(setAttentionItems).catch(() => setAttentionItems([]))
+    fetchMissedMoney().then(setQueue).catch(() => setQueue(null))
     fetchContacts().then(setContacts).catch(() => setContacts([]))
     fetchAppointments().then(setAppointments).catch(() => setAppointments([]))
     apiProfilePreferences()
@@ -179,6 +225,7 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchUsageTrends(rangeDays).then(setTrends).catch(() => setTrends(null))
+    fetchSpeedToLead(rangeDays).then(setSpeed).catch(() => setSpeed(null))
     fetchPeriodComparison(rangeDays).then(setComparison).catch(() => setComparison(null))
   }, [rangeDays])
 
@@ -437,6 +484,80 @@ export function Dashboard() {
                   )}
                 </button>
               ))}
+
+              {isVisible('speed_to_lead') && (
+                <section className="bento-tile bento-w2 flex flex-col">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="bento-title text-[15px]">Speed to lead</h3>
+                      <p className="mt-0.5 text-xs text-text-muted">How fast new leads get their first call · last {rangeDays} days</p>
+                    </div>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan/12 text-cyan"><Icon name="bolt" className="text-[19px]" /></span>
+                  </div>
+                  {!speed || speed.received === 0 ? (
+                    <p className="mt-4 text-sm leading-relaxed text-text-muted">No new leads in this period. Leads from ArthaLeads, Facebook Lead Ads or the lead API are timed from the moment they reach us to the first call.</p>
+                  ) : (
+                    <div className="mt-4 flex flex-1 flex-col justify-between gap-4">
+                      <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                        <div>
+                          <p className="bento-num text-5xl leading-none">{speed.medianSeconds == null ? '—' : formatSeconds(speed.medianSeconds)}</p>
+                          <p className="mt-2 text-xs font-bold text-text-muted">median time to first call</p>
+                        </div>
+                        {speed.withinMinutePct != null && (
+                          <div className="pb-0.5">
+                            <p className="bento-num text-2xl leading-none">{speed.withinMinutePct}%</p>
+                            <p className="mt-1.5 text-xs text-text-muted">called within a minute</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-full bg-surface-high/70 px-2.5 py-1 font-semibold">{speed.called} of {speed.received} leads called</span>
+                        {speed.notCalled > 0 && <span className="rounded-full bg-amber/12 px-2.5 py-1 font-bold text-amber">{speed.notCalled} never called</span>}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {isVisible('missed_money') && (
+                <section className="bento-tile bento-w2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="bento-title text-[15px]">People to call</h3>
+                      <p className="mt-0.5 text-xs text-text-muted">
+                        {queue ? (queue.toCall ? `${queue.toCall} waiting: new leads, missed callbacks and dropped calls` : 'Nobody is waiting on a call') : 'New leads, missed callbacks and dropped calls'}
+                      </p>
+                    </div>
+                    {queue && queue.toCall > 0 && <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-[11px] font-bold text-destructive">{queue.toCall}</span>}
+                  </div>
+                  {queue && queue.items.length > 0 ? (
+                    <div className="mt-3 flex flex-col">
+                      {(showAllQueue ? queue.items : queue.items.slice(0, QUEUE_PREVIEW)).map((item, index) => {
+                        const meta = QUEUE_KIND[item.kind]
+                        const to = item.contactId ? `/dashboard/contacts/${item.contactId}` : item.callId ? `/dashboard/calls/${item.callId}` : '/dashboard/contacts'
+                        return (
+                          <Link key={`${item.kind}-${item.contactId ?? item.callId ?? index}-${item.at ?? index}`} to={to} aria-label={`${item.title}: ${item.detail}`} className="bento-row flex items-center gap-3 rounded-xl px-2 py-2.5">
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${meta.tone}`}><Icon name={meta.icon} className="text-[19px]" /></span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold">{item.title}</span>
+                              <span className="block truncate text-xs text-text-muted">{item.detail}</span>
+                            </span>
+                            <span className="hidden shrink-0 text-right text-[11px] text-text-muted sm:block">{whenLabel(item.kind, item.at)}</span>
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">{item.kind === 'upcoming_follow_up' ? 'View' : 'Call'}</span>
+                          </Link>
+                        )
+                      })}
+                      {queue.items.length > QUEUE_PREVIEW && (
+                        <button type="button" onClick={() => setShowAllQueue((v) => !v)} aria-expanded={showAllQueue} className="mt-1 self-start rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/10">
+                          {showAllQueue ? 'Show fewer' : `Show ${queue.items.length}${queue.toCall > queue.items.length ? ' most urgent' : ''}`}
+                        </button>
+                      )}
+                    </div>
+                  ) : queue ? (
+                    <div className="mt-4 flex items-center gap-3 text-sm text-text-muted"><Icon name="verified" className="text-success" /> New leads that were not called, missed callbacks and dropped calls show up here.</div>
+                  ) : null}
+                </section>
+              )}
 
               {isVisible('attention') && (
                 <section className="bento-tile bento-w2">

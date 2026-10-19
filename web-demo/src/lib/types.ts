@@ -228,6 +228,26 @@ export interface DashboardPeriodSnapshot {
   bookingRate: number
 }
 
+/** GET /dashboard/speed-to-lead: seconds from a lead reaching us to its first call. */
+export interface SpeedToLead {
+  days: number
+  received: number
+  called: number
+  notCalled: number
+  medianSeconds: number | null
+  p90Seconds: number | null
+  withinMinutePct: number | null
+}
+
+export type MissedMoneyKind = 'uncalled_lead' | 'overdue_follow_up' | 'dropped_call' | 'upcoming_follow_up'
+
+/** GET /dashboard/missed-money: people worth calling now, most urgent first. */
+export interface MissedMoneyQueue {
+  items: { kind: MissedMoneyKind; title: string; detail: string; at: string | null; contactId: number | null; callId: number | null }[]
+  counts: Record<MissedMoneyKind, number>
+  toCall: number
+}
+
 export interface DashboardPeriodComparison {
   days: number
   current: DashboardPeriodSnapshot
