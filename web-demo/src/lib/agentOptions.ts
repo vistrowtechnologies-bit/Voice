@@ -325,11 +325,10 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
   // Re-listed at the platform owner's request for a controlled retest. Keep
   // this owner-only: prior calls showed slower audio and turn-handling errors.
   // Owner, 18 Oct 2026: 3.8 Live is the primary realtime model (Google GA,
-  // same price as 3.1); 3.1 is legacy (Google shutdown from 17 Nov 2026) and
-  // 2.5 retired. Both stay selectable only so existing rows still display.
+  // same price as 3.1). 3.1 (Google shutdown from 17 Nov 2026) and 2.5 are
+  // retired and, from 19 Oct, no longer offered; RETIRED_MODELS keeps their
+  // names for call history (no agent used either on 19 Oct).
   { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · primary realtime model · speech-to-speech in about 1-2 s' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 (retired)', tag: 'Owner-only · retired 18 Oct 2026, use 3.8' },
-  { value: 'gemini-live', label: 'Vistrow Live 2.5 (retired)', tag: 'Owner-only · retired, use 3.8' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
@@ -407,6 +406,7 @@ const RETIRED_MODELS = [
   // the lead tool, and premature hangups. It is now exposed only to the platform owner
   // for a controlled retest; tenant accounts cannot select it.
   { value: 'gemini-live', label: 'Vistrow Live 2.5 (retired)' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 (retired)' },
 ] as const
 
 export const modelLabel = (value: string) =>
