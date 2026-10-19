@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BrowserTestModal } from '../components/AgentTestCall'
@@ -27,10 +27,12 @@ import {
   geminiLiveVoiceName,
   LANGUAGES,
   isRealtimeModel,
+  LIVE_MODEL,
   modelOptionsFor,
   modelLabel,
   nearestVoiceFor,
   NOISE_CANCELLATION_OPTIONS,
+  STANDARD_MODEL,
   TONES,
   voiceLabel,
   voicePickerGroups,
@@ -294,6 +296,10 @@ function AgentEditorForm({
     setForm((f) => ({ ...f, model, voice: pick?.value ?? f.voice }))
     setVoiceSwitch({ from: auto?.from ?? form.voice, fromModel: auto?.fromModel ?? form.model, to: pick?.value ?? null })
   }
+  // Engine picker: tenants have exactly one standard engine; the owner also
+  // has Live (realtime) and an Advanced list of the other standard models.
+  const [showModels, setShowModels] = useState(false)
+  const lastStandardModel = useRef(isRealtimeModel(agent.model) ? STANDARD_MODEL : agent.model || STANDARD_MODEL)
   const undoVoiceSwitch = () => {
     if (!voiceSwitch) return
     setForm((f) => ({ ...f, model: voiceSwitch.fromModel, voice: voiceSwitch.from }))
@@ -396,23 +402,81 @@ function AgentEditorForm({
 </TabPane>
           <TabPane tab="instructions" active={tab}>
 <Field
-            label="Model"
+            label="Engine"
             hint={
               isRealtimeModel(form.model)
                 ? 'Speech-to-speech: the model listens and speaks directly, so speech recognition, the AI model and the voice below are bypassed. It speaks in the Live version of the voice you pick. Compare "Reply audio reached caller" in the call diagnostics.'
                 : undefined
             }
           >
-            <select value={form.model} onChange={(e) => changeModel(e.target.value)} className={inputCls}>
-              {modelOptionsFor(isPlatformOwner).map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label} - {m.tag}
-                </option>
-              ))}
-              {!modelOptionsFor(isPlatformOwner).some((m) => m.value === form.model) && form.model && (
-                <option value={form.model}>{modelLabel(form.model)} - no longer offered, pick a model above</option>
-              )}
-            </select>
+            {isPlatformOwner ? (
+              <>
+                {/* Owner only: realtime stays admin-only on the server (_ADMIN_ONLY_MODEL_PREFIXES). */}
+                <div role="group" aria-label="Engine mode" className="inline-flex w-fit rounded-lg border border-border bg-surface-high p-0.5">
+                  {(['standard', 'live'] as const).map((mode) => {
+                    const active = (mode === 'live') === isRealtimeModel(form.model)
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => {
+                          if (active) return
+                          if (mode === 'live') {
+                            lastStandardModel.current = form.model
+                            changeModel(LIVE_MODEL)
+                          } else {
+                            changeModel(lastStandardModel.current)
+                          }
+                        }}
+                        className={`rounded-md px-3 py-1.5 text-xs font-semibold ${active ? 'bg-primary text-bg' : 'bg-transparent text-text-muted hover:text-text'}`}
+                      >
+                        {mode === 'live' ? 'Live (realtime)' : 'Standard'}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-text-muted">
+                  {modelLabel(form.model)}
+                  {!modelOptionsFor(true).some((m) => m.value === form.model) && form.model ? ' (no longer offered)' : ''}
+                  {!isRealtimeModel(form.model) && (
+                    <>
+                      {' · '}
+                      <button type="button" onClick={() => setShowModels((v) => !v)} className="bg-transparent font-medium text-primary hover:underline">
+                        {showModels ? 'Hide advanced' : 'Advanced'}
+                      </button>
+                    </>
+                  )}
+                </p>
+                {showModels && !isRealtimeModel(form.model) && (
+                  <select value={form.model} onChange={(e) => changeModel(e.target.value)} className={`${inputCls} mt-2`}>
+                    {modelOptionsFor(true)
+                      .filter((m) => !isRealtimeModel(m.value))
+                      .map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label} - {m.tag}
+                        </option>
+                      ))}
+                    {!modelOptionsFor(true).some((m) => m.value === form.model) && form.model && (
+                      <option value={form.model}>{modelLabel(form.model)} - no longer offered, pick a model above</option>
+                    )}
+                  </select>
+                )}
+              </>
+            ) : (
+              // Tenants have one engine (MODEL_OPTIONS), so no picker: just say which.
+              <p className="text-sm text-text">
+                {modelLabel(form.model || STANDARD_MODEL)}
+                {form.model && form.model !== STANDARD_MODEL && (
+                  <>
+                    <span className="text-text-muted"> (no longer offered) · </span>
+                    <button type="button" onClick={() => changeModel(STANDARD_MODEL)} className="bg-transparent text-xs font-medium text-primary hover:underline">
+                      Switch to {modelLabel(STANDARD_MODEL)}
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
             {voiceSwitch && (
               <p role="status" className="mt-2 text-xs text-muted-foreground">
                 {voiceSwitch.to ? (

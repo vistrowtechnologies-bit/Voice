@@ -334,6 +334,11 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
 export const isRealtimeModel = (value: string) => value.startsWith('gemini-live')
 
+/** The engine every tenant agent runs on (Vistrow Bharat), and the one Live
+ *  model still offered (owner-only). */
+export const STANDARD_MODEL = MODEL_OPTIONS[0].value
+export const LIVE_MODEL = ADMIN_ONLY_MODELS.find((m) => isRealtimeModel(m.value))!.value
+
 // Gemini Live's own voice list (agent/main.py _GEMINI_LIVE_VOICES). A realtime
 // agent speaks with the persona its voice value names; any other voice is
 // replaced with Kore at call time.

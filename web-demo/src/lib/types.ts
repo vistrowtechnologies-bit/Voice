@@ -101,6 +101,9 @@ export interface CallRecord {
   connectLatencyMs: number | null
   agentJoinLatencyMs: number | null
   firstResponseLatencyMs: number | null
+  // Per-turn timings the call agent stores (latency_metrics_json), e.g.
+  // callerStopToFirstAudioMs: one value per caller turn, on every model.
+  latencyMetrics?: { callerStopToFirstAudioMs?: number[] } & Record<string, unknown>
   // Browser-reported, widget calls only. For why a call of ANY channel
   // ended, use disconnectReason below.
   failureReason: string | null
