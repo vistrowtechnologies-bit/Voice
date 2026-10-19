@@ -670,6 +670,13 @@ function AgentEditorForm({
                   className={inputCls}
                 />
               </Field>
+              {/* agent/main.py: on 3.x realtime the opener is an instruction
+                  ("open with this line, or as close to it as reads naturally"). */}
+              {isRealtimeModel(form.model) && (
+                <p className="text-xs text-text-muted sm:col-span-2">
+                  Realtime models say the welcome message in their own words, close to what you wrote, not word for word.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -798,6 +805,14 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
+          {/* agent/realtime_prompt.py compact(kb_limit=5500): realtime re-bills
+              the prompt every turn, so the knowledge base is cut there. */}
+          {isRealtimeModel(form.model) && form.kbId && (
+            <p className="mt-2 text-xs text-text-muted">
+              Realtime models use only the first ~5,500 characters (about 1,500 tokens) of the knowledge base, cut at a
+              whole question and answer. Put the most important answers first.
+            </p>
+          )}
         </Panel>
 </TabPane>
 
@@ -836,29 +851,10 @@ function AgentEditorForm({
         <TabPane tab="conversation" active={tab}>
 <Panel icon="graphic_eq" title="Speech settings" subtitle="Turn-taking and silence handling">
           <div className="flex flex-col gap-4">
-{!isRealtimeModel(form.model) && (
-            <Field label={`Interruption sensitivity - ${Math.round(form.interruptionSensitivity * 100)}%`}>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.1}
-                value={form.interruptionSensitivity}
-                onChange={(e) => set('interruptionSensitivity', Number(e.target.value))}
-                className="w-full accent-primary"
-              />
-              <span className="text-[10px] text-text-muted">
-                Higher = the agent yields the floor faster when the caller starts talking. Lower = it ignores
-                brief noise and finishes its sentence.
-              </span>
-            </Field>
-)}
-{isRealtimeModel(form.model) && (
-            <p className="text-xs text-text-muted">
-              This agent uses a realtime model, which decides on its own when the caller has finished speaking and
-              handles interruptions itself, so interruption sensitivity does not apply.
-            </p>
-)}
+            {/* No interruption-sensitivity control: with vad=None (agent/main.py)
+                livekit-agents only reads interruption.min_duration from VAD events,
+                so the saved value never changed a call (verified 19 Oct 2026).
+                The field stays in the form so a save keeps the stored value. */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <NumberField
                 label="Silence check-in after (sec)"
