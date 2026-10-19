@@ -1622,6 +1622,14 @@ def init_tables() -> None:
             # Idempotent: a second run finds no retired names.
             for _retired, _successor in plan_policy.OPENAI_MODEL_SUCCESSORS.items():
                 conn.execute("UPDATE agents SET model = ? WHERE model = ?", (_successor, _retired))
+            # Same date: accounts given orchestrator_pipeline=1 by the old
+            # signup default (only account 8 in production) go back to the
+            # LiveKit path. Nothing sets the flag any more; remove this once
+            # the orchestrator can run sarvam/ models.
+            conn.execute(
+                "UPDATE settings SET value = '0' WHERE key = ? AND value = '1'",
+                (_ORCHESTRATOR_PIPELINE_KEY,),
+            )
             # Same reasoning as the model default above: the column default is
             # what provision_account_defaults' bare INSERT relies on, so a new
             # tenant's starter agent gets the fastest measured voice. Existing
@@ -2075,17 +2083,14 @@ def create_account_with_owner(
                     provision_account_defaults(conn, account_id)
             else:
                 provision_account_defaults(conn, account_id)
-                # New tenants default onto the Railway-native orchestrator
-                # pipeline for phone calls rather than LiveKit's SIP bridge
-                # - account_id == 1 (above) is Vistrow's own legacy/first
-                # account and is migrated onto it explicitly instead, not
-                # defaulted here, since it already has real phone numbers
-                # and campaigns depending on today's behavior.
-                conn.execute(
-                    "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
-                    "ON CONFLICT (account_id, key) DO NOTHING",
-                    (account_id, _ORCHESTRATOR_PIPELINE_KEY, "1"),
-                )
+                # New tenants used to default onto the Railway-native
+                # orchestrator pipeline (orchestrator_pipeline=1). Owner, 19 Oct
+                # 2026: removed. orchestrator/llm.py sends every model that is
+                # not "gemini..." to OpenAI, so the default agent model
+                # (sarvam/sarvam-105b-conversations, Vistrow Bharat) got a 400
+                # and the caller heard the greeting, then silence - on phone
+                # calls and on the dashboard's Test agent button alike. New
+                # tenants run on the LiveKit path the live accounts use.
             return {"account_id": account_id, "user_id": user_id}
     finally:
         conn.close()
