@@ -397,6 +397,10 @@ export const modelOptionsFor = (isPlatformOwner: boolean) =>
 const RETIRED_MODELS = [
   { value: 'gpt-4.1-mini', label: 'Vistrow Swift' },
   { value: 'gpt-4.1', label: 'Vistrow Prime' },
+  // GPT-5 successors (plan_policy.OPENAI_MODEL_SUCCESSORS) that retired GPT-4
+  // agents are rewritten to: same names, still not offered for new picks.
+  { value: 'gpt-5.4-nano', label: 'Vistrow Swift' },
+  { value: 'gpt-5.4-mini', label: 'Vistrow Prime' },
   { value: 'gpt-4o', label: 'Vistrow Pro' },
   { value: 'gemini-3.6-flash', label: 'Vistrow Flash' },
   { value: 'gpt-4o-mini', label: 'Vistrow Standard' },
