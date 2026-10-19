@@ -1614,6 +1614,14 @@ def init_tables() -> None:
             conn.execute(
                 "ALTER TABLE agents ALTER COLUMN model SET DEFAULT 'sarvam/sarvam-105b-conversations'"
             )
+            # Owner, 19 Oct 2026: GPT-4 was retired 14 Oct and the call
+            # runtime already runs each retired name on its GPT-5 successor
+            # (plan_policy.OPENAI_MODEL_SUCCESSORS). Store the successor too, so
+            # the dashboard and billing see the model that actually answers.
+            # Agents only: call history keeps the model it was recorded with.
+            # Idempotent: a second run finds no retired names.
+            for _retired, _successor in plan_policy.OPENAI_MODEL_SUCCESSORS.items():
+                conn.execute("UPDATE agents SET model = ? WHERE model = ?", (_successor, _retired))
             # Same reasoning as the model default above: the column default is
             # what provision_account_defaults' bare INSERT relies on, so a new
             # tenant's starter agent gets the fastest measured voice. Existing
