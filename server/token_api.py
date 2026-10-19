@@ -4030,8 +4030,7 @@ def _guard_realtime_voice(data: dict, account_id: int, agent_id: int | None = No
     if model.startswith("gemini-live") and voice and not _realtime_voice_usable(voice):
         raise HTTPException(
             400,
-            "Realtime models can only speak with a Gemini realtime voice (for example Aoede or Kore). "
-            "Pick one of those voices for this agent.",
+            "Vistrow Live can only speak with a Live voice. Pick one of your Live voices for this agent.",
         )
 
 

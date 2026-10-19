@@ -689,8 +689,25 @@ function AgentEditorForm({
               Use <code className="rounded bg-surface-high px-1 py-0.5 text-primary">{'{{variable}}'}</code> for
               dynamic values filled per call.
             </span>
-            <span>~{promptTokens} tokens</span>
+            <span
+              className={
+                isRealtimeModel(form.model) && promptTokens > 2000
+                  ? 'text-destructive'
+                  : isRealtimeModel(form.model) && promptTokens > 1000
+                    ? 'text-amber-600'
+                    : undefined
+              }
+            >
+              ~{promptTokens} tokens
+            </span>
           </div>
+          {/* Realtime re-sends the whole prompt every turn (measured 19 Oct:
+              about ₹0.072 per 1,000 prompt tokens per turn); pipeline models don't. */}
+          {isRealtimeModel(form.model) && promptTokens > 1000 && (
+            <p className={`mt-1 text-xs ${promptTokens > 2000 ? 'text-destructive' : 'text-amber-600'}`}>
+              Realtime re-bills the whole prompt every turn; keep it under ~1,000 tokens.
+            </p>
+          )}
         </Field>
 </TabPane>
 
