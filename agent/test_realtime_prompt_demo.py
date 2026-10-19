@@ -15,7 +15,7 @@ ARTHA = open(os.path.join(HERE, "testdata", "artha_rt_instructions.txt"), encodi
 
 KEEP_HEADINGS = (
     "# Your identity", "# Language", "# Platform rules", "# How to run this demo call", "# Pricing",
-    "# Knowledge base", "# Lead capture", "# Only state back", "# Speak numbers",
+    "# Knowledge base", "# Lead capture", "# Only state back",
     "# Current date and time", "# How to talk", "# Personality",
 )
 DROPPED_HEADINGS = (
@@ -41,10 +41,10 @@ class PlatformDemoDiet(unittest.TestCase):
         self.assertFalse(rp.is_platform_demo(ARTHA.replace("the voice of Vistrow Voice itself", "a clinic's voice")))
 
     def test_fits_the_per_turn_budget(self):
-        # ≈ 3,700 tokens at the 4.3 chars/token this prompt measured at: the
-        # 18 Oct diet (~13,000 chars) plus the Personality section and the
-        # spoken-register line restored 19 Oct (owner, after call 1415).
-        self.assertLessEqual(len(self.out), 17_500, len(self.out))
+        # 19 Oct cost pass: identity, lead capture, numbers and personality
+        # rebuilt short and the playbook tightened, while the knowledge base
+        # now carries every approved answer (it had 1 of 19).
+        self.assertLessEqual(len(self.out), 14_600, len(self.out))
 
     def test_kept_headings_and_key_phrases(self):
         heads = "\n".join(self.heads())
@@ -57,10 +57,32 @@ class PlatformDemoDiet(unittest.TestCase):
 
     def test_kept_sections_are_verbatim(self):
         sections = {p.split("\n", 1)[0]: p.strip() for p in re.split(r"(?m)^(?=# )", ARTHA) if p.strip()}
-        for head in ("# Your identity", "# Platform rules", "# Lead capture", "# Only state back",
-                     "# Speak numbers", "# Current date and time", "# Personality"):
+        for head in ("# Platform rules", "# Only state back", "# Current date and time"):
             section = next(v for k, v in sections.items() if k.startswith(head))
             self.assertIn(section, self.out, head)
+
+    def test_short_demo_sections_keep_every_rule(self):
+        # Owner, 19 Oct 2026: identity, lead capture, numbers and personality
+        # rebuilt short (~1,860 -> ~640 tokens) without dropping a rule.
+        identity = self.out.split("# Your identity", 1)[1].split("\n# ", 1)[0]
+        for phrase in ("a woman", "the voice of Vistrow Voice itself", "मैं बताती", "मी सांगते",
+                       "Gujarati and Punjabi", "Artha, that's me!", "talk to Artha live"):
+            self.assertIn(phrase, identity, phrase)
+        lead = self.out.split("\n# Lead capture\n", 1)[1].split("\n# ", 1)[0]
+        for phrase in ("capture_platform_lead", "check_calendar_availability", "never say booked unless",
+                       "cannot play recordings, sample voices", "telephony provider", "widget needs no number",
+                       "Exact prices are not given on calls", "platform rule 5", "numbers and units as spoken"):
+            self.assertIn(phrase, lead, phrase)
+        self.assertNotIn("log_lead", self.out)  # tenant rule, no such tool on the demo
+        self.assertNotIn("# Speak numbers", self.out)
+
+    def test_every_approved_answer_reaches_the_model(self):
+        # Call 1419: the old 1,900-char cut counted the clinic strict-mode
+        # header, so Artha saw 1 approved answer of 19 and improvised.
+        kb = self.out.split("# Knowledge base", 1)[1].split("\n# ", 1)[0]
+        self.assertEqual(kb.count("Q: Question"), ARTHA.count("Q: Question"))
+        self.assertIn("only source for Vistrow's facts", kb)
+        self.assertNotIn("doctors", kb)
 
     def test_coaching_headings_are_gone(self):
         heads = "\n".join(self.heads())
@@ -77,7 +99,7 @@ class PlatformDemoDiet(unittest.TestCase):
                      "Never name the models", "Never re-ask", "capture_platform_lead",
                      "Book a demo only with name and phone", "No absolutes"):
             self.assertIn(rule, playbook, rule)
-        self.assertLess(len(playbook), 3_800)
+        self.assertLess(len(playbook), 2_500)
 
     def test_personality_and_spoken_register_survive(self):
         # Owner, 19 Oct 2026: call 1415 on 3.8 without these came out formal
@@ -117,10 +139,10 @@ class PlatformDemoDiet(unittest.TestCase):
         self.assertNotIn("most customers land", self.out)  # the long plan description
 
     def test_knowledge_base_is_cut_on_a_whole_answer(self):
-        kb = self.out.split("# Knowledge base", 1)[1].split("\n# ", 1)[0]
+        kb = rp._demo_kb("# Knowledge base\n" + "\n\n".join(f"Q: q{i}\nA: " + "x" * 400 for i in range(40)))
         self.assertLessEqual(len(kb), rp._DEMO_KB_LIMIT)
         self.assertTrue(kb.rstrip().endswith("x"), kb[-80:])
-        self.assertIn("Q: Question 0", kb)
+        self.assertIn("Q: q0", kb)
 
     def test_recompacting_the_output_changes_nothing(self):
         # main.py hands compact() the assembled text once; the saved fixture is
