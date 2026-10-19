@@ -189,3 +189,11 @@ def test_3x_models_hear_soft_speech_but_need_400ms_of_it():
     ad25 = config.activity_detection(config.DEFAULT_MODEL).automatic_activity_detection
     assert ad25.start_of_speech_sensitivity == config.types.StartSensitivity.START_SENSITIVITY_HIGH
     assert ad25.prefix_padding_ms == 20
+
+
+def test_38_captions_are_hinted_hindi_and_english():
+    # Call 1427: 3.8 captioned Hinglish as Spanish ("Pucharon con Pune").
+    assert config.input_transcription(config.MODEL_38, "en-IN").language_codes == ["en-IN", "hi-IN"]
+    assert config.input_transcription(config.MODEL_38, "hi-IN").language_codes == ["hi-IN", "en-IN"]
+    assert config.input_transcription(config.MODEL_38, "auto").language_codes is None
+    assert config.input_transcription(config.MODEL_31, "en-IN").language_codes is None
