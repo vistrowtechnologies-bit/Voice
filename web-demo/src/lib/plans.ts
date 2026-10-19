@@ -7,12 +7,11 @@ export interface Plan {
   // Lowercase key matching server/calls_db.py's PLAN_PRICING / accounts.plan
   // values and the Razorpay plan-id env vars in server/razorpay_client.py.
   key: 'starter' | 'growth' | 'scale'
-  price: string
   // One line, shown under the plan name - who this tier is actually for.
   description: string
-  // Mirrors server/calls_db.py's PLAN_PRICING - keep both in sync by hand
-  // (see that dict's own comment for why they can't share a module).
-  priceInr: number
+  // No prices here (owner, 18 Oct: prices are not public). This file ships in
+  // the public pricing page's bundle; the dashboard reads prices from the
+  // server's plan list (billing.plans).
   creditsNum: number
   credits: string
   tag: string | null
@@ -79,9 +78,7 @@ export const PLANS: Plan[] = [
   {
     name: 'Starter',
     key: 'starter',
-    price: '₹2,999',
     description: 'For trying voice AI on one real use case before you scale it up.',
-    priceInr: 2999,
     creditsNum: 400,
     credits: '400 minutes/mo',
     tag: null,
@@ -105,9 +102,7 @@ export const PLANS: Plan[] = [
   {
     name: 'Growth',
     key: 'growth',
-    price: '₹5,999',
     description: 'For teams automating inbound and outbound campaigns.',
-    priceInr: 5999,
     creditsNum: 1100,
     credits: '1,100 minutes/mo',
     tag: 'Recommended',
@@ -134,9 +129,7 @@ export const PLANS: Plan[] = [
   {
     name: 'Scale',
     key: 'scale',
-    price: '₹12,999',
     description: 'Full API access and integrations, built for production volume.',
-    priceInr: 12999,
     creditsNum: 2700,
     credits: '2,700 minutes/mo',
     tag: 'Most Popular',

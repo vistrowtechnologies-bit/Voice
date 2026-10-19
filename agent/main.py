@@ -287,30 +287,30 @@ _PLATFORM_DEMO_OPENERS: dict[str, list[str]] = {
 # always spoke the Hinglish lines regardless of that setting.
 _PLATFORM_DEMO_OPENERS_EN: dict[str, list[str]] = {
     "female": [
-        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. What industry is your business in?",
-        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. So, what does your business do?",
-        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. What business are you in?",
-        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. Just tell me — what does your business do?",
-        "Hi, I'm Artha. So, what field is your business in?",
-        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. Right now, when you miss a call, what happens on your end?",
-        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? What's got you checking this out?",
-        "Hold on, before I say anything — when's the last time you called a business and the person on the other end actually helped, fast?",
-        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. What's your business?",
-        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. Straight up — what's the biggest headache with your calls right now?",
-        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? What industry are you in?",
+        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. You can talk to me in any language you like. What industry is your business in?",
+        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. You can talk to me in any language you like. So, what does your business do?",
+        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. You can talk to me in any language you like. What business are you in?",
+        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. You can talk to me in any language you like. Just tell me — what does your business do?",
+        "Hi, I'm Artha. You can talk to me in any language you like. So, what field is your business in?",
+        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. You can talk to me in any language you like. Right now, when you miss a call, what happens on your end?",
+        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? You can talk to me in any language you like. What's got you checking this out?",
+        "Hold on, before I say anything — you can talk to me in any language you like. Now: when's the last time you called a business and the person on the other end actually helped, fast?",
+        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. You can talk to me in any language you like. What's your business?",
+        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. You can talk to me in any language you like. Straight up — what's the biggest headache with your calls right now?",
+        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? You can talk to me in any language you like. What industry are you in?",
     ],
     "male": [
-        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. What industry is your business in?",
-        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. So, what does your business do?",
-        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. What business are you in?",
-        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. Just tell me — what does your business do?",
-        "Hi, I'm Artha. So, what field is your business in?",
-        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. Right now, when you miss a call, what happens on your end?",
-        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? What's got you checking this out?",
-        "Hold on, before I say anything — when's the last time you called a business and the person on the other end actually helped, fast?",
-        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. What's your business?",
-        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. Straight up — what's the biggest headache with your calls right now?",
-        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? What industry are you in?",
+        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. You can talk to me in any language you like. What industry is your business in?",
+        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. You can talk to me in any language you like. So, what does your business do?",
+        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. You can talk to me in any language you like. What business are you in?",
+        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. You can talk to me in any language you like. Just tell me — what does your business do?",
+        "Hi, I'm Artha. You can talk to me in any language you like. So, what field is your business in?",
+        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. You can talk to me in any language you like. Right now, when you miss a call, what happens on your end?",
+        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? You can talk to me in any language you like. What's got you checking this out?",
+        "Hold on, before I say anything — you can talk to me in any language you like. Now: when's the last time you called a business and the person on the other end actually helped, fast?",
+        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. You can talk to me in any language you like. What's your business?",
+        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. You can talk to me in any language you like. Straight up — what's the biggest headache with your calls right now?",
+        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? You can talk to me in any language you like. What industry are you in?",
     ],
 }
 
@@ -3298,6 +3298,28 @@ def _add_llm_usage(usage: dict, metric) -> None:
         usage[key] = usage.get(key, 0) + max(0, int(getattr(metric, attr, 0) or 0))
 
 
+def _add_realtime_usage(usage: dict, metric) -> None:
+    """Adds one LiveKit RealtimeModelMetrics (Gemini Live generation) to the
+    same running totals as _add_llm_usage, plus the text/audio split the bill
+    is priced on: audio tokens cost several times text tokens, and the totals
+    alone cannot show which one a call burned. One metric = one generation."""
+    usage["requests"] = usage.get("requests", 0) + 1
+    if getattr(metric, "cancelled", False):
+        usage["cancelledRequests"] = usage.get("cancelledRequests", 0) + 1
+    in_details = getattr(metric, "input_token_details", None)
+    out_details = getattr(metric, "output_token_details", None)
+    for key, obj, attr in (
+        ("promptTokens", metric, "input_tokens"),
+        ("cachedTokens", in_details, "cached_tokens"),
+        ("completionTokens", metric, "output_tokens"),
+        ("rtTextIn", in_details, "text_tokens"),
+        ("rtAudioIn", in_details, "audio_tokens"),
+        ("rtTextOut", out_details, "text_tokens"),
+        ("rtAudioOut", out_details, "audio_tokens"),
+    ):
+        usage[key] = usage.get(key, 0) + max(0, int(getattr(obj, attr, 0) or 0))
+
+
 def _build_tools(config: dict) -> list:
     """The agent's live tool set. Core lead-capture + KB tools are always on
     (they're how the call does its job); enabled_functions only gates the
@@ -3829,7 +3851,9 @@ class RealEstateAgent(Agent):
             # instead of folding it into whichever section precedes it.
             caller_tail += "\n\n# This contact\n" + config["_contact_notes"]
 
-        reply_language = config.get("language") or "hi-IN"
+        # The platform demo opens in English (owner, 18 Oct 2026: callers from
+        # outside India got a Hindi opener); tenants keep Hindi as the default.
+        reply_language = config.get("language") or ("en-IN" if config.get("is_platform_demo") else "hi-IN")
         language_name = LANGUAGE_NAMES.get(reply_language, "Hindi")
         # 2026-10-16 prompt-cuts: ~215 -> ~120 tokens, same rules.
         instructions += (
@@ -4234,12 +4258,35 @@ class RealEstateAgent(Agent):
             _compliance, self._reply_language, self._is_platform_demo,
             cloned_voice=self._is_cloned_voice,
         )
+        _typed_welcome = self._welcome_message
         if self._welcome_message:
             self._welcome_message = call_disclosure.with_disclosure(
                 self._welcome_message, self._recording_disclosure, force=self._is_cloned_voice,
             )
+        # A cloned voice reads a romanized line ("Bataiye, main aapki...") with
+        # English pronunciation; swap in the native-script line when it is
+        # ready (custom_voice.native_script). Never waits: if the greeting
+        # starts first, the typed line is spoken as before.
+        if self._is_cloned_voice and custom_voice.needs_native_script(_typed_welcome, self._reply_language):
+            self._start_native_welcome(_typed_welcome)
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
+
+    def _start_native_welcome(self, typed: str) -> None:
+        spoken = self._welcome_message
+
+        async def _swap() -> None:
+            native = await custom_voice.native_script(typed, self._reply_language)
+            if native != typed and self._welcome_message == spoken:
+                self._welcome_message = call_disclosure.with_disclosure(
+                    native, self._recording_disclosure, force=self._is_cloned_voice,
+                )
+                logger.info("cloned voice: welcome line switched to native script")
+
+        try:
+            self._native_welcome_task = asyncio.get_running_loop().create_task(_swap())
+        except RuntimeError:  # no running loop (direct construction in tests)
+            self._native_welcome_task = None
 
     def _warm_llm_prompt_cache(self) -> None:
         """Process this agent's system prompt once, in the background, while
@@ -4653,6 +4700,14 @@ class RealEstateAgent(Agent):
             _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
         elif answered and getattr(self, "_lead_opening", ""):
             _greet += " " + self._lead_opening
+        if getattr(self, "_is_platform_demo", False) and not _opener:
+            # Owner, 18 Oct 2026: a visitor from Angola got a Hindi opener and
+            # had to ask for his language. The demo tells every caller, in its
+            # first line, that any language is fine.
+            _greet += (
+                " Also tell them, in the same short opening, that they can talk to you in any "
+                "language they like."
+            )
         _greet += call_disclosure.instruction(getattr(self, "_recording_disclosure", ""))
         if _opener and self._realtime_wants_tts_greeting():
             self.session.userdata["realtime_greeting_pending"] = True
@@ -8407,6 +8462,36 @@ async def entrypoint(ctx: JobContext) -> None:
         # record still says what served the turn.
         if not label:
             label = (getattr(metric, "label", "") or "").strip()
+        if metric_type == "realtime_model_metrics":
+            # Token accounting for every generation, cancelled ones included
+            # (they were billed). Until this landed the calls.llm_* columns
+            # stayed NULL for realtime calls, so the ₹8.5/min Google bill
+            # against a ₹1.35 list price could not be traced per call.
+            usage = timings.setdefault("llmUsage", _new_llm_usage())
+            _add_realtime_usage(usage, metric)
+            rt_in = getattr(metric, "input_token_details", None)
+            rt_out = getattr(metric, "output_token_details", None)
+            rt_prompt = int(getattr(metric, "input_tokens", 0) or 0)
+            rt_cached = int(getattr(rt_in, "cached_tokens", 0) or 0)
+            rt_completion = int(getattr(metric, "output_tokens", 0) or 0)
+            logger.info(
+                "[rt-usage] model=%s in=%s (text=%s audio=%s cached=%s) out=%s (text=%s audio=%s) room=%s",
+                model, rt_prompt,
+                getattr(rt_in, "text_tokens", 0), getattr(rt_in, "audio_tokens", 0), rt_cached,
+                rt_completion,
+                getattr(rt_out, "text_tokens", 0), getattr(rt_out, "audio_tokens", 0),
+                ctx.room.name,
+            )
+            _record_diagnostic(
+                "metric", "llm", "AI response started", "info",
+                observedAtOffsetMs=collected_offset_ms,
+                provider=provider,
+                model=model,
+                promptTokens=rt_prompt,
+                cachedTokens=rt_cached,
+                completionTokens=rt_completion,
+                cancelled=bool(getattr(metric, "cancelled", False)),
+            )
         if metric_type == "eou_metrics":
             samples = (
                 ("endpointing", "eouMs", "Caller turn detected", metric.end_of_utterance_delay),

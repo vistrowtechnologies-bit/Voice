@@ -1334,12 +1334,21 @@ def init_tables() -> None:
                 ("test_scenario_name", "TEXT DEFAULT ''"),
                 # Per-call LLM token totals from LiveKit's llm_metrics,
                 # cancelled requests included; written by the agent right
-                # after the call row (agent/db.py set_call_llm_usage). NULL =
-                # calls before these columns, realtime calls, or no request.
+                # after the call row (agent/db.py set_call_llm_usage); realtime
+                # (Gemini Live) generations count too since 2026-10-18. NULL =
+                # calls before these columns or no request.
                 ("llm_requests", "INTEGER"),
                 ("llm_prompt_tokens", "INTEGER"),
                 ("llm_cached_tokens", "INTEGER"),
                 ("llm_completion_tokens", "INTEGER"),
+                # Realtime (Gemini Live) split of the same totals: input and
+                # output tokens by text vs audio, because audio tokens are
+                # billed at a multiple of text and the totals alone cannot
+                # show which one a call burned. NULL = no realtime generation.
+                ("llm_rt_text_in", "INTEGER"),
+                ("llm_rt_audio_in", "INTEGER"),
+                ("llm_rt_text_out", "INTEGER"),
+                ("llm_rt_audio_out", "INTEGER"),
                 # Automatic conversation intelligence (campaign_dialer's
                 # auto-analysis sweep): how many times the sweep has tried
                 # this call, when it last claimed it, and the last error or

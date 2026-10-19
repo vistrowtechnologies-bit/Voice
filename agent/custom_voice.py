@@ -163,3 +163,76 @@ def resolve(voice: str, account_id: int | None, lookup: Callable[[str, int | Non
         logger.exception("cloned voice lookup failed for %s", voice[len(PREFIX):])
         row = None
     return resolve_row(voice, account_id, row, eleven_key, sarvam_key, acquire_slot)
+
+
+# ---- Native script for fixed lines spoken in a cloned voice ----------------
+# Sarvam's cloning guide: "Always prefer the native script for the most
+# accurate pronunciation." A welcome message typed as romanized Hindi
+# ("Bataiye, main aapki kya madad...") is read with English pronunciation by a
+# clone: owner's test 17 Oct, speech-to-text heard "Bataiye" as "beta ye";
+# the same line in Devanagari came back word for word. Sarvam /transliterate
+# (docs.sarvam.ai/api-reference/text/transliterate-text, read 17 Oct) takes
+# en-IN -> these targets (no Assamese). Measured 0.6-1.2 s per request, so it
+# runs once in the background at call setup and is cached per process; it is
+# never on the path of a reply.
+TRANSLITERATE_URL = "https://api.sarvam.ai/transliterate"
+TRANSLITERATE_TARGETS = frozenset({"bn-IN", "gu-IN", "hi-IN", "kn-IN", "ml-IN", "mr-IN", "od-IN", "pa-IN", "ta-IN", "te-IN"})
+TRANSLITERATE_TIMEOUT_S = 3.0
+_NATIVE_CACHE: dict[tuple[str, str], str] = {}
+_NATIVE_CACHE_MAX = 256
+# Common English words: a line that is mostly these is English on purpose
+# ("Hello, thank you for calling") and is left as it is.
+_ENGLISH_WORDS = frozenset(
+    "a an and are as at be can do for from have hello help hi how i in is it me my of on our please "
+    "thank thanks that the this to today we what will with you your".split()
+)
+
+
+def needs_native_script(text: str, language: str) -> bool:
+    """True for a line mostly in Latin letters that is not plain English,
+    in a language Sarvam can transliterate into."""
+    if language not in TRANSLITERATE_TARGETS or not text:
+        return False
+    letters = [c for c in text if c.isalpha()]
+    latin = sum(1 for c in letters if c.isascii())
+    if not letters or latin / len(letters) < 0.6:
+        return False
+    words = [w.strip(".,!?;:'\"()-").lower() for w in text.split()]
+    words = [w for w in words if w.isascii() and w.isalpha()]
+    if not words:
+        return False
+    return sum(1 for w in words if w in _ENGLISH_WORDS) / len(words) < 0.3
+
+
+async def native_script(text: str, language: str, api_key: str | None = None,
+                        timeout: float = TRANSLITERATE_TIMEOUT_S) -> str:
+    """The line in the language's own script (Sarvam /transliterate), or the
+    line unchanged when it does not need it or anything goes wrong."""
+    if not needs_native_script(text, language):
+        return text
+    key = (text, language)
+    if key in _NATIVE_CACHE:
+        return _NATIVE_CACHE[key]
+    api_key = api_key if api_key is not None else os.environ.get("SARVAM_API_KEY")
+    if not api_key:
+        return text
+    import aiohttp  # agent runtime dependency; kept out of import time for tests
+
+    body = {"input": text, "source_language_code": "en-IN", "target_language_code": language}
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as http:
+            async with http.post(TRANSLITERATE_URL, json=body, headers={"api-subscription-key": api_key}) as resp:
+                if resp.status != 200:
+                    logger.warning("native script: Sarvam transliterate HTTP %s; keeping the typed line", resp.status)
+                    return text
+                out = ((await resp.json()) or {}).get("transliterated_text") or ""
+    except Exception as e:  # timeout, network, bad JSON: the typed line still works
+        logger.warning("native script: transliterate failed (%s); keeping the typed line", type(e).__name__)
+        return text
+    out = out.strip()
+    if not out:
+        return text
+    if len(_NATIVE_CACHE) >= _NATIVE_CACHE_MAX:
+        _NATIVE_CACHE.pop(next(iter(_NATIVE_CACHE)))
+    _NATIVE_CACHE[key] = out
+    return out

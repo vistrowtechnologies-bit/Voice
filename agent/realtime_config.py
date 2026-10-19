@@ -109,19 +109,38 @@ def clean_browser_input(model: str, *, phone: bool) -> bool:
     return model == DEFAULT_MODEL and not phone
 
 
-def context_compression(instructions: str) -> types.ContextWindowCompressionConfig:
+AUDIO_TOKENS_PER_SECOND = 25  # Google's own figure on the Live API pricing page
+
+
+def context_compression(
+    instructions: str, *, keep_seconds: int = 90
+) -> types.ContextWindowCompressionConfig:
     """Cap the conversation history Google re-bills on every turn.
 
-    The bill (Oct 6-9 2026) showed the platform demo averaging ~44k text
-    input tokens per turn against a ~18k-token instruction: the rest is the
-    growing conversation, re-sent each turn. Once history passes ~10k tokens
-    beyond the instruction, Google's sliding window drops the oldest turns
-    back to ~6k (the system instruction is always kept). Roughly the last
-    few minutes of a call stay in context; facts already saved through the
-    lead tools are unaffected.
+    The whole context (instruction + every retained turn, caller audio
+    included) is re-sent and re-billed on each turn. Bill, 17 Oct 2026, on
+    3.1/3.8 Live: 181,111 audio-input tokens billed for ~15 min of caller
+    audio, i.e. ~22,500 real tokens at 25 tokens/s re-billed about 8x,
+    worth Rs 3.8 of the Rs 8.5/min. The old thresholds (instruction + 10k
+    to trigger, back to instruction + 6k) were sized on text and a 5-minute
+    call never reached them, so compression never ran. The re-bill factor is
+    roughly the number of turns kept in history, so compression must engage
+    within the first minute of a call: the trigger sits at the instruction
+    plus ~1 minute of audio (plus headroom), and the sliding window keeps
+    the instruction plus ``keep_seconds`` of audio (~3-4 recent turns at
+    the default 90 s, ~2,250 audio tokens plus transcripts), which should
+    bring the audio re-bill factor to ~2x. Google always retains the system
+    instruction and keeps the most recent turns. Facts already saved through
+    the lead tools are unaffected.
     """
-    instruction_tokens = len(instructions) // 4 + 1  # ~4.2 chars/token measured for these prompts
+    # count_tokens measured 4.31 chars/token on the demo prompt; //4 + 1
+    # overestimates slightly, which keeps both thresholds above the instruction.
+    instruction_tokens = len(instructions) // 4 + 1
+    keep_tokens = AUDIO_TOKENS_PER_SECOND * keep_seconds
+    trigger_tokens = instruction_tokens + max(2_000, keep_tokens + 1_500)
+    target_tokens = instruction_tokens + keep_tokens
+    assert instruction_tokens < target_tokens < trigger_tokens
     return types.ContextWindowCompressionConfig(
-        trigger_tokens=instruction_tokens + 10_000,
-        sliding_window=types.SlidingWindow(target_tokens=instruction_tokens + 6_000),
+        trigger_tokens=trigger_tokens,
+        sliding_window=types.SlidingWindow(target_tokens=target_tokens),
     )

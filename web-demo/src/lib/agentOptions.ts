@@ -324,9 +324,12 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
   { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest OpenAI cost; measure quality before rollout' },
   // Re-listed at the platform owner's request for a controlled retest. Keep
   // this owner-only: prior calls showed slower audio and turn-handling errors.
-  { value: 'gemini-live', label: 'Vistrow Live 2.5 · realtime', tag: 'Owner-only · replies in about 2-3 s · about a third of the cost of 3.1' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 · realtime', tag: 'Owner-only · fastest speech-to-speech (about 1-2 s) · recommended for realtime' },
-  { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · GA successor to 3.1, same price · in testing' },
+  // Owner, 18 Oct 2026: 3.8 Live is the primary realtime model (Google GA,
+  // same price as 3.1); 3.1 is legacy (Google shutdown from 17 Nov 2026) and
+  // 2.5 retired. Both stay selectable only so existing rows still display.
+  { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · primary realtime model · speech-to-speech in about 1-2 s' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 (retired)', tag: 'Owner-only · retired 18 Oct 2026, use 3.8' },
+  { value: 'gemini-live', label: 'Vistrow Live 2.5 (retired)', tag: 'Owner-only · retired, use 3.8' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */

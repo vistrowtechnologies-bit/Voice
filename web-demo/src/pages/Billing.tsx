@@ -260,10 +260,12 @@ export function Billing() {
               // Annual leads with what it works out to per month (owner, 17 Oct);
               // the amount actually charged once a year stays in the small print,
               // since that is what checkout takes upfront.
-              const yearInr = sp?.annualPrice ?? plan.priceInr * ANNUAL_MONTHS_CHARGED
-              const priceInr = cycle === 'annual' ? Math.round(yearInr / 12) : sp?.monthlyPrice ?? plan.priceInr
-              const displayPrice = `₹${priceInr.toLocaleString('en-IN')}`
-              const gstInr = priceInr * 0.18
+              // Prices come only from the server (none are kept in the public bundle);
+              // without its plan list the card shows a dash rather than a guess.
+              const yearInr = sp ? sp.annualPrice : null
+              const priceInr = sp ? (cycle === 'annual' ? Math.round(sp.annualPrice / 12) : sp.monthlyPrice) : null
+              const displayPrice = priceInr == null ? '—' : `₹${priceInr.toLocaleString('en-IN')}`
+              const gstInr = (priceInr ?? 0) * 0.18
               const minutesLine = `${(cycle === 'annual' ? sp?.annualMinutesPerMonth ?? plan.creditsNum : sp?.monthlyMinutes ?? plan.creditsNum).toLocaleString('en-IN')} minutes a month`
               return (
                 <div
@@ -294,9 +296,11 @@ export function Billing() {
                           <span className="text-xs font-normal text-text-muted"> /month</span>
                         </p>
                         <p className="text-xs text-text-muted">
-                          {cycle === 'annual'
-                            ? `Billed ₹${yearInr.toLocaleString('en-IN')} once a year + 18% GST`
-                            : `+ ₹${gstInr.toLocaleString('en-IN', { maximumFractionDigits: 0 })} GST (18%)`}
+                          {priceInr == null
+                            ? 'Price unavailable right now'
+                            : cycle === 'annual'
+                              ? `Billed ₹${(yearInr ?? 0).toLocaleString('en-IN')} once a year + 18% GST`
+                              : `+ ₹${gstInr.toLocaleString('en-IN', { maximumFractionDigits: 0 })} GST (18%)`}
                         </p>
                       </>
                     ) : (

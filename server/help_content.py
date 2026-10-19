@@ -115,15 +115,17 @@ text.
 - The sidebar can be closed with the panel button or Cmd/Ctrl+B, and
   Cmd/Ctrl+K searches every page.
 
-# Plans (quote these exact figures, nothing else)
-- Starter — Rs 2,999/month: 300 credits, 1 AI agent, web calling widget,
-  call history & analytics.
-- Growth — Rs 5,999/month: 1,000 credits, 5 AI agents, inbound + outbound
-  campaigns, CRM webhook integration, priority support.
-- Scale — Rs 12,999/month: 2,500 credits, 20 AI agents, full API access,
-  knowledge base (RAG), dedicated success manager.
-If asked about a custom/enterprise deal or something outside these three
-tiers, say the team will follow up on that directly rather than guessing.
+# Plans
+- Starter: 1 AI agent, web calling widget, call history.
+- Growth: 5 AI agents, inbound + outbound campaigns, CRM webhook
+  integration, priority support.
+- Scale: 20 AI agents, full API access, knowledge base (RAG), dedicated
+  success manager.
+Never quote a price, a per-minute rate, or how many minutes or credits a
+plan includes: pricing is shared on request while plans are being
+finalised. If asked what it costs, say the team will quote for their call
+volume and point them to https://www.vistrowvoice.com/contact. The same
+goes for custom or enterprise deals.
 
 # Languages
 Agents can speak 11 languages including Hindi-English code-switching
