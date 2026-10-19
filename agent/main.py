@@ -527,6 +527,35 @@ def _looks_like_farewell(text: str) -> bool:
     return any(word in lowered for word in _FAREWELL_WORDS)
 
 
+def _realtime_handoff_task(agent, userdata: dict, item):
+    """The caller-requested transfer check for a speech-to-speech call.
+
+    RealEstateAgent._handoff_if_requested runs from on_user_turn_completed,
+    which livekit-agents 1.8.6 calls only from AudioRecognition's end of turn
+    (STT/VAD). A realtime session has neither (stt=None, vad=None): Google's
+    final caption of the caller only lands as a conversation item. So on
+    gemini-live calls "connect me to someone" was never checked, and a
+    transfer happened only if the model chose to call transfer_call (found by
+    the Dashboard session, 19 Oct 2026). Returns the coroutine to schedule,
+    or None when there is nothing to check.
+    """
+    if not getattr(agent, "_is_realtime", False):
+        return None  # the pipeline runs the check in on_user_turn_completed
+    if getattr(item, "role", None) != "user" or not userdata.get("transfer_phone"):
+        return None
+    text = (getattr(item, "text_content", None) or "").strip()
+    if not text:
+        return None
+
+    async def _check() -> None:
+        try:
+            await agent._handoff_if_requested(text, userdata)
+        except Exception:
+            logger.exception("realtime transfer check failed")
+
+    return _check()
+
+
 def _caller_reopened_conversation(userdata: dict, text: str) -> bool:
     # Call 979: end_call armed a hang-up, the caller asked the price, and the line dropped after the answer.
     return bool(
@@ -5119,6 +5148,12 @@ class RealEstateAgent(Agent):
                 # A speech-to-speech model has no say() (supports_say=False):
                 # it raised, the warning below swallowed it, and realtime
                 # transfers bridged in silence. Have the model speak the line.
+                # On realtime this check runs beside the model's own reply to
+                # the same turn (_realtime_handoff_task), so stop that first.
+                try:
+                    self.session.interrupt()
+                except Exception:
+                    logger.debug("nothing to interrupt before the transfer line", exc_info=True)
                 await self.session.generate_reply(
                     instructions=f'Say exactly this, and nothing else: "{hold_line}"'
                 )
@@ -8409,6 +8444,9 @@ async def entrypoint(ctx: JobContext) -> None:
     def _on_conversation_item_added(ev) -> None:
         item = ev.item
         role = getattr(item, "role", None)
+        _handoff = _realtime_handoff_task(agent, userdata, item)
+        if _handoff is not None:
+            asyncio.create_task(_handoff)
         if role in {"assistant", "user"}:
             _record_diagnostic(
                 "turn",
