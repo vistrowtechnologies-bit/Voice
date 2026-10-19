@@ -65,11 +65,14 @@ def public_plans() -> list[dict]:
 # 1 credit = 1 standard minute: any standard voice (Native, Vistrow HD, Bharat
 # voices, cloned voices) on a standard model, the Vistrow Bharat (Sarvam)
 # pipeline included, bills exactly 1. Vistrow Live (Gemini realtime, every
-# version) bills 3 and ignores the voice tier, since the model speaks itself.
+# version) bills 2 and ignores the voice tier, since the model speaks itself.
+# It billed 3 while realtime was estimated at ~Rs 16/min; owner, 19 Oct 2026,
+# after measuring Rs 3.3-4.1/min at a normal pace on real calls: 2 credits
+# (Rs 9.6-15 earned per minute across plans) and open to every plan.
 # Premium voices (2x) and the legacy premium LLM tiers keep their credit-era
 # multipliers: a credit is still worth one GPT + Chirp minute, as before.
 VOICE_TIER_MULTIPLIERS = {"economy": 1.0, "standard": 1.0, "premium": 2.0}
-MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime": 3.0, "realtime_plus": 3.0}
+MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime": 2.0, "realtime_plus": 2.0}
 REALTIME_MODEL_TIERS = frozenset({"realtime", "realtime_plus"})
 MIN_CREDITS_PER_MINUTE = 1.0
 LIVE_MINUTES_PER_MINUTE = MODEL_TIER_MULTIPLIERS["realtime"]

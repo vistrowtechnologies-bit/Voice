@@ -74,12 +74,13 @@ class MinuteRates(unittest.TestCase):
         for call_type in RATES:
             self.assertEqual(_credits("google:chirp3:Achernar", "sarvam/sarvam-105b-conversations", 7.5, call_type), 7.5)
 
-    def test_vistrow_live_is_three_minutes_whatever_the_voice(self):
+    def test_vistrow_live_is_two_minutes_whatever_the_voice(self):
+        # Owner, 19 Oct 2026: 3 -> 2 after measuring Rs 3.3-4.1/min on real calls.
         for model in LIVE_MODELS:
             for voice in ("google:chirp3:Kore", "google:kore", None):
                 with self.subTest(model=model, voice=voice):
-                    self.assertEqual(_credits(voice, model), 3.0)
-        self.assertEqual(plan_policy.LIVE_MINUTES_PER_MINUTE, 3.0)
+                    self.assertEqual(_credits(voice, model), 2.0)
+        self.assertEqual(plan_policy.LIVE_MINUTES_PER_MINUTE, 2.0)
 
     def test_tiers_shown_to_tenants(self):
         self.assertEqual(calls_db.model_tier("sarvam/sarvam-105b-conversations"), "standard")
@@ -155,10 +156,10 @@ class MinuteBillingOnDatabase(unittest.TestCase):
         self.assertEqual(summary["creditsRemaining"], 4990.0)
         self.assertEqual(summary["creditUnit"], "standard_minute")
 
-    def test_live_minutes_count_three(self):
+    def test_live_minutes_count_two(self):
         self.set_credits(100)
         self.call(10, model="gemini-live", voice="google:chirp3:Kore")
-        self.assertEqual(calls_db.billing_summary(self.aid)["creditsUsed"], 30.0)
+        self.assertEqual(calls_db.billing_summary(self.aid)["creditsUsed"], 20.0)
 
     def test_overage_uses_the_plan_minute_rate(self):
         self.sql("UPDATE accounts SET plan = 'growth' WHERE id = ?", (self.aid,))

@@ -38,9 +38,9 @@ export const PRICING_FINALIZED = true
 // agents run Vistrow Bharat (sarvam/*), billed standard (1x);
 // server/test_plan_policy.py checks these stay in sync with billing.
 export const BHARAT_MODEL_MULTIPLIER = 1
-// Vistrow Live (Gemini realtime, every version) uses 3 minutes per minute and
-// ignores the voice tier, since the model speaks itself.
-export const LIVE_MODEL_MULTIPLIER: Record<string, number> = { '2.5': 3, default: 3 }
+// Vistrow Live (Gemini realtime, every version) uses 2 minutes per minute and
+// ignores the voice tier, since the model speaks itself (3 until 19 Oct 2026).
+export const LIVE_MODEL_MULTIPLIER: Record<string, number> = { '2.5': 2, default: 2 }
 export const MIN_MINUTES_PER_MINUTE = 1
 export function formatCredits(multiplier: number): string {
   const n = Math.max(MIN_MINUTES_PER_MINUTE, multiplier)
