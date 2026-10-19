@@ -183,6 +183,9 @@ _DEMO_PLAYBOOK = (
     "the plan and the number of lines, and the team confirms. Ask for their phone number or email only when they "
     "want a follow-up, a demo booked or something sent. A stray word or two that makes no sense is noise: skip "
     "it without apologising and keep going; ask them to repeat only when a full request was unclear.\n"
+    # Call 1420: "recorded... at that address" for info@pistol.com, never read back.
+    "Before you call capture_platform_lead, read the email or number back to them and wait for their yes; "
+    "never say it is recorded before that.\n"
 )
 
 

@@ -113,7 +113,7 @@ AUDIO_TOKENS_PER_SECOND = 25  # Google's own figure on the Live API pricing page
 
 
 def context_compression(
-    instructions: str, *, keep_seconds: int = 30
+    instructions: str, *, keep_seconds: int = 60
 ) -> types.ContextWindowCompressionConfig:
     """Cap the conversation history Google re-bills on every turn.
 
@@ -133,10 +133,20 @@ def context_compression(
     call's cost; the owner chose 30 s. Google always retains the system
     instruction and keeps the most recent turns. Facts already saved through
     the lead tools are unaffected.
+
+    Call 1420 (19 Oct, 30 s): the window trimmed back to the bare
+    instruction about once a minute (context 7,142 -> 5,422 tokens, text
+    4,808), so Artha re-greeted mid-call and re-asked the company and use
+    case. The instruction was estimated at chars/4 (~4,300) but really cost
+    4,808 tokens (~3.6 chars/token: Devanagari and Hinglish tokenize worse
+    than English), so "instruction + 30 s" was about the instruction alone.
+    It is now estimated at chars/3, which errs high, and 60 s are kept (owner:
+    memory over the last rupee).
     """
-    # count_tokens measured 4.31 chars/token on the demo prompt; //4 + 1
-    # overestimates slightly, which keeps both thresholds above the instruction.
-    instruction_tokens = len(instructions) // 4 + 1
+    # chars/3 errs high for every prompt measured so far (4.31 chars/token on
+    # the English demo text, ~3.6 on the live Artha prompt), so the window
+    # never cuts into the conversation.
+    instruction_tokens = len(instructions) // 3 + 1
     keep_tokens = AUDIO_TOKENS_PER_SECOND * keep_seconds
     trigger_tokens = instruction_tokens + max(2_000, keep_tokens + 1_500)
     target_tokens = instruction_tokens + keep_tokens
