@@ -4,6 +4,8 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import '../lib/chart-setup'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { WatchHowButton } from '../components/HelpVideo'
+import { helpVideoFor } from '../lib/helpVideos'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
 import { StatTile } from '../components/ui/StatTile'
@@ -271,6 +273,7 @@ export function Dashboard() {
     .filter((appointment) => appointment.status === 'confirmed' && appointment.date >= new Date().toISOString().slice(0, 10))
   const attentionCount = attentionItems.length
   const totalCalls = summary?.totalCalls ?? 0
+  const dashboardVideo = helpVideoFor('/dashboard')
   const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })
   const minutesLeft = billing?.creditsRemaining ?? 0
   const minutesLeftLabel = billing ? (Number.isInteger(minutesLeft) ? minutesLeft.toLocaleString('en-IN') : minutesLeft.toFixed(1)) : '—'
@@ -318,7 +321,7 @@ export function Dashboard() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Dashboard" subtitle="Overview of your voice AI platform" />
+      <PageHeader title="Dashboard" subtitle="Overview of your voice AI platform" ownWatchHow />
 
       <section className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
         <div className="flex items-center gap-6 border-b border-border">
@@ -338,43 +341,48 @@ export function Dashboard() {
 
         {tab === 'overview' && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <div role="group" aria-label="Performance period" className="flex gap-1 rounded-full bg-surface p-1 ring-1 ring-border">
-                  {RANGE_OPTIONS.map((range) => (
-                    <button
-                      key={range.days}
-                      type="button"
-                      onClick={() => setRangeDays(range.days)}
-                      aria-pressed={rangeDays === range.days}
-                      className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${rangeDays === range.days ? 'bg-primary text-white' : 'text-text-muted hover:text-text'}`}
-                    >
-                      {range.label}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-xs text-text-muted">Compared with the {rangeDays} days before</span>
+            {/* One row on every screen: the period switch takes the room it
+                has, Watch how and Customize sit at the end (icons only on
+                phones, labels for screen readers). */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div role="group" aria-label="Performance period" className="flex min-w-0 flex-1 gap-1 rounded-full bg-surface p-1 ring-1 ring-border sm:flex-none">
+                {RANGE_OPTIONS.map((range) => (
+                  <button
+                    key={range.days}
+                    type="button"
+                    onClick={() => setRangeDays(range.days)}
+                    aria-pressed={rangeDays === range.days}
+                    className={`flex-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-bold sm:flex-none sm:px-3.5 ${rangeDays === range.days ? 'bg-primary text-white' : 'text-text-muted hover:text-text'}`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
               </div>
-              <div className="relative max-w-full">
-                <button
-                  type="button"
-                  onClick={() => setCustomizing((value) => !value)}
-                  aria-expanded={customizing}
-                  className="flex items-center gap-2 rounded-full bg-surface px-3.5 py-2 text-xs font-bold text-text-muted ring-1 ring-border hover:text-text"
-                >
-                  <Icon name="tune" className="text-[17px]" /> Customize
-                </button>
-                {customizing && (
-                  <div className="absolute left-0 z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-3 shadow-xl sm:left-auto sm:right-0">
-                    <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Visible sections</p>
-                    {DASHBOARD_CARDS.map((card) => (
-                      <label key={card.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-high/40">
-                        <span>{card.label}</span>
-                        <input type="checkbox" checked={isVisible(card.key)} onChange={() => toggleCard(card.key)} className="accent-primary" />
-                      </label>
-                    ))}
-                  </div>
-                )}
+              <span className="hidden text-xs text-text-muted md:inline">Compared with the {rangeDays} days before</span>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                {dashboardVideo && <WatchHowButton slug={dashboardVideo} compact />}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setCustomizing((value) => !value)}
+                    aria-expanded={customizing}
+                    aria-label="Customize dashboard"
+                    className="flex h-9 items-center justify-center gap-2 rounded-full bg-surface px-2.5 text-xs font-bold text-text-muted ring-1 ring-border hover:text-text sm:h-auto sm:px-3.5 sm:py-2"
+                  >
+                    <Icon name="tune" className="text-[17px]" /><span className="sr-only sm:not-sr-only">Customize</span>
+                  </button>
+                  {customizing && (
+                    <div className="absolute right-0 z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-3 shadow-xl">
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Visible sections</p>
+                      {DASHBOARD_CARDS.map((card) => (
+                        <label key={card.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-high/40">
+                          <span>{card.label}</span>
+                          <input type="checkbox" checked={isVisible(card.key)} onChange={() => toggleCard(card.key)} className="accent-primary" />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

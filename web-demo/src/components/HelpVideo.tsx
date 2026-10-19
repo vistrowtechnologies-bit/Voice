@@ -37,7 +37,8 @@ export function HelpVideoPlayer({ slug, autoPlay = false }: { slug: string; auto
 }
 
 /** The "Watch how" button in a dashboard page header; the video opens in a dialog. */
-export function WatchHowButton({ slug }: { slug: string }) {
+/** compact: icon only on phones (the label stays for screen readers). */
+export function WatchHowButton({ slug, compact = false }: { slug: string; compact?: boolean }) {
   const [open, setOpen] = useState(false)
   const video = HELP_VIDEOS[slug]
   useEffect(() => {
@@ -52,10 +53,11 @@ export function WatchHowButton({ slug }: { slug: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+        aria-label={`Watch how: ${video.title}`}
+        className={`flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary ${compact ? 'h-9 justify-center px-2.5 sm:h-auto sm:px-3.5 sm:py-2' : 'px-3 py-1.5'}`}
       >
         <Icon name="play_arrow" className="text-[16px] text-primary" />
-        Watch how
+        <span className={compact ? 'sr-only sm:not-sr-only' : ''}>Watch how</span>
         <span className="hidden text-text-muted sm:inline">· {video.length}</span>
       </button>
       {open && (
