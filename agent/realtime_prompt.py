@@ -273,7 +273,49 @@ def _demo_sections(parts: list[str]) -> list[str]:
     return rest
 
 
-def compact(instructions: str, *, language_name: str, kb_limit: int = 6000) -> str:
+# --- Tenant realtime budget (owner, 19 Oct 2026) ---------------------------
+#
+# Google re-bills the whole instruction on every turn, and a realtime turn
+# already costs ~Rs 0.53 before any prompt (45 s of caller audio, the agent's
+# speech). To keep a normal-paced call near Rs 3.5-4/min the knowledge base
+# is held to ~1,500 tokens (5,500 chars cut on a whole answer; Vapi advises
+# ~1,000-token prompts, ElevenLabs puts only small documents in the prompt).
+# Two things in the assembled text cost tokens and give a speech-to-speech
+# model nothing:
+#  * main.py's strict-mode header (~1,500 chars, every rule written out for
+#    clinics and property desks) is rewritten to the same rules in ~650, so
+#    more approved answers fit in the same cap;
+#  * "# Speak numbers" tells a separate TTS engine how to spell digits; a
+#    native-audio model has no TTS, so it becomes one line.
+# A tenant's own system prompt is never cut here.
+_STRICT_KB_LONG_START = "The knowledge base below is your ONLY source for this business's concrete facts"
+_STRICT_KB_LONG_END = "say which days they work and offer one of those."
+_STRICT_KB_SHORT = (
+    "Use only these facts for this business's prices, sizes, distances, dates, legal status, amenities, payment "
+    "plans, contact details, hours and staff. When a question matches an approved answer, give that answer in the "
+    "caller's language with every number and name as written, and the same answer if asked again. Never guess, "
+    "round or say \"approximately\"; if it is not covered, say the team will confirm and offer to note it. General "
+    "concepts may come from your own knowledge. Never widen hours or add a day; asked which doctors, staff or "
+    "services exist, name all listed; no opinions it does not contain. Calendar slots are the business's, not a "
+    "person's: a slot outside a listed person's days is not bookable with them."
+)
+_TENANT_NUMBERS = (
+    "# Speak numbers\n"
+    "Say numbers and units as spoken words in the caller's language, exactly as the knowledge base or caller gave "
+    "them.\n"
+)
+
+
+def _tenant_kb(section: str, limit: int) -> str:
+    """Short strict-mode rules, then whole approved answers up to ``limit`` chars."""
+    i = section.find(_STRICT_KB_LONG_START)
+    j = section.find(_STRICT_KB_LONG_END)
+    if i >= 0 and j > i:
+        section = section[:i] + _STRICT_KB_SHORT + section[j + len(_STRICT_KB_LONG_END):]
+    return _trim_kb(section, limit)
+
+
+def compact(instructions: str, *, language_name: str, kb_limit: int = 5500) -> str:
     """Reshape an assembled instruction for a speech-to-speech model."""
     parts = [p for p in re.split(r"(?m)^(?=# )", instructions) if p.strip()]
     demo = is_platform_demo(instructions)
@@ -289,7 +331,9 @@ def compact(instructions: str, *, language_name: str, kb_limit: int = 6000) -> s
         elif head.startswith(_DROP):
             continue
         elif head.startswith("# Knowledge base"):
-            rest.append(_trim_kb(p, kb_limit))
+            rest.append(_tenant_kb(p, kb_limit))
+        elif head.startswith("# Speak numbers"):
+            rest.append(_TENANT_NUMBERS)
         else:
             rest.append(p)
     if demo:

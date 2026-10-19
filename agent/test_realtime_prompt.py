@@ -94,3 +94,37 @@ class StyleCoachingIsDroppedForRealtime(unittest.TestCase):
         self.assertIn("# Pricing", out)
         for rule in ("borrowed English word", "one moment", "never a reason to end the call", "one short goodbye"):
             self.assertIn(rule, out)
+
+
+class TenantRealtimeBudget(unittest.TestCase):
+    """Owner, 19 Oct 2026: keep a tenant realtime call near Rs 3.5-4/min. The
+    strict-mode KB header and the TTS number guide are shortened; every rule
+    and every approved answer that fit before still fit."""
+
+    STRICT = (
+        "# Knowledge base — THE authoritative facts for this call\n"
+        "The knowledge base below is your ONLY source for this business's concrete facts: prices.\n"
+        "- Asked which doctors, staff, services or departments exist, name ALL of them listed.\n"
+        "- check_calendar_availability returns the BUSINESS's open slots, not who works when. If the knowledge "
+        "base gives a person's days or hours, a slot outside them is NOT bookable with that person — say which "
+        "days they work and offer one of those.\n\n## Approved answers\n\nQ: timings?\nA: 9 to 5\n\n"
+    )
+
+    def test_strict_header_is_short_and_keeps_every_rule(self):
+        out = rp.compact("# Your identity\nYou are Siya.\n\n" + self.STRICT, language_name="Hindi")
+        kb = out.split("# Knowledge base", 1)[1].split("\n# ", 1)[0]
+        self.assertNotIn("ONLY source", kb)
+        for rule in ("Use only these facts", "same answer if asked again", "Never guess",
+                     "name all listed", "not bookable with them"):
+            self.assertIn(rule, kb, rule)
+        self.assertIn("Q: timings?\nA: 9 to 5", kb)
+
+    def test_tts_number_guide_becomes_one_line(self):
+        out = rp.compact("# Your identity\nYou are Siya.\n\n# Speak numbers and units naturally (do this "
+                         "regardless of the persona/rules above)\nYour text goes straight to a TTS engine.\n",
+                         language_name="Hindi")
+        self.assertIn("Say numbers and units as spoken words", out)
+        self.assertNotIn("TTS engine", out)
+
+    def test_knowledge_base_cap_is_about_1500_tokens(self):
+        self.assertEqual(rp.compact.__kwdefaults__["kb_limit"], 5500)
