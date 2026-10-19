@@ -3891,6 +3891,13 @@ def dashboard_speed_to_lead(days: int = 14, user: dict = Depends(current_user)) 
     return calls_db.speed_to_lead(user["account_id"], days=days)
 
 
+@app.get("/dashboard/insights")
+def dashboard_insights(days: int = 30, user: dict = Depends(current_user)) -> dict:
+    # Analytics tab only: Growth and Scale.
+    calls_db.require_feature(user["account_id"], "analytics")
+    return calls_db.growth_insights(user["account_id"], days=days)
+
+
 @app.get("/dashboard/missed-money")
 def dashboard_missed_money(user: dict = Depends(current_user)) -> dict:
     return calls_db.missed_money_queue(user["account_id"])

@@ -39,6 +39,7 @@ import storage_usage
 from storage import b2_client
 import campaign_window
 import lead_quality
+import budget_parse
 import retry_rules
 from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
@@ -4261,6 +4262,135 @@ def missed_money_queue(account_id: int, limit: int = 20) -> dict:
         "toCall": counts["uncalled_lead"] + counts["overdue_follow_up"] + counts["dropped_call"],
     }
 
+
+
+def _contact_budget_inr(fields: dict) -> int | None:
+    """A contact's form budget: numeric budget_min/budget_max when the form
+    sent them, else its free-text budget."""
+    try:
+        low, high = float(fields.get("budget_min") or 0), float(fields.get("budget_max") or 0)
+    except (TypeError, ValueError):
+        low = high = 0
+    if low or high:
+        return round(((low or high) + (high or low)) / 2)
+    return budget_parse.budget_midpoint_inr(str(fields.get("budget") or ""))
+
+
+def _ad_label(fields: dict, source: str = "") -> str:
+    for key in ("ad_headline", "project", "ad_name", "campaign_name", "form_name"):
+        value = str(fields.get(key) or "").strip()
+        if value:
+            return value[:80]
+    return _lead_channel_label(fields, source)
+
+
+def growth_insights(account_id: int, days: int = 30) -> dict:
+    """The Analytics tab's business view (Growth and Scale): buyer budget
+    qualified and booked, which ads bring leads that qualify, how each
+    language performs, and the best and worst scored call of the period."""
+    days = max(1, min(int(days or 30), 90))
+    since = "(now() AT TIME ZONE 'UTC') - (? || ' days')::interval"
+    conn = _connect()
+    try:
+        qualified = conn.execute(
+            f"""
+            SELECT DISTINCT ON (COALESCE(NULLIF(c.lead_phone, ''), c.room_name))
+                   c.lead_budget, COALESCE(c.site_visit_json, '') <> '' AS booked, ct.custom_fields
+            FROM calls c
+            LEFT JOIN contacts ct ON ct.account_id = c.account_id AND ct.phone = c.lead_phone AND ct.deleted_at IS NULL
+            WHERE c.account_id = ? AND COALESCE(c.test_run_id, '') = '' AND {lead_quality.QUALIFIED_SQL}
+              AND c.started_at::timestamp >= {since}
+            ORDER BY COALESCE(NULLIF(c.lead_phone, ''), c.room_name),
+                     (COALESCE(c.site_visit_json, '') <> '') DESC, (COALESCE(c.lead_budget, '') <> '') DESC, c.started_at DESC
+            """,
+            (account_id, days),
+        ).fetchall()
+        pipeline = {"qualifiedLeads": len(qualified), "withBudget": 0, "totalInr": 0, "bookedLeads": 0, "bookedInr": 0}
+        for r in qualified:
+            value = budget_parse.budget_midpoint_inr(r["lead_budget"]) or _contact_budget_inr(_load_json_field(r["custom_fields"], {}))
+            if r["booked"]:
+                pipeline["bookedLeads"] += 1
+            if value:
+                pipeline["withBudget"] += 1
+                pipeline["totalInr"] += value
+                if r["booked"]:
+                    pipeline["bookedInr"] += value
+
+        ads: dict[str, dict] = {}
+        lead_rows = conn.execute(
+            f"""
+            SELECT e.source, ct.custom_fields,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id AND l.lead_phone = ct.phone
+                           AND l.started_at::timestamp >= e.created_at::timestamp) AS called,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id AND l.lead_phone = ct.phone
+                           AND l.started_at::timestamp >= e.created_at::timestamp
+                           AND {lead_quality.QUALIFIED_SQL.replace('lead_', 'l.lead_')}) AS qualified,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id AND l.lead_phone = ct.phone
+                           AND l.started_at::timestamp >= e.created_at::timestamp
+                           AND COALESCE(l.site_visit_json, '') <> '') AS booked
+            FROM inbound_lead_events e
+            JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL
+                 AND ct.custom_fields LIKE ? AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id
+            WHERE e.account_id = ? AND e.created_at::timestamp >= {since}
+            """,
+            ("{%", account_id, days),
+        ).fetchall()
+        for r in lead_rows:
+            label = _ad_label(_load_json_field(r["custom_fields"], {}), r["source"])
+            row = ads.setdefault(label, {"ad": label, "leads": 0, "called": 0, "qualified": 0, "booked": 0})
+            row["leads"] += 1
+            row["called"] += int(bool(r["called"]))
+            row["qualified"] += int(bool(r["qualified"]))
+            row["booked"] += int(bool(r["booked"]))
+
+        languages = [
+            {"language": r["lang"], "calls": r["calls"], "qualified": r["qualified"] or 0,
+             "avgSeconds": round(float(r["avg_seconds"] or 0))}
+            for r in conn.execute(
+                f"""
+                SELECT COALESCE(NULLIF(reply_language, ''), 'unknown') AS lang, COUNT(*) AS calls,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
+                       AVG(COALESCE(duration_seconds, 0)) AS avg_seconds
+                FROM calls
+                WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::timestamp >= {since}
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 12
+                """,
+                (account_id, days),
+            ).fetchall()
+        ]
+
+        scored = []
+        for r in conn.execute(
+            f"""
+            SELECT id, lead_name, lead_phone, started_at, duration_seconds, intelligence_json,
+                   COALESCE(recording_key, '') <> '' AS has_recording
+            FROM calls
+            WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND intelligence_json LIKE ?
+              AND started_at::timestamp >= {since}
+            """,
+            (account_id, "%qa_score%", days),
+        ).fetchall():
+            intel = _load_json_field(r["intelligence_json"], {})
+            score = intel.get("qa_score") if isinstance(intel, dict) else None
+            if isinstance(score, (int, float)) and not isinstance(score, bool):
+                scored.append({
+                    "id": r["id"], "title": _queue_name(r["lead_name"], r["lead_phone"], f"Call #{r['id']}"),
+                    "qaScore": round(score), "summary": str(intel.get("summary") or "")[:220],
+                    "durationSeconds": round(float(r["duration_seconds"] or 0)),
+                    "hasRecording": bool(r["has_recording"]), "at": r["started_at"],
+                })
+    finally:
+        conn.close()
+    scored.sort(key=lambda c: (c["qaScore"], str(c["at"])))
+    return {
+        "days": days,
+        "pipeline": pipeline,
+        "ads": sorted(ads.values(), key=lambda a: (-a["leads"], a["ad"]))[:8],
+        "languages": languages,
+        "bestCall": scored[-1] if scored else None,
+        "worstCall": scored[0] if len(scored) > 1 else None,
+        "scoredCalls": len(scored),
+    }
 
 def _load_json_field(raw: str | None, default):
     if not raw:

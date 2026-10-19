@@ -19,6 +19,7 @@ import {
   fetchEntitlements,
   fetchFeedbackSummary,
   fetchIntelligence,
+  fetchInsights,
   fetchIntegrations,
   fetchNotifications,
   fetchLaunchReadiness,
@@ -32,7 +33,7 @@ import {
 } from '../lib/api'
 import { apiProfilePreferences, apiUpdateProfilePreferences, useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
-import type { ActiveCallInfo, Analytics, AppNotification, Appointment, BillingSummary, CallRecord, Contact, DashboardPeriodComparison, DashboardSummary, FeedbackSummary, Integration, LaunchReadiness, MissedMoneyKind, MissedMoneyQueue, SpeedToLead, UsageTrends } from '../lib/types'
+import type { ActiveCallInfo, Analytics, GrowthInsights, AppNotification, Appointment, BillingSummary, CallRecord, Contact, DashboardPeriodComparison, DashboardSummary, FeedbackSummary, Integration, LaunchReadiness, MissedMoneyKind, MissedMoneyQueue, SpeedToLead, UsageTrends } from '../lib/types'
 import { Tooltip } from '../components/ui/Tooltip'
 
 const AGENT_STATE_STYLES: Record<string, string> = {
@@ -90,6 +91,13 @@ function whenLabel(kind: MissedMoneyKind, at: string | null): string {
   const seconds = Math.max(0, (Date.now() - date.getTime()) / 1000)
   const ago = seconds < 3600 ? `${Math.max(1, Math.round(seconds / 60))} min ago` : seconds < 86400 ? `${Math.round(seconds / 3600)} h ago` : `${Math.round(seconds / 86400)} d ago`
   return kind === 'overdue_follow_up' ? `due ${ago}` : ago
+}
+
+// 9_18_00_000 -> "₹9.2 Cr", 4_50_000 -> "₹4.5 L", 18_000 -> "₹18,000".
+function formatInrShort(inr: number): string {
+  if (inr >= 1e7) return `₹${(inr / 1e7).toFixed(inr >= 1e8 ? 0 : 1).replace(/\.0$/, '')} Cr`
+  if (inr >= 1e5) return `₹${(inr / 1e5).toFixed(1).replace(/\.0$/, '')} L`
+  return `₹${Math.round(inr).toLocaleString('en-IN')}`
 }
 
 // 5 -> "5 s", 240 -> "4 min", 5400 -> "1.5 h".
@@ -180,6 +188,7 @@ export function Dashboard() {
   const [speed, setSpeed] = useState<SpeedToLead | null>(null)
   const [queue, setQueue] = useState<MissedMoneyQueue | null>(null)
   const [showAllQueue, setShowAllQueue] = useState(false)
+  const [insights, setInsights] = useState<GrowthInsights | null>(null)
 
   const { user } = useAuth()
   // Re-render (and recompute chart colors) when the header toggles the theme.
@@ -221,6 +230,7 @@ export function Dashboard() {
 
   useEffect(() => {
     if (analyticsAllowed) fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
+    if (analyticsAllowed) fetchInsights(30).then(setInsights).catch(() => setInsights(null))
   }, [analyticsAllowed])
 
   useEffect(() => {
@@ -465,7 +475,7 @@ export function Dashboard() {
                   type="button"
                   onClick={() => setOpenKpi((current) => (current === kpi.key ? null : kpi.key))}
                   aria-expanded={openKpi === kpi.key}
-                  className="bento-tile bento-kpi flex flex-col gap-2 text-left"
+                  className="bento-tile bento-kpi flex flex-col justify-between gap-2 text-left"
                 >
                   <span className="flex items-center justify-between">
                     <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${kpi.tone}`}><Icon name={kpi.icon} className="text-[19px]" /></span>
@@ -475,8 +485,10 @@ export function Dashboard() {
                       </span>
                     )}
                   </span>
-                  <span className="bento-num mt-2 text-[34px] leading-none">{kpi.value.toLocaleString('en-IN')}</span>
-                  <span className="text-[13px] font-bold text-text-muted">{kpi.label}</span>
+                  <span className="flex flex-col gap-2">
+                    <span className="bento-num mt-2 text-[34px] leading-none">{kpi.value.toLocaleString('en-IN')}</span>
+                    <span className="text-[13px] font-bold text-text-muted">{kpi.label}</span>
+                  </span>
                   {openKpi === kpi.key && (
                     <span className="bento-reveal mt-1 border-t border-dashed border-border pt-2 text-xs text-text-muted">
                       Previous {rangeDays} days: <b className="text-text">{kpi.previous.toLocaleString('en-IN')}</b>
@@ -559,39 +571,6 @@ export function Dashboard() {
                 </section>
               )}
 
-              {isVisible('attention') && (
-                <section className="bento-tile bento-w2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="bento-title text-[15px]">Needs attention</h3>
-                      <p className="mt-0.5 text-xs text-text-muted">{attentionCount ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} may affect customer conversations` : 'Everything important is in good shape'}</p>
-                    </div>
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${attentionCount ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success'}`}>{attentionCount || 'All clear'}</span>
-                  </div>
-                  {attentionCount === 0 ? (
-                    <div className="mt-4 flex items-center gap-3 text-sm text-text-muted"><Icon name="verified" className="text-success" /> No failed calls, integration errors, low-minute warnings, or negative feedback.</div>
-                  ) : (
-                    <div className="mt-3 flex flex-col">
-                      {(showAllAttention ? attentionItems : attentionItems.slice(0, ATTENTION_PREVIEW)).map((item) => (
-                        <AttentionLink
-                          key={item.id}
-                          to={item.to}
-                          icon={ATTENTION_ICON[item.id.split(':')[0]] ?? 'info'}
-                          label={item.title}
-                          detail={item.body}
-                          tone={item.severity === 'critical' ? 'destructive' : item.severity === 'warning' ? 'amber' : 'success'}
-                        />
-                      ))}
-                      {attentionCount > ATTENTION_PREVIEW && (
-                        <button type="button" onClick={() => setShowAllAttention((v) => !v)} aria-expanded={showAllAttention} className="mt-1 self-start rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/10">
-                          {showAllAttention ? 'Show fewer' : `Show all ${attentionCount}`}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </section>
-              )}
-
               <section className="bento-tile bento-w2">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -655,6 +634,39 @@ export function Dashboard() {
                   </div>
                 )}
               </section>
+
+              {isVisible('attention') && (
+                <section className="bento-tile bento-w2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="bento-title text-[15px]">Needs attention</h3>
+                      <p className="mt-0.5 text-xs text-text-muted">{attentionCount ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} may affect customer conversations` : 'Everything important is in good shape'}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${attentionCount ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success'}`}>{attentionCount || 'All clear'}</span>
+                  </div>
+                  {attentionCount === 0 ? (
+                    <div className="mt-4 flex items-center gap-3 text-sm text-text-muted"><Icon name="verified" className="text-success" /> No failed calls, integration errors, low-minute warnings, or negative feedback.</div>
+                  ) : (
+                    <div className="mt-3 flex flex-col">
+                      {(showAllAttention ? attentionItems : attentionItems.slice(0, ATTENTION_PREVIEW)).map((item) => (
+                        <AttentionLink
+                          key={item.id}
+                          to={item.to}
+                          icon={ATTENTION_ICON[item.id.split(':')[0]] ?? 'info'}
+                          label={item.title}
+                          detail={item.body}
+                          tone={item.severity === 'critical' ? 'destructive' : item.severity === 'warning' ? 'amber' : 'success'}
+                        />
+                      ))}
+                      {attentionCount > ATTENTION_PREVIEW && (
+                        <button type="button" onClick={() => setShowAllAttention((v) => !v)} aria-expanded={showAllAttention} className="mt-1 self-start rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/10">
+                          {showAllAttention ? 'Show fewer' : `Show all ${attentionCount}`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
 
               {isVisible('funnel') && analytics && (
                 <section className="bento-tile bento-w2">
@@ -881,6 +893,104 @@ export function Dashboard() {
         {tab === 'analytics' && analyticsAllowed && (
           <>
             <div className="bento-grid">
+              <section className="bento-tile bento-w2 flex flex-col">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="bento-title text-[15px]">Pipeline value</h3>
+                    <p className="mt-0.5 text-xs text-text-muted">Buyer budget from qualified leads · last 30 days</p>
+                  </div>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/12 text-success"><Icon name="trending_up" className="text-[19px]" /></span>
+                </div>
+                {!insights || insights.pipeline.withBudget === 0 ? (
+                  <p className="mt-4 text-sm leading-relaxed text-text-muted">
+                    {insights && insights.pipeline.qualifiedLeads > 0
+                      ? `${insights.pipeline.qualifiedLeads} qualified lead${insights.pipeline.qualifiedLeads === 1 ? '' : 's'}, none with a budget yet. Budgets appear when callers mention one.`
+                      : 'Budgets callers mention on qualified calls add up here, in any language.'}
+                  </p>
+                ) : (
+                  <div className="mt-4 flex flex-1 flex-col justify-between gap-4">
+                    <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                      <div>
+                        <p className="bento-num text-5xl leading-none">{formatInrShort(insights.pipeline.totalInr)}</p>
+                        <p className="mt-2 text-xs font-bold text-text-muted">qualified buyer budget</p>
+                      </div>
+                      {insights.pipeline.bookedInr > 0 && (
+                        <div className="pb-0.5">
+                          <p className="bento-num text-2xl leading-none">{formatInrShort(insights.pipeline.bookedInr)}</p>
+                          <p className="mt-1.5 text-xs text-text-muted">with a visit booked</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full bg-surface-high/70 px-2.5 py-1 font-semibold">{insights.pipeline.withBudget} of {insights.pipeline.qualifiedLeads} qualified leads gave a budget</span>
+                      {insights.pipeline.bookedLeads > 0 && <span className="rounded-full bg-success/12 px-2.5 py-1 font-bold text-success">{insights.pipeline.bookedLeads} booked</span>}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="bento-tile bento-w2">
+                <h3 className="bento-title text-[15px]">Best and worst call</h3>
+                <p className="mt-0.5 text-xs text-text-muted">By agent QA score · last 30 days{insights?.scoredCalls ? ` · ${insights.scoredCalls} scored` : ''}</p>
+                {insights && (insights.bestCall || insights.worstCall) ? (
+                  <div className="mt-3 flex flex-col gap-2">
+                    {[{ call: insights.bestCall, label: 'Best', tone: 'bg-success/12 text-success', cta: 'Listen' }, { call: insights.worstCall, label: 'Needs work', tone: 'bg-amber/12 text-amber', cta: 'Review' }]
+                      .filter((entry) => entry.call)
+                      .map(({ call, label, tone, cta }) => (
+                        <Link key={label} to={`/dashboard/calls/${call!.id}`} className="bento-row flex items-start gap-3 rounded-xl px-2 py-2.5">
+                          <span className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl ${tone}`}>
+                            <span className="bento-num text-base leading-none">{call!.qaScore}</span>
+                            <span className="text-[9px] font-bold uppercase">QA</span>
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2"><span className="truncate text-sm font-semibold">{call!.title}</span><span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-text-muted">{label}</span></span>
+                            <span className="mt-0.5 line-clamp-2 text-xs text-text-muted">{call!.summary || `${formatDuration(call!.durationSeconds)} call`}</span>
+                          </span>
+                          <span className="shrink-0 self-center rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">{call!.hasRecording ? cta : 'Open'}</span>
+                        </Link>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm leading-relaxed text-text-muted">Analyze calls from a call's detail page to score them; the best and worst scored call of the period show here.</p>
+                )}
+              </section>
+
+              <section className="bento-tile bento-w4">
+                <h3 className="bento-title text-[15px]">Which ad works</h3>
+                <p className="mt-0.5 text-xs text-text-muted">Leads by the ad or project they came from, and what happened next · last 30 days</p>
+                {insights && insights.ads.length > 0 ? (
+                  <div className="mt-4 flex flex-col gap-2">
+                    <div className="hidden grid-cols-[minmax(0,2.4fr)_repeat(4,minmax(0,1fr))] gap-3 px-3 text-[11px] font-bold uppercase tracking-wide text-text-muted md:grid">
+                      <span>Ad or project</span><span className="text-right">Leads</span><span className="text-right">Called</span><span className="text-right">Qualified</span><span className="text-right">Booked</span>
+                    </div>
+                    {insights.ads.map((ad) => {
+                      const rate = ad.leads ? Math.round((ad.qualified * 100) / ad.leads) : 0
+                      return (
+                        <div key={ad.ad} className="rounded-2xl bg-surface-high/40 px-3 py-3 md:grid md:grid-cols-[minmax(0,2.4fr)_repeat(4,minmax(0,1fr))] md:items-center md:gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold" title={ad.ad}>{ad.ad}</p>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-high"><div className="h-full rounded-full bg-gradient-to-r from-primary to-cyan" style={{ width: `${rate}%` }} /></div>
+                              <span className="text-[11px] font-bold text-text-muted">{rate}% qualified</span>
+                            </div>
+                          </div>
+                          <div className="mt-3 grid grid-cols-4 gap-1 text-center md:contents">
+                            {[['Leads', ad.leads], ['Called', ad.called], ['Qualified', ad.qualified], ['Booked', ad.booked]].map(([label, value]) => (
+                              <div key={label as string} className="md:text-right">
+                                <p className="bento-num text-lg leading-none">{value}</p>
+                                <p className="mt-1 text-[10px] font-bold uppercase text-text-muted md:hidden">{label}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm leading-relaxed text-text-muted">Leads from ArthaLeads, Facebook Lead Ads or the lead API are grouped by the ad or project they came from.</p>
+                )}
+              </section>
+
               <section className="bento-tile bento-w4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan/12 text-cyan"><Icon name="auto_awesome" className="text-[19px]" /></span>
@@ -971,19 +1081,29 @@ export function Dashboard() {
                 )}
               </AnalyticsTile>
 
-              <AnalyticsTile title="Calls by language">
-                {analytics && analytics.languages.length > 0 ? (
-                  <Bar
-                    data={{
-                      labels: analytics.languages.map((l) => LANGUAGE_NAMES[l.language] ?? l.language),
-                      datasets: [{ data: analytics.languages.map((l) => l.count), backgroundColor: '#A855F7', ...BAR_STYLE }],
-                    }}
-                    options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
-                  />
+              <section className="bento-tile bento-w2">
+                <h3 className="bento-title text-[15px]">Languages</h3>
+                <p className="mt-0.5 text-xs text-text-muted">Calls, qualification and length by language · last 30 days</p>
+                {insights && insights.languages.length > 0 ? (
+                  <div className="mt-4 flex flex-col gap-3">
+                    {insights.languages.map((l) => {
+                      const max = Math.max(...insights.languages.map((x) => x.calls), 1)
+                      const rate = l.calls ? Math.round((l.qualified * 100) / l.calls) : 0
+                      return (
+                        <div key={l.language}>
+                          <div className="flex items-baseline justify-between gap-2 text-sm">
+                            <span className="truncate font-semibold">{l.language === 'unknown' ? 'Not detected' : LANGUAGE_NAMES[l.language] ?? LANGUAGE_NAMES[`${l.language}-IN`] ?? l.language}</span>
+                            <span className="shrink-0 text-xs text-text-muted"><b className="text-text">{l.calls}</b> calls · {rate}% qualified · {formatDuration(l.avgSeconds)}</span>
+                          </div>
+                          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-high"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(3, (l.calls / max) * 100)}%` }} /></div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 ) : (
                   <EmptyState icon="translate" text="Language mix appears after the first calls." />
                 )}
-              </AnalyticsTile>
+              </section>
 
               <AnalyticsTile title="Average call duration" subtitle="Last 14 days">
                 {analytics && analytics.durationTrend.length > 0 ? (
@@ -1081,7 +1201,7 @@ function IntelStat({ label, value, tone = 'text-text' }: { label: string; value:
   return (
     <div className="rounded-2xl bg-surface-high/50 p-4">
       <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">{label}</p>
-      <p className={`bento-num mt-2 text-2xl ${tone}`}>{value}</p>
+      <p className={`bento-num mt-2 text-xl sm:text-2xl ${tone}`}>{value}</p>
     </div>
   )
 }

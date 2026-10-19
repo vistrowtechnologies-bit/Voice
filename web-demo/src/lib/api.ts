@@ -1,4 +1,5 @@
 import type {
+  GrowthInsights,
   MissedMoneyQueue,
   SpeedToLead,
   ActiveCallInfo,
@@ -312,6 +313,7 @@ export const fetchPeriodComparison = (days = 14) => get<DashboardPeriodCompariso
 export const fetchAnalytics = () => get<Analytics>('/dashboard/analytics')
 export const fetchSpeedToLead = (days = 14) => get<SpeedToLead>(`/dashboard/speed-to-lead?days=${days}`)
 export const fetchMissedMoney = () => get<MissedMoneyQueue>('/dashboard/missed-money')
+export const fetchInsights = (days = 30) => get<GrowthInsights>(`/dashboard/insights?days=${days}`)
 export const fetchLaunchReadiness = () => get<LaunchReadiness>('/dashboard/launch-readiness')
 export const fetchFeedbackSummary = () => get<FeedbackSummary>('/dashboard/feedback')
 
