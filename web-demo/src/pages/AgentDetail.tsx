@@ -304,7 +304,7 @@ function AgentEditorForm({
     try {
       await updateAgent(agent.id, form)
       setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
+      setTimeout(() => setSaved(false), 4000)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not save changes. Please try again.'
       // The dashboard's own voice picker only ever offers voices already in
@@ -938,7 +938,7 @@ function AgentEditorForm({
 </TabPane>
       </div>
 
-      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="vv-action-bar sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <button
           onClick={handleDelete}
           className="flex items-center gap-1.5 rounded-lg border border-destructive/40 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10"
@@ -948,7 +948,7 @@ function AgentEditorForm({
         </button>
         <div className="flex items-center gap-3">
           {saveError && <p className="text-xs font-semibold text-destructive">{saveError}</p>}
-          {saved && <p className="text-xs font-semibold text-green-500">Saved</p>}
+          {saved && <p role="status" className="flex items-center gap-1 rounded-full bg-success/12 px-2.5 py-1 text-xs font-bold text-success"><Icon name="check_circle" className="text-[15px]" />Changes saved</p>}
           <button onClick={onCancel} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary">
             Back
           </button>

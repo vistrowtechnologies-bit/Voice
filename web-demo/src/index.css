@@ -1338,3 +1338,10 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
    scrolls with the wheel, trackpad, touch and keyboard focus. */
 .vv-quiet-scroll { scrollbar-width: none; }
 .vv-quiet-scroll::-webkit-scrollbar { display: none; }
+
+/* A page with a sticky action bar at the bottom (Save changes, Create agent):
+   the floating help launcher sits just above the bar instead of on top of its
+   buttons. It used to cover "Save changes", so a click opened the help chat
+   and the agent was never saved (owner, 19 Oct). */
+body:has(.vv-action-bar) .vv-help-root { bottom: 5.25rem; }
+@media (min-width: 640px) { body:has(.vv-action-bar) .vv-help-root { bottom: 6rem; } }

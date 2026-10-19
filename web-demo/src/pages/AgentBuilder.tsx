@@ -404,7 +404,7 @@ export function AgentBuilder() {
                 </div>
               </Section>
 
-              <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-border bg-bg/90 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border sm:bg-surface/90 sm:shadow-lg">
+              <div className="vv-action-bar sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-border bg-bg/90 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border sm:bg-surface/90 sm:shadow-lg">
                 <button type="button" disabled={busy !== null} onClick={create} className={primaryBtn}>
                   <Icon name={busy === 'create' ? 'progress_activity' : 'rocket_launch'} className={`text-[18px] ${busy === 'create' ? 'motion-safe:animate-spin' : ''}`} />
                   {busy === 'create' ? 'Creating…' : 'Create agent'}
