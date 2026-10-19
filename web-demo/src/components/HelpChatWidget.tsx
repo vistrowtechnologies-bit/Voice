@@ -341,7 +341,7 @@ export function HelpChatWidget() {
     // App.tsx) covered and blurred the help launcher. Help has to stay
     // reachable from on top of a dialog - that is often exactly when someone
     // needs it.
-    <div className="fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    <div className="vv-help-root fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
       {open && (
         <div
           className={`help-chat-panel-in help-panel-size flex w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ${
