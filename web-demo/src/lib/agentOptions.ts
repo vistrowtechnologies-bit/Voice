@@ -354,6 +354,30 @@ export const geminiLiveVoiceName = (value: string): string | null => {
   return GEMINI_LIVE_VOICES.has(persona) ? persona.charAt(0).toUpperCase() + persona.slice(1) : null
 }
 
+/** Whether an agent on this model can speak with this voice. The one rule the
+ *  voice picker uses; the server enforces the same on save
+ *  (token_api._guard_realtime_voice). */
+export const voiceWorksWithModel = (model: string, voice: string) =>
+  !isRealtimeModel(model) || geminiLiveVoiceName(voice) !== null
+
+/** The voice to switch to when the model changes and the current voice can't
+ *  be used: the same voice if it works, else one of the same gender, else
+ *  the first that works. null when none of the voices work with the model. */
+export const nearestVoiceFor = (
+  model: string,
+  currentVoice: string,
+  currentGender: VoiceEntry['gender'] | undefined,
+  voices: readonly VoiceEntry[],
+): VoiceEntry | null => {
+  const usable = voices.filter((v) => voiceWorksWithModel(model, v.value))
+  return (
+    usable.find((v) => v.value === currentVoice) ??
+    usable.find((v) => currentGender && v.gender === currentGender) ??
+    usable[0] ??
+    null
+  )
+}
+
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
 // under a name instead of leaking the raw vendor string at a tenant.
 const RETIRED_ADMIN_MODELS = [

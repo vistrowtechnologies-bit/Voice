@@ -29,10 +29,12 @@ import {
   isRealtimeModel,
   modelOptionsFor,
   modelLabel,
+  nearestVoiceFor,
   NOISE_CANCELLATION_OPTIONS,
   TONES,
   voiceLabel,
   voicePickerGroups,
+  voiceWorksWithModel,
 } from '../lib/agentOptions'
 import type { AgentConfig, AgentVariable, CustomFunction, FollowUpPolicy, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
 import { FIRST_CALL_DELAY_CHOICES, FOLLOW_UP_DEFAULTS } from '../lib/types'
@@ -267,6 +269,37 @@ function AgentEditorForm({
   const set = <K extends keyof AgentForm>(key: K, value: AgentForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
 
+  const voiceName = (value: string) =>
+    myVoices.find((v) => v.value === value)?.name ??
+    clonedVoiceFallbackName(value, clonedVoices) ??
+    catalog.find((v) => v.value === value)?.name ??
+    voiceLabel(value)
+  // The voice a model switch replaced automatically, so the notice can name
+  // both and Undo (or switching back) can restore it.
+  const [voiceSwitch, setVoiceSwitch] = useState<{ from: string; fromModel: string; to: string | null } | null>(null)
+  const changeModel = (model: string) => {
+    const auto = voiceSwitch && form.voice === (voiceSwitch.to ?? form.voice) ? voiceSwitch : null
+    if (auto && voiceWorksWithModel(model, auto.from)) {
+      // Back on a model that can speak the voice we replaced: put it back.
+      setForm((f) => ({ ...f, model, voice: auto.from }))
+      setVoiceSwitch(null)
+      return
+    }
+    if (voiceWorksWithModel(model, form.voice)) {
+      set('model', model)
+      return
+    }
+    const gender = (myVoices.find((v) => v.value === form.voice) ?? catalog.find((v) => v.value === form.voice))?.gender
+    const pick = nearestVoiceFor(model, form.voice, gender, myVoices)
+    setForm((f) => ({ ...f, model, voice: pick?.value ?? f.voice }))
+    setVoiceSwitch({ from: auto?.from ?? form.voice, fromModel: auto?.fromModel ?? form.model, to: pick?.value ?? null })
+  }
+  const undoVoiceSwitch = () => {
+    if (!voiceSwitch) return
+    setForm((f) => ({ ...f, model: voiceSwitch.fromModel, voice: voiceSwitch.from }))
+    setVoiceSwitch(null)
+  }
+
   // enabledFunctions is a comma list of the OPTIONAL built-ins that are on;
   // empty string means "all default on". end_call, web_search and send_dtmf
   // are toggled here - transfer_call is governed by whether a transfer
@@ -370,7 +403,7 @@ function AgentEditorForm({
                 : undefined
             }
           >
-            <select value={form.model} onChange={(e) => set('model', e.target.value)} className={inputCls}>
+            <select value={form.model} onChange={(e) => changeModel(e.target.value)} className={inputCls}>
               {modelOptionsFor(isPlatformOwner).map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label} - {m.tag}
@@ -380,6 +413,27 @@ function AgentEditorForm({
                 <option value={form.model}>{modelLabel(form.model)} - no longer offered, pick a model above</option>
               )}
             </select>
+            {voiceSwitch && (
+              <p role="status" className="mt-2 text-xs text-muted-foreground">
+                {voiceSwitch.to ? (
+                  <>
+                    Voice changed to <span className="font-medium text-foreground">{voiceName(voiceSwitch.to)}</span>:{' '}
+                    {modelLabel(form.model).split(' · ')[0]} can’t speak {voiceName(voiceSwitch.from)}.{' '}
+                  </>
+                ) : (
+                  <>
+                    None of your voices work with {modelLabel(form.model).split(' · ')[0]}.{' '}
+                    <Link to="/dashboard/voices" className="text-primary hover:underline">
+                      Add a Live voice
+                    </Link>{' '}
+                    or{' '}
+                  </>
+                )}
+                <button type="button" onClick={undoVoiceSwitch} className="font-medium text-primary hover:underline">
+                  {voiceSwitch.to ? 'Undo' : 'undo'}
+                </button>
+              </p>
+            )}
           </Field>
 </TabPane>
           <TabPane tab="voice" active={tab}>
@@ -390,8 +444,9 @@ function AgentEditorForm({
                 'Loading your voices…'
               ) : (
                 <>
-                  {isRealtimeModel(form.model)
-                    ? 'Realtime lists the Live voices you have added (Voices → Live tabs); your other voices are greyed out. '
+                  {isRealtimeModel(form.model) ? `Only the voices ${modelLabel(form.model).split(' · ')[0]} can speak are listed. ` : null}
+                  {isRealtimeModel(form.model) && myVoices.length > realtimeVoices.length
+                    ? `${myVoices.length - realtimeVoices.length} of your other voices work only with standard models. `
                     : null}
                   Only voices you’ve added appear here.{' '}
                   <Link to="/dashboard/voices" className="text-primary hover:underline">
@@ -402,25 +457,32 @@ function AgentEditorForm({
             }
           >
             <div className="flex items-center gap-2">
-              <select value={form.voice} onChange={(e) => set('voice', e.target.value)} className={inputCls}>
+              <select
+                value={form.voice}
+                onChange={(e) => {
+                  set('voice', e.target.value)
+                  setVoiceSwitch(null)
+                }}
+                className={inputCls}
+              >
                 {/* Current voice isn't in this account's menu (a legacy voice, or
                     one removed from the menu since it was set) - surface it so the
                     browser doesn't silently show a different option as selected and
                     re-persist the wrong voice on Save. */}
                 {isRealtimeModel(form.model) ? (
                   <>
+                    {/* Only an agent saved before this check can land here; Save
+                        refuses the pair, so say so instead of naming a fallback. */}
                     {!realtimeVoices.some((v) => v.value === form.voice) && (
                       <option value={form.voice}>
-                        {clonedVoiceFallbackName(form.voice, clonedVoices) ?? catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)}
-                        {geminiLiveVoiceName(form.voice)
-                          ? ' → Live voice'
-                          : ' (not available on realtime, calls use Kirti)'}
+                        {voiceName(form.voice)}
+                        {voiceWorksWithModel(form.model, form.voice) ? '' : ' (can’t be used on realtime - pick a voice below)'}
                       </option>
                     )}
                     <optgroup label={`Your voices for ${modelLabel(form.model)}`}>
                       {realtimeVoices.length === 0 && (
                         <option value="" disabled>
-                          No realtime voices added yet - add one on the Voices page
+                          No Live voices added yet - add one on the Voices page
                         </option>
                       )}
                       {realtimeVoices.map((v) => (
@@ -429,48 +491,25 @@ function AgentEditorForm({
                         </option>
                       ))}
                     </optgroup>
-                    {/* Shown, but not selectable: a realtime model cannot speak with them. */}
-                    {myVoices.some((v) => !geminiLiveVoiceName(v.value)) && (
-                      <optgroup label="Not available on realtime">
-                        {myVoices
-                          .filter((v) => !geminiLiveVoiceName(v.value))
-                          .map((v) => (
-                            <option key={v.value} value={v.value} disabled>
-                              {v.name}
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
                   </>
                 ) : (
                   <>
-                {isRealtimeModel(form.model) && !geminiLiveVoiceName(form.voice) ? (
-                  <option value={form.voice}>{voiceLabel(form.voice)} (not available on realtime, calls use Kore)</option>
-                ) : (
-                  !myVoices.some((v) => v.value === form.voice) &&
+                {!myVoices.some((v) => v.value === form.voice) &&
                   !clonedReady && (
                     <option value={form.voice}>
                       {clonedVoiceFallbackName(form.voice, clonedVoices) ??
                         `${catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)} (not in your voices)`}
                     </option>
-                  )
-                )}
+                  )}
                 <ClonedVoiceOptions voices={clonedVoices} />
-                {voicePickerGroups(
-                  isRealtimeModel(form.model) ? myVoices.filter((v) => geminiLiveVoiceName(v.value)) : myVoices,
-                ).map((group) => {
+                {voicePickerGroups(myVoices).map((group) => {
                   if (group.voices.length === 0) return null
                   return (
                     <optgroup key={group.key} label={`${group.label} - ${group.note}`}>
                       {group.voices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.name}
-                          {/* Realtime speaks as the Live voice of the same name. */}
-                          {isRealtimeModel(form.model)
-                            ? ' → Live voice'
-                            : v.note
-                              ? ` - ${v.note}`
-                              : ''}
+                          {v.note ? ` - ${v.note}` : ''}
                         </option>
                       ))}
                     </optgroup>
