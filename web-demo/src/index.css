@@ -1270,3 +1270,71 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .topup-stepper button:active:not(:disabled) { transform: none; }
 }
+
+/* Dashboard overview: the Bento layout (owner pick, 17 Oct). Tiles use the
+   theme tokens so they work in light and dark; the hero is always violet. */
+.bento-grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bento-w2 { grid-column: span 2; } }
+@media (min-width: 1280px) { .bento-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .bento-h2 { grid-row: span 2; } }
+.bento-w4 { grid-column: 1 / -1; }
+.bento-tile {
+  border-radius: 1.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 1.25rem;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.03), 0 14px 32px -26px color-mix(in srgb, var(--color-primary) 55%, transparent);
+  transition: transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2), box-shadow 260ms ease, border-color 260ms ease;
+  animation: bento-in 520ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+.bento-tile:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.03), 0 24px 44px -26px color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+.bento-grid > :nth-child(2) { animation-delay: 40ms; }
+.bento-grid > :nth-child(3) { animation-delay: 80ms; }
+.bento-grid > :nth-child(4) { animation-delay: 110ms; }
+.bento-grid > :nth-child(5) { animation-delay: 140ms; }
+.bento-grid > :nth-child(6) { animation-delay: 170ms; }
+.bento-grid > :nth-child(n + 7) { animation-delay: 200ms; }
+@keyframes bento-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+.bento-hero {
+  border-color: transparent;
+  color: #fff;
+  background:
+    radial-gradient(120% 90% at 100% 0%, #c026d3 0%, transparent 55%),
+    linear-gradient(150deg, #4c1d95, #7c3aed 60%, #6d28d9);
+}
+.bento-hero:hover { border-color: transparent; }
+.bento-title { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; }
+.bento-num { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.bento-kpi { color: var(--color-text); font-family: var(--font-sans); }
+.bento-ring { transition: stroke-dasharray 900ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.bento-ring-value { font: 800 20px var(--font-display); fill: var(--color-text); letter-spacing: -0.02em; }
+.bento-ring-label { font: 600 9px var(--font-sans); fill: var(--color-text-muted); }
+.bento-pill {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  border-radius: 999px; padding: 0.7rem 1.05rem;
+  font: 700 13px var(--font-sans);
+  border: 1px solid transparent;
+}
+.bento-pill-light { background: #fff; color: #4c1d95; }
+.bento-pill-glass { background: rgb(255 255 255 / 0.12); border-color: rgb(255 255 255 / 0.3); color: #fff; }
+.bento-pill-dark { background: var(--color-text); color: var(--color-surface); }
+.bento-pill-soft { background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface)); border-color: color-mix(in srgb, var(--color-primary) 18%, var(--color-border)); color: var(--color-text); }
+.bento-pill-soft:hover { background: var(--color-text); color: var(--color-surface); border-color: var(--color-text); }
+.bento-pill-soft:hover .material-symbols-outlined { color: inherit; }
+.bento-row:hover { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
+.bento-funnel-last { background: var(--color-text); color: var(--color-surface); }
+.bento-reveal { animation: bento-reveal 240ms ease-out both; }
+@keyframes bento-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .bento-tile, .bento-reveal { animation: none; }
+  .bento-tile, .bento-ring { transition: none; }
+  .bento-tile:hover { transform: none; }
+}
+
+/* Sidebar scrolling: no scrollbar at all (owner, 17 Oct). The menu still
+   scrolls with the wheel, trackpad, touch and keyboard focus. */
+.vv-quiet-scroll { scrollbar-width: none; }
+.vv-quiet-scroll::-webkit-scrollbar { display: none; }

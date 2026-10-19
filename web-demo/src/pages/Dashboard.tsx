@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import '../lib/chart-setup'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
-import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
 import { StatTile } from '../components/ui/StatTile'
@@ -17,6 +16,7 @@ import {
   fetchCalls,
   fetchContacts,
   fetchDashboardSummary,
+  fetchEntitlements,
   fetchFeedbackSummary,
   fetchIntelligence,
   fetchIntegrations,
@@ -43,6 +43,25 @@ const CALL_STATUS_STYLES: Record<string, string> = {
   completed: 'bg-cyan/20 text-cyan border-cyan/30',
   failed: 'bg-destructive/20 text-destructive border-destructive/30',
 }
+
+const CHECKLIST_KEY = 'vv-launch-checklist-dismissed'
+
+function checklistDismissedLocally(): boolean {
+  try { return window.localStorage.getItem(CHECKLIST_KEY) === '1' } catch { return false }
+}
+
+const ANALYTICS_FEATURES = [
+  'Calls and qualified leads by agent and channel',
+  'Language mix and peak call hours',
+  'Caller sentiment and agent QA scores',
+  'Top reasons leads do not qualify',
+]
+
+// Rounded, slim bars for the Analytics tiles.
+const BAR_STYLE = { borderRadius: 8, borderSkipped: false, maxBarThickness: 28 } as const
+
+// Attention items shown before "Show all", so the tile stays the height of its neighbours.
+const ATTENTION_PREVIEW = 4
 
 const RANGE_OPTIONS = [
   { label: 'Week', days: 7 },
@@ -74,6 +93,11 @@ function chartTokens() {
   }
 }
 
+// "2026-10-13" -> "13 Oct" for chart axes; anything else is shown as given.
+function shortDay(label: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(label) ? new Date(`${label}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : label
+}
+
 function greeting(): string {
   const h = new Date().getHours()
   if (h < 12) return 'Good morning'
@@ -90,7 +114,7 @@ export function Dashboard() {
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
   const [rangeDays, setRangeDays] = useState(14)
-  const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(true)
+  const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(false)
   const [checklistDismissed, setChecklistDismissed] = useState<boolean | null>(null)
   const [dismissingChecklist, setDismissingChecklist] = useState(false)
   const [readiness, setReadiness] = useState<LaunchReadiness | null>(null)
@@ -107,6 +131,10 @@ export function Dashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [hiddenCards, setHiddenCards] = useState<Set<string>>(new Set())
   const [customizing, setCustomizing] = useState(false)
+  const [openKpi, setOpenKpi] = useState<string | null>(null)
+  const [showAllAttention, setShowAllAttention] = useState(false)
+  // The Analytics tab is Growth and Scale (plan_policy 'analytics'); null while loading.
+  const [analyticsAllowed, setAnalyticsAllowed] = useState<boolean | null>(null)
 
   const { user } = useAuth()
   // Re-render (and recompute chart colors) when the header toggles the theme.
@@ -115,11 +143,12 @@ export function Dashboard() {
   void theme
   const GRID = { color: t.grid }
   const TICKS = { color: t.tick, font: { size: 11 } }
+  const LEGEND = { display: true, align: 'end' as const, labels: { color: t.tick, boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } } }
 
   useEffect(() => {
     fetchDashboardSummary().then(setSummary).catch(() => setSummary(null))
     fetchAnalytics().then(setAnalytics).catch(() => setAnalytics(null))
-    fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
+    fetchEntitlements().then((e) => setAnalyticsAllowed(Boolean(e.features.analytics))).catch(() => setAnalyticsAllowed(true))
     fetchCalls().then((calls) => setRecentCalls(calls.slice(0, 5))).catch(() => setRecentCalls([]))
     fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
     fetchFeedbackSummary().then(setFeedback).catch(() => setFeedback(null))
@@ -130,14 +159,23 @@ export function Dashboard() {
     fetchAppointments().then(setAppointments).catch(() => setAppointments([]))
     apiProfilePreferences()
       .then((preferences) => {
-        setChecklistDismissed(Boolean(preferences.dashboard_checklist_dismissed))
+        const dismissedHere = checklistDismissedLocally()
+        setChecklistDismissed(Boolean(preferences.dashboard_checklist_dismissed) || dismissedHere)
+        // Dismissed on this device while the save failed: save it now.
+        if (dismissedHere && !preferences.dashboard_checklist_dismissed) {
+          apiUpdateProfilePreferences({ dashboard_checklist_dismissed: true }).catch(() => undefined)
+        }
         try {
           const parsed = JSON.parse(preferences.dashboard_hidden_cards || '[]')
           setHiddenCards(new Set(Array.isArray(parsed) ? parsed : []))
         } catch { setHiddenCards(new Set()) }
       })
-      .catch(() => setChecklistDismissed(false))
+      .catch(() => setChecklistDismissed(checklistDismissedLocally()))
   }, [])
+
+  useEffect(() => {
+    if (analyticsAllowed) fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
+  }, [analyticsAllowed])
 
   useEffect(() => {
     fetchUsageTrends(rangeDays).then(setTrends).catch(() => setTrends(null))
@@ -175,6 +213,27 @@ export function Dashboard() {
   const upcomingAppointments = appointments
     .filter((appointment) => appointment.status === 'confirmed' && appointment.date >= new Date().toISOString().slice(0, 10))
   const attentionCount = attentionItems.length
+  const totalCalls = summary?.totalCalls ?? 0
+  const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })
+  const minutesLeft = billing?.creditsRemaining ?? 0
+  const minutesLeftLabel = billing ? (Number.isInteger(minutesLeft) ? minutesLeft.toLocaleString('en-IN') : minutesLeft.toFixed(1)) : '—'
+  // Share of this cycle's allowance still left, for the ring.
+  const ringShare = billing && billing.creditsTotal > 0 ? Math.min(1, Math.max(0, minutesLeft / billing.creditsTotal)) : 0
+  const kpiTiles = [
+    { key: 'calls', label: 'Calls', icon: 'call', tone: 'bg-primary/12 text-primary', value: comparison?.current.calls ?? 0, previous: comparison?.previous.calls ?? 0, change: comparison?.change.calls ?? null },
+    { key: 'qualified', label: 'Qualified leads', icon: 'verified', tone: 'bg-magenta/12 text-magenta', value: comparison?.current.qualified ?? 0, previous: comparison?.previous.qualified ?? 0, change: comparison?.change.qualified ?? null },
+    { key: 'booked', label: 'Appointments', icon: 'event_available', tone: 'bg-cyan/12 text-cyan', value: comparison?.current.booked ?? 0, previous: comparison?.previous.booked ?? 0, change: comparison?.change.booked ?? null },
+    { key: 'minutes', label: 'Minutes', icon: 'timer', tone: 'bg-amber/12 text-amber', value: comparison?.current.minutes ?? 0, previous: comparison?.previous.minutes ?? 0, change: comparison?.change.minutes ?? null },
+  ]
+  // Each stage's rate is against the stage before it.
+  const funnelStages = analytics
+    ? [
+        { label: 'Answered', value: analytics.funnel.answered },
+        { label: 'Engaged', value: analytics.funnel.engaged },
+        { label: 'Qualified', value: analytics.funnel.qualified },
+        { label: 'Booked', value: analytics.funnel.visitBooked },
+      ].map((stage, index, all) => ({ ...stage, stepRate: index > 0 && all[index - 1].value ? Math.round((stage.value * 100) / all[index - 1].value) : 0 }))
+    : []
 
   const toggleCard = async (key: string) => {
     const next = new Set(hiddenCards)
@@ -187,10 +246,14 @@ export function Dashboard() {
     if (dismissingChecklist) return
     setDismissingChecklist(true)
     setChecklistDismissed(true)
+    // Remembered on this device too: if the save fails (a network blip, or the
+    // API restarting during a deploy) the checklist stays closed and the save
+    // is retried on the next visit, instead of the checklist coming back.
+    try { window.localStorage.setItem(CHECKLIST_KEY, '1') } catch { /* storage blocked */ }
     try {
       await apiUpdateProfilePreferences({ dashboard_checklist_dismissed: true })
     } catch {
-      setChecklistDismissed(false)
+      /* stays hidden; retried on the next visit */
     } finally {
       setDismissingChecklist(false)
     }
@@ -210,7 +273,7 @@ export function Dashboard() {
                 tab === t ? 'text-text' : 'text-text-muted hover:text-text'
               }`}
             >
-              {t}
+              <span className="flex items-center gap-1.5">{t}{t === 'analytics' && analyticsAllowed === false && <Icon name="lock" className="text-[15px]" />}</span>
               {tab === t && <span className="absolute -bottom-px left-0 h-0.5 w-full bg-primary" />}
             </button>
           ))}
@@ -218,24 +281,34 @@ export function Dashboard() {
 
         {tab === 'overview' && (
           <>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="break-words text-lg font-bold sm:text-xl">{greeting()}, {user?.accountName ?? 'there'}</h2>
-                <p className="mt-1 text-sm text-text-muted">
-                  Your agents handled <span className="font-semibold text-text">{summary?.totalCalls ?? 0} calls</span>{' '}
-                  with <span className="font-semibold text-cyan">{successPct}% qualified</span>
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div role="group" aria-label="Performance period" className="flex gap-1 rounded-full bg-surface p-1 ring-1 ring-border">
+                  {RANGE_OPTIONS.map((range) => (
+                    <button
+                      key={range.days}
+                      type="button"
+                      onClick={() => setRangeDays(range.days)}
+                      aria-pressed={rangeDays === range.days}
+                      className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${rangeDays === range.days ? 'bg-primary text-white' : 'text-text-muted hover:text-text'}`}
+                    >
+                      {range.label}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs text-text-muted">Compared with the {rangeDays} days before</span>
               </div>
               <div className="relative max-w-full">
                 <button
                   type="button"
                   onClick={() => setCustomizing((value) => !value)}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-text"
+                  aria-expanded={customizing}
+                  className="flex items-center gap-2 rounded-full bg-surface px-3.5 py-2 text-xs font-bold text-text-muted ring-1 ring-border hover:text-text"
                 >
-                  <Icon name="tune" className="text-[17px]" /> Customize dashboard
+                  <Icon name="tune" className="text-[17px]" /> Customize
                 </button>
                 {customizing && (
-                  <div className="absolute left-0 z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-3 shadow-xl sm:left-auto sm:right-0">
+                  <div className="absolute left-0 z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-3 shadow-xl sm:left-auto sm:right-0">
                     <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Visible sections</p>
                     {DASHBOARD_CARDS.map((card) => (
                       <label key={card.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-high/40">
@@ -281,540 +354,587 @@ export function Dashboard() {
               </SectionCard>
             )}
 
-            {isVisible('attention') && (
-              <SectionCard
-                title="Needs attention"
-                subtitle={attentionCount ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} may affect customer conversations` : 'Everything important is in good shape'}
-                action={<span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${attentionCount ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success'}`}>{attentionCount || 'All clear'}</span>}
-              >
-                {attentionCount === 0 ? (
-                  <div className="flex items-center gap-3 p-4 text-sm text-text-muted"><Icon name="verified" className="text-success" /> No failed calls, integration errors, low-credit warnings, or negative feedback.</div>
-                ) : (
-                  <div className="grid gap-2 p-4 md:grid-cols-2 xl:grid-cols-4">
-                    {attentionItems.map((item) => (
-                      <AttentionLink
-                        key={item.id}
-                        to={item.to}
-                        icon={ATTENTION_ICON[item.id.split(':')[0]] ?? 'info'}
-                        label={item.title}
-                        detail={item.body}
-                        tone={
-                          item.severity === 'critical'
-                            ? 'destructive'
-                            : item.severity === 'warning'
-                              ? 'amber'
-                              : 'success'
-                        }
-                      />
-                    ))}
+            <div className="bento-grid">
+              <section className="bento-tile bento-hero bento-w2 bento-h2 flex min-h-[300px] flex-col justify-between gap-6">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">{todayLabel}</span>
+                    {showingLive && (
+                      <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold">
+                        <span className="pulse-dot h-2 w-2 rounded-full bg-white" />{activeCalls.length} live now
+                      </span>
+                    )}
                   </div>
-                )}
-              </SectionCard>
-            )}
-
-            {isVisible('quick_actions') && (
-              <div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-1"><h3 className="text-sm font-semibold">Quick actions</h3><span className="text-[11px] text-text-muted">Based on your {user?.role ?? 'member'} access</span></div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  <QuickAction to="/dashboard/agents" icon="mic" label="Test an agent" />
-                  <QuickAction to="/dashboard/outbound" icon="campaign" label="Start campaign" />
-                  <QuickAction to="/dashboard/contacts" icon="person_add" label="Add contact" />
-                  <QuickAction to="/dashboard/appointments" icon="event" label="New appointment" />
-                  {user?.role !== 'viewer' && <QuickAction to="/dashboard/integrations" icon="extension" label="Connect app" />}
-                  {user?.role !== 'viewer' && <QuickAction to="/dashboard/website-widget" icon="widgets" label="Install widget" />}
+                  <h2 className="bento-title mt-4 break-words text-[28px] leading-tight sm:text-4xl">{greeting()}, {user?.accountName ?? 'there'}</h2>
+                  <p className="mt-3 max-w-md text-[15px] leading-relaxed text-white/80">
+                    Your agents have handled {totalCalls.toLocaleString('en-IN')} calls so far, and {successPct}% of them qualified as leads.
+                  </p>
                 </div>
-              </div>
-            )}
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="bento-num text-6xl leading-none sm:text-7xl">{totalCalls.toLocaleString('en-IN')}</p>
+                    <p className="mt-2 text-sm font-bold text-white/75">calls handled</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link to="/dashboard/agents" className="bento-pill bento-pill-light">Test an agent →</Link>
+                    <Link to="/dashboard/outbound" className="bento-pill bento-pill-glass">Start campaign</Link>
+                  </div>
+                </div>
+              </section>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
-              <div><p className="text-sm font-semibold">Performance period</p><p className="text-[11px] text-text-muted">Compared with the immediately preceding period</p></div>
-              <div className="flex gap-1 rounded-lg border border-border p-0.5">
-                {RANGE_OPTIONS.map((range) => <button key={range.days} onClick={() => setRangeDays(range.days)} className={`rounded-md px-3 py-1.5 text-[11px] font-semibold ${rangeDays === range.days ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'}`}>{range.label}</button>)}
-              </div>
-            </div>
+              <section className="bento-tile bento-h2 flex flex-col items-center justify-between gap-4 text-center">
+                <div className="self-stretch text-left">
+                  <h3 className="bento-title text-[15px]">Minutes</h3>
+                  <p className="mt-0.5 text-xs text-text-muted">{lowCredits ? 'Running low' : 'Your balance'}</p>
+                </div>
+                <svg width="168" height="168" viewBox="0 0 120 120" role="img" aria-label={`${minutesLeftLabel} minutes left`}>
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="var(--color-surface-high)" strokeWidth="12" />
+                  <circle
+                    cx="60" cy="60" r="48" fill="none"
+                    stroke={lowCredits ? 'var(--color-destructive)' : 'url(#bentoRing)'}
+                    strokeWidth="12" strokeLinecap="round"
+                    strokeDasharray={`${(ringShare * 301.6).toFixed(1)} 301.6`}
+                    transform="rotate(-90 60 60)"
+                    className="bento-ring"
+                  />
+                  <defs>
+                    <linearGradient id="bentoRing" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stopColor="var(--color-primary)" />
+                      <stop offset="1" stopColor="#c026d3" />
+                    </linearGradient>
+                  </defs>
+                  <text x="60" y="58" textAnchor="middle" className="bento-ring-value">{minutesLeftLabel}</text>
+                  <text x="60" y="76" textAnchor="middle" className="bento-ring-label">min left</text>
+                </svg>
+                <p className="text-[13px] text-text-muted">
+                  {comparison ? `${comparison.current.minutes.toLocaleString('en-IN')} min used in the last ${rangeDays} days` : 'Usage loads with your calls'}
+                </p>
+                <Link to="/dashboard/settings?tab=billing&topup=1" className="bento-pill bento-pill-dark self-stretch justify-center">Top up minutes</Link>
+              </section>
 
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <ComparisonTile label="Calls" value={comparison?.current.calls ?? 0} change={comparison?.change.calls ?? null} icon="call" />
-              <ComparisonTile label="Qualified leads" value={comparison?.current.qualified ?? 0} change={comparison?.change.qualified ?? null} icon="verified" />
-              <ComparisonTile label="Appointments" value={comparison?.current.booked ?? 0} change={comparison?.change.booked ?? null} icon="event_available" />
-              <ComparisonTile label="Minutes" value={comparison?.current.minutes ?? 0} change={comparison?.change.minutes ?? null} icon="timer" />
-            </div>
-
-            {/* Hero: live calls when any are in progress, otherwise the most
-                recent calls - this is a voice platform, so the front page
-                leads with actual calls, not abstract numbers. */}
-            <SectionCard
-              title={showingLive ? 'Live calls' : 'Recent calls'}
-              action={
-                <div className="flex items-center gap-3">
-                  {showingLive ? (
-                    <span className="flex items-center gap-1.5 text-[11px] text-text-muted">
-                      <span className="pulse-dot h-2 w-2 rounded-full bg-cyan" />
-                      {activeCalls.length} in progress
+              {kpiTiles.map((kpi) => (
+                <button
+                  key={kpi.key}
+                  type="button"
+                  onClick={() => setOpenKpi((current) => (current === kpi.key ? null : kpi.key))}
+                  aria-expanded={openKpi === kpi.key}
+                  className="bento-tile bento-kpi flex flex-col gap-2 text-left"
+                >
+                  <span className="flex items-center justify-between">
+                    <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${kpi.tone}`}><Icon name={kpi.icon} className="text-[19px]" /></span>
+                    {kpi.change != null && (
+                      <span className={`rounded-full px-2 py-1 text-[11px] font-extrabold ${kpi.change >= 0 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+                        {kpi.change >= 0 ? '↑' : '↓'} {Math.abs(kpi.change)}%
+                      </span>
+                    )}
+                  </span>
+                  <span className="bento-num mt-2 text-[34px] leading-none">{kpi.value.toLocaleString('en-IN')}</span>
+                  <span className="text-[13px] font-bold text-text-muted">{kpi.label}</span>
+                  {openKpi === kpi.key && (
+                    <span className="bento-reveal mt-1 border-t border-dashed border-border pt-2 text-xs text-text-muted">
+                      Previous {rangeDays} days: <b className="text-text">{kpi.previous.toLocaleString('en-IN')}</b>
                     </span>
-                  ) : (
-                    <Link to="/dashboard/calls" className="text-xs font-bold text-cyan hover:underline">
-                      View all →
-                    </Link>
                   )}
+                </button>
+              ))}
+
+              {isVisible('attention') && (
+                <section className="bento-tile bento-w2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="bento-title text-[15px]">Needs attention</h3>
+                      <p className="mt-0.5 text-xs text-text-muted">{attentionCount ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} may affect customer conversations` : 'Everything important is in good shape'}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${attentionCount ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success'}`}>{attentionCount || 'All clear'}</span>
+                  </div>
+                  {attentionCount === 0 ? (
+                    <div className="mt-4 flex items-center gap-3 text-sm text-text-muted"><Icon name="verified" className="text-success" /> No failed calls, integration errors, low-minute warnings, or negative feedback.</div>
+                  ) : (
+                    <div className="mt-3 flex flex-col">
+                      {(showAllAttention ? attentionItems : attentionItems.slice(0, ATTENTION_PREVIEW)).map((item) => (
+                        <AttentionLink
+                          key={item.id}
+                          to={item.to}
+                          icon={ATTENTION_ICON[item.id.split(':')[0]] ?? 'info'}
+                          label={item.title}
+                          detail={item.body}
+                          tone={item.severity === 'critical' ? 'destructive' : item.severity === 'warning' ? 'amber' : 'success'}
+                        />
+                      ))}
+                      {attentionCount > ATTENTION_PREVIEW && (
+                        <button type="button" onClick={() => setShowAllAttention((v) => !v)} aria-expanded={showAllAttention} className="mt-1 self-start rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/10">
+                          {showAllAttention ? 'Show fewer' : `Show all ${attentionCount}`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              <section className="bento-tile bento-w2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="bento-title text-[15px]">{showingLive ? 'Live calls' : 'Recent calls'}</h3>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      {showingLive
+                        ? <span className="flex items-center gap-1.5"><span className="pulse-dot h-2 w-2 rounded-full bg-cyan" />{activeCalls.length} in progress</span>
+                        : recentCalls.length === 0
+                          ? 'Every call your agent takes lands here'
+                          : `Latest: ${recentCalls[0].name || 'Unknown caller'} · ${formatDateTime(recentCalls[0].callDate)}`}
+                    </p>
+                  </div>
                   {!showingLive && (
-                    <button
-                      type="button"
-                      onClick={() => setRecentCallsCollapsed((c) => !c)}
-                      aria-label={recentCallsCollapsed ? 'Expand recent calls' : 'Collapse recent calls'}
-                      aria-expanded={!recentCallsCollapsed}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-high/40 hover:text-text"
-                    >
-                      <Icon
-                        name="expand_more"
-                        className={`text-[18px] transition-transform ${recentCallsCollapsed ? '-rotate-90' : ''}`}
-                      />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <Link to="/dashboard/calls" className="text-xs font-bold text-cyan hover:underline">View all →</Link>
+                      {recentCalls.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setRecentCallsCollapsed((c) => !c)}
+                          aria-label={recentCallsCollapsed ? 'Expand recent calls' : 'Collapse recent calls'}
+                          aria-expanded={!recentCallsCollapsed}
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-surface-high/40 hover:text-text"
+                        >
+                          <Icon name="expand_more" className={`text-[18px] transition-transform ${recentCallsCollapsed ? '-rotate-90' : ''}`} />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
-              }
-              footer={
-                !callsCollapsed && !showingLive && recentCalls.length > 0 ? (
-                  <Link to="/dashboard/calls" className="font-bold text-cyan hover:underline">
-                    View full call history →
-                  </Link>
-                ) : undefined
-              }
-            >
-              <div className={`divide-y divide-border ${callsCollapsed ? 'hidden' : ''}`}>
-                {showingLive
-                  ? activeCalls.map((call) => (
-                      <div key={call.room} className="flex items-center gap-3 px-4 py-3 sm:px-5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-                          {call.visitor_identity.slice(0, 2).toUpperCase()}
-                        </div>
+                {showingLive ? (
+                  <div className="mt-3 flex flex-col">
+                    {activeCalls.map((call) => (
+                      <div key={call.room} className="flex items-center gap-3 rounded-xl px-2 py-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{call.visitor_identity.slice(0, 2).toUpperCase()}</div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{call.visitor_identity}</p>
+                          <p className="truncate text-sm font-semibold">{call.visitor_identity}</p>
                           <p className="truncate text-[11px] text-text-muted">{call.room}</p>
                         </div>
-                        <span
-                          className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
-                            AGENT_STATE_STYLES[call.state] ?? 'border-border text-text-muted'
-                          }`}
-                        >
-                          {call.state}
-                        </span>
+                        <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${AGENT_STATE_STYLES[call.state] ?? 'border-border text-text-muted'}`}>{call.state}</span>
                       </div>
-                    ))
-                  : recentCalls.length === 0
-                    ? (
-                      <EmptyState
-                        icon="call"
-                        text="No calls yet - every call your agent takes lands here automatically."
-                      />
-                    )
-                    : recentCalls.map((call) => (
+                    ))}
+                  </div>
+                ) : !callsCollapsed && recentCalls.length > 0 && (
+                  <div className="bento-reveal mt-3 flex flex-col">
+                    {recentCalls.map((call) => (
                       <Link
                         key={call.id}
                         to={`/dashboard/calls/${call.id}`}
                         aria-label={`Open call from ${call.name || call.phone || 'unknown caller'}, ${call.callStatus}`}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-surface-high/20 sm:px-5"
+                        className="bento-row flex items-center gap-3 rounded-xl px-2 py-2.5"
                       >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-                          {call.initials}
-                        </div>
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{call.initials}</div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{call.name}</p>
-                          <p className="truncate text-[11px] text-text-muted">
-                            {call.channel} · {formatDateTime(call.callDate)}
-                          </p>
+                          <p className="truncate text-sm font-semibold">{call.name}</p>
+                          <p className="truncate text-[11px] text-text-muted">{call.channel} · {formatDateTime(call.callDate)}</p>
                         </div>
-                        <span className="hidden shrink-0 text-xs text-text-muted sm:block">
-                          {formatDuration(call.durationSeconds)}
-                        </span>
-                        <span
-                          className={`shrink-0 whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
-                            CALL_STATUS_STYLES[call.callStatus] ?? 'border-border text-text-muted'
-                          }`}
-                        >
-                          {call.callStatus}
-                        </span>
+                        <span className="hidden shrink-0 text-xs tabular-nums text-text-muted sm:block">{formatDuration(call.durationSeconds)}</span>
+                        <span className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${CALL_STATUS_STYLES[call.callStatus] ?? 'border-border text-text-muted'}`}>{call.callStatus}</span>
                       </Link>
                     ))}
-              </div>
-            </SectionCard>
-
-            {/* Secondary KPI strip - compact, not the page's hero. */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <StatTile compact label="Minutes" value={String(summary?.totalMinutes ?? 0)} icon="timer" tone="cyan" />
-              <StatTile compact label="Active Agents" value={String(summary?.activeAgents ?? 0)} icon="smart_toy" tone="primary" />
-              <StatTile compact label="Live Calls" value={String(activeCalls.length)} icon="sensors" pulse={activeCalls.length > 0} tone="magenta" />
-              <StatTile compact label="Qualified" value={String(summary?.qualifiedCalls ?? 0)} icon="check_circle" tone="success" />
-              <StatTile compact label="Success Rate" value={`${successPct}%`} icon="trending_up" tone="amber" />
-              <StatTile
-                compact
-                label="Conversion"
-                value={`${summary ? Math.round(summary.conversionRatio * 100) : 0}%`}
-                icon="event_available"
-                tone="primary"
-              />
-            </div>
-
-            {isVisible('funnel') && analytics && (
-              <SectionCard title="Conversion funnel" subtitle="See where conversations turn into business outcomes">
-                <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <FunnelStage label="Answered" value={analytics.funnel.answered} base={analytics.funnel.answered} icon="call" />
-                  <FunnelStage label="Engaged" value={analytics.funnel.engaged} base={analytics.funnel.answered} icon="forum" />
-                  <FunnelStage label="Qualified" value={analytics.funnel.qualified} base={analytics.funnel.answered} icon="verified" />
-                  <FunnelStage label="Booked" value={analytics.funnel.visitBooked} base={analytics.funnel.answered} icon="event_available" />
-                </div>
-              </SectionCard>
-            )}
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              {isVisible('followups') && (
-                <SectionCard title="Follow-up queue" subtitle={`${followUps.length} recent leads awaiting the next action`} action={<Link to="/dashboard/contacts" className="text-xs font-bold text-cyan hover:underline">View contacts →</Link>}>
-                  {followUps.length === 0 ? <EmptyState icon="task_alt" text="No qualified or new leads are waiting for follow-up." /> : (
-                    <div className="divide-y divide-border">
-                      {followUps.map((contact) => <Link key={contact.id} to={`/dashboard/contacts/${contact.id}`} aria-label={`Open contact ${contact.name || contact.phone || contact.email || ''}`.trim()} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-high/20"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{contact.name.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{contact.name}</p><p className="truncate text-[11px] text-text-muted">{contact.phone || contact.email || 'No contact details'} · {contact.source}</p></div><span className="rounded-full bg-cyan/10 px-2 py-1 text-[10px] font-bold capitalize text-cyan">{contact.status}</span></Link>)}
-                    </div>
-                  )}
-                </SectionCard>
-              )}
-              {isVisible('appointments') && <SectionCard title="Upcoming appointments" subtitle={`${upcomingAppointments.length} confirmed booking${upcomingAppointments.length === 1 ? '' : 's'}`} action={<Link to="/dashboard/appointments" className="text-xs font-bold text-cyan hover:underline">Calendar →</Link>}>
-                {upcomingAppointments.length === 0 ? <EmptyState icon="event_busy" text="No upcoming appointments. Artha can book them during calls." /> : (
-                  <div className="divide-y divide-border">{upcomingAppointments.slice(0, 5).map((appointment) => <div key={appointment.id} className="flex items-center gap-3 px-4 py-3"><div className="rounded-lg bg-success/10 px-2 py-1 text-center"><p className="text-[10px] font-bold uppercase text-success">{new Date(`${appointment.date}T00:00:00`).toLocaleDateString('en-IN', { month: 'short' })}</p><p className="text-sm font-bold">{Number(appointment.date.slice(-2))}</p></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{appointment.name}</p><p className="text-[11px] text-text-muted">{appointment.time} · {appointment.durationMinutes} min</p></div><span className="text-[11px] capitalize text-text-muted">{appointment.source}</span></div>)}</div>
+                  </div>
                 )}
-              </SectionCard>}
-            </div>
+              </section>
 
-            {isVisible('channels') && (
-              <SectionCard title="Channel performance" subtitle="Compare volume, qualification and conversion across every customer entry point">
-                {analytics?.byChannel?.length ? <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">{analytics.byChannel.map((channel) => { const rate = channel.calls ? Math.round(channel.qualified * 100 / channel.calls) : 0; return <div key={channel.channel} className="rounded-xl border border-border bg-surface-high/20 p-4"><div className="flex items-center justify-between"><p className="font-semibold">{channel.channel}</p><span className="text-xs font-bold text-cyan">{rate}% qualified</span></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><MiniMetric label="Calls" value={channel.calls} /><MiniMetric label="Leads" value={channel.qualified} /><MiniMetric label="Minutes" value={channel.minutes} /></div></div> })}</div> : <EmptyState icon="hub" text="Channel performance appears after your first calls." />}
-              </SectionCard>
-            )}
-
-            {/* Owner-only: visitor feedback is collected by our public
-                marketing-site widget, so it measures US, not the tenant. */}
-            {user?.isPlatformOwner && isVisible('feedback') && (
-              <>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <StatTile compact label="Feedback received" value={String(feedback?.total ?? 0)} icon="reviews" tone="primary" />
-                  <StatTile compact label="Helpful" value={feedback?.helpfulPercent == null ? '—' : `${feedback.helpfulPercent}%`} icon="thumb_up" tone="success" />
-                  <Link to="/dashboard/calls?feedback=not_helpful" className="rounded-xl border border-border bg-surface p-4 transition-colors hover:border-destructive"><p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Needs review</p><p className="mt-1 font-display text-2xl font-bold text-destructive">{feedback?.notHelpful ?? 0}</p><p className="mt-1 text-xs text-text-muted">Open negative-feedback conversations →</p></Link>
-                </div>
-                {(feedback?.firstResponseP50Ms != null || feedback?.firstResponseP95Ms != null) && <div className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-text-muted">First AI response: <span className="font-semibold text-text">p50 {feedback.firstResponseP50Ms == null ? '—' : `${(feedback.firstResponseP50Ms / 1000).toFixed(1)}s`}</span>{' · '}<span className="font-semibold text-text">p95 {feedback.firstResponseP95Ms == null ? '—' : `${(feedback.firstResponseP95Ms / 1000).toFixed(1)}s`}</span></div>}
-              </>
-            )}
-
-            <div className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-text-muted">
-              Connected apps: <span className="font-semibold text-text">{connectedIntegrations.length}</span>
-              {' · '}Upcoming appointments: <span className="font-semibold text-text">{upcomingAppointments.length}</span>
-              {' · '}Minutes remaining: <span className={`font-semibold ${lowCredits ? 'text-destructive' : 'text-text'}`}>{billing?.creditsRemaining ?? '—'}</span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <Card className="lg:col-span-2">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">Usage trends</h3>
-                  <div className="flex gap-1 rounded-lg border border-border p-0.5">
-                    {RANGE_OPTIONS.map((r) => (
-                      <button
-                        key={r.days}
-                        onClick={() => setRangeDays(r.days)}
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-                          rangeDays === r.days ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
-                        }`}
-                      >
-                        {r.label}
-                      </button>
+              {isVisible('funnel') && analytics && (
+                <section className="bento-tile bento-w2">
+                  <h3 className="bento-title text-[15px]">From call to appointment</h3>
+                  <p className="mt-0.5 text-xs text-text-muted">Where conversations turn into business outcomes</p>
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {funnelStages.map((stage, index) => (
+                      <div key={stage.label} className={`flex flex-col justify-between gap-3 rounded-2xl p-3.5 ${index === funnelStages.length - 1 ? 'bento-funnel-last' : 'bg-surface-high/60'}`}>
+                        <span className="h-5 text-[11px] font-extrabold">{index > 0 ? <span className="rounded-full bg-primary/15 px-2 py-0.5 text-primary">{stage.stepRate}%</span> : null}</span>
+                        <span>
+                          <span className="bento-num block text-2xl leading-none">{stage.value.toLocaleString('en-IN')}</span>
+                          <span className="mt-1.5 block text-xs font-bold opacity-75">{stage.label}</span>
+                        </span>
+                      </div>
                     ))}
                   </div>
+                  <p className="mt-3 text-[11px] text-text-muted">Each percentage is the share of the stage before it.</p>
+                </section>
+              )}
+
+              <section className="bento-tile bento-w2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="bento-title text-[15px]">Usage trends</h3>
+                  <span className="flex items-center gap-3 text-[11px] font-semibold text-text-muted">
+                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />Calls</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan" />Qualified</span>
+                  </span>
                 </div>
-                <div className="h-[220px]">
+                <div className="mt-4 h-[200px]">
                   {trends && trends.labels.length > 0 ? (
                     <Line
                       data={{
-                        labels: trends.labels,
+                        labels: trends.labels.map(shortDay),
                         datasets: [
-                          { label: 'Calls', data: trends.calls, borderColor: '#A855F7', backgroundColor: 'rgba(168,85,247,0.08)', fill: true, tension: 0.35, pointRadius: 2 },
-                          { label: 'Qualified', data: trends.qualified, borderColor: '#22D3EE', backgroundColor: 'rgba(34,211,238,0.08)', fill: true, tension: 0.35, pointRadius: 2 },
+                          { label: 'Calls', data: trends.calls, borderColor: '#A855F7', backgroundColor: 'rgba(168,85,247,0.10)', fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5 },
+                          { label: 'Qualified', data: trends.qualified, borderColor: '#22D3EE', backgroundColor: 'rgba(34,211,238,0.08)', fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5 },
                         ],
                       }}
                       options={{
                         maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
                         plugins: { legend: { display: false } },
-                        scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
+                        scales: { x: { grid: { display: false }, ticks: { ...TICKS, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
                       }}
                     />
                   ) : (
                     <EmptyState icon="show_chart" text="No calls yet in this range - every call the agent takes lands here automatically." />
                   )}
                 </div>
-              </Card>
+              </section>
 
-              <Card className="flex flex-col">
-                <h3 className="mb-4 text-sm font-semibold">Call outcomes</h3>
+              <section className="bento-tile bento-w2">
+                <h3 className="bento-title text-[15px]">Call outcomes</h3>
                 {summary && summary.totalCalls > 0 ? (
-                  <>
-                    <div className="flex flex-1 items-center justify-center py-2">
-                      <div className="h-[150px] w-[150px]">
-                        <Doughnut
-                          data={{
-                            labels: ['Appointment booked', 'Qualified', 'Not qualified'],
-                            datasets: [
-                              {
-                                data: [
-                                  summary.siteVisits,
-                                  summary.qualifiedCalls - summary.siteVisits,
-                                  summary.totalCalls - summary.qualifiedCalls,
-                                ],
-                                backgroundColor: ['#A855F7', '#22D3EE', t.muted],
-                                borderColor: t.surface,
-                                borderWidth: 3,
-                              },
-                            ],
-                          }}
-                          options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '70%' }}
-                        />
-                      </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-6">
+                    <div className="h-[150px] w-[150px]">
+                      <Doughnut
+                        data={{
+                          labels: ['Appointment booked', 'Qualified', 'Not qualified'],
+                          datasets: [{
+                            data: [summary.siteVisits, summary.qualifiedCalls - summary.siteVisits, summary.totalCalls - summary.qualifiedCalls],
+                            backgroundColor: ['#A855F7', '#22D3EE', t.muted],
+                            borderColor: t.surface,
+                            borderWidth: 3,
+                          }],
+                        }}
+                        options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '72%' }}
+                      />
                     </div>
-                    <div className="mt-3 flex flex-col gap-1.5 text-[11px] text-text-muted">
-                      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />Appointment booked · {summary.siteVisits}</span>
-                      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan" />Qualified · {summary.qualifiedCalls - summary.siteVisits}</span>
-                      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-muted" />Not qualified · {summary.totalCalls - summary.qualifiedCalls}</span>
+                    <div className="flex flex-col gap-2.5 text-[13px]">
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-primary" /><span className="text-text-muted">Appointment booked</span><b className="tabular-nums">{summary.siteVisits}</b></span>
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-cyan" /><span className="text-text-muted">Qualified</span><b className="tabular-nums">{summary.qualifiedCalls - summary.siteVisits}</b></span>
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-muted" /><span className="text-text-muted">Not qualified</span><b className="tabular-nums">{summary.totalCalls - summary.qualifiedCalls}</b></span>
                     </div>
-                  </>
+                  </div>
                 ) : (
                   <EmptyState icon="donut_large" text="Outcomes appear once calls are logged." />
                 )}
-              </Card>
+              </section>
+
+              <section className="bento-tile bento-w2">
+                <h3 className="bento-title text-[15px]">At a glance</h3>
+                <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-5">
+                  <GlanceStat label="Total minutes" value={String(summary?.totalMinutes ?? 0)} />
+                  <GlanceStat label="Active agents" value={String(summary?.activeAgents ?? 0)} />
+                  <GlanceStat label="Live calls" value={String(activeCalls.length)} live={activeCalls.length > 0} />
+                  <GlanceStat label="Qualified" value={String(summary?.qualifiedCalls ?? 0)} />
+                  <GlanceStat label="Success rate" value={`${successPct}%`} />
+                  <GlanceStat label="Conversion" value={`${summary ? Math.round(summary.conversionRatio * 100) : 0}%`} />
+                </div>
+                <p className="mt-5 border-t border-border pt-3 text-xs text-text-muted">
+                  Connected apps: <b className="text-text">{connectedIntegrations.length}</b> · Upcoming appointments: <b className="text-text">{upcomingAppointments.length}</b>
+                </p>
+              </section>
+
+              {isVisible('quick_actions') && (
+                <section className="bento-tile bento-w2">
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <h3 className="bento-title text-[15px]">Quick actions</h3>
+                    <span className="text-[11px] text-text-muted">Based on your {user?.role ?? 'member'} access</span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2.5">
+                    <QuickAction to="/dashboard/agents" icon="mic" label="Test an agent" />
+                    <QuickAction to="/dashboard/outbound" icon="campaign" label="Start campaign" />
+                    <QuickAction to="/dashboard/contacts" icon="person_add" label="Add contact" />
+                    <QuickAction to="/dashboard/appointments" icon="event" label="New appointment" />
+                    {user?.role !== 'viewer' && <QuickAction to="/dashboard/integrations" icon="extension" label="Connect app" />}
+                    {user?.role !== 'viewer' && <QuickAction to="/dashboard/website-widget" icon="widgets" label="Install widget" />}
+                  </div>
+                </section>
+              )}
+
+              {isVisible('followups') && (
+                <section className="bento-tile bento-w2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="bento-title text-[15px]">Follow-up queue</h3>
+                      <p className="mt-0.5 text-xs text-text-muted">{followUps.length} recent lead{followUps.length === 1 ? '' : 's'} awaiting the next action</p>
+                    </div>
+                    <Link to="/dashboard/contacts" className="text-xs font-bold text-cyan hover:underline">View contacts →</Link>
+                  </div>
+                  {followUps.length === 0 ? <EmptyState icon="task_alt" text="No qualified or new leads are waiting for follow-up." /> : (
+                    <div className="mt-3 flex flex-col">
+                      {followUps.map((contact) => (
+                        <Link key={contact.id} to={`/dashboard/contacts/${contact.id}`} aria-label={`Open contact ${contact.name || contact.phone || contact.email || ''}`.trim()} className="bento-row flex items-center gap-3 rounded-xl px-2 py-2.5">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{contact.name.slice(0, 2).toUpperCase()}</div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold">{contact.name}</p>
+                            <p className="truncate text-[11px] text-text-muted">{contact.phone || contact.email || 'No contact details'} · {contact.source}</p>
+                          </div>
+                          <span className="rounded-full bg-cyan/10 px-2 py-1 text-[10px] font-bold capitalize text-cyan">{contact.status}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {isVisible('appointments') && (
+                <section className="bento-tile bento-w2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="bento-title text-[15px]">Upcoming appointments</h3>
+                      <p className="mt-0.5 text-xs text-text-muted">{upcomingAppointments.length} confirmed booking{upcomingAppointments.length === 1 ? '' : 's'}</p>
+                    </div>
+                    <Link to="/dashboard/appointments" className="text-xs font-bold text-cyan hover:underline">Calendar →</Link>
+                  </div>
+                  {upcomingAppointments.length === 0 ? <EmptyState icon="event_busy" text="No upcoming appointments. Artha can book them during calls." /> : (
+                    <div className="mt-3 flex flex-col">
+                      {upcomingAppointments.slice(0, 5).map((appointment) => (
+                        <div key={appointment.id} className="flex items-center gap-3 rounded-xl px-2 py-2.5">
+                          <div className="w-11 shrink-0 rounded-xl bg-success/10 py-1 text-center">
+                            <p className="text-[10px] font-bold uppercase text-success">{new Date(`${appointment.date}T00:00:00`).toLocaleDateString('en-IN', { month: 'short' })}</p>
+                            <p className="bento-num text-sm">{Number(appointment.date.slice(-2))}</p>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold">{appointment.name}</p>
+                            <p className="text-[11px] text-text-muted">{appointment.time} · {appointment.durationMinutes} min</p>
+                          </div>
+                          <span className="text-[11px] capitalize text-text-muted">{appointment.source}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {isVisible('channels') && (
+                <section className="bento-tile bento-w4">
+                  <h3 className="bento-title text-[15px]">Channel performance</h3>
+                  <p className="mt-0.5 text-xs text-text-muted">Volume, qualification and conversion across every entry point</p>
+                  {analytics?.byChannel?.length ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {analytics.byChannel.map((channel) => {
+                        const rate = channel.calls ? Math.round(channel.qualified * 100 / channel.calls) : 0
+                        return (
+                          <div key={channel.channel} className="rounded-2xl bg-surface-high/50 p-4">
+                            <div className="flex items-center justify-between"><p className="font-bold">{channel.channel}</p><span className="text-xs font-bold text-cyan">{rate}% qualified</span></div>
+                            <div className="mt-4 grid grid-cols-3 gap-2 text-center"><MiniMetric label="Calls" value={channel.calls} /><MiniMetric label="Leads" value={channel.qualified} /><MiniMetric label="Minutes" value={channel.minutes} /></div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : <EmptyState icon="hub" text="Channel performance appears after your first calls." />}
+                </section>
+              )}
+
+              {/* Owner-only: visitor feedback is collected by our public
+                  marketing-site widget, so it measures US, not the tenant. */}
+              {user?.isPlatformOwner && isVisible('feedback') && (
+                <section className="bento-tile bento-w4">
+                  <h3 className="bento-title text-[15px]">Website visitor feedback</h3>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <StatTile compact label="Feedback received" value={String(feedback?.total ?? 0)} icon="reviews" tone="primary" />
+                    <StatTile compact label="Helpful" value={feedback?.helpfulPercent == null ? '—' : `${feedback.helpfulPercent}%`} icon="thumb_up" tone="success" />
+                    <Link to="/dashboard/calls?feedback=not_helpful" className="rounded-xl border border-border bg-surface p-4 transition-colors hover:border-destructive"><p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Needs review</p><p className="mt-1 font-display text-2xl font-bold text-destructive">{feedback?.notHelpful ?? 0}</p><p className="mt-1 text-xs text-text-muted">Open negative-feedback conversations →</p></Link>
+                  </div>
+                  {(feedback?.firstResponseP50Ms != null || feedback?.firstResponseP95Ms != null) && <p className="mt-3 text-xs text-text-muted">First AI response: <span className="font-semibold text-text">p50 {feedback.firstResponseP50Ms == null ? '—' : `${(feedback.firstResponseP50Ms / 1000).toFixed(1)}s`}</span>{' · '}<span className="font-semibold text-text">p95 {feedback.firstResponseP95Ms == null ? '—' : `${(feedback.firstResponseP95Ms / 1000).toFixed(1)}s`}</span></p>}
+                </section>
+              )}
             </div>
           </>
         )}
 
-        {tab === 'analytics' && (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card className="lg:col-span-2">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Icon name="auto_awesome" className="text-[18px] text-cyan" />
-                <h3 className="text-sm font-semibold">Conversation intelligence</h3>
-                <span className="text-xs text-text-muted">· last 30 days</span>
-              </div>
-              {!intel || intel.analyzed === 0 ? (
-                <EmptyState icon="auto_awesome" text="Analyze calls from any call's detail page to build sentiment, outcome, and QA insights here." />
-              ) : (
-                <div className="flex flex-col gap-5">
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <IntelStat label="Calls analyzed" value={String(intel.analyzed)} />
-                    <IntelStat label="Avg agent QA" value={intel.avgQaScore != null ? `${intel.avgQaScore}/100` : '-'} tone="text-primary" />
-                    <IntelStat label="Positive" value={String(intel.sentiment.positive)} tone="text-success" />
-                    <IntelStat label="Negative" value={String(intel.sentiment.negative)} tone="text-destructive" />
-                  </div>
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                    <div>
-                      <p className="mb-2 text-xs font-semibold text-text-muted">Outcomes</p>
-                      <div className="flex flex-col gap-1.5">
-                        {intel.outcomes.map((o) => {
-                          const max = Math.max(...intel.outcomes.map((x) => x.count), 1)
-                          return (
-                            <div key={o.outcome} className="flex items-center gap-2 text-xs">
-                              <span className="w-28 shrink-0 capitalize text-text-muted">{o.outcome.replace(/_/g, ' ')}</span>
-                              <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-high">
-                                <div className="h-full bg-cyan" style={{ width: `${(o.count / max) * 100}%` }} />
-                              </div>
-                              <span className="w-6 text-right tabular-nums">{o.count}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="mb-2 text-xs font-semibold text-text-muted">Top disqualification reasons</p>
-                      {intel.topDisqualifications.length === 0 ? (
-                        <p className="text-xs text-text-muted">None recorded.</p>
-                      ) : (
-                        <div className="flex flex-col gap-1.5">
-                          {intel.topDisqualifications.map((r) => (
-                            <div key={r.reason} className="flex items-center justify-between gap-2 text-xs">
-                              <span className="truncate capitalize text-text">{r.reason}</span>
-                              <span className="shrink-0 rounded-full bg-surface-high px-2 py-0.5 tabular-nums text-text-muted">{r.count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+        {tab === 'analytics' && analyticsAllowed === false && (
+          <section className="bento-tile bento-hero flex flex-col items-start gap-5 sm:p-8">
+            <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">Growth and Scale plans</span>
+            <h2 className="bento-title max-w-2xl text-[28px] leading-tight sm:text-4xl">See why calls convert, not just how many</h2>
+            <p className="max-w-xl text-[15px] leading-relaxed text-white/80">
+              Analytics breaks every call down by agent, channel, language and hour, scores conversations for sentiment and quality, and shows the top reasons leads don&apos;t qualify.
+            </p>
+            <ul className="grid gap-x-8 gap-y-2.5 text-sm sm:grid-cols-2">
+              {ANALYTICS_FEATURES.map((feature) => (
+                <li key={feature} className="flex items-center gap-2"><Icon name="check_circle" className="text-[18px] text-white/90" />{feature}</li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to="/dashboard/settings?tab=billing" className="bento-pill bento-pill-light">Upgrade to Growth →</Link>
+              <span className="text-xs text-white/70">Your call data is kept; Analytics opens as soon as you upgrade.</span>
+            </div>
+          </section>
+        )}
+
+        {tab === 'analytics' && analyticsAllowed && (
+          <>
+            <div className="bento-grid">
+              <section className="bento-tile bento-w4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan/12 text-cyan"><Icon name="auto_awesome" className="text-[19px]" /></span>
+                  <div>
+                    <h3 className="bento-title text-[15px]">Conversation intelligence</h3>
+                    <p className="text-xs text-text-muted">Last 30 days</p>
                   </div>
                 </div>
-              )}
-            </Card>
+                {!intel || intel.analyzed === 0 ? (
+                  <EmptyState icon="auto_awesome" text="Analyze calls from any call's detail page to build sentiment, outcome, and QA insights here." />
+                ) : (
+                  <div className="mt-5 flex flex-col gap-6">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      <IntelStat label="Calls analyzed" value={String(intel.analyzed)} />
+                      <IntelStat label="Avg agent QA" value={intel.avgQaScore != null ? `${intel.avgQaScore}/100` : '-'} tone="text-primary" />
+                      <IntelStat label="Positive" value={String(intel.sentiment.positive)} tone="text-success" />
+                      <IntelStat label="Negative" value={String(intel.sentiment.negative)} tone="text-destructive" />
+                    </div>
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div>
+                        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">Outcomes</p>
+                        <div className="flex flex-col gap-2.5">
+                          {intel.outcomes.map((o) => {
+                            const max = Math.max(...intel.outcomes.map((x) => x.count), 1)
+                            return (
+                              <div key={o.outcome} className="flex items-center gap-3 text-xs">
+                                <span className="w-28 shrink-0 capitalize text-text-muted">{o.outcome.replace(/_/g, ' ')}</span>
+                                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-surface-high">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-primary to-cyan" style={{ width: `${(o.count / max) * 100}%` }} />
+                                </div>
+                                <span className="w-7 text-right font-bold tabular-nums">{o.count}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">Top disqualification reasons</p>
+                        {intel.topDisqualifications.length === 0 ? (
+                          <p className="text-xs text-text-muted">None recorded.</p>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            {intel.topDisqualifications.map((r) => (
+                              <div key={r.reason} className="flex items-center justify-between gap-2 rounded-xl bg-surface-high/50 px-3 py-2 text-xs">
+                                <span className="truncate capitalize">{r.reason}</span>
+                                <span className="shrink-0 font-bold tabular-nums text-text-muted">{r.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Calls by channel</h3>
-              <div className="h-[200px]">
+              <AnalyticsTile title="Calls by channel">
                 {analytics && analytics.byChannel && analytics.byChannel.length > 0 ? (
                   <Bar
                     data={{
                       labels: analytics.byChannel.map((c) => c.channel),
                       datasets: [
-                        { label: 'Calls', data: analytics.byChannel.map((c) => c.calls), backgroundColor: '#A855F7', borderRadius: 4 },
-                        { label: 'Qualified', data: analytics.byChannel.map((c) => c.qualified), backgroundColor: '#22D3EE', borderRadius: 4 },
+                        { label: 'Calls', data: analytics.byChannel.map((c) => c.calls), backgroundColor: '#A855F7', ...BAR_STYLE },
+                        { label: 'Qualified', data: analytics.byChannel.map((c) => c.qualified), backgroundColor: '#22D3EE', ...BAR_STYLE },
                       ],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: true, labels: { color: t.tick, boxWidth: 10, font: { size: 11 } } } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
-                    }}
+                    options={{ maintainAspectRatio: false, plugins: { legend: LEGEND }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
                   />
                 ) : (
                   <EmptyState icon="bar_chart" text="Channel split appears after the first calls - Web, Website Widget, and Phone." />
                 )}
-              </div>
-            </Card>
+              </AnalyticsTile>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Calls by agent</h3>
-              <div className="h-[200px]">
+              <AnalyticsTile title="Calls by agent">
                 {analytics && analytics.byAgent && analytics.byAgent.length > 0 ? (
                   <Bar
                     data={{
                       labels: analytics.byAgent.map((a) => a.agent),
                       datasets: [
-                        { label: 'Calls', data: analytics.byAgent.map((a) => a.calls), backgroundColor: '#FF3D9A', borderRadius: 4 },
-                        { label: 'Qualified', data: analytics.byAgent.map((a) => a.qualified), backgroundColor: '#22D3EE', borderRadius: 4 },
+                        { label: 'Calls', data: analytics.byAgent.map((a) => a.calls), backgroundColor: '#FF3D9A', ...BAR_STYLE },
+                        { label: 'Qualified', data: analytics.byAgent.map((a) => a.qualified), backgroundColor: '#22D3EE', ...BAR_STYLE },
                       ],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: true, labels: { color: t.tick, boxWidth: 10, font: { size: 11 } } } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
-                    }}
+                    options={{ maintainAspectRatio: false, plugins: { legend: LEGEND }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
                   />
                 ) : (
                   <EmptyState icon="bar_chart" text="Per-agent stats appear after the first calls." />
                 )}
-              </div>
-            </Card>
+              </AnalyticsTile>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Calls by language</h3>
-              <div className="h-[200px]">
+              <AnalyticsTile title="Calls by language">
                 {analytics && analytics.languages.length > 0 ? (
                   <Bar
                     data={{
                       labels: analytics.languages.map((l) => LANGUAGE_NAMES[l.language] ?? l.language),
-                      datasets: [{ data: analytics.languages.map((l) => l.count), backgroundColor: '#A855F7', borderRadius: 4 }],
+                      datasets: [{ data: analytics.languages.map((l) => l.count), backgroundColor: '#A855F7', ...BAR_STYLE }],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
-                    }}
+                    options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
                   />
                 ) : (
                   <EmptyState icon="translate" text="Language mix appears after the first calls." />
                 )}
-              </div>
-            </Card>
+              </AnalyticsTile>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Average call duration - last 14 days</h3>
-              <div className="h-[200px]">
+              <AnalyticsTile title="Average call duration" subtitle="Last 14 days">
                 {analytics && analytics.durationTrend.length > 0 ? (
                   <Line
                     data={{
-                      labels: analytics.durationTrend.map((d) => d.day),
-                      datasets: [
-                        {
-                          data: analytics.durationTrend.map((d) => Math.round(d.avgSeconds)),
-                          borderColor: '#22D3EE',
-                          backgroundColor: 'rgba(34,211,238,0.08)',
-                          fill: true,
-                          tension: 0.35,
-                        },
-                      ],
+                      labels: analytics.durationTrend.map((d) => shortDay(d.day)),
+                      datasets: [{ data: analytics.durationTrend.map((d) => Math.round(d.avgSeconds)), borderColor: '#22D3EE', backgroundColor: 'rgba(34,211,238,0.10)', fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5 }],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, callback: (v) => `${v}s` } } },
-                    }}
+                    options={{ maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { ...TICKS, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } }, y: { grid: GRID, ticks: { ...TICKS, callback: (v) => `${v}s` } } } }}
                   />
                 ) : (
                   <EmptyState icon="timer" text="Duration trend appears after the first calls." />
                 )}
-              </div>
-            </Card>
+              </AnalyticsTile>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Qualification funnel</h3>
-              {analytics ? (
-                <div className="flex flex-col gap-3 py-2">
-                  <FunnelBar label="Answered" value={analytics.funnel.answered} max={analytics.funnel.answered} color="#6B647F" />
-                  <FunnelBar label="Engaged (4+ turns)" value={analytics.funnel.engaged} max={analytics.funnel.answered} color="#A855F7" />
-                  <FunnelBar label="Qualified" value={analytics.funnel.qualified} max={analytics.funnel.answered} color="#22D3EE" />
-                  <FunnelBar label="Appointment booked" value={analytics.funnel.visitBooked} max={analytics.funnel.answered} color="#FBBF24" />
-                </div>
-              ) : (
-                <EmptyState icon="filter_alt" text="Funnel appears after the first calls." />
-              )}
-            </Card>
-
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold">Caller sentiment</h3>
-              {analytics && (analytics.sentiment.positive + analytics.sentiment.neutral + analytics.sentiment.negative) > 0 ? (
-                <div className="flex items-center gap-6 py-2">
-                  <div className="h-[140px] w-[140px]">
-                    <Doughnut
-                      data={{
-                        labels: ['Positive', 'Neutral', 'Negative'],
-                        datasets: [
-                          {
-                            data: [analytics.sentiment.positive, analytics.sentiment.neutral, analytics.sentiment.negative],
-                            backgroundColor: ['#22D3EE', t.muted, '#F43F5E'],
-                            borderColor: t.surface,
-                            borderWidth: 3,
-                          },
-                        ],
-                      }}
-                      options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '70%' }}
-                    />
+              <AnalyticsTile title="Qualification funnel" chart={false}>
+                {analytics ? (
+                  <div className="flex flex-col gap-3.5 py-1">
+                    <FunnelBar label="Answered" value={analytics.funnel.answered} max={analytics.funnel.answered} color="#6B647F" />
+                    <FunnelBar label="Engaged (4+ turns)" value={analytics.funnel.engaged} max={analytics.funnel.answered} color="#A855F7" />
+                    <FunnelBar label="Qualified" value={analytics.funnel.qualified} max={analytics.funnel.answered} color="#22D3EE" />
+                    <FunnelBar label="Appointment booked" value={analytics.funnel.visitBooked} max={analytics.funnel.answered} color="#FBBF24" />
                   </div>
-                  <div className="flex flex-col gap-1.5 text-[11px] text-text-muted">
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan" />Positive · {analytics.sentiment.positive}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-muted" />Neutral · {analytics.sentiment.neutral}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#F43F5E' }} />Negative · {analytics.sentiment.negative}</span>
-                  </div>
-                </div>
-              ) : (
-                <EmptyState icon="mood" text="Sentiment split appears after the first calls." />
-              )}
-            </Card>
+                ) : (
+                  <EmptyState icon="filter_alt" text="Funnel appears after the first calls." />
+                )}
+              </AnalyticsTile>
 
-            <Card className="lg:col-span-2">
-              <h3 className="mb-4 text-sm font-semibold">Peak call hours</h3>
-              <div className="h-[180px]">
+              <AnalyticsTile title="Caller sentiment" chart={false}>
+                {analytics && (analytics.sentiment.positive + analytics.sentiment.neutral + analytics.sentiment.negative) > 0 ? (
+                  <div className="flex flex-wrap items-center gap-6 py-1">
+                    <div className="h-[150px] w-[150px]">
+                      <Doughnut
+                        data={{
+                          labels: ['Positive', 'Neutral', 'Negative'],
+                          datasets: [{ data: [analytics.sentiment.positive, analytics.sentiment.neutral, analytics.sentiment.negative], backgroundColor: ['#22D3EE', t.muted, '#F43F5E'], borderColor: t.surface, borderWidth: 3 }],
+                        }}
+                        options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '72%' }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2.5 text-[13px]">
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-cyan" /><span className="text-text-muted">Positive</span><b className="tabular-nums">{analytics.sentiment.positive}</b></span>
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-muted" /><span className="text-text-muted">Neutral</span><b className="tabular-nums">{analytics.sentiment.neutral}</b></span>
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#F43F5E' }} /><span className="text-text-muted">Negative</span><b className="tabular-nums">{analytics.sentiment.negative}</b></span>
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState icon="mood" text="Sentiment split appears after the first calls." />
+                )}
+              </AnalyticsTile>
+
+              <AnalyticsTile title="Peak call hours" subtitle="Times shown in IST (Indian Standard Time)" wide>
                 {analytics && analytics.peakHours.length > 0 ? (
                   <Bar
                     data={{
                       labels: analytics.peakHours.map((h) => `${h.hour}:00`),
-                      datasets: [{ data: analytics.peakHours.map((h) => h.count), backgroundColor: '#22D3EE', borderRadius: 4 }],
+                      datasets: [{ data: analytics.peakHours.map((h) => h.count), backgroundColor: '#22D3EE', ...BAR_STYLE }],
                     }}
-                    options={{
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
-                    }}
+                    options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } } }}
                   />
                 ) : (
                   <EmptyState icon="schedule" text="Hourly distribution appears after the first calls." />
                 )}
-              </div>
-              <p className="mt-2 text-[11px] text-text-muted">Times shown in IST (Indian Standard Time).</p>
-            </Card>
+              </AnalyticsTile>
+            </div>
 
             {summary && (
-              <p className="text-xs text-text-muted lg:col-span-2">
+              <p className="text-xs text-text-muted">
                 Based on {summary.totalCalls} logged calls · avg duration {formatDuration(summary.avgDurationSeconds)}
               </p>
             )}
-          </div>
+          </>
         )}
       </section>
     </DashboardLayout>
@@ -838,15 +958,29 @@ function FunnelBar({ label, value, max, color }: { label: string; value: number;
 
 function IntelStat({ label, value, tone = 'text-text' }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-surface-high/40 p-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
-      <p className={`mt-1 text-lg font-bold ${tone}`}>{value}</p>
+    <div className="rounded-2xl bg-surface-high/50 p-4">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">{label}</p>
+      <p className={`bento-num mt-2 text-2xl ${tone}`}>{value}</p>
     </div>
   )
 }
 
+function AnalyticsTile({ title, subtitle, wide = false, chart = true, children }: { title: string; subtitle?: string; wide?: boolean; chart?: boolean; children: ReactNode }) {
+  return (
+    <section className={`bento-tile ${wide ? 'bento-w4' : 'bento-w2'}`}>
+      <h3 className="bento-title text-[15px]">{title}</h3>
+      {subtitle && <p className="mt-0.5 text-xs text-text-muted">{subtitle}</p>}
+      <div className={chart ? 'mt-4 h-[220px]' : 'mt-4'}>{children}</div>
+    </section>
+  )
+}
+
 function QuickAction({ to, icon, label }: { to: string; icon: string; label: string }) {
-  return <Link to={to} className="group flex min-h-24 flex-col justify-between rounded-xl border border-border bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-primary"><Icon name={icon} className="text-[22px] text-primary" /><span className="mt-4 text-sm font-semibold group-hover:text-primary">{label} →</span></Link>
+  return <Link to={to} className="bento-pill bento-pill-soft"><Icon name={icon} className="text-[17px] text-primary" />{label}</Link>
+}
+
+function GlanceStat({ label, value, live = false }: { label: string; value: string; live?: boolean }) {
+  return <div><p className="bento-num flex items-center gap-1.5 text-2xl leading-none">{live && <span className="pulse-dot h-2 w-2 rounded-full bg-magenta" />}{value}</p><p className="mt-1.5 text-[11px] font-bold uppercase tracking-wide text-text-muted">{label}</p></div>
 }
 
 // Keyed by the id prefix each /notifications item is generated with (see
@@ -867,22 +1001,9 @@ function AttentionLink({ to, icon, label, detail, tone }: { to: string; icon: st
     amber: 'text-amber bg-amber/10',
     success: 'text-success bg-success/10',
   }[tone]
-  // bg-surface is intentional: without an owned background, the global
-  // outline-button selector mistakes this Link card for a CTA, paints the
-  // whole card purple, and forces the semantic icon to inherit white.
-  return <Link to={to} aria-label={`${label}: ${detail}`} className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3 transition-colors hover:border-primary"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}><Icon name={icon} className="text-[19px]" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-[11px] text-text-muted">{detail} →</span></span></Link>
-}
-
-function ComparisonTile({ label, value, change, icon }: { label: string; value: number; change: number | null; icon: string }) {
-  const positive = change != null && change >= 0
-  return <Card variant="stat" padding="sm"><div className="flex items-center justify-between"><Icon name={icon} className="text-[20px] text-primary" />{change != null && <span className={`flex items-center gap-0.5 text-[11px] font-bold ${positive ? 'text-success' : 'text-destructive'}`}><Icon name={positive ? 'arrow_upward' : 'arrow_downward'} className="text-[13px]" />{Math.abs(change)}%</span>}</div><p className="mt-4 font-display text-2xl font-bold">{value}</p><p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">{label}</p></Card>
-}
-
-function FunnelStage({ label, value, base, icon }: { label: string; value: number; base: number; icon: string }) {
-  const rate = base ? Math.round(value * 100 / base) : 0
-  return <div className="relative overflow-hidden rounded-xl border border-border bg-surface-high/20 p-4"><div className="absolute inset-x-0 bottom-0 h-1 bg-surface-high"><div className="h-full bg-primary" style={{ width: `${rate}%` }} /></div><div className="flex items-center justify-between"><Icon name={icon} className="text-[20px] text-primary" /><span className="text-xs font-bold text-cyan">{rate}%</span></div><p className="mt-4 text-2xl font-bold">{value}</p><p className="text-xs text-text-muted">{label}</p></div>
+  return <Link to={to} aria-label={`${label}: ${detail}`} className="bento-row flex items-start gap-3 rounded-xl px-2 py-2.5"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${toneClass}`}><Icon name={icon} className="text-[19px]" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-xs text-text-muted">{detail} →</span></span></Link>
 }
 
 function MiniMetric({ label, value }: { label: string; value: number }) {
-  return <div><p className="font-display text-lg font-bold">{value}</p><p className="text-[10px] uppercase tracking-wide text-text-muted">{label}</p></div>
+  return <div><p className="bento-num text-lg">{value}</p><p className="text-[10px] uppercase tracking-wide text-text-muted">{label}</p></div>
 }
