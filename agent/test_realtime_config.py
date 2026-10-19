@@ -23,7 +23,7 @@ def test_native_endpointing_models_are_independent(monkeypatch):
         assert aad.end_of_speech_sensitivity.value == (
             "END_SENSITIVITY_HIGH" if model == config.DEFAULT_MODEL else "END_SENSITIVITY_LOW"
         )
-        assert aad.prefix_padding_ms == (20 if model == config.DEFAULT_MODEL else 200)
+        assert aad.prefix_padding_ms == (20 if model == config.DEFAULT_MODEL else 400)
         assert not aad.disabled
 
 
@@ -174,16 +174,18 @@ def test_38_live_is_a_supported_primary_model_on_the_31_profile():
     import realtime_config as rc
     assert rc.MODEL_38 in rc.API_MODELS
     ad = rc.activity_detection(rc.MODEL_38).automatic_activity_detection
-    assert ad.silence_duration_ms == 700 and ad.prefix_padding_ms == 200
+    assert ad.silence_duration_ms == 700 and ad.prefix_padding_ms == 400
     cc = rc.context_compression("x" * 12000)
     assert cc.trigger_tokens > cc.sliding_window.target_tokens
 
 
-def test_3x_models_ignore_noise_as_speech_start():
-    # Call 1421: HIGH start sensitivity turned room noise into caller turns
-    # transcribed as "¿Qué?" (6 of 29 billed turns).
+def test_3x_models_hear_soft_speech_but_need_400ms_of_it():
+    # 1421 (HIGH, 200 ms): noise became "¿Qué?" turns. 1425 (LOW): the caller
+    # was not heard for ~17 s. HIGH plus 400 ms of required speech.
     for m in (config.MODEL_38, config.MODEL_31):
         ad = config.activity_detection(m).automatic_activity_detection
-        assert ad.start_of_speech_sensitivity == config.types.StartSensitivity.START_SENSITIVITY_LOW
+        assert ad.start_of_speech_sensitivity == config.types.StartSensitivity.START_SENSITIVITY_HIGH
+        assert ad.prefix_padding_ms == 400
     ad25 = config.activity_detection(config.DEFAULT_MODEL).automatic_activity_detection
     assert ad25.start_of_speech_sensitivity == config.types.StartSensitivity.START_SENSITIVITY_HIGH
+    assert ad25.prefix_padding_ms == 20

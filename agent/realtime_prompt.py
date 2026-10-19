@@ -76,6 +76,20 @@ def language_directive(language_name: str) -> str:
     )
 
 
+# Call 1426 (19 Oct): the caller spoke Hindi, Artha answered in Hinglish,
+# then a one-word "Okay." flipped her back to English for the rest of the
+# call. Artha's agent language is en-IN (English opener), and the general
+# directive says to respond in English until the caller uses another language.
+_DEMO_LANGUAGE = (
+    "# Language\n"
+    "Open in English. After that, reply in the language the caller speaks in full sentences and stay in it; "
+    "a one-word reply such as \"okay\", \"yes\", \"haan\" or \"theek hai\" never changes the language. "
+    "With Hindi callers, answer in natural Hinglish the way they speak. "
+    + _LANGUAGE_TOOL_LINE
+    + "\n"
+)
+
+
 def _trim_kb(section: str, limit: int) -> str:
     """Cut a knowledge-base section at a whole Q&A boundary, never mid-answer."""
     if len(section) <= limit:
@@ -275,7 +289,8 @@ def compact(instructions: str, *, language_name: str, kb_limit: int = 6000) -> s
     if demo:
         identity = _DEMO_IDENTITY
         rest = _demo_sections(parts)
-    ordered = [x for x in (identity, language_directive(language_name), rules) if x] + rest + [_TURN_STYLE]
+    language = _DEMO_LANGUAGE if demo else language_directive(language_name)
+    ordered = [x for x in (identity, language, rules) if x] + rest + [_TURN_STYLE]
     out = "\n".join(p.rstrip("\n") + "\n" for p in ordered)
     # This rule exists in BOTH Platform rules and Only state back what they
     # actually said. Qualifying just the first copy leaves an unconditional

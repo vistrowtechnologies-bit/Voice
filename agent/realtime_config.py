@@ -31,19 +31,18 @@ def activity_detection(model: str) -> types.RealtimeInputConfig:
         raise ValueError(f"{key} must be an integer between 200 and 2000 ms") from None
     return types.RealtimeInputConfig(
         automatic_activity_detection=types.AutomaticActivityDetection(
-            # Call 1421 (19 Oct, 3.8): with HIGH, room noise and breaths started
-            # caller turns that the transcript showed as "¿Qué?", "Ouais", "da":
-            # 6 of 29 billed turns, each cutting Artha off mid-sentence. LOW
-            # for 3.x; 2.5 keeps Google's default.
-            start_of_speech_sensitivity=(
-                types.StartSensitivity.START_SENSITIVITY_HIGH if model == DEFAULT_MODEL
-                else types.StartSensitivity.START_SENSITIVITY_LOW
-            ),
+            # HIGH for every model. Call 1421 (3.8, HIGH): room noise started
+            # turns transcribed as "¿Qué?". Call 1425 (3.8, LOW): the caller
+            # spoke and nothing was detected for ~17 s. Google: prefixPaddingMs
+            # is "the required duration of detected speech before
+            # start-of-speech is committed", so 3.x keeps HIGH and requires
+            # 400 ms of speech, which a breath or click does not reach.
+            start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
             end_of_speech_sensitivity=(
                 types.EndSensitivity.END_SENSITIVITY_HIGH if model == DEFAULT_MODEL
                 else types.EndSensitivity.END_SENSITIVITY_LOW
             ),
-            prefix_padding_ms=20 if model == DEFAULT_MODEL else 200,
+            prefix_padding_ms=20 if model == DEFAULT_MODEL else 400,
             silence_duration_ms=silence_ms,
         ),
     )
