@@ -70,7 +70,7 @@ class PlatformDemoDiet(unittest.TestCase):
             self.assertIn(phrase, identity, phrase)
         lead = self.out.split("\n# Lead capture\n", 1)[1].split("\n# ", 1)[0]
         for phrase in ("capture_platform_lead", "check_calendar_availability", "never say booked unless",
-                       "cannot play recordings, sample voices", "telephony provider", "widget needs no number",
+                       "cannot play recordings or switch to a different voice", "put on an accent", "telephony provider", "widget needs no number",
                        "Exact prices are not given on calls", "platform rule 5", "numbers and units as spoken"):
             self.assertIn(phrase, lead, phrase)
         self.assertNotIn("log_lead", self.out)  # tenant rule, no such tool on the demo
