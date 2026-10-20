@@ -90,15 +90,22 @@ class PromptCarriesTheRule(unittest.TestCase):
 
     def test_demo_honesty_lines(self):
         agent = main.RealEstateAgent(dict(self.CFG))
-        self.assertIn("you cannot play recordings, sample voices", agent.instructions)
+        self.assertIn("you cannot play recordings or switch to a different voice", agent.instructions)
         self.assertIn("Exact prices are not given on calls", agent.instructions)
+
+    def test_accents_are_allowed_only_recordings_are_not(self):
+        # Owner, 21 Oct 2026: "sample voices or other accents" read as a ban
+        # and Artha refused a Russian-accent request.
+        agent = main.RealEstateAgent(dict(self.CFG))
+        self.assertIn("You CAN speak any language and put on an accent", agent.instructions)
+        self.assertNotIn("other accents", agent.instructions)
 
     def test_rule_survives_realtime_compaction(self):
         import realtime_prompt
         agent = main.RealEstateAgent(dict(self.CFG))
         out = realtime_prompt.compact(agent.instructions, language_name="English")
         self.assertIn("5. Contact details and follow-up", out)
-        self.assertIn("you cannot play recordings, sample voices", out)
+        self.assertIn("you cannot play recordings or switch to a different voice", out)
 
 
 if __name__ == "__main__":
