@@ -1,3 +1,4 @@
+import { DAILY_CONTEXTUAL_LINKS, DAILY_IMAGE_ALTS, DAILY_POSTS, DAILY_SOURCES } from './dailyBlogPosts'
 import { IVR_CONTEXTUAL_LINKS, IVR_IMAGE_ALTS, IVR_POSTS } from './ivrBlogPosts'
 
 export interface VoiceBlogSection {
@@ -326,8 +327,11 @@ const CONTEXTUAL_LINK_PARAGRAPHS: Record<string, string> = {
 
 Object.assign(IMAGE_ALTS, IVR_IMAGE_ALTS)
 Object.assign(CONTEXTUAL_LINK_PARAGRAPHS, IVR_CONTEXTUAL_LINKS)
+Object.assign(IMAGE_ALTS, DAILY_IMAGE_ALTS)
+Object.assign(CONTEXTUAL_LINK_PARAGRAPHS, DAILY_CONTEXTUAL_LINKS)
+Object.assign(SOURCES, DAILY_SOURCES)
 
-export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS, ...IVR_POSTS].map((post) => {
+export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS, ...IVR_POSTS, ...DAILY_POSTS].map((post) => {
   const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? [])].map((section, index) => index === 0
     ? { ...section, paragraphs: [...section.paragraphs, CONTEXTUAL_LINK_PARAGRAPHS[post.slug]] }
     : section)

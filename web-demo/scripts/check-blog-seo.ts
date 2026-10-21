@@ -3,9 +3,10 @@ import { readFileSync, existsSync } from 'node:fs'
 import { VOICE_BLOG_POSTS } from '../src/content/voiceBlog'
 import { SEO_ORIGIN, seoForPath } from '../src/lib/seoPages'
 
-assert.equal(VOICE_BLOG_POSTS.length, 14)
-assert.equal(new Set(VOICE_BLOG_POSTS.map(post => post.slug)).size, 14)
-assert.equal(new Set(VOICE_BLOG_POSTS.map(post => post.image)).size, 14)
+const COUNT = VOICE_BLOG_POSTS.length
+assert.ok(COUNT >= 15, `expected the daily posts too, got ${COUNT}`)
+assert.equal(new Set(VOICE_BLOG_POSTS.map(post => post.slug)).size, COUNT)
+assert.equal(new Set(VOICE_BLOG_POSTS.map(post => post.image)).size, COUNT)
 const sitemap = readFileSync('dist/sitemap.xml', 'utf8')
 for (const post of VOICE_BLOG_POSTS) {
   const path = `/resources/blog/${post.slug}`
@@ -39,4 +40,4 @@ for (const post of VOICE_BLOG_POSTS) {
     assert.ok(anchor.trim().length >= 12, `Descriptive anchor: ${post.slug}`)
   }
 }
-console.log('PASS: 14 articles with rendered contextual links to valid internal pages, covers, BlogPosting schema, social metadata, and sitemap entries.')
+console.log(`PASS: ${COUNT} articles with rendered contextual links to valid internal pages, covers, BlogPosting schema, social metadata, and sitemap entries.`)
