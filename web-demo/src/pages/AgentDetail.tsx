@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BrowserTestModal } from '../components/AgentTestCall'
 import { ClonedVoiceOptions, clonedVoiceFallbackName, useClonedVoices } from '../components/ClonedVoiceOptions'
-import { AgentIdChip } from '../components/AgentIdChip'
 import { AmbiencePreviewButton } from '../components/AmbiencePreviewButton'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -406,11 +405,11 @@ function AgentEditorForm({
       .catch(() => setChannelReady(false))
   }, [agent.id])
   const steps: SetupStep[] = [
-    { key: 'persona', label: 'Persona', hint: 'Write what the agent says and does', done: Boolean(form.systemPrompt.trim() || form.welcomeMessage.trim()), tab: 'instructions' },
-    { key: 'voice', label: 'Voice', hint: 'Pick how it sounds', done: Boolean(form.voice), tab: 'voice' },
-    { key: 'knowledge', label: 'Knowledge', hint: 'Attach your answers and documents', done: Boolean(form.kbId), tab: 'tools' },
-    { key: 'channel', label: 'Channel', hint: 'Connect a phone number or website', done: channelReady, to: '/dashboard/numbers' },
-    { key: 'live', label: 'Go live', hint: 'Turn the agent on', done: form.status === 'live' },
+    { key: 'persona', label: 'Persona', action: 'Write the prompt', hint: 'Write what the agent says and does', done: Boolean(form.systemPrompt.trim() || form.welcomeMessage.trim()), tab: 'instructions' },
+    { key: 'voice', label: 'Voice', action: 'Pick a voice', hint: 'Pick how it sounds', done: Boolean(form.voice), tab: 'voice' },
+    { key: 'knowledge', label: 'Knowledge', action: 'Attach knowledge', hint: 'Attach your answers and documents', done: Boolean(form.kbId), tab: 'tools' },
+    { key: 'channel', label: 'Channel', action: 'Connect a channel', hint: 'Connect a phone number or website', done: channelReady, to: '/dashboard/numbers' },
+    { key: 'live', label: 'Go live', action: 'Turn it on', hint: 'Turn the agent on', done: form.status === 'live' },
   ]
   const nextStep = steps.find((step) => !step.done) ?? null
   const goToStep = (step: SetupStep) => {
@@ -1218,6 +1217,8 @@ function AgentEditorForm({
 type SetupStep = {
   key: 'persona' | 'voice' | 'knowledge' | 'channel' | 'live'
   label: string
+  /** Two or three words for the hero ("Attach knowledge"). */
+  action: string
   hint: string
   done: boolean
   tab?: AgentTab
@@ -1239,16 +1240,30 @@ function HeroRing({ done, total }: { done: number; total: number }) {
   )
 }
 
-/** A: who this agent is, whether it is on, how far setup is, and what to do next. */
+/** A: who this agent is, whether it is on, how far setup is, and what to do next.
+ * Three zones: identity (left), setup progress (middle), actions (right), each
+ * vertically centred; on phones they stack. */
 function AgentHero({ agent, name, description, model, voice, language, live, statusBusy, steps, nextStep, onToggleLive, onStep, onTalk, onDelete }: {
   agent: AgentConfig; name: string; description: string; model: string; voice: ReactNode; language: string
   live: boolean; statusBusy: boolean; steps: SetupStep[]; nextStep: SetupStep | null
   onToggleLive: () => void; onStep: (step: SetupStep) => void; onTalk: () => void; onDelete: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
   const done = steps.filter((s) => s.done).length
+  const publicId = agent.publicId || String(agent.id)
+  const copyId = async () => {
+    try {
+      await navigator.clipboard.writeText(publicId)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      alert('Could not copy the agent ID. Check clipboard permission and try again.')
+    }
+  }
+  const glass = 'h-10 rounded-xl bg-white/12 ring-1 ring-white/25 transition-colors hover:bg-white/20'
   return (
-    <section className="bento-tile bento-hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="bento-tile bento-hero grid grid-cols-1 items-center gap-5 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
       <div className="flex min-w-0 items-center gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 font-display text-lg font-extrabold ring-1 ring-white/30">
           {(name || 'A').slice(0, 2).toUpperCase()}
@@ -1275,41 +1290,46 @@ function AgentHero({ agent, name, description, model, voice, language, live, sta
           </div>
         </div>
       </div>
-      <div className="flex min-w-0 items-center gap-3 sm:shrink-0">
+
+      <button
+        type="button"
+        onClick={() => (nextStep ? onStep(nextStep) : undefined)}
+        disabled={!nextStep}
+        className="flex items-center gap-3 rounded-2xl bg-white/10 p-2 pr-4 text-left ring-1 ring-white/20 transition-colors hover:bg-white/15 disabled:cursor-default disabled:hover:bg-white/10"
+      >
         <HeroRing done={done} total={steps.length} />
-        <div className="flex min-w-0 flex-col items-start gap-2">
-          {nextStep ? (
-            <button type="button" onClick={() => onStep(nextStep)} className="bento-pill bento-pill-light max-w-full text-left">
-              <Icon name="bolt" className="text-[16px]" /> <span className="min-w-0">Next: {nextStep.hint}</span>
-            </button>
-          ) : (
-            <span className="bento-pill bento-pill-glass"><Icon name="check_circle" className="text-[16px]" /> Ready for calls</span>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Below xl the Try panel is hidden, so the hero carries the test button. */}
-            {/* Wrapped: .bento-pill sets display itself, which beats a utility on the same element. */}
-            <span className="xl:hidden">
-              <button type="button" onClick={onTalk} className="bento-pill bento-pill-glass">
-                <Icon name="mic" className="text-[16px]" /> Talk
+        <span className="min-w-0">
+          <span className="block text-[11px] font-bold uppercase tracking-wider text-white/70">Setup {done} of {steps.length}</span>
+          <span className="flex items-center gap-1.5 text-sm font-bold">
+            {nextStep ? <>Next: {nextStep.action}<Icon name="arrow_forward" className="text-[16px]" /></> : <><Icon name="check_circle" className="text-[16px]" />Ready for calls</>}
+          </span>
+        </span>
+      </button>
+
+      <div className="flex items-center gap-2 lg:justify-end">
+        {/* Below xl the Try panel is hidden, so the hero carries the test button. */}
+        <button type="button" onClick={onTalk} className={`${glass} flex items-center gap-1.5 px-3.5 text-xs font-bold xl:hidden`}>
+          <Icon name="mic" className="text-[16px]" /> Talk
+        </button>
+        <button type="button" onClick={() => void copyId()} title="Copy agent ID" aria-label={copied ? 'Agent ID copied' : `Copy agent ID ${publicId}`} className={`${glass} flex items-center gap-2 px-3.5 text-xs`}>
+          <span className="font-semibold text-white/70">ID</span>
+          <code className="font-mono font-semibold tracking-wide">{publicId}</code>
+          <Icon name={copied ? 'check' : 'content_copy'} className="text-[15px]" />
+        </button>
+        <div className="relative">
+          <button type="button" aria-label="More actions" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)} className={`${glass} flex w-10 items-center justify-center`}>
+            <Icon name="more_horiz" className="text-[18px]" />
+          </button>
+          {menuOpen && (
+            <div role="menu" className="bento-reveal absolute right-0 top-12 z-20 w-44 rounded-xl border border-border bg-surface p-1 text-text shadow-xl">
+              <Link role="menuitem" to="/dashboard/testing" className="flex items-center gap-2 rounded-lg bg-transparent px-3 py-2 text-xs font-semibold hover:bg-surface-high">
+                <Icon name="science" className="text-[16px]" /> Testing Lab
+              </Link>
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onDelete() }} className="flex w-full items-center gap-2 rounded-lg bg-transparent px-3 py-2 text-left text-xs font-semibold text-destructive hover:bg-destructive/10">
+                <Icon name="delete" className="text-[16px]" /> Delete agent
               </button>
-            </span>
-            <AgentIdChip publicId={agent.publicId ?? ''} />
-            <div className="relative">
-              <button type="button" aria-label="More actions" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/30 hover:bg-white/25">
-                <Icon name="more_horiz" className="text-[18px]" />
-              </button>
-              {menuOpen && (
-                <div role="menu" className="bento-reveal absolute right-0 top-11 z-20 w-44 rounded-xl border border-border bg-surface p-1 text-text shadow-xl">
-                  <Link role="menuitem" to="/dashboard/testing" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold hover:bg-surface-high">
-                    <Icon name="science" className="text-[16px]" /> Testing Lab
-                  </Link>
-                  <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onDelete() }} className="flex w-full items-center gap-2 rounded-lg bg-transparent px-3 py-2 text-left text-xs font-semibold text-destructive hover:bg-destructive/10">
-                    <Icon name="delete" className="text-[16px]" /> Delete agent
-                  </button>
-                </div>
-              )}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </section>
