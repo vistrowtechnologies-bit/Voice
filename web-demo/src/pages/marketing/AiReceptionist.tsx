@@ -160,7 +160,7 @@ export function AiReceptionist() {
     <MarketingLayout>
       <Seo
         title="AI Receptionist for Indian Businesses | Vistrow Voice"
-        description="An AI receptionist that answers your phone and website calls in Hindi, English and 9 more Indian languages, books appointments and transfers to your team."
+        description="An AI receptionist that answers your phone and website calls in 130+ languages, including Hindi and English, books appointments and transfers to your team."
         path="/ai-receptionist"
         jsonLd={FAQ_JSONLD}
       />
@@ -187,7 +187,7 @@ export function AiReceptionist() {
           <ul className="space-y-3 text-sm leading-relaxed text-text-muted">
             {[
               'Answers at any hour your route allows, including nights and holidays',
-              'Hindi, English and 9 more Indian languages, switching when the caller does',
+              '130+ languages, including Hindi, English and 9 more Indian languages, switching when the caller does',
               'Books into the built-in Appointments calendar',
               'Transcript, summary and captured details for every call',
             ].map((item) => (

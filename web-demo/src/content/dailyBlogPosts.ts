@@ -3,8 +3,8 @@ import type { VoiceBlogPost, VoiceBlogSection } from './voiceBlog'
 // Daily posts (from 21 Oct 2026), one buyer-intent keyword each. Plan,
 // evidence and calendar: docs/SEO-BLOG-PLAN-2026-10-21.md.
 // Rules: no prices, no named competitors, no invented statistics (every
-// number is in SOURCES). Product statements must match the product: 11
-// languages for calls (agent/language.py), no Urdu; phone numbers connect through the customer's
+// number is in SOURCES). Product statements must match the product: more
+// than 130 languages (owner decision 21 Oct 2026; Studio voices), 10 Indian; phone numbers connect through the customer's
 // telephony provider and overseas calling depends on that provider; the
 // website voice widget works from any browser.
 
@@ -31,8 +31,8 @@ export const DAILY_POSTS: DailyBlogPost[] = [
         'A multilingual AI receptionist answers every call, greets the caller, and continues in the language the caller uses. The aim is simple: the caller should never have to adapt to the business.',
       ] },
       { heading: 'Which languages can a Hindi and Punjabi AI receptionist speak?', paragraphs: [
-        'Vistrow Voice is an AI voice agent platform that answers phone calls and website conversations in Hindi, English and nine other Indian languages: Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia. One agent can follow a caller from English into Hindi or Punjabi and back within the same call. Each language has its own page, for example the [Hindi AI voice agent overview](/languages/hindi) and the [Punjabi AI voice agent overview](/languages/punjabi).',
-        'Be clear about what is not covered. Urdu is not one of the supported languages today, which matters for many callers in the UK and Canada. If a large part of your audience prefers Urdu, plan a human route for those calls rather than assuming Hindi will be close enough.',
+        'Vistrow Voice is an AI voice agent platform that answers phone calls and website conversations in more than 130 languages, including Hindi, English and nine other Indian languages: Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia. One agent can follow a caller from English into Hindi or Punjabi and back within the same call. Each language has its own page, for example the [Hindi AI voice agent overview](/languages/hindi) and the [Punjabi AI voice agent overview](/languages/punjabi).',
+        'Test the languages your callers actually use rather than trusting a number. If many of your callers mix Punjabi, Hindi and English, or switch to a regional language when they get comfortable, make those mixes part of your pilot and listen to how the agent handles names, numbers and dates in each.',
       ] },
       { heading: 'What should "multilingual" mean on a real call?', paragraphs: [
         'A list of supported languages tells you very little. What matters is whether the agent can hold a useful conversation the way your callers actually speak. Our [multilingual voice agent evaluation checklist](/resources/blog/how-to-choose-a-multilingual-voice-agent) covers vendor testing in detail; on a receptionist line, four things matter most.',
@@ -71,7 +71,7 @@ export const DAILY_POSTS: DailyBlogPost[] = [
     ],
     faqs: [
       { q: 'Can one AI receptionist speak Hindi, Punjabi and English on the same call?', a: 'Yes. A multilingual agent follows the language the caller uses and can switch mid-call, including mixed Hindi and English. Test it with native speakers before launch, because recognition of names and numbers varies between systems.' },
-      { q: 'Does Vistrow Voice support Urdu?', a: 'Not today. Calls are supported in Hindi, English, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia. Plan a human route for callers who prefer Urdu.' },
+      { q: 'Which languages does Vistrow Voice speak?', a: 'More than 130, including Hindi, English, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia. Test the exact languages and mixes your callers use before launch.' },
       { q: 'Can callers outside India reach the AI receptionist?', a: 'By phone, that depends on the number and telephony provider you connect, so check international calling with your provider. From a website, anyone can talk to the agent in their browser through the [website voice widget](/product/widget).' },
       { q: 'Will the AI receptionist tell callers it is an AI?', a: 'It should. Open each call with a short disclosure in the caller’s language that they are speaking with an AI assistant and that the call may be recorded, and offer a person on request.' },
       { q: 'How long does it take to test a multilingual receptionist?', a: 'A focused one-week pilot on a single call type is usually enough to see where the agent mishears names or numbers, how handoffs work, and whether callers in each language reach a clear next step.' },

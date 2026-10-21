@@ -26,7 +26,7 @@ const FAQ = [
   },
   {
     q: 'Which languages does the platform support?',
-    a: 'Ten Indian languages plus English, including natural Hinglish, with the agent switching when the caller does. Each language has its own page.',
+    a: 'More than 130 languages, including 10 Indian languages and natural Hinglish, with the agent switching when the caller does. Each language has its own page.',
   },
   {
     q: 'What happens to the calls and leads afterwards?',
@@ -53,7 +53,7 @@ const START_HERE = [
   { icon: 'call_received', title: 'Stop missing calls', body: 'Answer the business number around the clock, inside the hours and limits you set.', to: '/product/inbound', link: 'Inbound calling' },
   { icon: 'graphic_eq', title: 'Talk to website visitors', body: 'Add a call button so a visitor can ask a question by voice, with no phone number.', to: '/product/widget', link: 'Website call widget' },
   { icon: 'campaign', title: 'Follow up with contacts', body: 'Reminders and follow-ups to a contact list, with Do-Not-Call and calling-window checks before every dial.', to: '/product/outbound', link: 'Outbound campaigns' },
-  { icon: 'translate', title: 'Serve regional-language callers', body: 'Ten Indian languages plus English, with each language page covering how callers actually speak.', to: '/languages', link: 'Languages' },
+  { icon: 'translate', title: 'Serve regional-language callers', body: 'More than 130 languages, including 10 Indian languages, with each language page covering how callers actually speak.', to: '/languages', link: 'Languages' },
   { icon: 'apartment', title: 'Fit it to your industry', body: 'See the flows for real estate, healthcare, e-commerce, finance and support.', to: '/solutions', link: 'Solutions' },
   { icon: 'payments', title: 'Check what a plan includes', body: 'Plans and what they include are on the pricing page, and our team can walk you through them.', to: '/pricing', link: 'Pricing' },
 ]

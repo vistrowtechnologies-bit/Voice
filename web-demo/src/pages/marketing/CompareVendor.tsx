@@ -8,7 +8,7 @@ import { COMPARE_VENDORS } from '../../lib/seoExpansionContent'
 import { NotFound } from './NotFound'
 
 const GLANCE: { icon: string; title: string; body: string; to: string }[] = [
-  { icon: 'translate', title: 'Languages', body: 'Ten Indian languages plus English, including Hinglish, switching with the caller mid-call.', to: '/languages' },
+  { icon: 'translate', title: 'Languages', body: 'More than 130 languages, including 10 Indian languages and Hinglish, switching with the caller mid-call.', to: '/languages' },
   { icon: 'call', title: 'Phone and website', body: 'Inbound phone calls through a connected number, plus a call widget that talks to website visitors in the browser.', to: '/product/widget' },
   { icon: 'menu_book', title: 'Approved answers', body: 'A knowledge base with strict mode, so the agent quotes your material instead of improvising.', to: '/product/knowledge-base' },
   { icon: 'receipt_long', title: 'A finished record', body: 'Transcript, summary, captured lead fields, optional recording and CRM or webhook delivery status for every call.', to: '/product/integrations' },
