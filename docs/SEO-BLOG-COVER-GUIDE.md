@@ -4,7 +4,7 @@ Every blog post's cover is also its og:image (link previews on WhatsApp, LinkedI
 
 Owner review, 21 Oct 2026: the first photo-only covers scored about 3.5/10. They were good photos, but did not show the topic (no IVR, no "vs", no headline). This guide replaces them.
 
-Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-service-vs-ivr.html` with `people/receptionist-headset.jpg`, rendered to 1200x675.
+Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-service-vs-ivr.html` with `people/artha-headset.jpg`, rendered to 1200x675.
 
 ## Rules
 
@@ -20,6 +20,11 @@ Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-s
 10. **Accessible alt text** describes what the cover shows (for example: "Comparison card: IVR menu, answering service and AI receptionist, with the AI receptionist highlighted"), more than 30 characters.
 
 ## The person (photo layer)
+
+**Artha rule (owner, 21 Oct 2026): whenever a cover shows the AI agent answering or making a call, the person is Artha, our AI voice agent avatar, never a stock or random model.** Use `web-demo/scripts/blog-covers/people/artha-headset.jpg`, or generate a new Artha pose with the references below. Other people on covers (callers, clinic staff, business owners, customers) can be anyone who fits the post.
+
+- Artha references: `server/static/widget-avatars/artha.png` (round avatar) and her character sheet (long dark wavy hair with brown highlights, centre parting, black tailored blazer over a beige ribbed top). Pass both to Codex with `--image` and tell it to keep her face, hair and outfit exactly the same.
+- An AI-only visual (an orb, waveform or bot) is also allowed when no person fits; it should still use the brand purple.
 
 - Generate with Codex, using an approved cover as the colour reference: one photorealistic studio portrait, 4:5, chest-up, a plain smooth dark purple background close to #1e0b3a, a purple-magenta rim light, a soft key light from the left, eyes or body turned slightly left (toward the headline), and absolutely no text or logos. Choose a role that fits the post: receptionist with headset, clinic front-desk staff, property adviser, shop owner on a phone, bank officer, older caller on a mobile. Use Indian or South Asian people unless the post's audience suggests otherwise.
 - Resize to 900 px on the long side (`sips -Z 900`), save it in `web-demo/scripts/blog-covers/people/<role>.jpg`, and reuse a portrait across posts when the role fits. Not every post needs a new photo.
