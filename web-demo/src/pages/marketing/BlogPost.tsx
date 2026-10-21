@@ -35,7 +35,7 @@ export function BlogPost() {
     datePublished: post.publishedAt,
     dateModified: post.updatedAt,
     image: { '@type': 'ImageObject', url: `${SEO_ORIGIN}${post.image}`, width: 1200, height: 675, caption: post.imageAlt },
-    author: { '@type': 'Organization', name: 'Vistrow Voice', url: SEO_ORIGIN },
+    author: { '@type': 'Organization', name: 'Vistrow Voice', url: SEO_ORIGIN, logo: { '@type': 'ImageObject', url: `${SEO_ORIGIN}/apple-touch-icon.png` } },
     publisher: { '@type': 'Organization', name: 'Vistrow Voice', logo: { '@type': 'ImageObject', url: `${SEO_ORIGIN}/apple-touch-icon.png` } },
     mainEntityOfPage: canonical,
     articleSection: post.category,
@@ -59,7 +59,7 @@ export function BlogPost() {
               <div className="mt-6 flex flex-wrap items-center gap-3"><span className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">{post.category}</span><time dateTime={post.publishedAt} className="text-sm text-text-muted">{prettyDate(post.publishedAt)}</time><span aria-hidden="true" className="text-border">·</span><span className="text-sm text-text-muted">{post.readTime}</span></div>
               <h1 className="mt-4 font-display text-[clamp(1.9rem,3.4vw,2.9rem)] font-bold leading-[1.12] tracking-[-0.03em]">{post.title}</h1>
               <p className="mt-4 text-lg leading-relaxed text-text-muted">{post.excerpt}</p>
-              <div className="mt-5 flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-fuchsia-500 text-white"><Icon name="graphic_eq" className="text-[18px]" /></span><div><p className="text-sm font-semibold">Vistrow Voice team</p><p className="text-xs text-text-muted">Product, speech, and customer experience</p></div></div>
+              <div className="mt-5 flex items-center gap-3"><img src="/media/vistrow-mark-96.webp" alt="Vistrow Voice logo" width={36} height={36} className="h-9 w-9 rounded-lg" /><div><p className="text-sm font-semibold">Vistrow Voice team</p><p className="text-xs text-text-muted">Product, speech, and customer experience</p></div></div>
             </header>
             <figure className="mb-8 mt-7 overflow-hidden rounded-3xl border border-border bg-surface"><img src={post.image} srcSet={`${post.image.replace('.jpg', '-640.jpg')} 640w, ${post.image} 1200w`} sizes="(min-width:1024px) 800px, 100vw" alt={post.imageAlt} width={1200} height={675} decoding="async" className="aspect-[16/9] w-full object-cover" /><figcaption className="px-5 py-3 text-xs text-text-muted">AI-generated editorial illustration; not a customer photograph.</figcaption></figure>
             {post.shortAnswer && <section aria-labelledby="short-answer" className="mb-8 rounded-3xl border-l-4 border-primary bg-surface p-6 sm:p-7"><h2 id="short-answer" className="text-xs font-bold uppercase tracking-[0.15em] text-primary">The short answer</h2><p className="mt-3 text-base leading-[1.8] text-text sm:text-lg">{paragraphWithLinks(post.shortAnswer)}</p></section>}
