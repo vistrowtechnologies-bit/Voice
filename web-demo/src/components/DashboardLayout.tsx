@@ -463,16 +463,24 @@ function FullPageHeader({
   )
 
   if (!desktop) {
-    // Phone and tablet: one app bar (title, search, alerts, account) and a
-    // row for the minutes pill. Navigation is the bottom tab bar.
+    // Phone and tablet: one app bar row (title, minutes, search, alerts,
+    // account). Navigation is the bottom tab bar.
     return (
       <>
         <header className="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur-xl">
           <div className="flex h-14 items-center gap-0.5 px-1.5">
-            <div className="flex min-w-0 flex-1 items-center gap-2 pl-2.5 pr-1">
-              <img src={vistrowMark} alt="" className="h-7 w-7 shrink-0 rounded-lg" />
-              <h1 className="truncate text-[17px] font-semibold tracking-tight">{title}</h1>
-            </div>
+            {/* No logo here: the title needs the room, and Home is in the tab bar. */}
+            <h1 className="min-w-0 flex-1 truncate pl-2.5 pr-1 text-[17px] font-semibold tracking-tight">{title}</h1>
+            {credits !== null && (
+              <Link
+                to={topupAvailable ? '/dashboard/settings?tab=billing&topup=1' : '/dashboard/settings?tab=billing'}
+                aria-label={topupAvailable ? `${credits} minutes remaining. Buy minutes` : `${credits} minutes remaining. Open plan and billing`}
+                className="mr-0.5 flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-2 py-1 text-xs font-semibold text-text-muted"
+              >
+                <Icon name="toll" className="text-[14px] text-cyan" />
+                {credits}<span className="-ml-0.5 hidden min-[360px]:inline">&nbsp;min</span>
+              </Link>
+            )}
             <button type="button" aria-label="Search and commands" aria-haspopup="dialog" onClick={openCommandMenu} className={appBarIconBtn}>
               <Icon name="search" className="text-[21px]" />
             </button>
@@ -480,9 +488,6 @@ function FullPageHeader({
             <span className="pl-1 pr-1.5">
               <HeaderAvatarMenu />
             </span>
-          </div>
-          <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {creditsPill}
           </div>
         </header>
         {pageActions}
