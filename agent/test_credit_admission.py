@@ -48,16 +48,18 @@ class CreditAdmissionTests(unittest.TestCase):
 
     def test_minutes_use_the_dashboard_multipliers(self) -> None:
         # Minute pricing (2026-10-17), 10 credits = 10 standard minutes: 10
-        # Bharat minutes (1x) or 3.4 Vistrow Live minutes (3x, any version)
-        # use them up, exactly as server/calls_db bills them.
+        # Bharat minutes (1x) or 5 Vistrow Live minutes (2x since 19 Oct 2026,
+        # any version) use them up, exactly as server/calls_db bills them.
         with patch.object(db.voice_catalog, "get_voice", return_value={"tier": "standard"}):
             for model, minutes, exhausted in (
                 ("sarvam/sarvam-105b-conversations", 9.9, False),
                 ("sarvam/sarvam-105b-conversations", 10, True),
-                ("gemini-live:gemini-3.1-flash-live-preview", 3.3, False),
-                ("gemini-live:gemini-3.1-flash-live-preview", 3.4, True),
-                ("gemini-live", 3.3, False),
-                ("gemini-live", 3.4, True),
+                ("gemini-live:gemini-3.1-flash-live-preview", 4.9, False),
+                ("gemini-live:gemini-3.1-flash-live-preview", 5, True),
+                ("gemini-live:gemini-3.8-live", 4.9, False),
+                ("gemini-live:gemini-3.8-live", 5, True),
+                ("gemini-live", 4.9, False),
+                ("gemini-live", 5, True),
                 ("groq/llama-3.3-70b", 9, False),
             ):
                 conn = _CreditConnection(subscription_status="inactive", used_minutes=minutes, model=model)
@@ -66,10 +68,11 @@ class CreditAdmissionTests(unittest.TestCase):
     def test_native_and_live_voices_bill_like_the_server(self) -> None:
         # Native (catalog tier "lite") is 1 minute per minute; a Live call
         # ignores its voice's tier (the model speaks), so a premium persona on
-        # Live is still 3, not 6.
+        # Live is still 2, not 4.
         for tier, model, minutes, exhausted in (
             ("lite", "sarvam/sarvam-105b-conversations", 9.9, False),
-            ("premium", "gemini-live", 3.3, False),
+            ("premium", "gemini-live", 4.9, False),
+            ("premium", "gemini-live", 5, True),
             ("premium", "sarvam/sarvam-105b-conversations", 5, True),
         ):
             with patch.object(db.voice_catalog, "get_voice", return_value={"tier": tier}):
