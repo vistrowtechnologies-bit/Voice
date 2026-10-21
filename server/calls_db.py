@@ -354,6 +354,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     notify_billing INTEGER DEFAULT 1,
     notify_product INTEGER DEFAULT 0,
     dashboard_checklist_dismissed INTEGER DEFAULT 0,
+    agent_guide_dismissed INTEGER DEFAULT 0,
     dashboard_hidden_cards TEXT DEFAULT '[]',
     -- What the notification bell shows this person, and whether it also pops up / pings.
     bell_calls INTEGER DEFAULT 1,
@@ -1700,6 +1701,10 @@ def init_tables() -> None:
             conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_checklist_dismissed INTEGER DEFAULT 0"
             )
+            # The agent editor's first-time step guide; Skip hides it for good.
+            conn.execute(
+                "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS agent_guide_dismissed INTEGER DEFAULT 0"
+            )
             conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_hidden_cards TEXT DEFAULT '[]'"
             )
@@ -2344,6 +2349,7 @@ def get_user_preferences(user_id: int) -> dict:
             "notify_billing",
             "notify_product",
             "dashboard_checklist_dismissed",
+            "agent_guide_dismissed",
             "bell_calls",
             "bell_appointments",
             "desktop_popups",
@@ -2365,6 +2371,7 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_billing",
         "notify_product",
         "dashboard_checklist_dismissed",
+        "agent_guide_dismissed",
         "dashboard_hidden_cards",
         "bell_calls",
         "bell_appointments",
@@ -2382,6 +2389,7 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_billing",
         "notify_product",
         "dashboard_checklist_dismissed",
+        "agent_guide_dismissed",
         "bell_calls",
         "bell_appointments",
         "desktop_popups",

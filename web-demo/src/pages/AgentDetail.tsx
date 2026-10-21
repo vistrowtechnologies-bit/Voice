@@ -10,13 +10,14 @@ import { Icon } from '../components/Icon'
 import { UpgradeRequiredModal } from '../components/UpgradeRequiredModal'
 import { VariableInput } from '../components/VariableInput'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
-import { useAuth } from '../lib/auth'
+import { apiProfilePreferences, apiUpdateProfilePreferences, useAuth } from '../lib/auth'
 import {
   deleteAgent,
   fetchAgents,
   fetchEntitlements,
   fetchIntegrations,
   fetchKnowledgeBases,
+  fetchLaunchReadiness,
   fetchMyVoices,
   fetchProjectListings,
   fetchVoiceCatalog,
@@ -111,20 +112,12 @@ export function AgentDetail() {
   return (
     <DashboardLayout>
       <PageHeader title={agent.name} subtitle={agent.description || 'No description yet'}>
-        <AgentIdChip publicId={agent.publicId ?? ''} />
         <Link
           to="/dashboard/agents"
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-text"
         >
           <Icon name="arrow_back" className="text-[15px]" />
-          Back to agents
-        </Link>
-        <Link
-          to="/dashboard/testing"
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
-        >
-          <Icon name="science" className="text-[15px]" />
-          Test agent
+          Agents
         </Link>
       </PageHeader>
       <section className="p-4 sm:p-6">
@@ -155,8 +148,8 @@ export function AgentDetail() {
           agent={agent}
           kbs={kbs}
           isPlatformOwner={user?.isPlatformOwner ?? false}
-          onCancel={backToList}
           onDeleted={backToList}
+          onTest={() => setTesting(true)}
         />
       </section>
     </DashboardLayout>
@@ -167,15 +160,16 @@ function AgentEditorForm({
   agent,
   kbs,
   isPlatformOwner,
-  onCancel,
   onDeleted,
+  onTest,
 }: {
   agent: AgentConfig
   kbs: KnowledgeBase[]
   isPlatformOwner: boolean
-  onCancel: () => void
   onDeleted: () => void
+  onTest: () => void
 }) {
+  const navigate = useNavigate()
   const [tab, setTab] = useState<AgentTab>('instructions')
   const [catalogAccess, setCatalogAccess] = useState<boolean | null>(null)
   useEffect(() => { fetchEntitlements().then((e) => setCatalogAccess(!!e.features.live_catalog)).catch(() => setCatalogAccess(false)) }, [])
@@ -337,13 +331,15 @@ function AgentEditorForm({
 
   const promptTokens = Math.max(0, Math.ceil(form.systemPrompt.length / 4))
 
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     setSaving(true)
     setSaveError(null)
     try {
       await updateAgent(agent.id, form)
+      savedSnapshot.current = JSON.stringify(form)
       setSaved(true)
       setTimeout(() => setSaved(false), 4000)
+      return true
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not save changes. Please try again.'
       // The dashboard's own voice picker only ever offers voices already in
@@ -357,9 +353,70 @@ function AgentEditorForm({
       } else {
         setSaveError(msg)
       }
+      return false
     } finally {
       setSaving(false)
     }
+  }
+
+  // Unsaved edits: the form against what was last loaded or saved.
+  const savedSnapshot = useRef(JSON.stringify(form))
+  const dirty = JSON.stringify(form) !== savedSnapshot.current
+  const discard = () => setForm(JSON.parse(savedSnapshot.current) as AgentForm)
+
+  // Live / paused applies at once (like the switch on the Agents page), and
+  // the saved copy follows so Save never puts the old status back.
+  const [statusBusy, setStatusBusy] = useState(false)
+  const toggleLive = async () => {
+    const next: AgentForm['status'] = form.status === 'live' ? 'paused' : 'live'
+    setStatusBusy(true)
+    try {
+      await updateAgent(agent.id, { status: next })
+      setForm((f) => ({ ...f, status: next }))
+      savedSnapshot.current = JSON.stringify({ ...(JSON.parse(savedSnapshot.current) as AgentForm), status: next })
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not change the status.')
+    } finally {
+      setStatusBusy(false)
+    }
+  }
+
+  // A test call uses the saved agent, so unsaved edits are saved first.
+  const talk = async () => {
+    if (dirty && !(await save())) return
+    onTest()
+  }
+
+  // Setup, from the form as it is now (so it moves while you edit); only the
+  // channel comes from the server, which knows numbers and website widgets.
+  const [channelReady, setChannelReady] = useState(false)
+  useEffect(() => {
+    fetchLaunchReadiness()
+      .then((r) => setChannelReady(Boolean(r.agents.find((a) => a.id === agent.id)?.checks.channel)))
+      .catch(() => setChannelReady(false))
+  }, [agent.id])
+  const steps: SetupStep[] = [
+    { key: 'persona', label: 'Persona', hint: 'Write what the agent says and does', done: Boolean(form.systemPrompt.trim() || form.welcomeMessage.trim()), tab: 'instructions' },
+    { key: 'voice', label: 'Voice', hint: 'Pick how it sounds', done: Boolean(form.voice), tab: 'voice' },
+    { key: 'knowledge', label: 'Knowledge', hint: 'Attach your answers and documents', done: Boolean(form.kbId), tab: 'tools' },
+    { key: 'channel', label: 'Channel', hint: 'Connect a phone number or website', done: channelReady, to: '/dashboard/numbers' },
+    { key: 'live', label: 'Go live', hint: 'Turn the agent on', done: form.status === 'live' },
+  ]
+  const nextStep = steps.find((step) => !step.done) ?? null
+  const goToStep = (step: SetupStep) => {
+    if (step.key === 'live') void toggleLive()
+    else if (step.to) navigate(step.to)
+    else if (step.tab) setTab(step.tab)
+  }
+
+  // First-time guide (C): shown until this user skips or finishes it, once.
+  const [guideOpen, setGuideOpen] = useState(false)
+  useEffect(() => {
+    apiProfilePreferences().then((p) => setGuideOpen(!p.agent_guide_dismissed)).catch(() => setGuideOpen(false))
+  }, [])
+  const closeGuide = () => {
+    setGuideOpen(false)
+    apiUpdateProfilePreferences({ agent_guide_dismissed: true }).catch(() => undefined)
   }
 
   const handleDelete = async () => {
@@ -381,6 +438,25 @@ function AgentEditorForm({
 
   return (
     <div className="flex flex-col gap-4">
+      <AgentHero
+        agent={agent}
+        name={form.name}
+        description={form.description}
+        model={form.model}
+        voice={voiceName(form.voice)}
+        language={form.language}
+        live={form.status === 'live'}
+        statusBusy={statusBusy}
+        steps={steps}
+        nextStep={nextStep}
+        onToggleLive={() => void toggleLive()}
+        onStep={goToStep}
+        onTalk={() => void talk()}
+        onDelete={() => void handleDelete()}
+      />
+      {guideOpen && <SetupGuide steps={steps} onStep={goToStep} onClose={closeGuide} />}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="flex min-w-0 flex-col gap-4">
       <AgentTabBar tab={tab} onChange={setTab} />
       <div className="flex flex-col gap-4">
         {/* Identity */}
@@ -1053,24 +1129,43 @@ function AgentEditorForm({
         </Panel>
 </TabPane>
       </div>
+      </div>
+      <TryPanel
+        name={form.name}
+        dirty={dirty}
+        saving={saving}
+        model={form.model}
+        voice={form.voice}
+        voiceName={voiceName(form.voice)}
+        language={form.language}
+        steps={steps}
+        onTalk={() => void talk()}
+        onStep={goToStep}
+      />
+      </div>
 
       <div className="vv-action-bar sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <button
-          onClick={handleDelete}
-          className="flex items-center gap-1.5 rounded-lg border border-destructive/40 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10"
-        >
-          <Icon name="delete" className="text-[16px]" />
-          Delete agent
-        </button>
-        <div className="flex items-center gap-3">
-          {saveError && <p className="text-xs font-semibold text-destructive">{saveError}</p>}
-          {saved && <p role="status" className="flex items-center gap-1 rounded-full bg-success/12 px-2.5 py-1 text-xs font-bold text-success"><Icon name="check_circle" className="text-[15px]" />Changes saved</p>}
-          <button onClick={onCancel} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary">
-            Back
-          </button>
+        <p className="flex min-w-0 items-center gap-2 text-xs font-semibold" role="status">
+          {saveError ? (
+            <span className="text-destructive">{saveError}</span>
+          ) : saved ? (
+            <span className="flex items-center gap-1 text-success"><Icon name="check_circle" className="text-[15px]" />Changes saved</span>
+          ) : dirty ? (
+            <span className="flex items-center gap-2 text-amber"><span className="h-2 w-2 rounded-full bg-amber" />Unsaved changes</span>
+          ) : (
+            <span className="text-text-muted">All changes saved</span>
+          )}
+        </p>
+        <div className="flex items-center gap-2">
+          {dirty && (
+            <button type="button" onClick={discard} disabled={saving} className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-bold hover:border-primary disabled:opacity-50">
+              Discard
+            </button>
+          )}
           <button
-            onClick={save}
-            disabled={saving}
+            type="button"
+            onClick={() => void save()}
+            disabled={saving || !dirty}
             className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save changes'}
@@ -1082,6 +1177,201 @@ function AgentEditorForm({
         <UpgradeRequiredModal message={upgradeMessage} onClose={() => setUpgradeMessage(null)} />
       )}
     </div>
+  )
+}
+
+type SetupStep = {
+  key: 'persona' | 'voice' | 'knowledge' | 'channel' | 'live'
+  label: string
+  hint: string
+  done: boolean
+  tab?: AgentTab
+  to?: string
+}
+
+/** Setup ring for the purple hero: white on the gradient. */
+function HeroRing({ done, total }: { done: number; total: number }) {
+  const c = 2 * Math.PI * 24
+  return (
+    <svg viewBox="0 0 60 60" className="h-[60px] w-[60px] shrink-0" role="img" aria-label={`Setup ${done} of ${total}`}>
+      <circle cx="30" cy="30" r="24" fill="none" stroke="rgb(255 255 255 / 0.22)" strokeWidth="6" />
+      <circle
+        cx="30" cy="30" r="24" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round"
+        strokeDasharray={`${((done / total) * c).toFixed(1)} ${c.toFixed(1)}`} transform="rotate(-90 30 30)" className="bento-ring"
+      />
+      <text x="30" y="34" textAnchor="middle" fill="#fff" className="font-display text-[13px] font-extrabold">{done}/{total}</text>
+    </svg>
+  )
+}
+
+/** A: who this agent is, whether it is on, how far setup is, and what to do next. */
+function AgentHero({ agent, name, description, model, voice, language, live, statusBusy, steps, nextStep, onToggleLive, onStep, onTalk, onDelete }: {
+  agent: AgentConfig; name: string; description: string; model: string; voice: ReactNode; language: string
+  live: boolean; statusBusy: boolean; steps: SetupStep[]; nextStep: SetupStep | null
+  onToggleLive: () => void; onStep: (step: SetupStep) => void; onTalk: () => void; onDelete: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const done = steps.filter((s) => s.done).length
+  return (
+    <section className="bento-tile bento-hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 font-display text-lg font-extrabold ring-1 ring-white/30">
+          {(name || 'A').slice(0, 2).toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <p className="bento-title truncate text-xl">{name || 'Untitled agent'}</p>
+          <p className="truncate text-sm text-white/75">{description || 'No description yet'}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={live}
+              disabled={statusBusy}
+              onClick={onToggleLive}
+              className="inline-flex items-center gap-2 rounded-full bg-white/15 py-1 pl-1 pr-3 font-bold ring-1 ring-white/30 disabled:opacity-60"
+            >
+              <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${live ? 'bg-success' : 'bg-white/25'}`}>
+                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${live ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+              </span>
+              {live ? 'Live' : 'Paused'}
+            </button>
+            <span className="rounded-full bg-white/15 px-2.5 py-1 font-bold ring-1 ring-white/30">{isRealtimeModel(model) ? 'Vistrow Live' : modelLabel(model).split(' · ')[0]}</span>
+            <span className="truncate text-white/80">{voice} · {language}</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex min-w-0 items-center gap-3 sm:shrink-0">
+        <HeroRing done={done} total={steps.length} />
+        <div className="flex min-w-0 flex-col items-start gap-2">
+          {nextStep ? (
+            <button type="button" onClick={() => onStep(nextStep)} className="bento-pill bento-pill-light max-w-full text-left">
+              <Icon name="bolt" className="text-[16px]" /> <span className="min-w-0">Next: {nextStep.hint}</span>
+            </button>
+          ) : (
+            <span className="bento-pill bento-pill-glass"><Icon name="check_circle" className="text-[16px]" /> Ready for calls</span>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Below xl the Try panel is hidden, so the hero carries the test button. */}
+            {/* Wrapped: .bento-pill sets display itself, which beats a utility on the same element. */}
+            <span className="xl:hidden">
+              <button type="button" onClick={onTalk} className="bento-pill bento-pill-glass">
+                <Icon name="mic" className="text-[16px]" /> Talk
+              </button>
+            </span>
+            <AgentIdChip publicId={agent.publicId ?? ''} />
+            <div className="relative">
+              <button type="button" aria-label="More actions" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/30 hover:bg-white/25">
+                <Icon name="more_horiz" className="text-[18px]" />
+              </button>
+              {menuOpen && (
+                <div role="menu" className="bento-reveal absolute right-0 top-11 z-20 w-44 rounded-xl border border-border bg-surface p-1 text-text shadow-xl">
+                  <Link role="menuitem" to="/dashboard/testing" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold hover:bg-surface-high">
+                    <Icon name="science" className="text-[16px]" /> Testing Lab
+                  </Link>
+                  <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onDelete() }} className="flex w-full items-center gap-2 rounded-lg bg-transparent px-3 py-2 text-left text-xs font-semibold text-destructive hover:bg-destructive/10">
+                    <Icon name="delete" className="text-[16px]" /> Delete agent
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/** C: first-time guide. Skip (or finishing) hides it for this user for good. */
+function SetupGuide({ steps, onStep, onClose }: { steps: SetupStep[]; onStep: (step: SetupStep) => void; onClose: () => void }) {
+  const current = steps.find((s) => !s.done)
+  return (
+    <section aria-label="Set up your agent" className="bento-tile bento-reveal">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="bento-title text-[15px]">{current ? 'Set up your agent in 5 steps' : 'Your agent is ready'}</p>
+          <p className="text-xs text-text-muted">{current ? `Next: ${current.hint}.` : 'Everything is set. Test it once, then share your number or website.'}</p>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-lg bg-transparent px-2 py-1 text-xs font-bold text-text-muted hover:text-text">
+          {current ? 'Skip guide' : 'Done'}
+        </button>
+      </div>
+      <ol className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+        {steps.map((step, i) => {
+          const isCurrent = step === current
+          return (
+            <li key={step.key}>
+              <button
+                type="button"
+                onClick={() => onStep(step)}
+                className={`flex h-full w-full items-start gap-2 rounded-2xl border p-3 text-left transition-colors ${
+                  isCurrent ? 'border-primary bg-primary/8' : step.done ? 'border-success/30 bg-success/5' : 'border-border bg-surface hover:border-primary/50'
+                }`}
+              >
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold ${step.done ? 'bg-success text-bg' : isCurrent ? 'bg-primary text-bg' : 'bg-surface-high text-text-muted'}`}>
+                  {step.done ? <Icon name="check" className="text-[14px]" /> : i + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-bold">{step.label}</span>
+                  <span className="block text-[11px] leading-snug text-text-muted">{step.hint}</span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
+/** B: the panel beside the editor on wide screens: talk to the agent, hear it, see setup. */
+function TryPanel({ name, dirty, saving, model, voice, voiceName, language, steps, onTalk, onStep }: {
+  name: string; dirty: boolean; saving: boolean; model: string; voice: string; voiceName: ReactNode; language: string
+  steps: SetupStep[]; onTalk: () => void; onStep: (step: SetupStep) => void
+}) {
+  const realtime = isRealtimeModel(model)
+  return (
+    <aside className="sticky top-4 hidden flex-col gap-4 xl:flex">
+      <section className="bento-tile flex flex-col items-center gap-3 text-center">
+        <p className="bento-title text-[15px]">Try {name || 'your agent'}</p>
+        <button
+          type="button"
+          onClick={onTalk}
+          disabled={saving}
+          aria-label={dirty ? `Save and talk to ${name}` : `Talk to ${name}`}
+          className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#7c3aed] to-[#c026d3] text-white shadow-[0_14px_40px_-12px_rgb(168_85_247/0.8)] transition-transform hover:scale-105 disabled:opacity-60"
+        >
+          <Icon name="mic" className="text-[34px]" />
+        </button>
+        <p className="text-xs text-text-muted">{dirty ? 'Saves your changes, then starts a browser call.' : 'Starts a browser call with your microphone.'}</p>
+        <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-surface-high/30 px-3 py-2 text-left">
+          <span className="min-w-0">
+            <span className="block text-[11px] text-text-muted">Voice</span>
+            <span className="block truncate text-xs font-bold">{voiceName}</span>
+          </span>
+          {/* The preview plays the standard voice; a realtime call speaks the Live version. */}
+          {!realtime && voice && !voice.startsWith('custom:') && (
+            <VoicePreviewButton voice={voice} lang={(language || 'hi').startsWith('en') ? 'en' : 'hi'} />
+          )}
+        </div>
+      </section>
+      <section className="bento-tile">
+        <p className="mb-2 text-xs font-bold">Setup {steps.filter((s) => s.done).length}/{steps.length}</p>
+        <ul className="flex flex-col gap-1">
+          {steps.map((step) => (
+            <li key={step.key}>
+              <button type="button" onClick={() => onStep(step)} className="flex w-full items-center gap-2 rounded-lg bg-transparent px-2 py-1.5 text-left text-xs hover:bg-surface-high">
+                <Icon name={step.done ? 'check_circle' : 'radio_button_unchecked'} className={`text-[16px] ${step.done ? 'text-success' : 'text-text-muted'}`} />
+                <span className={step.done ? 'text-text-muted line-through decoration-text-muted/40' : 'font-semibold'}>{step.label}</span>
+                {!step.done && <Icon name="arrow_forward" className="ml-auto text-[14px] text-text-muted" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <Link to="/dashboard/testing" className="mt-3 flex items-center gap-1.5 text-xs font-bold text-primary hover:underline">
+          <Icon name="science" className="text-[15px]" /> Run a scenario in Testing Lab
+        </Link>
+      </section>
+    </aside>
   )
 }
 

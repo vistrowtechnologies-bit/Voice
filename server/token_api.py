@@ -2447,6 +2447,7 @@ class PreferencesRequest(BaseModel):
     notify_calls: bool | None = None
     notify_billing: bool | None = None
     dashboard_checklist_dismissed: bool | None = None
+    agent_guide_dismissed: bool | None = None
     dashboard_hidden_cards: str | None = None
     bell_calls: bool | None = None
     bell_appointments: bool | None = None
