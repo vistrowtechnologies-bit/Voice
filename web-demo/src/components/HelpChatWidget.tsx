@@ -380,7 +380,7 @@ export function HelpChatWidget() {
     <div className="vv-help-root fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6" style={barClearance ? { bottom: barClearance } : undefined}>
       {open && (
         <div
-          className={`help-chat-panel-in help-panel-size flex w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ${
+          className={`vv-help-panel help-chat-panel-in help-panel-size flex w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ${
             expanded ? 'h-[min(820px,calc(100dvh-6rem))] sm:w-[min(720px,calc(100vw-3rem))]' : 'h-[min(640px,calc(100dvh-6rem))] sm:w-[420px]'
           }`}
         >
@@ -687,7 +687,7 @@ export function HelpChatWidget() {
         </div>
       )}
 
-      <div className="relative">
+      <div className="vv-help-launcher relative">
         {!open && showHint && (
           <button
             type="button"

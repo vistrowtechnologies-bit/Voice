@@ -1391,3 +1391,21 @@ html.vv-sheet-open .vv-help-root { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .vv-sheet-up, .vv-sheet-fade { animation: none; }
 }
+
+/* Copilot on phones: a full-screen panel, like a chat app, instead of a card
+   floating over the page and the tab bar. Its header has the close button,
+   so the floating launcher (and its second X) steps aside while it is open. */
+@media (max-width: 639.98px) {
+  .vv-help-panel {
+    position: fixed; inset: 0; z-index: 70;
+    width: 100vw !important; height: 100dvh !important;
+    border: 0; border-radius: 0;
+    padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+    animation: vv-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .vv-help-root:has(.vv-help-panel) .vv-help-launcher { display: none; }
+  html:has(.vv-help-panel) body { overflow: hidden; }
+}
+@media (max-width: 639.98px) and (prefers-reduced-motion: reduce) {
+  .vv-help-panel { animation: none; }
+}
