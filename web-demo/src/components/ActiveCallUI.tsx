@@ -270,7 +270,8 @@ export function ActiveCallUI({
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6 lg:flex-row">
         {/* Stage: the agent, what it is doing, and the controls. */}
-        <section className="bento-tile flex shrink-0 flex-col items-center justify-center gap-6 py-6 lg:w-[44%] lg:py-10">
+        {/* With captions off the stage takes the whole width, centred. */}
+        <section className={`bento-tile flex flex-col items-center justify-center gap-6 py-6 lg:py-10 ${showTranscript ? 'shrink-0 lg:w-[44%]' : 'flex-1'}`}>
           {agentParticipant ? (
             <AgentOrb agentParticipant={agentParticipant} agentName={agentName} />
           ) : (
