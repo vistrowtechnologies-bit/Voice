@@ -1,0 +1,122 @@
+{
+  "n": 6,
+  "publishOn": "2026-10-26",
+  "primaryKeyword": "ai receptionist for clinics",
+  "audience": "India + diaspora",
+  "slug": "ai-receptionist-for-clinics",
+  "title": "AI receptionist for clinics: bookings, reminders and handoffs",
+  "seoTitle": "AI Receptionist for Clinics: Bookings, Reminders, Handoffs",
+  "metaDescription": "How an AI receptionist for clinics books appointments, runs reminder calls and hands patients to staff, plus the safety rules to set before launch.",
+  "shortAnswer": "An AI receptionist for clinics answers patient calls, shares timings and visit instructions from approved information, books or reschedules appointments and takes callback requests. Reminder calls run as outbound campaigns. It never gives medical advice: worrying symptoms, emergencies and anything clinical go to staff or emergency services. Pilot it on booking calls first.",
+  "excerpt": "Clinic phones ring hardest when the front desk is busiest. Here is what an AI receptionist can take off the desk, what must stay with your team, and how to set it up safely.",
+  "category": "Healthcare",
+  "related": [
+    "what-is-an-ai-receptionist",
+    "multilingual-ai-receptionist-hindi-punjabi-english",
+    "ai-call-recordings-and-transcripts"
+  ],
+  "sections": [
+    {
+      "heading": "What can an AI receptionist do for a clinic?",
+      "paragraphs": [
+        "Most clinic calls are administrative: when is the doctor in, can I come tomorrow, where do I park, what should I bring, can I move my appointment. They arrive in bursts, usually when the person at the desk is checking in a patient. An [AI receptionist that answers every call](/ai-receptionist) takes those calls in parallel, at any hour the line is open.",
+        "The scope should stay administrative. The [healthcare voice AI overview](/solutions/healthcare) describes the front-desk work it suits and the guardrails it follows. If the idea is new to you, our explainer on [what an AI receptionist should handle](/resources/blog/what-is-an-ai-receptionist) covers the basics."
+      ],
+      "points": [
+        "Clinic information: timings, location, doctors, services and how to prepare for a visit.",
+        "Appointment requests, rescheduling and cancellations.",
+        "Callback requests when no slot suits the patient.",
+        "Returning callers recognised by number, if you turn on memory."
+      ]
+    },
+    {
+      "heading": "How does an AI receptionist book clinic appointments?",
+      "paragraphs": [
+        "The agent collects the patient’s name, phone number and reason for the visit, offers free slots inside your business hours and confirms only once the booking has saved. On Vistrow Voice, bookings go into the built-in Appointments calendar, where staff can reschedule them or mark them confirmed, completed, cancelled or no-show. You set business hours per day, slot length, timezone and blackout dates; the [bookings and availability guide](/help/appointments/manage-appointments) explains each setting.",
+        "Be clear about one limit. There is no direct connector for a specific practice-management or hospital system. If you run one, send each booking event to a webhook, Google Sheets, Slack or your CRM and let your team or an automation copy it across. Test that path before patients use it.",
+        "Agree with your team which visit types the agent may book on its own, for example routine consultations, and which need a person first, such as procedures that need preparation or a referral."
+      ]
+    },
+    {
+      "heading": "How do reminder calls work?",
+      "paragraphs": [
+        "Reminder calls run as an outbound campaign, not as an automatic call attached to every booking. You choose who to call and when: import or select the patients, personalise the greeting with their name or appointment date, and launch. The agent confirms the visit, or takes a callback request if the patient wants to move it, and staff update the booking afterwards. The [outbound calling campaigns page](/product/outbound) shows the setup.",
+        "Every dial is checked against your Do-Not-Call list and calling window first, and blocked contacts are counted rather than called. The [calling window and Do-Not-Call guide](/help/compliance/calling-rules) covers those rules. Keep reminder calls short and factual, and avoid naming a sensitive treatment in case someone else answers the phone."
+      ]
+    },
+    {
+      "heading": "When should the call go to a person?",
+      "paragraphs": [
+        "Anything clinical goes to people. An AI receptionist should not diagnose, suggest treatment, interpret a report or reassure a worried caller about symptoms. Write that as a fixed rule, together with what the agent says instead. Possible emergencies must be directed to immediate human or emergency care. In the UK, for example, the NHS advises calling 999 for a life-threatening emergency and 111 for urgent help that is not an emergency; use the numbers that apply where your patients are.",
+        "For everything else, set a transfer number. On phone calls the agent dials your colleague into the call and stays on until they answer; the [functions and transfer guide](/help/agents/agent-functions-and-transfer) explains it. A conversation started from the website widget cannot be transferred to a phone, so there the agent takes a callback number."
+      ],
+      "points": [
+        "Always a person: symptoms, test results, medication, billing disputes and complaints.",
+        "Always an emergency route: chest pain, breathing difficulty, heavy bleeding or anything the caller describes as urgent.",
+        "Callback by default: when the transfer is not answered or the clinic is closed."
+      ]
+    },
+    {
+      "heading": "Which languages can a clinic AI receptionist speak?",
+      "paragraphs": [
+        "Patients describe problems best in the language they think in. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia). It opens in the language you set and follows the patient if they switch mid-call, including everyday Hinglish. The [supported languages page](/languages) has a page for each Indian language.",
+        "This matters for clinics abroad too. A practice in Leicester, Brampton or Dubai with many South Asian patients can offer the same front desk in their language; our guide to a [multilingual AI receptionist for Hindi and Punjabi callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english) covers what to test. Phone access from abroad depends on your telephony provider, while the website widget works from any browser."
+      ]
+    },
+    {
+      "heading": "What about patient privacy, consent and recordings?",
+      "paragraphs": [
+        "Treat every call as containing personal health information. Decide whether calls are recorded, what patients are told at the start, who in your team can open transcripts and how long records are kept. Vistrow Voice lets you require spoken consent before details are collected, switch recording on or off and set a retention period, as the [consent, recording and retention guide](/help/compliance/consent-recording-retention) describes. Call data is kept within your clinic’s own account.",
+        "These are controls, not a certification. Whether and how to record patient calls is the clinic’s responsibility, and rules differ between countries. Read the [Vistrow Voice security overview](/security) for what is in place today, and agree your wording with whoever handles compliance."
+      ]
+    },
+    {
+      "heading": "How should a clinic pilot an AI receptionist?",
+      "paragraphs": [
+        "Start with one line and one job, usually appointment requests and timing questions. Upload your timings, doctor list, services and visit instructions to the [clinic knowledge base](/product/knowledge-base), review the extracted answers, and switch on strict mode so the agent quotes them rather than paraphrasing. Then test with colleagues playing difficult callers: an anxious parent, an elderly patient who speaks slowly, a caller who switches language and one who describes a worrying symptom.",
+        "Read the first week of transcripts daily. Check that every booking was real, every clinical question was handed over and every emergency was routed correctly. Fix the cause of each failure before widening the scope, and compare plans on the [Vistrow Voice pricing page](/pricing) when you are ready to scale."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI receptionist book appointments for my clinic?",
+      "a": "Yes. It offers free slots inside the hours you set, collects the patient’s name, number and visit reason, and confirms once the booking has saved in the Appointments calendar."
+    },
+    {
+      "q": "Does it send appointment reminders automatically?",
+      "a": "Not automatically. Reminders run as an outbound campaign: you choose the patients and the time, and each dial is checked against your calling window and Do-Not-Call list."
+    },
+    {
+      "q": "Will the AI receptionist give medical advice?",
+      "a": "No. It answers administrative questions from the information you provide and sends symptoms, results and possible emergencies to staff or emergency services."
+    },
+    {
+      "q": "Does it connect to my practice-management software?",
+      "a": "There is no direct connector for a specific clinic system. Booking events can be sent to a webhook, Google Sheets, Slack or your CRM."
+    },
+    {
+      "q": "Can patients speak Hindi or regional languages?",
+      "a": "Yes. Patients can speak Hindi, Hinglish, Marathi, Tamil, Telugu, Kannada and the other supported Indian languages, or English, and switch mid-call."
+    }
+  ],
+  "imageAlt": "Older woman in a sari talking on her mobile phone in a clinic waiting area while a receptionist helps a patient at the desk",
+  "imagePrompt": "Create ONE photorealistic editorial photograph, 16:9 landscape, and save it as cover.png in the current directory. Use style-ref.jpg only as a reference for mood, colour grading and photographic style (do not copy its scene). Natural daylight, warm tones, soft purple accents in clothing or decor, candid documentary feel, shallow depth of field, real workplace. ABSOLUTELY NO text, letters, numbers, logos, signage, labels, posters with writing, or screens with readable content anywhere in the image; any phone or laptop screen must be dark, turned away, or out of focus. Scene: Reception area of a small, clean Indian neighbourhood clinic. An older woman patient sits in the waiting area speaking on her mobile phone, while in the background a receptionist in a lavender uniform helps another patient at the counter. Calm, caring atmosphere.",
+  "sources": [
+    {
+      "title": "NHS: When to use 111",
+      "url": "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/when-to-use-111/"
+    }
+  ],
+  "contextualLinks": "To see a clinic line in action, explore [voice AI for healthcare and clinics](/solutions/healthcare) or read how an [AI receptionist answers and routes calls](/ai-receptionist).",
+  "inbound": [
+    {
+      "target": "blog:multilingual-ai-receptionist-hindi-punjabi-english",
+      "sentence": "Clinics have their own rules for bookings and safety; see our guide to an [AI receptionist for clinics](/resources/blog/ai-receptionist-for-clinics)."
+    },
+    {
+      "target": "page:/solutions/healthcare",
+      "sentence": "For a step-by-step view of bookings, reminder campaigns and handoffs, read [how an AI receptionist works for clinics](/resources/blog/ai-receptionist-for-clinics)."
+    }
+  ]
+}
