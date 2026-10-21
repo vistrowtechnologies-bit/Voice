@@ -1782,6 +1782,48 @@ def _make_repeated_opener_transform(agent: "RealEstateAgent"):
     return _transform
 
 
+# Call 1443 (21 Oct 2026, GPT-5.4 nano): replies wrote "business/portfolio",
+# "services/projects", "जोड़/अपडेट", and the voice read each slash aloud.
+# A slash between two words is spoken as "या" (or "or" in an all-Latin reply);
+# URLs, dates and numbers keep theirs.
+_WORD_SLASH = re.compile(r"(?<=[A-Za-z\u0900-\u097F])[ \t]*/[ \t]*(?=[A-Za-z\u0900-\u097F])")
+
+
+def _speak_slashes(text: str, devanagari: bool) -> str:
+    def _sub(m: re.Match) -> str:
+        head = text[: m.start()]
+        before = head.rsplit(None, 1)[-1] if head.strip() else ""
+        if "." in before or ":" in before:  # vistrow.com/contact, https://
+            return m.group(0)
+        return " या " if devanagari else " or "
+
+    return _WORD_SLASH.sub(_sub, text)
+
+
+def _make_slash_transform():
+    """Never holds text back, except a chunk ending in "/" after a word,
+    which waits for the next chunk ("business/" + "portfolio")."""
+    async def _transform(text):
+        devanagari = False
+        carry = ""  # trailing "word/" held for the next chunk
+        tail = ""  # last word already sent, for the URL check
+        async for chunk in text:
+            devanagari = devanagari or bool(re.search(r"[\u0900-\u097F]", chunk))
+            joined = carry + chunk
+            out = _speak_slashes(tail + joined, devanagari)[len(tail):] if tail and not carry else _speak_slashes(joined, devanagari)
+            carry = ""
+            m = re.search(r"[A-Za-z\u0900-\u097F][^\s/]*[ \t]*/[ \t]*$", out)
+            if m:
+                carry, out = out[m.start():], out[: m.start()]
+            if out:
+                tail = out.rsplit(None, 1)[-1] if out.strip() else tail
+                yield out
+        if carry:
+            yield carry
+
+    return _transform
+
+
 # End-of-turn thresholds for the languages this product actually serves.
 #
 # The endpointing delay below only escalates from min_delay to max_delay when
@@ -7711,6 +7753,7 @@ async def entrypoint(ctx: JobContext) -> None:
             "filter_markdown",
             _make_repeated_opener_transform(agent),
             _make_caller_gender_guard_transform(agent),
+            _make_slash_transform(),
         ],
         turn_handling=TurnHandlingOptions(turn_detection="realtime_llm") if _rt_call else TurnHandlingOptions(
             interruption={
