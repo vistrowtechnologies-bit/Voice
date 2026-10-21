@@ -1166,8 +1166,8 @@ export interface LanguagePage {
   extraFaqs?: { q: string; a: string }[]
   /** Links to registered pages that go deeper (solutions, compare, product, demo calls). */
   related?: { to: string; label: string }[]
-  /** One in-text link to a related guide, shown above the related links. */
-  readMore?: { lead: string; to: string; label: string }
+  /** Sentences linking to related guides, shown above the related links. Each may contain [text](/path) links. */
+  guides?: string[]
 }
 
 /** Voices that speak every one of the ten Indian languages and keep the same
@@ -1183,7 +1183,9 @@ export const INDIAN_LANGUAGE_VOICES = {
 export const LANGUAGES: LanguagePage[] = [
   {
     slug: 'hindi',
-    readMore: { lead: 'Serving Hindi-speaking customers outside India, in the UK, Canada, the US or the Gulf? Read our guide to', to: '/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english', label: 'a multilingual AI receptionist for Hindi, Punjabi and English callers' },
+    guides: [
+      'Serving Hindi-speaking customers outside India, in the UK, Canada, the US or the Gulf? Read our guide to [a multilingual AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english).',
+    ],
     name: 'Hindi',
     native: 'हिन्दी',
     code: 'hi-IN',
@@ -1652,7 +1654,9 @@ export const LANGUAGES: LanguagePage[] = [
   },
   {
     slug: 'punjabi',
-    readMore: { lead: 'Many Punjabi speakers call businesses in the UK and Canada. Read our guide to', to: '/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english', label: 'answering Punjabi, Hindi and English callers with one AI receptionist' },
+    guides: [
+      'Many Punjabi speakers call businesses in the UK and Canada. Read our guide to [answering Punjabi, Hindi and English callers with one AI receptionist](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english).',
+    ],
     name: 'Punjabi',
     native: 'ਪੰਜਾਬੀ',
     code: 'pa-IN',

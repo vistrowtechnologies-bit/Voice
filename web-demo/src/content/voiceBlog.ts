@@ -348,3 +348,19 @@ export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POST
   const words = sections.flatMap(section => [section.heading, ...section.paragraphs, ...(section.points ?? [])]).join(' ').replace(/\[([^\]]+)\]\(\/[^)]+\)/g, '$1').trim().split(/\s+/).length
   return { ...post, sections, readTime: `${Math.max(1, Math.ceil(words / 200))} min read`, updatedAt: post.publishedAt > '2026-10-07' ? post.publishedAt : '2026-10-07', image: `/blog/${post.slug}.jpg`, imageAlt: IMAGE_ALTS[post.slug], sources: SOURCES[post.slug] ?? [] }
 })
+
+/** Blog index: newest first; post 0 is the featured post on page 1, the rest are listed 12 per page. */
+export const BLOG_PAGE_SIZE = 12
+export const BLOG_POSTS_NEWEST = [...VOICE_BLOG_POSTS].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+export const BLOG_PAGE_COUNT = Math.max(1, Math.ceil((BLOG_POSTS_NEWEST.length - 1) / BLOG_PAGE_SIZE))
+export const blogPagePath = (page: number) => page <= 1 ? '/resources/blog' : `/resources/blog/page/${page}`
+
+/** Hand-picked guides for the blog sidebar; replace with the most-read pages from GA4 when there is enough traffic. */
+export const EDITORS_PICKS = [
+  'what-is-an-ai-voice-agent',
+  'multilingual-ai-receptionist-hindi-punjabi-english',
+  'ivr-vs-ai-voice-agent-india',
+  'ai-voice-agent-pricing-india',
+  'write-ai-voice-agent-prompts',
+  'how-to-choose-a-multilingual-voice-agent',
+]

@@ -59,7 +59,7 @@ export function Seo({ title, description, path, image, imageAlt, noindex, jsonLd
     document.title = resolvedTitle
 
     upsertMeta('name', 'description', resolvedDescription)
-    upsertMeta('name', 'robots', resolvedNoindex ? 'noindex, follow' : 'index, follow')
+    upsertMeta('name', 'robots', resolvedNoindex ? 'noindex, follow' : 'index, follow, max-image-preview:large')
     upsertLink('canonical', url)
 
     upsertMeta('property', 'og:type', registered?.kind === 'article' ? 'article' : 'website')

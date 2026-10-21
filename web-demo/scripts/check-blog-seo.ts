@@ -46,7 +46,7 @@ for (const post of VOICE_BLOG_POSTS) {
 // in docs/SEO-BLOG-PLAN-2026-10-21.md.
 const DAILY = new Set(DAILY_POSTS.map(post => post.slug))
 const strip = (text: string) => text.replace(/\[([^\]]+)\]\(\/[^)]+\)/g, '$1')
-const allHtml = readdirSync('dist/resources/blog').map(dir => `dist/resources/blog/${dir}/index.html`).concat(['dist/ai-receptionist/index.html', ...readdirSync('dist/languages').map(dir => `dist/languages/${dir}/index.html`)]).filter(file => existsSync(file))
+const allHtml = (readdirSync('dist', { recursive: true }) as string[]).filter(file => file.endsWith('index.html')).map(file => `dist/${file}`)
 for (const post of VOICE_BLOG_POSTS.filter(item => DAILY.has(item.slug))) {
   const path = `/resources/blog/${post.slug}`
   const html = readFileSync(`dist${path}/index.html`, 'utf8')

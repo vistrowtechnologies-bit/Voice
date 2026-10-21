@@ -1,0 +1,123 @@
+{
+  "n": 5,
+  "publishOn": "2026-10-25",
+  "primaryKeyword": "ai voice agent platform",
+  "audience": "Global",
+  "slug": "ai-voice-agent-platform-buyers-checklist",
+  "title": "How to evaluate an AI voice agent platform: a buyer’s checklist",
+  "seoTitle": "AI Voice Agent Platform: A Buyer’s Evaluation Checklist",
+  "metaDescription": "A practical checklist for evaluating an AI voice agent platform: languages, speed, grounded answers, handoffs, channels, testing, controls and cost.",
+  "shortAnswer": "To evaluate an AI voice agent platform, test it on your own calls rather than a vendor demo. Check language quality with native speakers, response speed on a real phone line, whether answers stay within your approved facts, how bookings and handoffs work, which channels it covers, whether your team can test and edit it, and how usage is billed.",
+  "excerpt": "Demos are built to impress. This checklist helps you judge an AI voice agent platform on the calls your business actually gets, before you commit.",
+  "category": "Voice AI basics",
+  "related": [
+    "how-to-choose-a-multilingual-voice-agent",
+    "voice-ai-latency-how-to-measure-it",
+    "connecting-voice-calls-to-your-crm"
+  ],
+  "sections": [
+    {
+      "heading": "What are you really buying in an AI voice agent platform?",
+      "paragraphs": [
+        "An AI voice agent platform is the system that lets you build, run and review voice agents: it combines speech recognition, a language model, a synthetic voice, telephony and your own rules and facts. If you are new to the idea, start with [what an AI voice agent is](/resources/blog/what-is-an-ai-voice-agent). The quality a caller hears depends on that whole chain, not on any single model.",
+        "So evaluate the platform the way callers will meet it. Pick two or three real call types, write down what a good outcome is for each, and run the same tests on every option. The sections below are the checks that matter most. Our [voice agent builder overview](/product/agents) shows how each item looks on Vistrow Voice, so you can use it as one point of comparison."
+      ]
+    },
+    {
+      "heading": "Does the platform speak your callers’ languages properly?",
+      "paragraphs": [
+        "A long list of languages tells you little. Ask native speakers to call in each language you need, using everyday speech, mixed languages and real names, and read the transcripts next to the recordings. Our [multilingual voice agent buying guide](/resources/blog/how-to-choose-a-multilingual-voice-agent) explains the full test.",
+        "Ask which languages work on phone calls specifically, whether the agent can switch mid-call, and whether its grammar matches the voice you choose. For reference, Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia); the Indian languages are listed on the [supported languages page](/languages)."
+      ]
+    },
+    {
+      "heading": "How fast and natural does it feel on a real phone line?",
+      "paragraphs": [
+        "A pause that feels fine on a laptop demo can feel long on a mobile call. Time the gap between the caller finishing and the agent starting to speak, on an ordinary phone connection, at a busy time of day. Check how it copes when the caller interrupts, speaks over a reply or goes quiet. The [voice AI latency measurement guide](/resources/blog/voice-ai-latency-how-to-measure-it) shows how to measure this fairly.",
+        "Listen for turn-taking as well as speed. A good agent stops talking when the caller cuts in, picks up the new point without restarting its answer, and does not jump in while the caller is still pausing mid-sentence. Try this with a fast talker and a slow one, and on a call with traffic or office noise behind it, because that is how many of your real callers will sound."
+      ]
+    },
+    {
+      "heading": "Will the agent stay within your approved facts?",
+      "paragraphs": [
+        "An agent that invents a price, a policy or an opening time does more damage than one that says it will check. Ask how answers are grounded: can you upload your own documents, review what the agent will say, and restrict it to that material? On Vistrow Voice, a [knowledge base with a strict mode](/product/knowledge-base) keeps answers to your approved content and has the agent say it will check with the team when something is missing.",
+        "Test this directly. Ask the agent questions just outside its material and see whether it guesses.",
+        "Also ask how quickly a change to the material reaches live calls. If you update a fee or an opening time, the agent should use it from the next call, without a rebuild or a support ticket."
+      ]
+    },
+    {
+      "heading": "Can it finish the task and hand over cleanly?",
+      "paragraphs": [
+        "Answering questions is the easy part. Check what the agent can actually do during a call, and what your team receives afterwards. A handover should carry the caller’s name, need and language, so nobody asks them to start again; the [CRM handoff checklist](/resources/blog/connecting-voice-calls-to-your-crm) lists what that record should contain."
+      ],
+      "points": [
+        "Bookings: does it check real free slots and confirm only once the booking has saved?",
+        "Transfers: can it bring a colleague into a phone call, and what happens when nobody answers?",
+        "Callbacks: does it capture a callback request when it cannot finish?",
+        "Data: which fields are extracted from each call, and can they reach your CRM, a spreadsheet, a chat channel or a webhook through [CRM and app integrations](/product/integrations)?"
+      ]
+    },
+    {
+      "heading": "Which channels does the platform cover?",
+      "paragraphs": [
+        "Most businesses need more than one way in. Ask how phone numbers connect: through your existing telephony provider or only through the vendor’s numbers, and whether calls from abroad can reach them. On Vistrow Voice, numbers connect through your own telephony provider, so overseas calling depends on that provider.",
+        "Ask whether the same agent can talk to website visitors. A browser voice button needs microphone permission, which browsers grant only on secure (HTTPS) pages and only after the visitor agrees. The [website voice widget](/product/widget) works this way from any browser. For outbound calls, check calling windows, Do-Not-Call handling and retry rules on the [outbound campaigns page](/product/outbound)."
+      ]
+    },
+    {
+      "heading": "Can your own team test, edit and review the agent?",
+      "paragraphs": [
+        "If every change needs the vendor, small fixes take weeks. Ask to change a fact, a greeting and a handover rule yourself during the trial, then test the result before it reaches callers. Vistrow Voice lets you talk to an agent in the browser with its real settings, and its Testing Lab plays situations such as an impatient caller or a language switch; the [guide to running a test](/help/testing-lab/run-a-test) shows how.",
+        "After launch, you need every call on record: a transcript, a summary, the extracted details and, where you choose, the recording. Check how quickly you can find one call and what your team sees on it."
+      ]
+    },
+    {
+      "heading": "What should you check on cost, controls and risk?",
+      "paragraphs": [
+        "Ask how usage is billed, what counts as a billable minute, and whether voice or model choices change the rate. Separate AI usage from telephony charges such as number rental and carrier minutes. Vistrow Voice bills conversation minutes in credits; current plans are on the [Vistrow Voice pricing page](/pricing).",
+        "Then check the controls you will need in production: spoken consent before details are collected, recording on or off, how long transcripts and recordings are kept, and who in your team can see them. The [security overview](/security) lists what is in place today. Agree recording and disclosure rules for each market with whoever handles compliance."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "What is an AI voice agent platform?",
+      "a": "It is software for building, running and reviewing voice agents that hold spoken conversations on phone calls or websites, combining speech recognition, a language model, a synthetic voice, telephony and your own rules and facts."
+    },
+    {
+      "q": "How long should a voice agent trial last?",
+      "a": "Long enough to run your real call types on real traffic and read the results. A focused one-week pilot on a single line is a common starting point."
+    },
+    {
+      "q": "Should I judge a platform by its demo?",
+      "a": "No. Demos use ideal scripts. Test with your own facts, difficult callers, native speakers and an ordinary mobile connection."
+    },
+    {
+      "q": "What is the most common reason voice agents fail?",
+      "a": "Usually missing or vague information: a fact the agent was never given, an unclear instruction, or a topic that should have gone to a person. Reading transcripts shows which."
+    },
+    {
+      "q": "Can a voice agent platform work with my CRM?",
+      "a": "Many can. Vistrow Voice sends call details to Zoho CRM, Google Sheets, Slack, ArthaLeads or any webhook as the call ends."
+    }
+  ],
+  "imageAlt": "Checklist card for choosing an AI voice agent platform: languages, speed on real calls, approved answers, handoffs, cost and controls",
+  "imagePrompt": "Designed cover (scripts/blog-covers/05-ai-voice-agent-platform-buyers-checklist.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "MDN Web Docs: MediaDevices.getUserMedia() (secure contexts and user permission)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia"
+    }
+  ],
+  "contextualLinks": "To compare specific options, read [AI receptionist vs answering service vs IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr) or see [how voice agents are built on Vistrow Voice](/product/agents).",
+  "inbound": [
+    {
+      "target": "blog:how-to-choose-a-multilingual-voice-agent",
+      "sentence": "Language is one part of the decision; our [AI voice agent platform buyer’s checklist](/resources/blog/ai-voice-agent-platform-buyers-checklist) covers the rest."
+    },
+    {
+      "target": "page:/product/agents",
+      "sentence": "Comparing vendors? Use our [checklist for evaluating an AI voice agent platform](/resources/blog/ai-voice-agent-platform-buyers-checklist) on your own calls."
+    }
+  ]
+}
