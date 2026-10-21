@@ -39,12 +39,16 @@ class LeadCaptureIsIndustryNeutral(unittest.TestCase):
         text = _instructions()
         self.assertNotIn("self-use ke liye", text)
         self.assertNotIn("a property type, a configuration", text)
-        self.assertIn("are for a business that sells property, never for any other", text)
+        # Call 1458: naming the words, even to forbid them, primed Sarvam 105B.
+        for word in ("investment", "self-use", "locality", "BHK", "Two localities"):
+            self.assertNotIn(word, text)
+        self.assertIn("Ask only about what THIS business offers", text)
 
     def test_log_lead_property_fields_are_marked_property_only(self):
         doc = inspect.getdoc(tools.log_lead) or ""
-        self.assertIn('purpose: Property businesses only: "investment" or "self-use"', doc)
-        self.assertIn("Never ask it for any other business", doc)
+        self.assertIn("purpose: Only if this business sells property", doc)
+        for word in ("investment", "self-use", "BHK", "villa"):
+            self.assertNotIn(word, doc)
         self.assertNotIn("When they want to buy", doc)
 
 
