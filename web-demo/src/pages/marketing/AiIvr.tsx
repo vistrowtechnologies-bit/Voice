@@ -158,7 +158,7 @@ export function AiIvr() {
     <MarketingLayout>
       <Seo
         title="AI IVR System and Cloud IVR for India | Vistrow Voice"
-        description="An AI IVR system for India: callers say what they need on an IVR call and get an answer, a booking or a transfer. A cloud IVR in 11 languages."
+        description="An AI IVR system for India: callers say what they need on an IVR call and get an answer, a booking or a transfer. A cloud IVR in 130+ languages."
         path="/ai-ivr"
         jsonLd={FAQ_JSONLD}
       />
@@ -187,7 +187,7 @@ export function AiIvr() {
           <ul className="space-y-3 text-sm leading-relaxed text-text-muted">
             {[
               'Inbound phone calls, outbound calls and the website voice widget from one agent',
-              '10 Indian languages plus English, switching when the caller does',
+              '130+ languages, including 10 Indian languages, switching when the caller does',
               'Answers grounded in your knowledge base - it says so when it does not know',
               'Recording, transcript and summary for every call',
             ].map((item) => (

@@ -156,7 +156,7 @@ export function SolutionsOverview() {
               <Link to="/product/agents" className="font-semibold text-primary hover:underline">voice agent builder</Link>:
               a persona, instructions, a voice and a default language, tested in the browser before it takes a real call.
               Agents speak{' '}
-              <Link to="/languages" className="font-semibold text-primary hover:underline">Hindi, English and 9 more Indian languages</Link>{' '}
+              <Link to="/languages" className="font-semibold text-primary hover:underline">130+ languages, including Hindi and English</Link>{' '}
               and follow a caller who switches mid-call.
             </p>
             <p>

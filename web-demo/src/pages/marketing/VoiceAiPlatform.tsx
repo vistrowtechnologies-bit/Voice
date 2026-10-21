@@ -169,7 +169,7 @@ export function VoiceAiPlatform() {
             {[
               'No-code agent builder, with an AI drafting assistant',
               'Phone numbers and a website call widget on the same agent',
-              '10 Indian languages plus English, switching mid-call',
+              '130+ languages, including 10 Indian languages, switching mid-call',
               'Webhooks and custom functions when you do want code',
             ].map((item) => (
               <li key={item} className="flex gap-2">

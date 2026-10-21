@@ -26,7 +26,7 @@ Last 7 days (11 to 17 Oct): 8 clicks, 516 impressions; impressions by country: I
 ## Rules for every post
 
 - No prices (the pricing page is the only place for them), no named competitors, no invented statistics. Any number cites a primary source in `sources`.
-- Product claims must match the product: calls in 11 languages (Hindi, English, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia; agent/language.py LANGUAGE_NAMES); no Urdu. Assamese is only for cloned voices. Phone numbers connect through the customer's telephony provider (EnableX today); overseas calling depends on that provider. The website voice widget works from any browser.
+- Languages (owner decision 21 Oct 2026): say "more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia)". Do not claim that speech recognition, phone numbers or the knowledge base cover 130 languages, and do not say Urdu is unsupported. Phone numbers connect through the customer's telephony provider (EnableX today); overseas calling depends on that provider. The website voice widget works from any browser.
 - No em dashes (the build rejects them). A cover image (1200x675 and 640 px) with alt text.
 - SEO: `seoTitle` of 60 characters or fewer with the primary keyword first; `metaDescription` of 155 or fewer; question-style H2s that use keyword variants; about 1,200 to 1,600 words.
 - AEO: `shortAnswer` of 40 to 60 words that answers the main question directly; 4 to 6 `faqs` (rendered with FAQPage data).
@@ -38,7 +38,7 @@ Last 7 days (11 to 17 Oct): 8 clicks, 516 impressions; impressions by country: I
 
 Stage: Learning (what is it), Comparing (options), Choosing (vendor/use-case fit), Deciding (cost, risk, rollout). Link targets are pages each post must link to in its text (more are fine). Status is set by the publishing job. Before writing, confirm every link target exists in web-demo/src/lib/seoPages.ts; if one does not, pick the closest existing page.
 
-Scope: only buyers we can serve honestly (Indian businesses in the 11 call languages, businesses abroad with South Asian customers, website voice for any country, and neutral comparison and how-to guides). No posts that need promises we cannot keep, such as US phone numbers, HIPAA compliance or bookings into industry-specific software.
+Scope: only buyers we can serve honestly (Indian businesses in the Indian call languages, businesses abroad with South Asian customers, website voice for any country, and neutral comparison and how-to guides). No posts that need promises we cannot keep, such as US phone numbers, HIPAA compliance or bookings into industry-specific software.
 
 | # | Date | Title | Primary keyword | Stage | Audience | Cluster | Link targets | Status |
 |---|---|---|---|---|---|---|---|---|
