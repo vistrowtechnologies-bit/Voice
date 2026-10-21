@@ -101,7 +101,7 @@
       "a": "Many can. Vistrow Voice sends call details to Zoho CRM, Google Sheets, Slack, ArthaLeads or any webhook as the call ends."
     }
   ],
-  "imageAlt": "A man reviewing papers at a desk beside a checklist of languages, speed on real calls, approved answers, handoffs, cost and controls",
+  "imageAlt": "Checklist card for choosing an AI voice agent platform: languages, speed on real calls, approved answers, handoffs, cost and controls",
   "imagePrompt": "Designed cover (scripts/blog-covers/05-ai-voice-agent-platform-buyers-checklist.html) per docs/SEO-BLOG-COVER-GUIDE.md",
   "sources": [
     {

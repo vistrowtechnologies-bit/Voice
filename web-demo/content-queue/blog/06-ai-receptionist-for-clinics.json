@@ -100,7 +100,7 @@
       "a": "Yes. Patients can speak Hindi, Hinglish, Marathi, Tamil, Telugu, Kannada and the other supported Indian languages, or English, and switch mid-call."
     }
   ],
-  "imageAlt": "An older woman on her phone in a clinic waiting area, with Artha answering patient calls and labels for bookings, reminders and handoffs",
+  "imageAlt": "A patient on her phone in a clinic waiting area, with a phone screen showing Artha, the AI receptionist, and an appointment booked",
   "imagePrompt": "Designed cover (scripts/blog-covers/06-ai-receptionist-for-clinics.html) per docs/SEO-BLOG-COVER-GUIDE.md",
   "sources": [
     {

@@ -7,14 +7,21 @@ Owner review, 21 Oct 2026: the first photo-only covers scored about 3.5/10. They
 Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-service-vs-ivr.html` with `people/artha-headset.jpg`, rendered to 1200x675.
 
 
-## Two styles (owner, 21 Oct: not every cover should look the same)
+## Layouts (owner, 21 Oct: covers must not all look like one template)
 
-| Style | Look | Use for |
-|---|---|---|
-| **Studio** | Dark brand gradient, a person cut out on the right, topic cards over their shoulder | Comparisons and flows (posts 2 and 4) |
-| **Scene** | A full-width realistic photo of people in a real place, darkened on the left for the headline, topic chips under it, and an "Artha" badge when the AI agent is part of the story | Guides, checklists and industry posts (posts 3, 5 and 6) |
+The first five covers used one skeleton (dark shade on the left, pill, headline, chips) and looked alike in the blog grid. Use these **distinct layouts** instead. Only the logo and a touch of brand purple are shared. **Never use the same layout on two posts in a row**, and vary the mood (dark, light, photo, graphic) across each week.
 
-Shared styles: `web-demo/scripts/blog-covers/cover.css`. Alternate the styles so consecutive posts do not look alike.
+| Layout | Look | Mood | Good for | Example |
+|---|---|---|---|---|
+| **1. Studio comparison** | Dark brand gradient, a person cut out on the right, option cards over their shoulder, the AI option highlighted | Dark, bold | "X vs Y" posts | `02-...html` |
+| **2. Light editorial** | Full bright photo with no dark shade; a white rounded headline card in a bottom corner; a small "on a call" tag on the photo | Light, airy | Definitions and guides | `03-...html` |
+| **3. Before / after split** | Left half greyscale photo of the old way (frustrated caller, keypad menu) with a dark caption card; right half full-colour Artha on purple with a white speech bubble; arrow badge in the middle; headline across the top | Contrast story | Replacing IVR, missed calls, speed to lead, migrations | `04-...html` |
+| **4. Checklist board** | Light lavender background with a faint grid, big headline left, a tilted white checklist card right, the person in a round framed photo | Light, graphic | Checklists, how-tos, compliance | `05-...html` |
+| **5. Phone mock-up** | Warm full-bleed scene photo, a smartphone screen showing Artha on a call and an outcome card ("Appointment booked"), headline bottom-left over a bottom gradient | Product in action | Industry posts, bookings, reminders | `06-...html` |
+| **6. Language greeting** (to build) | The greeting in its own script, very large, over a local scene photo; small Artha badge | Local, cultural | Language posts | |
+| **7. Quote / stat card** (to build) | One short, sourced fact or customer-style question in very large type on a solid colour, with a small photo | Typographic | Data-led and myth-busting posts | |
+
+Each cover HTML carries its own CSS (fonts from `web-demo/public/fonts`). `cover.css` holds the shared studio and scene pieces.
 
 ## Rules
 

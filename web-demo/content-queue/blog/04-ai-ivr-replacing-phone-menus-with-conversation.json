@@ -103,7 +103,7 @@
       "a": "No. Move one line with predictable calls first, read the transcripts for a week, and keep the old flow until the new one has proved itself on real traffic."
     }
   ],
-  "imageAlt": "A caller smiling on his phone while a press-1 phone menu is replaced by Artha, the AI agent, asking how she can help",
+  "imageAlt": "Before and after: a frustrated caller stuck in a press-1 phone menu, beside Artha, the AI agent, asking how she can help",
   "imagePrompt": "Designed cover (scripts/blog-covers/04-ai-ivr-replacing-phone-menus-with-conversation.html) per docs/SEO-BLOG-COVER-GUIDE.md",
   "sources": [
     {
