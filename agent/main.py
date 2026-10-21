@@ -836,8 +836,8 @@ def _facts_reminder(lead_data: dict, fact_status: dict | None = None) -> str:
         blocks.append(
             "# Heard, but NOT confirmed — you may verify these, and must not state them as fact\n"
             + "\n".join(unconfirmed)
-            + "\nAsk about these as a question (\"...self-use ke liye?\"), never as a summary "
-            "(\"...so you want self-use.\")."
+            + "\nAsk about these as a question (\"...next month tak?\"), never as a summary "
+            "(\"...so you want it next month.\")."
         )
     return "\n\n".join(blocks)
 
@@ -3834,12 +3834,18 @@ class RealEstateAgent(Agent):
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
             "Use the tool that fits what this call is about:\n"
             "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
-            "any detail at all — a budget (any language or unit: \"एक करोड़\", \"50 lakh\", \"around "
-            "2 crore\"), a locality, a timeline, a property type, a configuration, a name. Pass only "
+            "any detail at all — what they need, a timeline, a budget (any language or unit: \"50 "
+            "hazaar\", \"एक करोड़\"), a location, a name. Pass only "
             "what you just learned; omitted fields keep their value. You do NOT need their name or "
             "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
             "your very next tool call, before you reply and before any booking or end_call; many "
-            "one-field calls are exactly right. Two localities: call it twice (locations accumulate).\n"
+            "one-field calls are exactly right. Two localities: call it twice (locations accumulate). "
+            # Call 1439 (21 Oct 2026): a website enquiry on a digital-marketing
+            # agent was asked "business ke liye ya investment ke liye?" and for a
+            # locality - property wording here and in log_lead, from when every
+            # tenant sold property. Property tenants' own prompts ask these.
+            "Ask only questions that fit THIS business: locality, property type, BHK, investment "
+            "or self-use are for a business that sells property, never for any other.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "
@@ -3874,8 +3880,8 @@ class RealEstateAgent(Agent):
             + "These tool calls are silent — never mention saving, logging or recording anything, "
             "except confirming a follow-up request after the tool succeeded (platform rule 5).\n\n"
             "# Only state back what they actually said\n"
-            "When you fill a gap by inference, ask it (\"...self-use ke liye dekh rahe hain?\"), never "
-            "state it as a summary (\"...self-use ke liye dekh rahe hain.\").\n\n"
+            "When you fill a gap by inference, ask it (\"...next month tak chahiye?\"), never "
+            "state it as a summary (\"...next month tak chahiye.\").\n\n"
             "Call the end_call tool once the caller clearly signals the conversation is over — they "
             "thank you with nothing further to ask, say goodbye, or otherwise say they are done. Not "
             "for a mere pause or a one-word \"okay\".\n\n"
