@@ -81,4 +81,46 @@ assert.equal(consent.getAnalyticsConsent(throwing), null)
 consent.setAnalyticsConsent('denied', throwing)
 assert.equal(consent.getAnalyticsConsent(throwing), 'denied')
 
+// Two categories (21 Oct 2026). Each case starts from a clean slate.
+const fresh = () => {
+  consent.resetAnalyticsConsentForTests()
+  for (const k of Object.keys(store)) delete store[k]
+  calls.length = 0
+  appended.length = 0
+  delete (fakeWindow as { clarity?: unknown }).clarity
+}
+
+// Visitors who answered before the split: one answer covers both.
+fresh()
+store[consent.ANALYTICS_CONSENT_KEY] = 'granted'
+assert.equal(consent.sessionInsightsAllowed(), true, 'old Accept keeps session insights on')
+fresh()
+store[consent.ANALYTICS_CONSENT_KEY] = 'denied'
+assert.equal(consent.sessionInsightsAllowed(), false, 'old Reject keeps session insights off')
+
+// Necessary only: neither loads.
+fresh()
+consent.setCookieChoices({ analytics: false, sessions: false })
+analytics.trackPageView('/pricing')
+analytics.initClarity('/pricing')
+assert.equal(store[consent.SESSION_CONSENT_KEY], 'denied')
+assert.equal(calls.length, 0)
+assert.equal(appended.length, 0)
+
+// Analytics only: GA loads, Clarity does not.
+fresh()
+consent.setCookieChoices({ analytics: true, sessions: false })
+analytics.initClarity('/pricing')
+assert.equal(appended.filter((s) => s.includes('googletagmanager.com/gtag/js')).length, 1)
+assert.ok(!appended.some((s) => s.includes('clarity.ms')), 'no Clarity without session insights')
+
+// Session insights only: Clarity loads, GA does not, no gtag calls.
+fresh()
+consent.setCookieChoices({ analytics: false, sessions: true })
+analytics.trackPageView('/pricing')
+analytics.initClarity('/pricing')
+assert.ok(appended.some((s) => s.includes('clarity.ms')), 'Clarity loads with session insights')
+assert.ok(!appended.some((s) => s.includes('googletagmanager.com')), 'no GA without analytics')
+assert.equal(calls.length, 0)
+
 console.log('analytics consent checks passed')
