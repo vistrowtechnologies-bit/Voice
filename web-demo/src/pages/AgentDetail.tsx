@@ -426,7 +426,7 @@ function AgentEditorForm({
   }
 
   const inputCls =
-    'w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary'
+    'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10'
 
   // Offered after typing "{{" in a Welcome Message field - the built-ins
   // agent/main.py always fills from the contact record, plus whatever this
@@ -459,8 +459,8 @@ function AgentEditorForm({
       <div className="flex min-w-0 flex-col gap-4">
       <AgentTabBar tab={tab} onChange={setTab} />
       <div className="flex flex-col gap-4">
-        {/* Identity */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* Identity: one tile per tab; a tab with no field in this grid shows no empty tile. */}
+        <div className="bento-tile hidden grid-cols-1 gap-4 sm:grid-cols-2 has-[>.contents]:grid">
           <TabPane tab="instructions" active={tab}>
 <Field label="Name">
             <input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputCls} />
@@ -649,7 +649,7 @@ function AgentEditorForm({
                       {group.voices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.name}
-                          {v.note ? ` - ${v.note}` : ''}
+
                         </option>
                       ))}
                     </optgroup>
@@ -692,15 +692,24 @@ function AgentEditorForm({
           </Field>
 </TabPane>
                     <TabPane tab="voice" active={tab}>
-{isRealtimeModel(form.model) ? null : <Field label="Voice delivery">
-            <select value={form.tone} onChange={(e) => set('tone', e.target.value as AgentForm['tone'])} className={inputCls}>
+{isRealtimeModel(form.model) ? null : <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-text-muted">Voice delivery</span>
+            <div role="radiogroup" aria-label="Voice delivery" className="flex flex-wrap gap-1.5">
               {TONES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label} - {t.description.split('-')[0].trim()}
-                </option>
+                <button
+                  key={t.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.tone === t.value}
+                  onClick={() => set('tone', t.value as AgentForm['tone'])}
+                  className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${form.tone === t.value ? 'border-text bg-text text-surface' : 'border-border bg-surface text-text-muted hover:text-text'}`}
+                >
+                  {t.label}
+                </button>
               ))}
-            </select>
-          </Field>}
+            </div>
+            <p className="text-[11px] leading-snug text-text-muted">{TONES.find((t) => t.value === form.tone)?.description}</p>
+          </div>}
 </TabPane>
                     <TabPane tab="conversation" active={tab}>
 <Field
@@ -714,10 +723,11 @@ function AgentEditorForm({
             >
               {NOISE_CANCELLATION_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
-                  {o.label} - {o.description}
+                  {o.label}
                 </option>
               ))}
             </select>
+            <span className="text-[11px] leading-snug text-text-muted">{NOISE_CANCELLATION_OPTIONS.find((o) => o.value === (form.noiseCancellation ?? ''))?.description}</span>
           </Field>
 </TabPane>
           <TabPane tab="instructions" active={tab}>
@@ -737,9 +747,9 @@ function AgentEditorForm({
               read together. Volume stays visible but disabled when the sound is Off, so
               the layout does not jump. */}
           <TabPane tab="voice" active={tab}>
-<div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-high/40 p-3 sm:col-span-2">
+<div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface-high/30 p-4 sm:col-span-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Background sound</span>
+              <span className="text-xs font-semibold text-text-muted">Background sound</span>
               <span className="text-[11px] text-text-muted">What the caller hears behind the agent</span>
             </div>
             <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -789,7 +799,7 @@ function AgentEditorForm({
             ambience"), paired with Caller noise suppression instead of
             dangling here alone; this block just holds what it controls. */}
         <TabPane tab="instructions" active={tab}>
-<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+<div className="bento-tile grid grid-cols-1 gap-4 sm:grid-cols-2 empty:hidden">
           {form.firstSpeaker === 'agent' && (
             <>
               <Field label="Welcome message — inbound (blank = auto-generated)">
@@ -824,12 +834,13 @@ function AgentEditorForm({
 
         {/* System prompt */}
         <TabPane tab="instructions" active={tab}>
+<div className="bento-tile">
 <Field label="System prompt (blank = built-in generic assistant prompt)">
           <textarea
             value={form.systemPrompt}
             onChange={(e) => set('systemPrompt', e.target.value)}
             placeholder="Leave empty to use the built-in generic business assistant prompt, or write a custom persona here…"
-            className="min-h-[160px] w-full resize-y rounded-lg border border-border bg-surface-high p-3 text-xs leading-relaxed outline-none focus:border-primary"
+            className="min-h-[200px] w-full resize-y rounded-xl border border-border bg-surface p-3.5 text-[13px] leading-relaxed outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
           />
           <div className="flex items-center justify-between text-[10px] text-text-muted">
             <span>
@@ -856,10 +867,12 @@ function AgentEditorForm({
             </p>
           )}
         </Field>
+</div>
 </TabPane>
 
         {isPlatformOwner && (
-          <label className="flex items-start gap-2 rounded-lg border border-border bg-surface-high/40 p-3">
+          <TabPane tab="instructions" active={tab}>
+          <label className="bento-tile flex items-start gap-3">
             <input
               type="checkbox"
               checked={form.isPlatformDemo}
@@ -870,8 +883,10 @@ function AgentEditorForm({
               <span className="font-bold text-text">Use as public website demo agent.</span> Powers the "talk
               to Artha live" demo on the Vistrow Voice marketing site. Only one agent platform-wide can hold
               this - enabling it here turns it off on any other agent.
+              <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">Owner only</span>
             </span>
           </label>
+          </TabPane>
         )}
 
         {/* Collapsible advanced panels */}
@@ -1394,15 +1409,15 @@ function TabPane({ tab, active, children }: { tab: AgentTab; active: AgentTab; c
 
 function AgentTabBar({ tab, onChange }: { tab: AgentTab; onChange: (next: AgentTab) => void }) {
   return (
-    <div role="tablist" aria-label="Agent settings" className="flex w-full min-w-0 gap-1 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div role="tablist" aria-label="Agent settings" className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-2xl border border-border bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {AGENT_TABS.map((item) => (
         <button
           key={item.id}
           role="tab"
           aria-selected={tab === item.id}
           onClick={() => onChange(item.id)}
-          className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors ${
-            tab === item.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'
+          className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+            tab === item.id ? 'bg-text text-surface shadow-sm' : 'bg-transparent text-text-muted hover:bg-surface-high hover:text-text'
           }`}
         >
           {item.label}
@@ -1423,25 +1438,19 @@ function Panel({
   subtitle?: string
   children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(false)
   return (
-    <div className="rounded-lg border border-border bg-surface-high/30">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left"
-      >
-        <span className="flex items-center gap-3">
-          <Icon name={icon} className="text-[18px] text-text-muted" />
-          <span>
-            <span className="block text-sm font-bold">{title}</span>
-            {subtitle && <span className="block text-[11px] text-text-muted">{subtitle}</span>}
-          </span>
+    <section className="bento-tile">
+      <div className="mb-4 flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Icon name={icon} className="text-[18px]" />
         </span>
-        <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[20px] text-text-muted" />
-      </button>
-      {open && <div className="border-t border-border px-4 py-4">{children}</div>}
-    </div>
+        <span className="min-w-0">
+          <span className="bento-title block text-[15px]">{title}</span>
+          {subtitle && <span className="block text-xs text-text-muted">{subtitle}</span>}
+        </span>
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -1457,11 +1466,15 @@ function Toggle({
   hint?: string
 }) {
   return (
-    <label className="flex items-start gap-2">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5" />
+    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl px-1 py-1">
       <span className="text-xs leading-relaxed">
         <span className="font-bold text-text">{label}</span>
         {hint && <span className="mt-0.5 block text-text-muted">{hint}</span>}
+      </span>
+      {/* A real checkbox (keyboard and screen readers), drawn as a switch. */}
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+      <span aria-hidden="true" className="relative mt-0.5 inline-flex h-6 w-10 shrink-0 items-center rounded-full bg-surface-high transition-colors peer-checked:bg-success peer-focus-visible:ring-4 peer-focus-visible:ring-primary/20 [&>span]:translate-x-[3px] peer-checked:[&>span]:translate-x-[19px]">
+        <span className="inline-block h-[18px] w-[18px] rounded-full bg-white shadow transition-transform" />
       </span>
     </label>
   )
@@ -1523,7 +1536,7 @@ function CustomFunctionsEditor({
       {value.map((fn, i) => (
         <div key={i} className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
+            <span className="text-xs font-semibold text-text-muted">
               Function {i + 1}
             </span>
             <button onClick={() => remove(i)} aria-label="Remove function" className="text-text-muted hover:text-destructive">
@@ -1585,7 +1598,7 @@ function ParamsEditor({
     onChange(value.map((p, idx) => (idx === i ? { ...p, ...patch } : p)))
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-border/60 bg-surface-high/30 p-2">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Parameters</span>
+      <span className="text-xs font-semibold text-text-muted">Parameters</span>
       {value.map((p, i) => (
         <div key={i} className="flex items-center gap-1.5">
           <input
@@ -1838,7 +1851,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-text-muted">
+      <span className="flex items-center gap-1 text-xs font-semibold text-text-muted">
         {label}
         {hint && <InfoTip label={`More info about ${label}`}>{hint}</InfoTip>}
       </span>
