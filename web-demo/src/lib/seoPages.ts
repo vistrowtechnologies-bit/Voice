@@ -117,10 +117,10 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
 export const SEO_PAGES: SeoPage[] = [
   page(
     '/',
-    'AI Voice Agent for India in 11 Languages | Vistrow Voice',
-    'An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 11 languages.',
+    'AI Voice Agent for India in 130+ Languages | Vistrow Voice',
+    'An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 130+ languages.',
     'home',
-    'Vistrow Voice multilingual AI voice agent orb: Hindi, English and 9 more Indian languages across phone and web',
+    'Vistrow Voice multilingual AI voice agent orb: 130+ languages including Hindi and English across phone and web',
     'home',
     'Home',
   ),
@@ -243,8 +243,8 @@ export const SEO_PAGES: SeoPage[] = [
   ),
   page(
     '/languages',
-    'AI Voice Agents in Hindi, English + 9 Indian Languages | Vistrow Voice',
-    'AI voice agents that speak Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi and Odia, and switch language mid-call.',
+    'AI Voice Agents in 130+ Languages incl. Hindi | Vistrow Voice',
+    'AI voice agents that speak 130+ languages, including Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi and Odia.',
     'languages',
     'Vistrow Voice multilingual AI orb surrounded by Indian language scripts',
     'collection',
@@ -284,7 +284,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/ai-ivr',
       'AI IVR System and Cloud IVR for India | Vistrow Voice',
-      'An AI IVR system for India: callers say what they need on an IVR call and get an answer, a booking or a transfer. A cloud IVR in 11 languages.',
+      'An AI IVR system for India: callers say what they need on an IVR call and get an answer, a booking or a transfer. A cloud IVR in 130+ languages.',
       'vs-ivr',
       'A press-1 phone menu replaced by a conversational Vistrow Voice AI IVR',
       'product',
@@ -296,7 +296,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/ai-receptionist',
       'AI Receptionist for Indian Businesses | Vistrow Voice',
-      'An AI receptionist that answers your phone and website calls in Hindi, English and 9 more Indian languages, books appointments and transfers to your team.',
+      'An AI receptionist that answers your phone and website calls in 130+ languages, including Hindi and English, books appointments and transfers to your team.',
       'ai-receptionist',
       'Vistrow Voice AI receptionist orb answering a front-desk call',
       'product',
@@ -510,7 +510,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/voice-bot',
       'AI Voice Bot for Business Calls in India | Vistrow Voice',
-      'What an AI voice bot is, how a voicebot call works, and how Vistrow Voice runs one on phone and website calls in Hindi, English and 9 more Indian languages.',
+      'What an AI voice bot is, how a voicebot call works, and how Vistrow Voice runs one on phone and website calls in 130+ languages, including Hindi and English.',
       'voice-bot',
       'Vistrow Voice AI voice bot for phone and website calls',
       'product',
@@ -522,7 +522,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/ai-telecaller',
       'AI Telecaller for Indian Businesses | Vistrow Voice',
-      'An AI telecaller that answers and calls back leads, qualifies them and runs follow-ups in Hindi, English and 9 more Indian languages, inside your calling rules.',
+      'An AI telecaller that answers and calls back leads, qualifies them and runs follow-ups in 130+ languages, including Hindi and English, inside your calling rules.',
       'ai-telecaller',
       'Vistrow Voice AI telecaller orb handling lead calls and follow-ups',
       'product',
@@ -534,7 +534,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/ai-calling-agent',
       'AI Calling Agent & Automated Calling Software | Vistrow Voice',
-      'An AI calling agent for Indian businesses: automated calling software that answers inbound calls, calls leads back and follows up in 11 languages.',
+      'An AI calling agent for Indian businesses: automated calling software that answers inbound calls, calls leads back and follows up in 130+ languages.',
       'ai-calling-agent',
       'Vistrow Voice AI calling agent handling inbound and outbound business calls',
       'product',
@@ -691,7 +691,7 @@ export function baseStructuredData(entry: SeoPage): object[] {
 // renders these definitions with the real Vistrow mark and a frame from the
 // real production orb video.
 export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
-  home: { eyebrow: 'MULTILINGUAL VOICE AI', headline: 'Voice AI that speaks your customer\u2019s language.', proof: 'Hindi, English + 9 Indian languages  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg' },
+  home: { eyebrow: 'MULTILINGUAL VOICE AI', headline: 'Voice AI that speaks your customer\u2019s language.', proof: '130+ languages, Hindi to Tamil  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg' },
   product: { eyebrow: 'VISTROW VOICE PLATFORM', headline: 'Everything you need to run voice AI.', proof: 'Build  \u00b7  Call  \u00b7  Learn  \u00b7  Integrate', accent: '#9333ea', hue: '0deg' },
   'product-agents': { eyebrow: 'VOICE AGENTS', headline: 'Build a voice agent in minutes.', proof: 'Persona  \u00b7  Knowledge  \u00b7  Voice  \u00b7  Tools', accent: '#9333ea', hue: '0deg' },
   'product-inbound': { eyebrow: 'INBOUND CALLING', headline: 'Answer customer calls, day or night.', proof: 'Qualify  \u00b7  Answer  \u00b7  Book  \u00b7  Route', accent: '#0e7490', hue: '-91deg' },
@@ -705,7 +705,7 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   'solution-ecommerce': { eyebrow: 'E-COMMERCE & D2C', headline: 'Support that scales with every sale.', proof: 'Orders  \u00b7  Delivery  \u00b7  Returns  \u00b7  Follow-up', accent: '#db2777', hue: '57deg' },
   'solution-finance': { eyebrow: 'FINANCE & COLLECTIONS', headline: 'Collections conversations, handled with care.', proof: 'Respectful reminders  \u00b7  Logged outcomes  \u00b7  Controls', accent: '#047857', hue: '-126deg' },
   'solution-support': { eyebrow: 'SUPPORT & HELPDESK', headline: 'Resolve tier-one issues on the first call.', proof: 'Troubleshoot  \u00b7  Resolve  \u00b7  Escalate with context', accent: '#0e7490', hue: '-91deg' },
-  languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: 'Hindi, English and 9 more Indian languages.', proof: 'Mid-call language switching  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी  ·  ಕನ್ನಡ  ·  తెలుగు  ·  தமிழ்  ·  বাংলা' },
+  languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: '130+ languages, Hindi to Tamil.', proof: 'Mid-call language switching  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी  ·  ಕನ್ನಡ  ·  తెలుగు  ·  தமிழ்  ·  বাংলা' },
   'language-hindi': { eyebrow: 'HINDI AI VOICE AGENT', headline: 'हिन्दी calls, handled naturally.', proof: 'Hindi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी' },
   'language-marathi': { eyebrow: 'MARATHI AI VOICE AGENT', headline: 'मराठी calls, handled naturally.', proof: 'Marathi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'मराठी' },
   'language-tamil': { eyebrow: 'TAMIL AI VOICE AGENT', headline: 'தமிழ் calls, handled naturally.', proof: 'Tamil + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'தமிழ்' },

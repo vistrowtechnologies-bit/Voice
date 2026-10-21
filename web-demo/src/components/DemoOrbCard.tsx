@@ -97,6 +97,7 @@ export function DemoOrbCard({
   language,
   badgeLabel = 'Live demo',
   accentHue,
+  variant = 'default',
 }: {
   spotlight?: boolean
   /** Published industry-demo slug (e.g. 'healthcare'). Omitted on the
@@ -111,6 +112,10 @@ export function DemoOrbCard({
    * industry's demo reads as its own thing instead of five identical purple
    * cards. Omitted = the homepage's original purple, untouched. */
   accentHue?: string
+  /** 'call' (homepage hero, owner 21 Oct): the idle card reads as an incoming
+   * call - "Artha is calling you" with a green Answer button - and follows the
+   * site theme (dark card / lavender card). The call itself is unchanged. */
+  variant?: 'default' | 'call'
 }) {
   // Hidden QA entry point: /?pipeline=sarvam-livekit sends only this demo
   // call to the dedicated demo worker's all-Sarvam LiveKit profile. It is
@@ -405,6 +410,28 @@ export function DemoOrbCard({
   const cardRef = useRef<HTMLDivElement>(null)
   const [cardMinHeight, setCardMinHeight] = useState<number | undefined>(undefined)
 
+  // Homepage hero only: while this card is on screen, fade out the floating
+  // widget (its "I actually talk back!" bubble sat on the Answer button, two
+  // Arthas competing). It comes back once the card scrolls away, and is never
+  // hidden while the visitor has the widget's panel open.
+  useEffect(() => {
+    if (variant !== 'call') return
+    const card = cardRef.current
+    if (!card || typeof IntersectionObserver === 'undefined') return
+    const root = document.documentElement
+    const widgetOpen = () =>
+      (document.getElementById('vistrow-voice-widget-host')?.shadowRoot?.getElementById('av-panel') as HTMLElement | null)?.style.display === 'flex'
+    const observer = new IntersectionObserver(
+      ([entry]) => root.classList.toggle('vv-hero-call-visible', entry.intersectionRatio > 0.2 && !widgetOpen()),
+      { threshold: [0, 0.2, 0.5] },
+    )
+    observer.observe(card)
+    return () => {
+      observer.disconnect()
+      root.classList.remove('vv-hero-call-visible')
+    }
+  }, [variant])
+
   useLayoutEffect(() => {
     if (!isIdleLike) return
     const measure = () => setCardMinHeight(cardRef.current?.offsetHeight)
@@ -430,12 +457,18 @@ export function DemoOrbCard({
       <div
         ref={cardRef}
         style={cardMinHeight ? { minHeight: cardMinHeight } : undefined}
-        className="relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10"
+        className={
+          variant === 'call'
+            ? 'demo-call-card relative flex w-full flex-col items-center overflow-hidden rounded-[28px] p-6 text-center sm:p-8'
+            : 'relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10'
+        }
       >
-        <span className="demo-start-label" aria-hidden="true">
-          <Icon name="south_east" className="text-[15px]" /> Start here
-        </span>
-        <div className="demo-accent absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1">
+        {variant !== 'call' && (
+          <span className="demo-start-label" aria-hidden="true">
+            <Icon name="south_east" className="text-[15px]" /> Start here
+          </span>
+        )}
+        <div className={`demo-accent absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1 ${variant === 'call' ? 'hidden' : ''}`}>
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
@@ -472,6 +505,16 @@ export function DemoOrbCard({
           <ConsentPrompt onAccept={handleConsentAccept} onCancel={handleConsentCancel} />
         ) : phase === 'feedback' ? (
           <FeedbackPrompt submitted={feedbackSubmitted} onRate={handleFeedback} onDone={handleFeedbackDone} />
+        ) : variant === 'call' ? (
+          <CallInvite
+            phase={phase}
+            exhausted={exhausted}
+            remaining={remaining}
+            errorMessage={errorMessage}
+            inCooldown={inCooldown}
+            cooldownRemainingS={cooldownRemainingS}
+            onStart={handleStart}
+          />
         ) : (
           <>
             <button
@@ -550,6 +593,137 @@ export function DemoOrbCard({
       </div>
     </div>
   )
+}
+
+// The homepage hero's idle card (variant="call"): Artha "calling you", so it
+// is obvious that tapping starts a live voice call. Same states as the
+// default card: connecting, mic blocked, unreachable (with cooldown), capped.
+function CallInvite({ phase, exhausted, remaining, errorMessage, inCooldown, cooldownRemainingS, onStart }: {
+  phase: Phase
+  exhausted: boolean
+  remaining: number
+  errorMessage: string | null
+  inCooldown: boolean
+  cooldownRemainingS: number
+  onStart: () => void
+}) {
+  const connecting = phase === 'connecting'
+  const failed = phase === 'denied' || phase === 'unreachable'
+  const proof = usePlatformProof()
+  return (
+    <>
+      <p className="demo-call-kicker">Live demo · free</p>
+      <button
+        type="button"
+        onClick={exhausted || connecting ? undefined : onStart}
+        disabled={connecting}
+        aria-label="Answer Artha's call"
+        className="demo-start-target group relative my-5 flex h-32 w-32 items-center justify-center disabled:cursor-wait"
+      >
+        <span className="demo-call-ring" aria-hidden="true" />
+        <span className="demo-call-ring demo-call-ring-2" aria-hidden="true" />
+        {/* Zoomed so the video's black backdrop is cropped out of the circle. */}
+        <span className="demo-call-orb relative h-28 w-28 overflow-hidden rounded-full transition-transform group-hover:scale-105">
+          <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
+        </span>
+        {connecting && (
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-bg/40">
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          </span>
+        )}
+      </button>
+      <h3 className="font-display text-2xl font-bold">
+        {exhausted
+          ? 'Book a live walkthrough'
+          : connecting
+            ? 'Connecting…'
+            : phase === 'denied'
+              ? 'Mic access blocked'
+              : phase === 'unreachable'
+                ? 'Couldn’t reach Artha'
+                : 'Artha is calling you'}
+      </h3>
+      <p className="demo-call-sub mt-1 text-sm">
+        {exhausted
+          ? 'You’ve used all your free demo calls'
+          : connecting
+            ? 'If your browser asks, tap Allow so Artha can hear you.'
+            : failed
+              ? errorMessage
+              : 'Answer and talk to her live, like a real phone call.'}
+      </p>
+      {exhausted ? (
+        <Link
+          to="/contact"
+          onClick={() => trackMarketingCta('book_demo', 'demo_card_exhausted')}
+          className="mt-5 w-full rounded-full bg-primary px-5 py-3 text-sm font-bold text-bg transition-opacity hover:opacity-90"
+        >
+          Book a demo
+        </Link>
+      ) : failed ? (
+        <button
+          type="button"
+          onClick={onStart}
+          disabled={inCooldown}
+          className="mt-5 w-full rounded-full bg-primary px-5 py-3 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {inCooldown ? `Try again in ${cooldownRemainingS}s` : 'Try again'}
+        </button>
+      ) : (
+        <span className={`demo-call-tap mt-5 block w-full ${connecting ? 'demo-call-tap-off' : ''}`}>
+          <button
+            type="button"
+            onClick={onStart}
+            disabled={connecting}
+            className="demo-call-answer flex w-full items-center justify-center gap-2 rounded-full px-5 py-3.5 text-[15px] font-extrabold disabled:cursor-wait disabled:opacity-70"
+          >
+            <Icon name="call" className="text-[19px]" />
+            Answer · talk live
+          </button>
+        </span>
+      )}
+      <ul className="demo-call-assure mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11.5px] font-semibold">
+        <li className="flex items-center gap-1"><Icon name="mic" className="text-[14px]" />Your mic</li>
+        <li className="flex items-center gap-1"><Icon name="graphic_eq" className="text-[14px]" />Sound on</li>
+        <li className="flex items-center gap-1"><Icon name="verified" className="text-[14px]" />Free, no signup</li>
+        <li>{remaining}/{DEMO_CALL_CAP} calls left</li>
+      </ul>
+      {proof && (
+        <p className="demo-call-proof mt-3 flex items-center justify-center gap-1.5 text-[11.5px] font-bold">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+          {proof}
+        </p>
+      )}
+    </>
+  )
+}
+
+// The same real, cached weekly count the floating widget shows ("N+ AI
+// conversations this week"), read through the widget's own public site key
+// and API base from its script tag. Nothing is shown below 50, the widget's
+// threshold, or when the widget script is absent.
+function usePlatformProof(): string | null {
+  const [label, setLabel] = useState<string | null>(null)
+  useEffect(() => {
+    const tag = document.querySelector<HTMLScriptElement>('script[data-site-key][data-api-base]')
+    const siteKey = tag?.dataset.siteKey
+    const apiBase = tag?.dataset.apiBase
+    if (!siteKey || !apiBase) return
+    let cancelled = false
+    fetch(`${apiBase}/widget/site-config?siteKey=${encodeURIComponent(siteKey)}&path=${encodeURIComponent(location.pathname)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { platformConversationCount?: unknown } | null) => {
+        const count = data?.platformConversationCount
+        if (cancelled || typeof count !== 'number' || count < 50) return
+        const base = count < 100 ? 10 : count < 1000 ? 50 : 100
+        setLabel(`${(Math.floor(count / base) * base).toLocaleString('en-US')}+ AI conversations this week`)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return label
 }
 
 // Shown for a few seconds right after a real call ends, in the same card

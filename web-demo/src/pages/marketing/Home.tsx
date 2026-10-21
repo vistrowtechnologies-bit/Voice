@@ -6,7 +6,7 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { LaunchFilm } from '../../components/LaunchFilm'
 import { Seo } from '../../components/Seo'
-import { CTABand, TalkToArthaButton } from '../../components/MarketingBits'
+import { CTABand } from '../../components/MarketingBits'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
 import { Reveal } from '../../components/Reveal'
 import arthaAvatar from '../../assets/artha-avatar.webp'
@@ -22,7 +22,7 @@ import {
 const FAQ = [
   {
     q: 'What is Vistrow Voice?',
-    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls 24/7 in Hindi, English and 9 more Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia).',
+    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls 24/7 in more than 130 languages, including Hindi, English and 9 more Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia).',
   },
   {
     q: 'Do I need to write code to set it up?',
@@ -79,12 +79,12 @@ const BHARAT_POINTS = [
     body: 'Hindi, Marathi, Gujarati, and Punjabi verbs agree with the speaker’s gender. Most models get the first line right and drift after that. Artha stays consistent with its own voice, every turn.',
   },
   {
-    glyph: '😤',
+    glyph: 'बकवास',
     title: 'It knows “bakwas” means trouble',
     body: 'Frustration in an Indian call rarely arrives in textbook English. Artha reads the cues people actually use - bekaar, faltu, bakwas - and softens its tone before the caller escalates.',
   },
   {
-    glyph: '🎭',
+    glyph: 'आवाज़',
     title: 'A voice that reacts to the caller',
     body: 'Built by an Indian team, tuned for Indian callers: Artha reads frustration, confusion, or excitement in your caller’s voice and shifts its own pace and warmth to match - live, mid-call, not a flat text-to-speech read.',
   },
@@ -125,8 +125,8 @@ export function Home() {
   return (
     <MarketingLayout>
       <Seo
-        title="AI Voice Agent for India in 11 Languages | Vistrow Voice"
-        description="An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 11 languages."
+        title="AI Voice Agent for India in 130+ Languages | Vistrow Voice"
+        description="An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 130+ languages."
         path="/"
         jsonLd={HOME_JSONLD}
       />
@@ -141,8 +141,11 @@ export function Home() {
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
       {/* ---------- Hero ---------- */}
-      <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-5 py-12 md:px-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] lg:items-start lg:gap-12 lg:py-12">
-        <div>
+      {/* Owner, 21 Oct: on phones the call card comes straight after the
+          headline (it was ~1,000px down), then the description, CTA and stats.
+          On desktop: text on the left, card on the right, as before. */}
+      <section className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-5 py-8 md:px-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] lg:gap-x-12 lg:gap-y-0 lg:py-12">
+        <div className="lg:col-start-1 lg:row-start-1">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em]">
             <span className="font-sans normal-case tracking-normal text-sm text-text-muted">
               भारत के लिए
@@ -166,13 +169,19 @@ export function Home() {
               in their own language.
             </span>
           </h1>
-          <p className="mt-4 max-w-xl text-base leading-7 text-text-muted sm:mt-5 sm:text-lg sm:leading-relaxed">
+        </div>
+
+        <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          <DemoOrbCard spotlight={demoSpotlight} variant="call" />
+        </div>
+
+        <div className="lg:col-start-1 lg:row-start-2">
+          <p className="max-w-xl text-[15px] leading-6 text-text-muted sm:mt-5 sm:text-lg sm:leading-relaxed">
             Vistrow Voice is an AI voice agent for Indian businesses, built for how India actually speaks. Your AI voice
             calling agent answers, qualifies, and books customers across phone and web in Hindi, English and 9 more
             Indian languages, with natural Hinglish and mid-sentence language switching.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <TalkToArthaButton />
+          <div className="mt-5 flex flex-wrap gap-3">
             <Link
               to="/contact"
               onClick={() => trackMarketingCta('book_demo', 'home_hero')}
@@ -181,18 +190,14 @@ export function Home() {
               Book a demo
             </Link>
           </div>
-          <div className="mt-8 grid grid-cols-3 gap-4 border-t border-border pt-5 sm:gap-8">
+          <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
             {HERO_STATS.map((stat) => (
-              <div key={stat.label}>
+              <div key={stat.label} className="rounded-2xl border border-border bg-surface px-2 py-3 text-center">
                 <p className="font-display text-2xl font-bold text-text">{stat.value}</p>
-                <p className="text-xs uppercase tracking-wider text-text-muted">{stat.label}</p>
+                <p className="text-[10.5px] font-semibold uppercase tracking-wider text-text-muted">{stat.label}</p>
               </div>
             ))}
           </div>
-        </div>
-
-        <div>
-          <DemoOrbCard spotlight={demoSpotlight} />
         </div>
       </section>
 
@@ -285,7 +290,7 @@ export function Home() {
               <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                 <div className="md:max-w-md">
                   <div className="flex items-start justify-between gap-4">
-                    <h3 className="font-display text-lg font-semibold">Ten Indian languages plus English, one agent</h3>
+                    <h3 className="font-display text-lg font-semibold">130+ languages, one agent</h3>
                     <span
                       aria-hidden="true"
                       className="shrink-0 font-display text-2xl text-text-muted transition-colors group-hover:text-primary md:hidden"
@@ -482,7 +487,7 @@ export function Home() {
         <div className="grid gap-5 md:grid-cols-3">
           {[
             ['mic', 'Live voice and chat', 'Test real conversations in the browser, by phone, or through your website.'],
-            ['translate', '11 languages, one agent', 'Hindi, English and 9 more Indian languages, with natural code-switching and no separate deployment per language.'],
+            ['translate', '130+ languages, one agent', 'More than 130 languages, including Hindi, English and 9 more Indian languages, with natural code-switching and no separate deployment per language.'],
             ['analytics', 'Calls, transcripts and feedback', 'Review outcomes, recordings, ratings, and operational analytics in one dashboard.'],
           ].map(([icon, title, body], i) => (
             <Reveal key={title} delayMs={i * 70} className="h-full">

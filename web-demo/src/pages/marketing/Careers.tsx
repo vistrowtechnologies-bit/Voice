@@ -29,7 +29,7 @@ const WHY = [
   {
     icon: 'translate',
     title: 'Built for how India talks',
-    body: 'Eleven Indian languages, mid-sentence code-switching, and grammatical gender that has to agree turn after turn. Most global voice AI treats this as an edge case. It’s our default.',
+    body: 'More than 130 languages, mid-sentence code-switching, and grammatical gender that has to agree turn after turn. Most global voice AI treats this as an edge case. It’s our default.',
   },
   {
     icon: 'group',
@@ -54,7 +54,7 @@ export function Careers() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           We’re a small team making phone calls answerable by an AI that actually sounds like it’s from
-          here - in 10 Indian languages plus English, in real time.
+          here - in more than 130 languages, in real time.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-text-muted">
           Read{' '}

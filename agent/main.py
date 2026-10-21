@@ -836,8 +836,8 @@ def _facts_reminder(lead_data: dict, fact_status: dict | None = None) -> str:
         blocks.append(
             "# Heard, but NOT confirmed — you may verify these, and must not state them as fact\n"
             + "\n".join(unconfirmed)
-            + "\nAsk about these as a question (\"...self-use ke liye?\"), never as a summary "
-            "(\"...so you want self-use.\")."
+            + "\nAsk about these as a question (\"...next month tak?\"), never as a summary "
+            "(\"...so you want it next month.\")."
         )
     return "\n\n".join(blocks)
 
@@ -1778,6 +1778,48 @@ def _make_repeated_opener_transform(agent: "RealEstateAgent"):
             head = None
         if head:
             yield _vary_opener(agent, head)
+
+    return _transform
+
+
+# Call 1443 (21 Oct 2026, GPT-5.4 nano): replies wrote "business/portfolio",
+# "services/projects", "जोड़/अपडेट", and the voice read each slash aloud.
+# A slash between two words is spoken as "या" (or "or" in an all-Latin reply);
+# URLs, dates and numbers keep theirs.
+_WORD_SLASH = re.compile(r"(?<=[A-Za-z\u0900-\u097F])[ \t]*/[ \t]*(?=[A-Za-z\u0900-\u097F])")
+
+
+def _speak_slashes(text: str, devanagari: bool) -> str:
+    def _sub(m: re.Match) -> str:
+        head = text[: m.start()]
+        before = head.rsplit(None, 1)[-1] if head.strip() else ""
+        if "." in before or ":" in before:  # vistrow.com/contact, https://
+            return m.group(0)
+        return " या " if devanagari else " or "
+
+    return _WORD_SLASH.sub(_sub, text)
+
+
+def _make_slash_transform():
+    """Never holds text back, except a chunk ending in "/" after a word,
+    which waits for the next chunk ("business/" + "portfolio")."""
+    async def _transform(text):
+        devanagari = False
+        carry = ""  # trailing "word/" held for the next chunk
+        tail = ""  # last word already sent, for the URL check
+        async for chunk in text:
+            devanagari = devanagari or bool(re.search(r"[\u0900-\u097F]", chunk))
+            joined = carry + chunk
+            out = _speak_slashes(tail + joined, devanagari)[len(tail):] if tail and not carry else _speak_slashes(joined, devanagari)
+            carry = ""
+            m = re.search(r"[A-Za-z\u0900-\u097F][^\s/]*[ \t]*/[ \t]*$", out)
+            if m:
+                carry, out = out[m.start():], out[: m.start()]
+            if out:
+                tail = out.rsplit(None, 1)[-1] if out.strip() else tail
+                yield out
+        if carry:
+            yield carry
 
     return _transform
 
@@ -2983,6 +3025,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 **_rate,
                 prompt=style,
                 model_name=_GOOGLE_31_MODEL,
+                # _google_fallback_tts wraps this backup as non-streaming, so it
+                # runs synthesize(), where Google rejects the plugin's default
+                # PCM for 3.1 with 400 "Unsupported audio encoding" (call 1441,
+                # 21 Oct 2026: every 3.8 quota hit skipped the backup and the
+                # call switched to the female ElevenLabs safety net). LINEAR16
+                # returns a WAV, verified against the API the same day.
+                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
             )
             return (
                 _google_fallback_tts(gemini38_tts, backup, model, reply_language, tone_name),
@@ -3822,6 +3871,18 @@ class RealEstateAgent(Agent):
             "book_appointment, compute the date argument (YYYY-MM-DD) from this real date."
         )
         instructions += "\n\n" + VOICE_STYLE_PROMPT
+        if (config.get("model") or "").startswith("gpt-"):
+            # Call 1443 (21 Oct 2026, gpt-5.4-nano): the one-sentence rule above
+            # held only on paper. Replies ran ~150 chars, joined clauses with
+            # dashes, semicolons and slashes, asked two questions per turn, and
+            # promised to send details on WhatsApp. Sarvam 105B follows the
+            # rule as written, so this is added for GPT models only.
+            instructions += (
+                "\n\n# Reply length (hard limit)\n"
+                "At most 20 spoken words and ONE question per turn. Never join clauses with a "
+                "dash, semicolon or slash, and never offer options as \"x/y\": say \"x ya y\". "
+                "You cannot send WhatsApp, SMS, email or links, so never promise to."
+            )
         if needs_human_speech_layer:
             instructions += "\n\n" + build_human_speech_manner()
         if voice_value.startswith(_ELEVENLABS_VOICE_PREFIX):
@@ -3834,12 +3895,18 @@ class RealEstateAgent(Agent):
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
             "Use the tool that fits what this call is about:\n"
             "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
-            "any detail at all — a budget (any language or unit: \"एक करोड़\", \"50 lakh\", \"around "
-            "2 crore\"), a locality, a timeline, a property type, a configuration, a name. Pass only "
+            "any detail at all — what they need, a timeline, a budget (any language or unit: \"50 "
+            "hazaar\", \"एक करोड़\"), a location, a name. Pass only "
             "what you just learned; omitted fields keep their value. You do NOT need their name or "
             "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
             "your very next tool call, before you reply and before any booking or end_call; many "
-            "one-field calls are exactly right. Two localities: call it twice (locations accumulate).\n"
+            "one-field calls are exactly right. Two localities: call it twice (locations accumulate). "
+            # Call 1439 (21 Oct 2026): a website enquiry on a digital-marketing
+            # agent was asked "business ke liye ya investment ke liye?" and for a
+            # locality - property wording here and in log_lead, from when every
+            # tenant sold property. Property tenants' own prompts ask these.
+            "Ask only questions that fit THIS business: locality, property type, BHK, investment "
+            "or self-use are for a business that sells property, never for any other.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "
@@ -3874,8 +3941,8 @@ class RealEstateAgent(Agent):
             + "These tool calls are silent — never mention saving, logging or recording anything, "
             "except confirming a follow-up request after the tool succeeded (platform rule 5).\n\n"
             "# Only state back what they actually said\n"
-            "When you fill a gap by inference, ask it (\"...self-use ke liye dekh rahe hain?\"), never "
-            "state it as a summary (\"...self-use ke liye dekh rahe hain.\").\n\n"
+            "When you fill a gap by inference, ask it (\"...next month tak chahiye?\"), never "
+            "state it as a summary (\"...next month tak chahiye.\").\n\n"
             "Call the end_call tool once the caller clearly signals the conversation is over — they "
             "thank you with nothing further to ask, say goodbye, or otherwise say they are done. Not "
             "for a mere pause or a one-word \"okay\".\n\n"
@@ -7698,6 +7765,7 @@ async def entrypoint(ctx: JobContext) -> None:
             "filter_markdown",
             _make_repeated_opener_transform(agent),
             _make_caller_gender_guard_transform(agent),
+            _make_slash_transform(),
         ],
         turn_handling=TurnHandlingOptions(turn_detection="realtime_llm") if _rt_call else TurnHandlingOptions(
             interruption={

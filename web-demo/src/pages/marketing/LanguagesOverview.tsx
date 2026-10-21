@@ -8,9 +8,10 @@ import { Reveal } from '../../components/Reveal'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { DEMO_GLOBAL_LOCALES, LANGUAGES } from '../../lib/marketingContent'
 
-// Customer agents support exactly the 11 languages in LANGUAGES (Hindi, English
-// + 9 Indian languages; see lib/agentOptions.ts LANGUAGES). The larger Gemini
-// language lists are owner-only and must not be claimed here.
+// Owner decision 21 Oct 2026: the site claims "more than 130 languages" (the
+// Studio voices' list, voice_catalog.GEMINI_38_FLASH_TTS_TOTAL_LANGUAGES) and
+// names the 10 Indian languages + English from lib/agentOptions.ts LANGUAGES
+// as the most tested. Keep copy and the hero stat in step with that decision.
 const LANGUAGE_SETUP = [
   {
     title: 'Set a default language',
@@ -18,11 +19,11 @@ const LANGUAGE_SETUP = [
   },
   {
     title: 'The caller can switch',
-    body: 'If a caller answers in another of the eleven languages, or mixes English words into Hindi, Kannada or Telugu, the agent replies in the language the caller is using rather than asking them to switch back.',
+    body: 'If a caller answers in another language, or mixes English words into Hindi, Kannada or Telugu, the agent replies in the language the caller is using rather than asking them to switch back.',
   },
   {
     title: 'Pick a voice that suits the language',
-    body: 'Voices are added from the Voices page and previewed before you use them. Some voices are tuned to sound native in a particular language while still speaking all eleven, so a Tamil line can use a voice that sounds local.',
+    body: 'Voices are added from the Voices page and previewed before you use them. Some voices are tuned to sound native in a particular language while still speaking the others, so a Tamil line can use a voice that sounds local.',
   },
   {
     title: 'Numbers, dates and names',
@@ -34,7 +35,7 @@ const LANGUAGE_SETUP = [
   },
   {
     title: 'Phone and website',
-    body: 'All eleven languages work on phone calls (inbound and outbound) and on browser calls from the website widget.',
+    body: 'Languages work the same way on phone calls (inbound and outbound) and on browser calls from the website widget.',
   },
 ]
 
@@ -43,8 +44,8 @@ export function LanguagesOverview() {
   return (
     <MarketingLayout>
       <Seo
-        title="AI Voice Agents in Hindi, English + 9 Indian Languages | Vistrow Voice"
-        description="AI voice agents that speak Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi and Odia, and switch language mid-call."
+        title="AI Voice Agents in 130+ Languages incl. Hindi | Vistrow Voice"
+        description="AI voice agents that speak 130+ languages, including Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi and Odia."
         path="/languages"
       />
 
@@ -54,9 +55,9 @@ export function LanguagesOverview() {
           Your customer shouldn’t have to switch languages to be understood.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Artha speaks 10 Indian languages plus English, and switches mid-call when the caller does - including
-          the everyday mixed speech most people actually use on the phone. Every customer agent supports
-          all eleven languages on phone calls and website calls.
+          Artha speaks more than 130 languages, including 10 Indian languages and English, and switches mid-call
+          when the caller does - including the everyday mixed speech most people actually use on the phone, on
+          phone calls and website calls.
         </p>
         <p className="mx-auto mt-4 max-w-xl text-sm text-text-muted">
           Each Indian language has its own page with a sample conversation and regional notes, for example{' '}
@@ -248,7 +249,7 @@ function TryALanguage() {
             </optgroup>
           </select>
           <p className="mt-3 text-xs text-text-muted">
-            Customer agents support Hindi, English and 9 more Indian languages; the other languages in this demo are in testing.
+            Hindi, English and the 9 other Indian languages are the most tested; the other languages in this demo are newer.
           </p>
           <p className="mt-5 max-w-sm rounded-xl border border-border bg-bg px-4 py-3 text-sm leading-relaxed text-text-muted">
             Selected: <span className="font-semibold text-text">{selected?.label ?? 'Hindi'}</span>. Ask Artha

@@ -1824,10 +1824,10 @@ async def check_calendar_availability(
     if not requested_time and date in _offered:
         _same = _offered[date]
         return (
-            f"You have ALREADY offered these times for {date}: {', '.join(_same)}. They have not "
-            f"changed. Do not list them a third time and do not produce a different set. Say once "
-            f"that nothing else is open that day, and ask them to pick one of those or name a "
-            f"different day."
+            f"You have ALREADY offered these times for {date}: {', '.join(_same)}. Do not list them "
+            f"a third time and do not produce a different set. Do not say nothing else is open: ask "
+            f"which time they would like, then call this tool again with that requested_time to "
+            f"check it, or offer a different day."
         )
 
     logger.info(
@@ -2024,11 +2024,16 @@ async def check_calendar_availability(
         f"specific doctor or staff member, offer ONLY times that fall inside that person's days "
         f"and hours as written in the knowledge base — if none of these do, say which days they "
         f"actually work and offer one of those instead of booking one of these. "
-        f"Offer ONLY these open choices on {date_phrase}: {', '.join(_say(c) for c in choices)}. "
+        # Call 1437 (21 Oct 2026): offered these three, the caller asked for
+        # 10:30, and the model answered "10:30 is not free" without calling
+        # this tool again - "Offer ONLY these" read as "only these are free".
+        f"Offer these open choices on {date_phrase}: {', '.join(_say(c) for c in choices)}. "
+        "They are three examples from a fuller free list, not the only free times: if the caller names "
+        "any other time, call check_calendar_availability again with requested_time before you answer, "
+        "and never say a time is taken without that check. "
         "Where a \"(say: ...)\" phrase is given, speak that phrase, not the raw digits before it — "
-        "it's there so the time is pronounced correctly. Do not mention any other time or read a "
-        "full-day list. If none suits, ask whether the caller prefers morning, afternoon, or evening, "
-        "then check their exact requested time."
+        "it's there so the time is pronounced correctly. Do not read a full-day list. If none suits, ask "
+        "whether the caller prefers morning, afternoon, or evening, then check their exact requested time."
     )
 
 
@@ -2416,10 +2421,11 @@ async def log_lead(
             approximation approximate.
         location: One preferred locality. Call again with the second one if
             they name more than one — they accumulate, they do not replace.
-        timeline: When they want to buy, e.g. "next month".
-        property_type: apartment, plot, villa, commercial, etc.
-        configuration: e.g. "2 BHK", "3 BHK", "2000 sqft plot".
-        purpose: "investment" or "self-use" — ONLY if they actually said it.
+        timeline: When they want it, e.g. "next month".
+        property_type: Property businesses only: apartment, plot, villa, etc.
+        configuration: Property businesses only: e.g. "2 BHK", "2000 sqft plot".
+        purpose: Property businesses only: "investment" or "self-use", ONLY
+            if they actually said it. Never ask it for any other business.
         need: What this caller actually wants, in their own words, for ANY
             business — "root canal, in pain, wants tomorrow", "dinner for 20
             next Friday", "field-service software for 12 technicians", "car
