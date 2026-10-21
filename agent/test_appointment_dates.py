@@ -59,6 +59,18 @@ class Availability(unittest.TestCase):
         slots = db.check_appointment_availability(1, "2026-10-12", 30)  # Monday
         self.assertEqual(slots[0], "10:00")
 
+    def test_one_bookings_query_for_the_whole_day(self):
+        # Call 1459: one query per slot cost 6.0 s over the database proxy.
+        slots = db.check_appointment_availability(1, "2026-10-12", 30)
+        self.assertGreater(len(slots), 10)
+        self.assertEqual(self.conn.execute.call_count, 1)
+
+    def test_a_booked_slot_is_still_excluded(self):
+        self.conn.execute.return_value.fetchall.return_value = [{"start_time": "11:00", "duration_minutes": 30}]
+        slots = db.check_appointment_availability(1, "2026-10-12", 30)
+        self.assertNotIn("11:00", slots)
+        self.assertIn("11:30", slots)
+
     def test_booking_a_past_time_is_refused_without_an_insert(self):
         result = db.book_native_appointment(1, 2, "2026-10-10", "13:00", 30, "A", "+911", "visit")
         self.assertFalse(result["ok"])

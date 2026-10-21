@@ -570,6 +570,36 @@ TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 _TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
 
+# Second, different line for a lookup still running after the first filler
+# (call 1459, 21 Oct 2026: a 5.8 s check with no filler left for the caller,
+# since the first one is said once per call). Also once per call.
+_STILL_CHECKING_LINES = {
+    "hi-IN": {"female": "बस देख रही हूँ...", "male": "बस देख रहा हूँ..."},
+    "mr-IN": {"female": "बघते आहे, एक क्षण...", "male": "बघतोय, एक क्षण..."},
+    "en-IN": {"default": "Still checking, just a moment..."},
+}
+_STILL_CHECKING_AFTER_S = 3.0
+
+
+def _still_checking_line(context: RunContext) -> str:
+    agent = context.session.current_agent
+    options = _STILL_CHECKING_LINES.get(getattr(agent, "_reply_language", "en-IN")) or _STILL_CHECKING_LINES["en-IN"]
+    return options.get(getattr(agent, "_voice_gender", "female")) or options.get("default") or _STILL_CHECKING_LINES["en-IN"]["default"]
+
+
+async def _await_with_still_checking(context: RunContext, task: "asyncio.Task"):
+    """Await a slow lookup; past _STILL_CHECKING_AFTER_S, say one different
+    holding line (once per call) so the caller never sits in silence."""
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), timeout=_STILL_CHECKING_AFTER_S)
+    except asyncio.TimeoutError:
+        agent = context.session.current_agent
+        if not getattr(agent, "_is_realtime", False) and not getattr(agent, "_said_still_checking", False):
+            agent._said_still_checking = True
+            context.session.say(_still_checking_line(context), allow_interruptions=False)
+        return await task
+
+
 def _calendar_check_filler(context: RunContext) -> str:
     """Natural, language-matched bridge spoken before a calendar lookup."""
     agent = context.session.current_agent
@@ -1866,7 +1896,7 @@ async def check_calendar_availability(
             _agent._said_calendar_filler = True
             filler = context.session.say(_calendar_check_filler(context), allow_interruptions=False)
             await filler.wait_for_playout()
-        slots = await slots_task
+        slots = await _await_with_still_checking(context, slots_task)
     except BaseException:
         if not slots_task.done():
             slots_task.cancel()
@@ -2244,6 +2274,18 @@ async def book_appointment(
     # Same plausibility rule log_lead uses (_looks_like_a_phone_number). The
     # old ">= 8 digits" check let a mis-heard 9-digit number ("982134567",
     # booking test calls 1296 and 1298, 2026-10-14) onto a real booking.
+    _own = context.session.current_agent
+    _caller_digits = re.sub(r"\D", "", str((context.userdata or {}).get("visitor_phone") or ""))
+    if phone_digits and len(phone_digits) >= 10 and phone_digits[-10:] != _caller_digits[-10:] and phone_digits[-10:] in re.sub(
+        r"\D", "", str(getattr(_own, "instructions", "") or "")
+    ):
+        # Call 1459 (21 Oct 2026): a website caller with no number on file was
+        # booked under the business's OWN contact number, copied from the
+        # prompt (+91 90670 97779).
+        return (
+            "BOOKING REJECTED — that number is this business's own contact number, not the "
+            "caller's. Ask the caller for their own phone number and do not say booked yet."
+        )
     if not _looks_like_a_phone_number(phone_digits):
         return (
             "BOOKING REJECTED — the callback phone number looks incomplete or mis-heard. Ask the caller "

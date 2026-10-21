@@ -1029,12 +1029,17 @@ def get_availability_config(account_id: int | None) -> dict:
         conn.close()
 
 
-def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, duration_minutes: int) -> bool:
-    rows = conn.execute(
+def _confirmed_appointments(conn, account_id: int, appt_date: str) -> list:
+    return conn.execute(
         "SELECT start_time, duration_minutes FROM appointments "
         "WHERE account_id = ? AND appt_date = ? AND status = 'confirmed'",
         (account_id, appt_date),
     ).fetchall()
+
+
+def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, duration_minutes: int, rows=None) -> bool:
+    if rows is None:
+        rows = _confirmed_appointments(conn, account_id, appt_date)
     new_start = _hhmm_to_minutes(start_time)
     new_end = new_start + duration_minutes
     for r in rows:
@@ -1094,10 +1099,13 @@ def check_appointment_availability(account_id: int | None, date: str, duration_m
         is_today = date == now.date().isoformat()
         now_minutes = now.hour * 60 + now.minute
         slots: list[str] = []
+        # One query for the day, not one per slot: call 1459 (21 Oct 2026)
+        # spent 6.0 s here on ~16 round-trips over the database proxy.
+        booked = _confirmed_appointments(conn, account_id, date)
         cursor = open_m
         while cursor + duration_minutes <= close_m:
             hhmm = f"{cursor // 60:02d}:{cursor % 60:02d}"
-            if not (is_today and cursor <= now_minutes) and not _appt_slot_conflict(conn, account_id, date, hhmm, duration_minutes):
+            if not (is_today and cursor <= now_minutes) and not _appt_slot_conflict(conn, account_id, date, hhmm, duration_minutes, rows=booked):
                 slots.append(hhmm)
             cursor += slot_minutes
         return slots
