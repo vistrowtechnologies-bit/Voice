@@ -5,12 +5,12 @@ import { useEffect, useRef, useState } from 'react'
  * scroll away. A visitor who pauses it themselves is left alone. The Hindi
  * file is only fetched once someone picks Hindi. */
 type Lang = 'en' | 'hi'
-const FILMS: Record<Lang, { hd: string; sd: string; length: string; spoken: string }> = {
-  en: { hd: '/media/launch-film-v4.mp4', sd: '/media/launch-film-v4-720.mp4', length: '3:34', spoken: '3 minutes 34 seconds' },
-  hi: { hd: '/media/launch-film-v4-hi.mp4', sd: '/media/launch-film-v4-hi-720.mp4', length: '3:36', spoken: '3 minutes 36 seconds' },
+const FILMS: Record<Lang, { hd: string; sd: string; poster: string; length: string; spoken: string }> = {
+  en: { hd: '/media/launch-film-v5-en.mp4', sd: '/media/launch-film-v5-en-720.mp4', poster: '/media/launch-film-v5-en-poster.jpg', length: '2:52', spoken: '2 minutes 52 seconds' },
+  hi: { hd: '/media/launch-film-v4-hi.mp4', sd: '/media/launch-film-v4-hi-720.mp4', poster: '/media/launch-film-v4-poster.jpg', length: '3:36', spoken: '3 minutes 36 seconds' },
 }
 
-/** Phones and Save-Data visitors get the 720p file (6 MB instead of 12 MB). */
+/** Phones and Save-Data visitors get the 720p file (about half the size of the 1080p one). */
 function pickSize(): 'hd' | 'sd' {
   try {
     const nav = navigator as Navigator & { connection?: { saveData?: boolean } }
@@ -100,7 +100,7 @@ export function LaunchFilm() {
           <video
             key={lang /* a new element per language, so the new film starts cleanly */}
             src={film[size]}
-            poster="/media/launch-film-v4-poster.jpg"
+            poster={film.poster}
             ref={(v) => {
               videoRef.current = v
               if (v && (inView.current || wantPlay.current) && v.paused && !userPaused.current && v.readyState === 0) void tryPlay(v)
@@ -124,7 +124,7 @@ export function LaunchFilm() {
             className="group absolute inset-0 h-full w-full"
           >
             <img
-              src="/media/launch-film-v4-poster.jpg"
+              src={film.poster}
               alt="Artha booking a restaurant table on a live phone call, in Hindi"
               loading="lazy"
               decoding="async"
