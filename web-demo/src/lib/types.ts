@@ -373,6 +373,16 @@ export interface AgentVariable {
   defaultValue: string
 }
 
+/** Per-agent call counts for the Agents page (GET /agents/activity). */
+export interface AgentActivity {
+  agentId: number
+  today: number
+  /** Calls per day for the last 7 days, oldest first, today last. */
+  daily: number[]
+  booked7: number
+  lastCallAt: string | null
+}
+
 export interface AgentConfig {
   id: number
   // 10-digit Agent ID for mapping in ArthaLeads and other platforms.

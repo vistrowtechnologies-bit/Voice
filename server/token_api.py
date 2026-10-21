@@ -3922,6 +3922,13 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_agents(user["account_id"])
 
 
+@app.get("/agents/activity")
+def agents_activity(user: dict = Depends(current_user)) -> list[dict]:
+    """Calls today, 7-day daily calls, bookings and last call per agent, for
+    the Agents page tiles and table. Counts only: no caller details."""
+    return calls_db.agent_activity(user["account_id"])
+
+
 # Models restricted to the Vistrow admin account. Groq is the fastest
 # time-to-first-token option available but its model list is open-weight
 # only and unevaluated for Hindi/Marathi quality on real calls — speed was

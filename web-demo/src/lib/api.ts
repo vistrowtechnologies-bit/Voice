@@ -1,4 +1,5 @@
 import type {
+  AgentActivity,
   GrowthInsights,
   MissedMoneyQueue,
   SpeedToLead,
@@ -344,6 +345,7 @@ export const fetchCallRecordingUrl = (id: number | string) => get<{ url: string 
 // ---------------------------------------------------------------- agents
 
 export const fetchAgents = () => get<AgentConfig[]>('/agents')
+export const fetchAgentActivity = () => get<AgentActivity[]>('/agents/activity')
 export const createAgent = (data: Partial<AgentConfig>) => send<AgentConfig>('POST', '/agents', data)
 export const updateAgent = (id: number, data: Partial<AgentConfig>) =>
   send<AgentConfig>('PATCH', `/agents/${id}`, data)
