@@ -91,7 +91,7 @@ let avatarKey = scriptEl?.dataset.avatar || 'default'
 // default string in one place instead of duplicated into the dashboard,
 // the WordPress plugin, and every existing site's stored settings.
 let customGreeting = scriptEl?.dataset.greeting || ''
-const DEFAULT_GREETING = "👋 Hi, I’m Artha. Tap to start."
+const DEFAULT_GREETING = "Hi, I’m Artha. Tap to start."
 const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
 // Rotated instead of a single static line — a tenant supplying their own
 // data-greeting always wins and skips this entirely (see greeting-render
@@ -103,9 +103,9 @@ const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
 // a full sentence reads as something to read, not something to tap, which
 // is the opposite of what a one-line nudge bubble is for.
 const CURIOSITY_GREETINGS = [
-  '🎙️ I actually talk back!',
-  '👀 Ask me anything',
-  '🎧 Hear it before you go',
+  'I actually talk back!',
+  'Ask me anything',
+  'Hear it before you go',
 ]
 // Explicit per-tenant override, if a site wants its own custom line instead
 // of the real platform-wide count fetched below. Never a fabricated
@@ -202,6 +202,13 @@ const CHAT_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>'
 const COPY_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>'
+// Owner, 21 Oct 2026: no emoji in the widget; these replace the lock and thumbs emoji.
+const LOCK_ICON =
+  '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:-1px"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
+const THUMB_UP_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 11v9H4v-9h3zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.3 20H7"/></svg>'
+const THUMB_DOWN_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="M7 11v9H4v-9h3zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.3 20H7"/></svg>'
 const ARROW_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
 
@@ -416,7 +423,7 @@ const CSS = `
 .av-complete h2 { margin:2px 0 0;font-size:20px; }
 .av-complete p { margin:0;color:#a9a2bd;font-size:12.5px;line-height:1.5; }
 .av-feedback { display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0; }
-.av-feedback button { width:40px;height:40px;border:1px solid #39304e;border-radius:99px;background:#211a2e;color:#fff;cursor:pointer;font-size:18px; }
+.av-feedback button { display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid #39304e;border-radius:99px;background:#211a2e;color:#fff;cursor:pointer;font-size:18px; }
 .av-feedback button:hover,.av-feedback button[aria-pressed="true"] { background:#3a2457;border-color:#a855f7;transform:scale(1.06); }
 .av-feedback-note { width:100%;box-sizing:border-box;border:1px solid #39304e;border-radius:10px;background:#211a2e;color:#fff;padding:9px 11px;font:inherit;resize:none; }
 .av-complete-actions { width:100%;display:flex;flex-direction:column;gap:8px; }
@@ -532,7 +539,7 @@ function widgetHtml(label: string): string {
             <button id="av-choose-voice" class="av-primary">${MIC_ICON} Start a voice conversation</button>
             <button id="av-choose-chat" class="av-secondary">${CHAT_ICON} Chat instead</button>
           </div>
-          <span class="av-trust">🔒 Secure connection</span>
+          <span class="av-trust">${LOCK_ICON} Secure connection</span>
           <!-- Recording/processing notice. Shown before the conversation starts.
                Transcripts are always stored; audio recording depends on the
                tenant's Compliance "Record calls" setting, which site-config
@@ -619,8 +626,8 @@ function widgetHtml(label: string): string {
           <p id="av-complete-summary">Thanks for speaking with ${agentName}.</p>
           <p>Was this helpful?</p>
           <div class="av-feedback" role="group" aria-label="Rate this conversation">
-            <button id="av-feedback-up" aria-label="Helpful" aria-pressed="false">👍</button>
-            <button id="av-feedback-down" aria-label="Not helpful" aria-pressed="false">👎</button>
+            <button id="av-feedback-up" aria-label="Helpful" aria-pressed="false">${THUMB_UP_ICON}</button>
+            <button id="av-feedback-down" aria-label="Not helpful" aria-pressed="false">${THUMB_DOWN_ICON}</button>
           </div>
           <textarea id="av-feedback-note" class="av-feedback-note" rows="2" maxlength="500" placeholder="What went wrong? (optional)" style="display:none;"></textarea>
           <button id="av-feedback-send" class="av-complete-action" style="display:none;">Send</button>
@@ -1221,7 +1228,7 @@ function init(): void {
       timerEl.textContent = formatCallTime(elapsed)
       if (elapsed >= MAX_CALL_SECONDS - 30) timerEl.classList.add('av-timer-warn')
       if (elapsed >= MAX_CALL_SECONDS) {
-        showNotice('⏱️ 5-minute call limit reached. Feel free to start a new call anytime.')
+        showNotice('5-minute call limit reached. Feel free to start a new call anytime.')
         endCall()
       }
     }

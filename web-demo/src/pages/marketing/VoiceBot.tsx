@@ -95,7 +95,7 @@ export function VoiceBot() {
     <MarketingLayout>
       <Seo
         title="AI Voice Bot for Business Calls in India | Vistrow Voice"
-        description="What an AI voice bot is, how a voicebot call works, and how Vistrow Voice runs one on phone and website calls in Hindi, English and 9 more Indian languages."
+        description="What an AI voice bot is, how a voicebot call works, and how Vistrow Voice runs one on phone and website calls in 130+ languages, including Hindi and English."
         path="/voice-bot"
         jsonLd={FAQ_JSONLD}
       />

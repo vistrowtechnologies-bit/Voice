@@ -99,7 +99,7 @@ export const PRODUCT_DETAIL: Record<
     subhead:
       'A no-code builder for real-time AI phone agents. Set the persona, prompt, voice and language - publish, and Artha starts taking calls.',
     features: [
-      { icon: 'translate', title: 'Multilingual', body: 'Speaks 10 Indian languages plus English, including natural Hinglish, and switches mid-call with the caller.' },
+      { icon: 'translate', title: 'Multilingual', body: 'Speaks more than 130 languages, including 10 Indian languages and natural Hinglish, and switches mid-call with the caller.' },
       { icon: 'menu_book', title: 'Grounded answers', body: 'Ties responses to your knowledge base with strict-mode RAG, so the agent says it does not know instead of improvising.' },
       { icon: 'swap_calls', title: 'Human handoff', body: 'On phone calls, transfers to the colleague you set when a caller needs a person. Website calls take a callback request instead.' },
       { icon: 'analytics', title: 'Analytics & transcripts', body: 'Every call is transcribed, scored, and searchable across channels and agents.' },
@@ -201,7 +201,7 @@ export const PRODUCT_DETAIL: Record<
       { q: 'What happens if the agent can’t help a caller?', a: 'On phone calls it can transfer to a person if you have set a transfer number, or take a callback request - never a dead end or hold music.' },
       { q: 'Is every call recorded and transcribed?', a: 'Every call gets a transcript. Audio recording is a setting you can turn on or off under Compliance, along with spoken consent and how long data is kept.' },
       { q: 'Can I limit when the agent answers?', a: 'Yes. Set a call window, active days and a maximum number of concurrent calls per number. Calls outside those rules are not answered by the agent.' },
-      { q: 'Which languages can it answer in?', a: 'Ten Indian languages plus English, including Hinglish, and it follows the caller if they switch mid-call. See the languages page for each one.' },
+      { q: 'Which languages can it answer in?', a: 'More than 130 languages, including Hindi, English and 9 other Indian languages, plus Hinglish, and it follows the caller if they switch mid-call. See the languages page for each one.' },
       { q: 'How is this different from an IVR?', a: 'An IVR asks the caller to press keys through a fixed menu. The agent understands what the caller says, answers from your knowledge base and completes the next step such as a booking.' },
     ],
   },
@@ -492,10 +492,10 @@ export const SOLUTIONS: Solution[] = [
     label: 'Real Estate',
     to: '/solutions/real-estate',
     icon: 'apartment',
-    desc: 'Qualify buyers and book site visits - 24/7, in Hindi, English and 9 more Indian languages.',
+    desc: 'Qualify buyers and book site visits - 24/7, in 130+ languages, including Hindi and 9 more Indian languages.',
     headline: 'AI calling agent for real estate enquiries and site visits.',
     subhead:
-      'Artha answers property enquiries and calls new leads back within seconds, in Hindi, English or 9 other Indian languages. It qualifies budget, location, configuration, timeline and purpose, and books site visits on your calendar, day or night.',
+      'Artha answers property enquiries and calls new leads back within seconds, in more than 130 languages, including Hindi, English and 9 other Indian languages. It qualifies budget, location, configuration, timeline and purpose, and books site visits on your calendar, day or night.',
     pains: [
       { icon: 'phone_missed', title: 'Missed calls', body: 'After-hours enquiries go to voicemail and buyers move on. Artha picks up at any hour, within the call limits you set.' },
       { icon: 'fact_check', title: 'Manual qualification', body: 'No more re-asking budget and location - Artha saves each detail as a lead field during the call.' },
@@ -742,7 +742,7 @@ export const SOLUTIONS: Solution[] = [
           { icon: 'api', title: 'Order status through a custom function', body: 'A custom function calls your order system with the order number the customer gives and reads back what it returns. Test it with sample orders before real customers call.', to: '/help/agents/agent-functions-and-transfer', link: 'Functions and transfer' },
           { icon: 'confirmation_number', title: 'Cases to your helpdesk', body: 'Damaged-delivery and return requests are posted as JSON to any helpdesk or automation tool that accepts a webhook, with the transcript and the outcome the customer asked for.', to: '/integrations', link: 'All integrations' },
           { icon: 'graphic_eq', title: 'A voice button on product pages', body: 'Put the website widget on product or order-tracking pages so a shopper can ask a question out loud without leaving the page. Page rules can send each page to a different agent.', to: '/product/widget', link: 'Website call widget' },
-          { icon: 'translate', title: 'The language your customer shops in', body: 'The same agent answers in Hindi, English and 9 more Indian languages and follows a customer who switches mid-call, which matters when you sell across several states.', to: '/languages', link: 'Supported languages' },
+          { icon: 'translate', title: 'The language your customer shops in', body: 'The same agent answers in more than 130 languages, including Hindi, English and 9 more Indian languages, and follows a customer who switches mid-call, which matters when you sell across several states.', to: '/languages', link: 'Supported languages' },
         ],
         note: 'Refunds, replacements and exceptions should stay with your team. The agent collects the facts and the customer’s request so nobody has to ask twice.',
       },
@@ -750,7 +750,7 @@ export const SOLUTIONS: Solution[] = [
     faqs: [
       { q: 'Can it check real order status?', a: 'Yes, once you connect it. A custom function lets the agent call your order system during the conversation and read back the current status. Without that connection it takes the order number and passes the request to your team instead of guessing.' },
       { q: 'Can it handle returns without a human agent?', a: 'It handles the conversation: it explains your approved returns and exchange policy, checks the details the policy asks for and records the request with the transcript. Approving a refund or replacement stays with your team or your own system.' },
-      { q: 'What languages can it support customers in?', a: 'Artha speaks 10 Indian languages plus English, including natural Hinglish, matching whichever language the customer uses.' },
+      { q: 'What languages can it support customers in?', a: 'Artha speaks more than 130 languages, including 10 Indian languages and natural Hinglish, matching whichever language the customer uses.' },
     ],
   },
   {
@@ -766,7 +766,7 @@ export const SOLUTIONS: Solution[] = [
     desc: 'Run polite EMI reminder and collection calls inside your calling rules.',
     headline: 'AI voice agent for loan collections and EMI reminders.',
     subhead:
-      'Artha calls borrowers about an upcoming or missed EMI in Hindi, English or 9 other Indian languages, notes what they say - paid, a promised date, a dispute, a callback - and passes sensitive cases to your team. Every call is transcribed and summarised.',
+      'Artha calls borrowers about an upcoming or missed EMI in Hindi, English, 9 other Indian languages or any of 130+ languages, notes what they say - paid, a promised date, a dispute, a callback - and passes sensitive cases to your team. Every call is transcribed and summarised.',
     pains: [
       { icon: 'currency_rupee', title: 'Manual dialing', body: 'Collectors spend hours on repetitive reminder calls. Artha runs them as a campaign from your number.' },
       { icon: 'gavel', title: 'Inconsistent calls', body: 'Every collector words the reminder differently. Artha follows the same approved script on every call, and each call can be reviewed afterwards.' },
@@ -965,7 +965,7 @@ export const HOME_FEATURES: NavLink[] = PRODUCT_PAGES
 export const HOW_IT_WORKS: FeatureRow[] = [
   { icon: 'dialpad', title: 'Connect a number', body: 'Bring your own number or get one from us. Point inbound calls at Vistrow in minutes.' },
   { icon: 'menu_book', title: 'Train on your knowledge', body: 'Upload PDFs and docs. Artha answers from them with retrieval-grounded RAG.' },
-  { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking - in 10 Indian languages plus English.' },
+  { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking - in more than 130 languages, including 10 Indian languages.' },
 ]
 
 // ---- Header navigation structure ----
@@ -991,7 +991,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'All industries', to: '/solutions', icon: 'grid_view', desc: 'Voice AI for every industry.' },
       ...SOLUTIONS.map((s) => ({ label: s.label, to: s.to, icon: s.icon, desc: s.desc })),
-      { label: 'By language', to: '/languages', icon: 'translate', desc: '10 Indian languages plus English.' },
+      { label: 'By language', to: '/languages', icon: 'translate', desc: '130+ languages, including 10 Indian languages.' },
     ],
   },
   { label: 'Pricing', to: '/pricing' },
@@ -1095,10 +1095,11 @@ export const GLOBAL_GREETINGS: { greeting: string; name: string }[] = [
   { greeting: 'مرحبا', name: 'Arabic' },
 ]
 
+// Owner, 21 Oct: 130+ languages; short labels so each stat is one line on phones.
 export const HERO_STATS = [
-  { value: '11', label: 'Languages' },
-  { value: '24/7', label: 'Always answering' },
-  { value: '3', label: 'Inbound · outbound · web' },
+  { value: '130+', label: 'Languages' },
+  { value: '24/7', label: 'Answering' },
+  { value: '3', label: 'Channels' },
 ]
 
 /** Tools shown in "works with" strips.
@@ -1462,7 +1463,7 @@ export const LANGUAGES: LanguagePage[] = [
     extraFaqs: [
       { q: 'Does the agent understand Bengaluru Kannada mixed with English?', a: 'It follows everyday spoken Kannada with English words inside a sentence, and keeps replying in Kannada unless the caller moves to English. Speech differs between Bengaluru, Mysuru, coastal and North Karnataka, so run test calls with callers from your regions before launch.' },
       { q: 'Can a Kannada call be transferred to someone on my team?', a: 'On phone calls, yes. Set a transfer number and the agent dials your colleague into the call and stays on until they answer; if nobody picks up, it takes a callback request. Website widget calls cannot be transferred to a phone, so the agent captures a callback number.' },
-      { q: 'Does it speak Tulu or Konkani?', a: 'No. The agent speaks Kannada, English and nine other Indian languages, but not Tulu or Konkani. Coastal Karnataka callers usually use Kannada or English on business calls; test with a few of them if that region matters to you.' },
+      { q: 'Does it speak Tulu or Konkani?', a: 'No. The agent speaks more than 130 languages, including Kannada and English, but not Tulu. Coastal Karnataka callers usually use Kannada or English on business calls; test with a few of them if that region matters to you.' },
     ],
     related: [
       { to: '/demo-calls/kannada-inbound-property-enquiry', label: 'Kannada property-enquiry demo call' },

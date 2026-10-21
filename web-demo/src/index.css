@@ -507,11 +507,61 @@ a[class*="border-cyan"]:not([class*=" bg-"]):not([class^="bg-"]) * {
   100% { opacity: 0; transform: translateY(-3px); }
 }
 
+/* Homepage hero demo card, variant="call" (owner, 21 Oct): Artha "calling
+   you". Dark card on the dark theme, a lavender card on the light theme,
+   same purple glow in both. */
+.demo-call-card {
+  background: #140b26;
+  color: #fff;
+  border: 1px solid #3b2a5c;
+  box-shadow: 0 24px 48px -26px rgb(168 85 247 / 0.65);
+  --color-text: #f5f3ff;
+  --color-text-muted: #b9b2d6;
+}
+.demo-call-card::before {
+  content: ""; position: absolute; inset: -30% -30% auto; height: 260px; pointer-events: none;
+  background: radial-gradient(closest-side, rgb(168 85 247 / 0.55), transparent);
+}
+.demo-call-card > * { position: relative; }
+.demo-call-kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: rgb(255 255 255 / 0.65); }
+.demo-call-sub, .demo-call-assure { color: rgb(255 255 255 / 0.72); }
+.demo-call-proof { color: rgb(255 255 255 / 0.85); }
+.demo-call-orb { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 16px 40px -10px rgb(168 85 247 / 0.9); background: #0b0716; }
+.demo-call-ring { position: absolute; inset: 0; border-radius: 9999px; border: 2px solid rgb(168 85 247 / 0.8); animation: demo-call-ring 2.4s ease-out infinite; pointer-events: none; }
+.demo-call-ring-2 { animation-delay: 1.2s; }
+@keyframes demo-call-ring { from { transform: scale(0.85); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+.demo-call-answer { background: #22c55e; color: #052e16; box-shadow: 0 12px 26px -12px #22c55e; transition: transform 0.15s ease, filter 0.15s ease; }
+.demo-call-answer:hover { filter: brightness(1.05); }
+.demo-call-answer:active { transform: scale(0.98); }
+/* A ring pulses out of the Answer button so the card reads as "tap me". */
+.demo-call-tap { position: relative; }
+.demo-call-tap::after { content: ""; position: absolute; inset: -6px; border-radius: 9999px; border: 2px solid rgb(34 197 94 / 0.75); animation: demo-call-tap 1.8s ease-out infinite; pointer-events: none; }
+.demo-call-tap-off::after { display: none; }
+@keyframes demo-call-tap { 0% { transform: scale(0.96); opacity: 0.9; } 100% { transform: scale(1.1); opacity: 0; } }
+:root[data-theme="light"] .demo-call-card {
+  background: linear-gradient(180deg, #efe6ff 0%, #faf7ff 55%, #ffffff 100%);
+  color: var(--color-text);
+  border-color: #e4d8fb;
+  box-shadow: 0 22px 44px -28px rgb(124 58 237 / 0.55);
+  --color-text: #1a1523;
+  --color-text-muted: #5d5776;
+}
+:root[data-theme="light"] .demo-call-card::before { background: radial-gradient(closest-side, rgb(168 85 247 / 0.28), transparent); }
+:root[data-theme="light"] .demo-call-kicker { color: #7c3aed; }
+:root[data-theme="light"] .demo-call-sub, :root[data-theme="light"] .demo-call-assure, :root[data-theme="light"] .demo-call-proof { color: #5d5776; }
+:root[data-theme="light"] .demo-call-ring { border-color: rgb(168 85 247 / 0.55); }
+:root[data-theme="light"] .demo-call-orb { box-shadow: 0 0 0 3px #fff, 0 14px 32px -12px rgb(124 58 237 / 0.7); }
+:root[data-theme="light"] .demo-call-tap::after { border-color: rgb(22 163 74 / 0.6); }
+#vistrow-voice-widget-host { transition: opacity 0.25s ease, visibility 0.25s ease; }
+html.vv-hero-call-visible #vistrow-voice-widget-host { opacity: 0; visibility: hidden; pointer-events: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .independence-ribbon::after,
   .demo-card-spotlight::before,
   .demo-card-spotlight > div:nth-of-type(2),
-  .demo-card-spotlight .demo-start-target {
+  .demo-card-spotlight .demo-start-target,
+  .demo-call-ring,
+  .demo-call-tap::after {
     animation: none;
   }
   .demo-card-spotlight .demo-start-label {
