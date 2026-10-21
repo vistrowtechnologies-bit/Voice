@@ -6152,6 +6152,14 @@ class RealEstateAgent(Agent):
                 candidate, self._turn_script_anomaly, len(text or ""),
             )
             candidate = None
+        if (
+            candidate is not None
+            and self._tts_provider == "google-native"
+            and not voice_catalog.chirp3_persona(self._speaking_voice)
+        ):
+            # A Native (locale Standard) voice speaks one language; the reply
+            # language stays locked to it (call 1447, see switch_reply_language).
+            candidate = None
         if candidate is None or candidate == self._reply_language:
             # Ambiguous turn, or already the current language — nothing to
             # confirm. Reset the streak so a one-off stray word elsewhere
