@@ -51,7 +51,9 @@ for (const p of posts) {
     check(links.some(l => l.anchor.length >= 12), `${id}: section ${i + 1} has no descriptive link`)
   })
   const allLinks = [...body, ...(p.faqs ?? []).map((f: any) => f.a), p.contextualLinks, p.shortAnswer].flatMap(linkTargets)
+  for (const l of (p.inbound ?? []).flatMap((i: any) => linkTargets(i.sentence))) check(l.anchor.length >= 12, `${id}: inbound link text too short: "${l.anchor}"`)
   for (const l of allLinks) {
+    check(l.anchor.length >= 12, `${id}: link text too short (needs 12+ chars): "${l.anchor}"`)
     check(linkable(l.path), `${id}: link target not live or earlier: ${l.path}`)
     check(l.path !== `/resources/blog/${p.slug}`, `${id}: self-link`)
   }
