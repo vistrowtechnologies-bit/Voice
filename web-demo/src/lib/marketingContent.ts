@@ -1095,10 +1095,11 @@ export const GLOBAL_GREETINGS: { greeting: string; name: string }[] = [
   { greeting: 'مرحبا', name: 'Arabic' },
 ]
 
+// Owner, 21 Oct: 130+ languages; short labels so each stat is one line on phones.
 export const HERO_STATS = [
-  { value: '11', label: 'Languages' },
-  { value: '24/7', label: 'Always answering' },
-  { value: '3', label: 'Inbound · outbound · web' },
+  { value: '130+', label: 'Languages' },
+  { value: '24/7', label: 'Answering' },
+  { value: '3', label: 'Channels' },
 ]
 
 /** Tools shown in "works with" strips.
