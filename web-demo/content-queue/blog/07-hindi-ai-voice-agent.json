@@ -1,0 +1,135 @@
+{
+  "n": 7,
+  "publishOn": "2026-10-27",
+  "primaryKeyword": "hindi ai voice agent",
+  "audience": "India + diaspora",
+  "slug": "hindi-ai-voice-agent",
+  "title": "Hindi AI voice agent: what natural Hindi on a call sounds like",
+  "seoTitle": "Hindi AI Voice Agent: What Natural Hindi Sounds Like",
+  "metaDescription": "What a good Hindi AI voice agent sounds like on a real call: Hinglish, respectful address, numbers and names, and the tests to run before callers hear it.",
+  "shortAnswer": "A good Hindi AI voice agent sounds like a polite person at your front desk, not a textbook. It greets in Hindi, uses aap and ji, follows the English words callers mix in, reads numbers and dates back clearly, and switches to English when the caller does. Test it on Hinglish, names, amounts and interruptions before launch.",
+  "excerpt": "Most Hindi calls are not in pure Hindi. Here is what natural Hindi on a phone call actually sounds like, and how to check that an AI voice agent gets it right before your customers hear it.",
+  "category": "Languages & speech",
+  "related": [
+    "multilingual-ai-receptionist-hindi-punjabi-english",
+    "how-to-choose-a-multilingual-voice-agent",
+    "write-ai-voice-agent-prompts"
+  ],
+  "sections": [
+    {
+      "heading": "What should a Hindi AI voice agent sound like on a call?",
+      "paragraphs": [
+        "Hindi is the largest language group in India. The 2011 Census counted about 52.8 crore people, 43.6% of the population, under Hindi, a figure that includes many mother tongues grouped with it. That is why most Indian call flows start in Hindi, and why callers notice quickly when an agent sounds wrong.",
+        "Natural Hindi on a business call is warm, short and respectful. The agent says aap, adds ji after a name and keeps sentences simple. It does not read out long formal words that nobody uses on the phone. Our [Hindi AI voice calling agent page](/languages/hindi) has a written sample of a reminder call, and the [AI voice agent builder](/product/agents) is where you set the language, voice and tone."
+      ],
+      "points": [
+        "A greeting in Hindi that names your business in the first sentence.",
+        "Respectful address: aap, ji and a calm pace, even when the caller is curt.",
+        "Short replies that leave room for the caller to speak.",
+        "A clear next step at the end: a booking, a callback time or a transfer."
+      ]
+    },
+    {
+      "heading": "Why do most Hindi calls end up in Hinglish?",
+      "paragraphs": [
+        "Callers mix English into Hindi all the time. Words like EMI, due date, payment, booking, site visit, order and refund usually stay in English inside a Hindi sentence. A caller might say \"mera order kab deliver hoga\" and expect a reply in the same mix.",
+        "A good agent understands those English words without asking the caller to repeat them in Hindi, keeps replying in Hindi, and moves fully to English if the caller does. It should not swap in formal Hindi terms that sound like a government form. Our guide on [how to choose a multilingual voice agent](/resources/blog/how-to-choose-a-multilingual-voice-agent) explains why language switching is the first thing to test.",
+        "Vistrow Voice can speak more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia). A Hindi agent can follow a caller into English or another of those languages mid-call without restarting."
+      ]
+    },
+    {
+      "heading": "How should a Hindi voice agent handle numbers, dates and names?",
+      "paragraphs": [
+        "Numbers are where Hindi calls go wrong most often. Callers say amounts in lakh and crore, often in English, and dates as \"15 tarikh\" or \"agle Monday\". Phone numbers come in pairs or groups. The agent should repeat important figures back in the form the caller used, then confirm before saving them.",
+        "Names need the same care. Ask the agent to confirm a name once and then use it with ji. For structured data, add [post-call data extraction fields](/help/agents/agent-functions-and-transfer) such as budget, preferred date or promised payment date, so each value is pulled from the transcript in a form your team can sort."
+      ],
+      "points": [
+        "Amounts: lakh and crore, said back the way the caller said them.",
+        "Dates: day and date confirmed together, for example Saturday the 15th.",
+        "Phone numbers: read back in groups, then confirmed.",
+        "Names: confirmed once, then used with ji."
+      ]
+    },
+    {
+      "heading": "Which calls suit a Hindi AI voice agent?",
+      "paragraphs": [
+        "Start with calls that follow a pattern and arrive in volume. Property enquiries are a common first use: buyers in Delhi NCR, Lucknow, Jaipur or Indore asking about budget, location and site visits, mostly in Hinglish. The [Hindi real estate calling page](/solutions/real-estate/hindi-ai-calling-agent-real-estate) shows how those calls are qualified.",
+        "Reminders are the other big group. Payment and EMI reminders, appointment confirmations and follow-ups run as [outbound calling campaigns](/product/outbound), inside your calling window and checked against your Do-Not-Call list. Support lines for online sellers, where customers ask about orders and returns in Hindi, are a third good fit."
+      ],
+      "points": [
+        "Inbound: enquiries, bookings, timings and order questions.",
+        "Outbound: reminders, confirmations and new-lead callbacks.",
+        "Website: a voice button for visitors who would rather speak Hindi than type."
+      ]
+    },
+    {
+      "heading": "How do you write the Hindi greeting and agent prompt?",
+      "paragraphs": [
+        "Write the welcome message in Devanagari, not in romanised Hindi, so the voice pronounces it correctly. Keep it to one or two short sentences: who is calling or answering, and how you can help. Use variables such as the caller's name or due date only where your contact list has them.",
+        "In the prompt, describe the tone in plain words: polite, warm, short replies, aap and ji, English words where callers use them. List what the agent must never do, such as promising a discount or guessing a date. Our guide to [writing AI voice agent prompts](/resources/blog/write-ai-voice-agent-prompts) covers the structure, and the [voice selection guide](/help/voices/choose-voices) shows how to preview voices in Hindi before you choose one.",
+        "If you turn on call recording, the opening line can also say that the call is recorded and that the caller is speaking with an AI assistant. For Hindi agents that notice is spoken in Hindi."
+      ]
+    },
+    {
+      "heading": "How do you test a Hindi AI voice agent before launch?",
+      "paragraphs": [
+        "Test with real people, not only with your own team reading a script. Ask colleagues from different regions to call: someone who speaks fast Delhi Hinglish, someone from Bihar or Uttar Pradesh with a different accent, an older caller who speaks slowly, and someone who interrupts. The [Testing Lab guide](/help/testing-lab/run-a-test) lists built-in scenarios for interruptions, language switching and background noise.",
+        "Listen for three things: did it understand, did it sound natural, and did it reply quickly enough. A pause that feels fine in a demo can feel long on a phone line, so measure it the way our article on [measuring voice AI latency](/resources/blog/voice-ai-latency-how-to-measure-it) describes."
+      ],
+      "points": [
+        "Hinglish sentences with your own product words.",
+        "Amounts in lakh and crore, and dates said as tarikh.",
+        "A caller who switches to English halfway.",
+        "A question the agent should not answer, and how it hands over."
+      ]
+    },
+    {
+      "heading": "Can a Hindi voice agent serve callers outside India?",
+      "paragraphs": [
+        "Yes. Businesses in the UK, Canada, the US and the Gulf often have customers who prefer Hindi, and the same agent can answer them. Our guide to a [multilingual AI receptionist for Hindi and Punjabi callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english) covers what changes for those businesses.",
+        "Phone numbers connect through your own telephony provider, so whether a number works from abroad depends on that provider. The [website voice widget](/product/widget) works from any browser in any country, which makes it the simplest way to offer Hindi to customers outside India."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can a Hindi AI voice agent understand Hinglish?",
+      "a": "Yes. It understands English words inside Hindi sentences, keeps replying in Hindi, and moves to English if the caller does. Test it with your own product words before launch."
+    },
+    {
+      "q": "Should the greeting be written in Devanagari or English letters?",
+      "a": "Devanagari. The voice pronounces Hindi written in Devanagari more naturally than romanised Hindi. Keep English product words in English where callers use them."
+    },
+    {
+      "q": "Can the agent use aap and ji with callers?",
+      "a": "Yes. Describe the tone you want in the agent prompt, for example polite replies with aap and ji after the caller's name, and check it on test calls."
+    },
+    {
+      "q": "Can a Hindi call be transferred to a person?",
+      "a": "On phone calls, yes. Set a transfer number and the agent dials your colleague into the call and stays on until they answer. Website widget calls take a callback number instead."
+    },
+    {
+      "q": "Which other languages can the same agent speak?",
+      "a": "More than 130, including English and nine other Indian languages: Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia."
+    }
+  ],
+  "imageAlt": "The Hindi greeting नमस्ते in large purple letters beside a shop owner in a North Indian general store talking on his phone, with a small badge showing Artha, the AI voice agent, answering",
+  "imagePrompt": "Designed cover (scripts/blog-covers/07-hindi-ai-voice-agent.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Census of India 2011, Language: India, States and Union Territories (Table C-16), Statement 4",
+      "url": "https://censusindia.gov.in/nada/index.php/catalog/42458"
+    }
+  ],
+  "contextualLinks": "To hear how it fits your calls, see the [Hindi AI voice calling agent](/languages/hindi) or build one in the [AI voice agent builder](/product/agents).",
+  "inbound": [
+    {
+      "target": "language:hindi",
+      "sentence": "For what natural Hindi and Hinglish should sound like on a real call, and how to test it, read our guide to a [Hindi AI voice agent](/resources/blog/hindi-ai-voice-agent)."
+    },
+    {
+      "target": "blog:how-to-choose-a-multilingual-voice-agent",
+      "sentence": "If Hindi is your main call language, our guide on [what a natural Hindi AI voice agent sounds like](/resources/blog/hindi-ai-voice-agent) lists the tests to run first."
+    }
+  ]
+}

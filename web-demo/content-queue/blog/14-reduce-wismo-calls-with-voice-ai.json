@@ -1,0 +1,124 @@
+{
+  "n": 14,
+  "publishOn": "2026-11-03",
+  "primaryKeyword": "reduce wismo calls",
+  "audience": "Global",
+  "slug": "reduce-wismo-calls-with-voice-ai",
+  "title": "How to reduce 'where is my order' calls with voice AI",
+  "seoTitle": "Reduce WISMO Calls: Answering Order Status with Voice AI",
+  "metaDescription": "How to reduce WISMO calls: fix the causes first, then let a voice AI agent read back real order status and hand exceptions to your team.",
+  "shortAnswer": "To reduce WISMO calls, first remove the causes: vague delivery dates, missing tracking updates and silence when a parcel is late. Then let a voice AI agent answer the calls that remain, reading back the real status from your order system and passing delays, damage and refunds to a person with the details already collected.",
+  "excerpt": "\"Where is my order?\" is the most repetitive call an online shop takes. Here is how to cut the volume at the source and answer the rest with voice AI, without inventing delivery promises.",
+  "category": "Industries",
+  "related": [
+    "connecting-voice-calls-to-your-crm",
+    "what-is-an-ai-voice-agent",
+    "website-voice-widget-for-lead-generation"
+  ],
+  "sections": [
+    {
+      "heading": "What are WISMO calls and why do they pile up?",
+      "paragraphs": [
+        "WISMO stands for \"where is my order\". These are calls and messages from customers who have paid and want to know when their parcel will arrive. Each one is short, but together they can fill a support line, especially during sales, festivals and bad weather, when deliveries slip and everyone calls at once.",
+        "Most WISMO contacts are not really questions about a parcel. They are signs of uncertainty: the customer was given a wide delivery window, the tracking page has not changed for two days, or a promised date passed without a message. The [voice AI for e-commerce support page](/solutions/ecommerce) shows how an agent handles the calls that remain, and our guide to [what an AI voice agent is](/resources/blog/what-is-an-ai-voice-agent) covers the basics."
+      ]
+    },
+    {
+      "heading": "How do you reduce WISMO calls before they happen?",
+      "paragraphs": [
+        "The cheapest call is the one nobody needs to make. Before automating anything, fix the gaps that cause customers to pick up the phone. A voice agent will answer a WISMO call well, but it cannot make up for a delivery promise you never kept.",
+        "Publish your delivery rules plainly too. In the UK, for example, a business selling at a distance must deliver within 30 days unless it has agreed otherwise with the customer, according to GOV.UK guidance. Whatever your market, the [knowledge base for your store policies](/product/knowledge-base) is where those rules live so the agent can quote them."
+      ],
+      "points": [
+        "Give a narrow, realistic delivery estimate at checkout, not a vague range.",
+        "Send an update at each stage: confirmed, dispatched, out for delivery, delivered.",
+        "Tell customers about a delay before they notice it, with a new date.",
+        "Put a clear tracking link in every message and on the order page."
+      ]
+    },
+    {
+      "heading": "How does a voice AI agent answer a WISMO call?",
+      "paragraphs": [
+        "The agent asks for the order number, or the phone number on the order if your order system can search by it, and looks up the order. It then states the latest status in plain language, gives the next useful step and closes the call. If the status is unclear or the parcel is late, it says so honestly and records a request for your team.",
+        "This needs a live connection to your order data. On Vistrow Voice, a custom function calls your order system with the order number the customer gives and reads back what it returns; the [functions and transfer guide](/help/agents/agent-functions-and-transfer) explains how functions work. Without that connection, the agent takes the order number and passes the request to your team instead of guessing. Vistrow Voice can answer these calls on your [inbound support phone line](/product/inbound) at any hour the line is open.",
+        "Keep the call short. A good WISMO call takes well under a minute: confirm the order, state the status, give the next step and offer anything else. If the customer has a second question, such as changing the delivery address, the agent should say clearly whether it can do that or record it for your team."
+      ]
+    },
+    {
+      "heading": "What should the agent never promise?",
+      "paragraphs": [
+        "A confident wrong answer is worse than no answer. Write a short list of things the agent may not invent, and test each one before launch. The agent should read back what your system says, not predict what a courier will do.",
+        "When the answer is not in the data, the agent records the order number, what the customer wants and the best callback time, and your team picks it up. Our guide to [connecting voice calls to your CRM](/resources/blog/connecting-voice-calls-to-your-crm) explains how that record reaches the right person."
+      ],
+      "points": [
+        "Never invent a delivery date, refund amount or replacement approval.",
+        "Never confirm a refund or cancellation that your own system has not processed.",
+        "Never read out personal details until the caller has given the order reference.",
+        "Always hand damaged, missing and disputed deliveries to a person."
+      ]
+    },
+    {
+      "heading": "What about returns, damaged parcels and refunds?",
+      "paragraphs": [
+        "These calls often follow a WISMO call and need a different shape. The agent can explain your approved returns and exchange policy, check the details the policy asks for and record the request with the transcript. Approving a refund or replacement stays with your team or your own system.",
+        "Send these cases where your team already works. Vistrow Voice posts lead, appointment and callback events as JSON to any webhook, and connects to Zoho CRM, Google Sheets and Slack; the [integrations for CRM, Sheets, Slack and webhooks](/product/integrations) page lists the options. A damaged-parcel case should arrive with the order number, the problem and what the customer asked for, so nobody has to call them back just to ask again."
+      ]
+    },
+    {
+      "heading": "Can customers ask about their order in their own language?",
+      "paragraphs": [
+        "Yes, and it matters if you sell across regions. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows a customer who switches mid-call, including everyday Hinglish. The [supported languages page](/languages) has details for each Indian language.",
+        "Order numbers are the weak point in any language. Mixed letters and digits are easy to mishear, so have the agent repeat the reference back before it looks anything up, and, if your system allows it, accept the phone number on the order as a second way to find it. For customers already on your site, the [website voice and chat widget](/product/widget) can sit on the order-tracking page, so they can ask without dialling."
+      ]
+    },
+    {
+      "heading": "How do you measure whether WISMO calls went down?",
+      "paragraphs": [
+        "Measure before you launch. Count WISMO contacts for a normal month, tagged by cause: no update, late parcel, wrong address, damaged or missing. After launch, track three numbers each week: how many WISMO calls arrived, how many the agent resolved without a person, and how many handoffs arrived with everything your team needed.",
+        "Set a target for each cause rather than one overall number. A drop in \"no update\" calls shows your notifications are working; a drop in \"late parcel\" calls depends on your couriers. The agent's job is to answer well; the business's job is to give it fewer reasons to be called.",
+        "Read transcripts weekly. They show you which delivery messages confuse customers, which courier causes most calls and where your tracking page is unclear. Fix those at the source and the call volume falls further. When you are ready to compare plans, see the [Vistrow Voice pricing page](/pricing)."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "What does WISMO mean?",
+      "a": "WISMO stands for \"where is my order\": contacts from customers asking about the status or delivery date of something they have bought."
+    },
+    {
+      "q": "Can a voice AI agent check real order status?",
+      "a": "Yes, once you connect it. A custom function looks up the order in your system during the call and the agent reads back the status it returns, without adding its own predictions."
+    },
+    {
+      "q": "What happens if the order system has no answer?",
+      "a": "The agent says it cannot confirm the status, records the order number and the customer's request, and passes it to your team."
+    },
+    {
+      "q": "Can the agent process refunds?",
+      "a": "No. It explains your approved policy and records the request; approving a refund or replacement stays with your team or system."
+    },
+    {
+      "q": "Does it work on the website as well as the phone?",
+      "a": "Yes. The same agent can answer phone calls and a voice or chat widget on your order-tracking page."
+    }
+  ],
+  "imageAlt": "A customer on her phone at home next to delivery boxes, with a phone screen showing Artha answering and an order status card",
+  "imagePrompt": "Designed cover (scripts/blog-covers/14-reduce-wismo-calls-with-voice-ai.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "GOV.UK: Online and distance selling for businesses",
+      "url": "https://www.gov.uk/online-and-distance-selling-for-businesses"
+    }
+  ],
+  "contextualLinks": "To set up an order-support line, explore [voice AI for e-commerce and D2C brands](/solutions/ecommerce) or see how [inbound AI call answering](/product/inbound) works.",
+  "inbound": [
+    {
+      "target": "blog:connecting-voice-calls-to-your-crm",
+      "sentence": "Online shops can use the same records to [reduce 'where is my order' calls with voice AI](/resources/blog/reduce-wismo-calls-with-voice-ai)."
+    },
+    {
+      "target": "page:/solutions/ecommerce",
+      "sentence": "For a step-by-step plan, read [how to reduce WISMO calls with voice AI](/resources/blog/reduce-wismo-calls-with-voice-ai)."
+    }
+  ]
+}

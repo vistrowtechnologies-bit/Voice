@@ -1,0 +1,122 @@
+{
+  "n": 13,
+  "publishOn": "2026-11-02",
+  "primaryKeyword": "ai receptionist for real estate agents",
+  "audience": "UK, CA",
+  "slug": "ai-receptionist-for-estate-agents-uk-canada",
+  "title": "AI receptionist for estate agents in the UK and Canada",
+  "seoTitle": "AI Receptionist for Real Estate Agents in the UK and Canada",
+  "metaDescription": "How an AI receptionist for estate agents answers buyer and tenant calls, books viewings and serves Hindi and Punjabi callers in the UK and Canada.",
+  "shortAnswer": "An AI receptionist for real estate agents answers buyer, seller and tenant enquiries, shares approved listing details, books viewings and valuations, and sends each lead to your CRM with a transcript. For agencies in the UK and Canada with South Asian clients, it can also hold the conversation in Hindi, Punjabi or English.",
+  "excerpt": "Estate agents lose enquiries while they are out on viewings. Here is what an AI receptionist can take off the office phone, how it handles Hindi and Punjabi callers, and what to check before you switch it on.",
+  "category": "Industries",
+  "related": [
+    "ai-voice-agents-for-real-estate-leads",
+    "multilingual-ai-receptionist-hindi-punjabi-english",
+    "website-voice-widget-for-lead-generation"
+  ],
+  "sections": [
+    {
+      "heading": "What does an AI receptionist do for an estate agency?",
+      "paragraphs": [
+        "Agency phones ring hardest when the office is emptiest: Saturday mornings, lunchtimes and early evenings, when negotiators are out on viewings. Most of those calls are routine. Is the flat still available, can I see it this week, do you do valuations, will the landlord accept pets. An AI receptionist answers them at once, from the facts you have approved, and books the next step.",
+        "Vistrow Voice is an AI receptionist that answers property enquiries on the phone and on your website. The [AI receptionist for property and other businesses](/ai-receptionist) explains the general model, and the [voice AI for real estate overview](/solutions/real-estate) shows how it qualifies buyers and tenants without turning the call into an interrogation."
+      ],
+      "points": [
+        "Answers questions about listings, areas, viewing times and the next steps in a sale or let.",
+        "Books viewings and valuation appointments into a calendar your team can see.",
+        "Takes callback requests for offers, complaints and anything that needs a negotiator.",
+        "Sends every enquiry, with its transcript and summary, to your CRM or a shared sheet."
+      ]
+    },
+    {
+      "heading": "Why do South Asian callers matter to agents in the UK and Canada?",
+      "paragraphs": [
+        "Many agencies in Leicester, Birmingham, Southall, Brampton and Surrey serve families who are more comfortable discussing a large purchase in Punjabi, Hindi or Gujarati than in English. In England and Wales, 291,000 people gave Panjabi as their main language in the 2021 Census. In Canada, 520,000 people spoke Punjabi most often at home in 2021, according to Statistics Canada.",
+        "An older parent calling about a house for their son, or a landlord who prefers Punjabi for anything that sounds legal, gets more out of a call held in their own language. Our guide to a [multilingual AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english) covers how to test mixed-language calls before launch."
+      ]
+    },
+    {
+      "heading": "Which languages can an estate agent's AI receptionist speak?",
+      "paragraphs": [
+        "Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia). The agent opens in the language you choose and follows the caller if they switch mid-sentence, which is how many British and Canadian Punjabi families actually speak.",
+        "Test names and addresses carefully. Street names, postcodes and Canadian postal codes are where any voice agent is most likely to stumble, so ask the agent to read details back before it saves them. The [Punjabi AI voice agent page](/languages/punjabi) and the [Hindi AI voice agent page](/languages/hindi) show sample calls in each language.",
+        "Decide the opening language per line or per page. A Brampton office might open in English and switch to Punjabi on request, while a page aimed at Punjabi-speaking buyers can greet visitors in Punjabi from the start."
+      ]
+    },
+    {
+      "heading": "How does it book viewings and valuations?",
+      "paragraphs": [
+        "The agent collects the caller's name, number, the property they are asking about and when they can attend, then offers free slots inside the hours you set and confirms only once the booking has saved. Bookings go into the built-in Appointments calendar, where staff can reschedule them or mark them confirmed, completed, cancelled or no-show. The [bookings and availability guide](/help/appointments/manage-appointments) covers business hours, slot length, timezone and blackout dates.",
+        "Be honest about one limit: there is no direct connector for property-portal or agency-management software. Booking and lead events go to Zoho CRM, Google Sheets, Slack or any system that accepts a webhook, so check how they reach your diary before going live. Many agencies have the agent book a provisional viewing and a negotiator confirm that the property is still available."
+      ]
+    },
+    {
+      "heading": "Can it answer listing questions without making things up?",
+      "paragraphs": [
+        "A wrong answer about a property costs more than no answer. Put your listings in the live catalog, so the agent looks up the asking price, rent, bedrooms, availability and features of a property when a caller asks, instead of guessing. The [live catalog guide for listings](/help/knowledge-base/live-catalog) explains how it keeps large stock lists quick to search.",
+        "Put agency policies, such as referencing, holding deposits and viewing rules, in the [knowledge base with strict mode](/product/knowledge-base), so the agent quotes your approved wording and says it will check with the team when something is not covered. Keep legal, mortgage and tax questions with people: the agent should take the question and book a callback, not give advice."
+      ]
+    },
+    {
+      "heading": "Should the agent sit on the phone line, the website or both?",
+      "paragraphs": [
+        "Both, if you can. Phone numbers connect through your own telephony provider, so whether your existing UK or Canadian number can be routed to the agent depends on that provider; confirm it before you plan the rollout. The [website voice widget for property sites](/product/widget) needs no number at all: it works in any browser, in any country, and page rules can send each listing page to an agent that knows only that property.",
+        "On phone calls the agent can transfer a hot buyer or an upset landlord to a negotiator and stays on until they answer. A website conversation cannot be transferred to a phone, so there the agent takes a callback number instead.",
+        "Lettings agencies should plan the out-of-hours line separately. A tenant reporting a burst pipe at 10 pm needs a different path from a buyer asking about a viewing. Give the agent a short list of what counts as urgent, the number to transfer those calls to, and the wording for everything else: a callback request logged for the morning with the address, the problem and the best number to call."
+      ]
+    },
+    {
+      "heading": "What should an agency check before going live?",
+      "paragraphs": [
+        "Write down the ten most common calls your office takes and test each one with colleagues playing awkward callers: a buyer chasing an offer, a tenant reporting a leak at night, a caller who starts in English and switches to Punjabi. Read the transcripts, not just the summaries. The [no-code agent builder](/product/agents) lets your own team change greetings, rules and handoffs without a developer.",
+        "Then decide your recording and disclosure wording. Tell callers they are speaking to an AI assistant, say whether the call is recorded and keep only what you need. Vistrow Voice lets you switch recording on or off and set a retention period; the [consent, recording and retention guide](/help/compliance/consent-recording-retention) explains the settings. Compare plans on the [Vistrow Voice pricing page](/pricing) once the pilot looks right."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI receptionist book property viewings?",
+      "a": "Yes. It offers free slots inside the hours you set and saves the viewing in the Appointments calendar, where a negotiator can confirm or move it."
+    },
+    {
+      "q": "Will it work with my UK or Canadian phone number?",
+      "a": "That depends on your telephony provider, because numbers connect through it, so confirm international and local routing with them first. The website voice widget works in any country without a number."
+    },
+    {
+      "q": "Can callers speak Punjabi or Hindi?",
+      "a": "Yes. The agent speaks Punjabi, Hindi, English and many other languages, and follows a caller who switches language during the call."
+    },
+    {
+      "q": "Does it connect to my agency software?",
+      "a": "There is no direct connector for agency-management or portal software. Leads and bookings go to Zoho CRM, Google Sheets, Slack or a webhook."
+    },
+    {
+      "q": "Will it give buyers mortgage or legal advice?",
+      "a": "No. It shares approved listing and agency information, and passes mortgage, legal and tax questions to your team as callback requests."
+    }
+  ],
+  "imageAlt": "Artha, the AI receptionist, holding a tablet beside cards showing a property enquiry, Hindi and Punjabi greetings and a viewing booked",
+  "imagePrompt": "Designed cover (scripts/blog-covers/13-ai-receptionist-for-estate-agents-uk-canada.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "ONS: Language, England and Wales, Census 2021",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/culturalidentity/language/bulletins/languageenglandandwales/census2021"
+    },
+    {
+      "title": "Statistics Canada, The Daily, 17 August 2022: languages spoken at home, 2021 Census",
+      "url": "https://www150.statcan.gc.ca/n1/daily-quotidien/220817/dq220817a-eng.htm"
+    }
+  ],
+  "contextualLinks": "To see how property calls are qualified, read about [AI voice agents for real estate leads](/resources/blog/ai-voice-agents-for-real-estate-leads) or explore the [real estate voice AI solution](/solutions/real-estate).",
+  "inbound": [
+    {
+      "target": "blog:ai-voice-agents-for-real-estate-leads",
+      "sentence": "Agencies abroad with South Asian clients can read our guide to an [AI receptionist for estate agents in the UK and Canada](/resources/blog/ai-receptionist-for-estate-agents-uk-canada)."
+    },
+    {
+      "target": "page:/solutions/real-estate",
+      "sentence": "For agencies in Britain and Canada, see how an [AI receptionist for estate agents answers Hindi and Punjabi callers](/resources/blog/ai-receptionist-for-estate-agents-uk-canada)."
+    }
+  ]
+}

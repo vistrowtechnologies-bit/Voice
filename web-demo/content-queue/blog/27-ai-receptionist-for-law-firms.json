@@ -1,0 +1,127 @@
+{
+  "n": 27,
+  "publishOn": "2026-11-16",
+  "primaryKeyword": "ai receptionist for law firms",
+  "audience": "India + diaspora",
+  "slug": "ai-receptionist-for-law-firms",
+  "title": "AI receptionist for law firms: intake without the risk",
+  "seoTitle": "AI Receptionist for Law Firms: Safe Client Intake",
+  "metaDescription": "How an AI receptionist for law firms takes enquiries and books consultations without giving legal advice, and the intake and privacy rules to set.",
+  "shortAnswer": "An AI receptionist for law firms answers enquiry calls, records the caller's details and the type of matter, books consultations and sends urgent calls to a lawyer. It must never give legal advice or predict outcomes. Set fixed rules for what it says, how it handles urgent matters and how call records are kept before clients hear it.",
+  "excerpt": "Law firms miss calls when lawyers are in court and staff are busy. An AI receptionist can take those enquiries, but only inside firm rules. Here is what it should do, what it must never do, and how to set it up.",
+  "category": "Industries",
+  "related": [
+    "what-is-an-ai-receptionist",
+    "ai-receptionist-for-clinics",
+    "ai-call-recordings-and-transcripts"
+  ],
+  "sections": [
+    {
+      "heading": "What can an AI receptionist do for a law firm?",
+      "paragraphs": [
+        "Most calls to a law firm are first enquiries, appointment requests and questions about fees, documents or office hours. They arrive while lawyers are in court or in meetings, and a missed enquiry often becomes another firm's client. An [AI receptionist that answers every call](/ai-receptionist) takes those calls at any hour the line is open, without making the caller wait.",
+        "Vistrow Voice answers enquiry calls, collects the details your intake form needs, books consultations into the built-in Appointments calendar and sends each enquiry to your CRM or email workflow. It does administrative work only. If the idea is new to you, our explainer on [what an AI receptionist should handle](/resources/blog/what-is-an-ai-receptionist) covers the basics."
+      ],
+      "points": [
+        "Firm information: practice areas, office locations, hours and what to bring.",
+        "New enquiries: who is calling, what kind of matter, how urgent it is.",
+        "Consultation booking, rescheduling and callback requests."
+      ]
+    },
+    {
+      "heading": "What should legal intake on the phone collect?",
+      "paragraphs": [
+        "Good intake is short and consistent. Decide the fields your team needs to decide whether to take a matter, then let the agent ask for them one at a time. Post-call data extraction turns each answer into a field, and the [CRM and webhook integrations](/product/integrations) deliver them to your system with the transcript.",
+        "Include the names of the other parties so your team can run its own conflict check before anyone gives an opinion. The agent only records those names; it never decides whether the firm can act."
+      ],
+      "points": [
+        "Caller name, phone number and preferred language.",
+        "Type of matter, such as property, family, employment or company work.",
+        "Names of the other parties, for your conflict check.",
+        "Any date that cannot be missed, such as a hearing or a notice deadline.",
+        "How the caller found the firm, and a good time for a callback."
+      ]
+    },
+    {
+      "heading": "How do you stop an AI receptionist giving legal advice?",
+      "paragraphs": [
+        "Write it as a fixed rule, together with what the agent says instead. For example: \"I can't advise on your situation, but I can book you a consultation with one of our lawyers.\" The agent should not interpret documents, estimate chances of success, comment on what the caller should do, or quote outcomes of past cases.",
+        "Put your approved answers about practice areas, consultation process and documents in the [knowledge base for approved answers](/product/knowledge-base), and switch on strict mode. The [knowledge base setup guide](/help/knowledge-base/add-knowledge) explains how strict mode makes the agent quote your approved answers and say it will check with the team when something is not covered, instead of improvising."
+      ],
+      "points": [
+        "Never: legal opinions, predictions, document review or fee promises outside your approved fee wording.",
+        "Always: a consultation offer or a callback from a lawyer instead.",
+        "Test it: ask the agent \"Will I win?\" in several ways and read the replies."
+      ]
+    },
+    {
+      "heading": "How should urgent legal matters be handled?",
+      "paragraphs": [
+        "Some calls cannot wait for a consultation slot: an arrest, a hearing tomorrow, a threat to someone's safety. Agree with your partners which situations go straight to a person, and write those triggers into the prompt. Set a transfer number; on phone calls the agent dials a lawyer or the duty contact into the call and stays on until they answer, as the [functions and transfer guide](/help/agents/agent-functions-and-transfer) explains.",
+        "If nobody answers, the agent takes a callback with the details and the urgency flagged, and your team is alerted through Slack or your CRM. Where someone may be in danger, the agent should tell them to contact the police or emergency services first. A conversation started from the website widget cannot be transferred to a phone, so there the agent takes a callback number."
+      ]
+    },
+    {
+      "heading": "How should a law firm handle confidentiality, consent and recordings?",
+      "paragraphs": [
+        "Callers often share sensitive facts in the first minute. Decide whether calls are recorded, what callers are told at the start and who in the firm can open transcripts. Vistrow Voice lets you require spoken consent before details are collected, switch recording on or off and set a retention period, as the [consent, recording and retention guide](/help/compliance/consent-recording-retention) describes. If a caller declines, the recording is discarded and the agent does not collect personal details.",
+        "In India, the Digital Personal Data Protection Act, 2023 says consent must be free, specific, informed, unconditional and unambiguous, and that a request for consent must come with a notice of the data and its purpose. Its provisions come into force on dates the government notifies, so check which ones apply to your firm and when. Agree the wording with whoever handles compliance, and read the [Vistrow Voice security overview](/security) for the controls in place today. Our [call recordings and transcripts checklist](/resources/blog/ai-call-recordings-and-transcripts) covers access and retention in more detail."
+      ]
+    },
+    {
+      "heading": "Which languages can clients use?",
+      "paragraphs": [
+        "People describe a legal problem best in the language they think in. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows a caller who switches mid-call. The [supported languages page](/languages) has a page for each Indian language.",
+        "This helps firms abroad too. A practice in the UK or Canada with many South Asian clients, for example in immigration, property or family work, can take first enquiries in Hindi, Punjabi or Gujarati. Phone access from abroad depends on your telephony provider, while the [website voice widget](/product/widget) works from any browser."
+      ]
+    },
+    {
+      "heading": "How should a law firm pilot an AI receptionist?",
+      "paragraphs": [
+        "Start with one line and one job: new-enquiry intake and consultation booking. Keep the agent to answering enquiries that people start themselves, and check any outbound use with your bar council or regulator first.",
+        "Test with colleagues playing difficult callers: an angry client, a caller who wants advice on the spot, someone with a hearing tomorrow and a caller who switches language. Read the first week of transcripts daily, then widen the scope. If your enquiries arrive through web forms, see how [instant AI follow-up calls](/resources/blog/speed-to-lead-ai-follow-up-calls) reach them quickly, and compare plans on the [Vistrow Voice pricing page](/pricing)."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI receptionist give legal advice?",
+      "a": "No, and it should be set up never to try. It answers administrative questions from your approved information and offers a consultation or a callback for anything about the caller's situation."
+    },
+    {
+      "q": "Can it book consultations with our lawyers?",
+      "a": "Yes. It offers free slots inside the hours you set, collects the caller's details and matter type, and confirms once the booking has saved in the Appointments calendar."
+    },
+    {
+      "q": "Does it run conflict checks?",
+      "a": "No. It records the names of the other parties so your team can run its own conflict check before the consultation."
+    },
+    {
+      "q": "What happens with an urgent call, such as an arrest or a hearing tomorrow?",
+      "a": "The agent transfers the call to the lawyer or duty contact you set. If nobody answers, it takes a callback with the urgency flagged and alerts your team."
+    },
+    {
+      "q": "Is client information kept confidential?",
+      "a": "Call data stays in your firm's own account. You can require spoken consent, switch recording off and set how long transcripts and recordings are kept."
+    }
+  ],
+  "imageAlt": "A client on her phone in a bright law office with law books and brass scales, with a card reading AI receptionist for law firms and an Artha tag",
+  "imagePrompt": "Designed cover (scripts/blog-covers/27-ai-receptionist-for-law-firms.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "The Digital Personal Data Protection Act, 2023 (Gazette of India, Ministry of Electronics and IT)",
+      "url": "https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf"
+    }
+  ],
+  "contextualLinks": "To plan a law firm line, see how an [AI receptionist answers and routes calls](/ai-receptionist) and how the [knowledge base keeps answers approved](/product/knowledge-base).",
+  "inbound": [
+    {
+      "target": "blog:what-is-an-ai-receptionist",
+      "sentence": "Professional firms need stricter rules; see our guide to an [AI receptionist for law firms](/resources/blog/ai-receptionist-for-law-firms)."
+    },
+    {
+      "target": "page:/ai-receptionist",
+      "sentence": "For legal practices, read how an [AI receptionist for law firms takes intake](/resources/blog/ai-receptionist-for-law-firms) without giving legal advice."
+    }
+  ]
+}

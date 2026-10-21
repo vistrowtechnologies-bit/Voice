@@ -1,0 +1,137 @@
+{
+  "n": 20,
+  "publishOn": "2026-11-09",
+  "primaryKeyword": "punjabi ai voice agent",
+  "audience": "India, UK, CA",
+  "slug": "punjabi-ai-voice-agent",
+  "title": "Punjabi AI voice agent for businesses in India, the UK and Canada",
+  "seoTitle": "Punjabi AI Voice Agent for India, the UK and Canada",
+  "metaDescription": "What a Punjabi AI voice agent should do on calls and on your website in India, the UK and Canada, and how to test Punjabi, Hindi and English mixing.",
+  "shortAnswer": "A Punjabi AI voice agent answers and makes calls in Punjabi, follows callers who switch to Hindi or English, and books, captures or hands over the request. For businesses in India, the UK and Canada, test it with native speakers, on your real phone route and website, before it takes live calls.",
+  "excerpt": "Punjabi speakers call clinics, consultancies, shops and property firms in Punjab, Birmingham, Brampton and Surrey. Here is what a Punjabi voice agent should handle and how to test one properly.",
+  "category": "Languages & speech",
+  "related": [
+    "multilingual-ai-receptionist-hindi-punjabi-english",
+    "how-to-choose-a-multilingual-voice-agent",
+    "website-voice-widget-for-lead-generation"
+  ],
+  "sections": [
+    {
+      "heading": "What is a Punjabi AI voice agent?",
+      "paragraphs": [
+        "A Punjabi AI voice agent is software that holds a spoken conversation in Punjabi on a phone call or a website. It listens, understands the request, answers from facts you approved, and then books an appointment, takes a callback request or passes the call to a person. It is not a recorded menu that asks callers to press keys. Our [Punjabi AI voice calling agent page](/languages/punjabi) shows a sample call in Gurmukhi with an English gloss.",
+        "Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia). If your callers also use Hindi, read our guide to [one AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english)."
+      ]
+    },
+    {
+      "heading": "Who needs a Punjabi voice agent in India, the UK and Canada?",
+      "paragraphs": [
+        "In India, Punjabi is the everyday language for many callers in Punjab, Chandigarh and parts of Delhi NCR. Outside India the audience is large too. In England and Wales, 291,000 people gave Panjabi as their main language in Census 2021, according to the Office for National Statistics. In Canada, the 2021 Census counted about 942,000 Punjabi speakers, more than any other non-official language except Spanish and Mandarin, according to Statistics Canada.",
+        "The businesses that hear Punjabi most are the ones whose customers phone before they visit: study-abroad and immigration consultancies, clinics, property developers and letting agents, insurance brokers, car dealers, and family-run shops and caterers. The [inbound call answering overview](/product/inbound) explains how an agent takes those calls when your team is busy or closed."
+      ]
+    },
+    {
+      "heading": "How should it handle Punjabi, Hindi and English on one call?",
+      "paragraphs": [
+        "Very few calls stay in one language. A caller in Ludhiana may say “visa”, “IELTS” and “booking” in English inside a Punjabi sentence; a caller in Brampton may start in English and switch once they hear Punjabi. A good agent understands those mixed sentences, keeps replying in the caller’s language and switches only when the caller does. Our [multilingual voice agent buying guide](/resources/blog/how-to-choose-a-multilingual-voice-agent) covers the wider test."
+      ],
+      "points": [
+        "Mid-sentence mixing: Punjabi with English nouns and numbers, and Punjabi with Hindi phrases.",
+        "Following the caller, not the phone number: a UK or Canadian number tells you nothing about language preference.",
+        "Respectful forms of address: “ji” and polite forms matter to older callers.",
+        "Grammar that matches the voice: Punjabi verbs change with the speaker’s gender, so a female voice must use feminine forms."
+      ]
+    },
+    {
+      "heading": "Does it work on phone lines outside India?",
+      "paragraphs": [
+        "On Vistrow Voice, phone numbers connect through your own telephony provider. Whether callers in the UK or Canada can reach the agent on a local number, and what that costs, depends on that provider, so confirm it before you plan a launch abroad. Ask your provider which countries it can route and test a call from each one.",
+        "The website is simpler. The [website voice widget](/product/widget) lets a visitor talk to the same agent from any browser in any country, with no phone call at all. For a consultancy or shop serving customers in Wolverhampton or Surrey, a voice button on the website is often the quickest way to offer Punjabi help.",
+        "Time zones matter as well. If your team works from India but serves customers in Canada or the UK, many enquiries arrive while your office is closed. An agent that answers in Punjabi at those hours, books a slot inside your bookable hours and leaves a clear summary for the morning means nobody waits a day for a reply."
+      ]
+    },
+    {
+      "heading": "What can the agent do once it understands the caller?",
+      "paragraphs": [
+        "Understanding Punjabi is only useful if the call ends with something done. Vistrow Voice can book appointments inside your bookable hours, request callbacks, capture details you choose (such as course, budget or location), and transfer phone calls to a colleague. Each call is saved with a transcript and summary, and leads can go to Zoho CRM, Google Sheets, Slack, ArthaLeads or a webhook through [CRM and app integrations](/product/integrations)."
+      ],
+      "points": [
+        "Study-abroad and immigration enquiries: course, intake and counselling questions answered from your approved information, with consultations booked. The agent does not give immigration advice.",
+        "Property enquiries: budget, location and timeline captured before your sales team calls back, as on the [real estate voice AI page](/solutions/real-estate).",
+        "Clinic and service bookings: appointment requests, timings and directions in Punjabi."
+      ]
+    },
+    {
+      "heading": "How do you test a Punjabi voice agent before launch?",
+      "paragraphs": [
+        "Ask at least three native speakers from the regions you serve to call it: one from Punjab, one who grew up in the UK or Canada, and one older caller. Give each a real task, such as booking a counselling session or asking about a property, and let them speak naturally. You can run early rounds in the browser with the [quick browser test](/help/testing-lab/quick-browser-test) before you connect a number."
+      ],
+      "points": [
+        "Read every transcript next to the recording and mark names, places, dates and numbers the agent got wrong.",
+        "Check that prices, fees and timings come only from your approved information.",
+        "Try a caller who switches language halfway, background noise, and a request the agent should refuse.",
+        "Ask your testers whether the voice sounds natural and respectful, not just whether it was understood."
+      ]
+    },
+    {
+      "heading": "What should Punjabi callers hear about AI and recording?",
+      "paragraphs": [
+        "Tell callers they are speaking with an AI assistant and, if you record, that the call is recorded. On Vistrow Voice, when recording is on, the agent’s opening line adds a short notice. The built-in wording is in Hindi for Hindi agents and in English for every other language, so for Punjabi callers write your own one-sentence notice in Punjabi under [consent, recording and retention settings](/help/compliance/consent-recording-retention).",
+        "Rules on recording and disclosure differ between India, the UK and Canada. Agree the wording and how long recordings are kept with whoever handles compliance in each market."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can a Punjabi AI voice agent understand Punjabi mixed with English?",
+      "a": "It should. Test it with callers who mix English words, numbers and Hindi phrases into Punjabi, and check that it keeps replying in Punjabi."
+    },
+    {
+      "q": "Can callers in the UK or Canada phone a Punjabi agent?",
+      "a": "On Vistrow Voice, numbers connect through your own telephony provider, so overseas calling depends on that provider. The website voice widget works from any browser in any country."
+    },
+    {
+      "q": "Does the agent give immigration or visa advice?",
+      "a": "No. It takes enquiries, answers from your approved information and books consultations. Advice stays with your qualified advisers."
+    },
+    {
+      "q": "Which script does the Punjabi page use?",
+      "a": "Our sample call on the [Punjabi AI voice calling agent page](/languages/punjabi) is written in Gurmukhi. On a call, the agent works with speech, so script matters for transcripts and your own written notices."
+    },
+    {
+      "q": "Is a Punjabi voice agent the same as a Punjabi IVR?",
+      "a": "No. An IVR plays recorded prompts and waits for key presses. A voice agent understands what the caller says in their own words, answers, and completes or hands over the request."
+    },
+    {
+      "q": "Can it book appointments in Punjabi?",
+      "a": "Yes. Vistrow Voice books appointments inside the bookable hours you set, or takes a callback request when no slot fits."
+    }
+  ],
+  "imageAlt": "Punjabi greeting Sat Sri Akal in Gurmukhi above the title Punjabi AI voice agent, with a Sikh shopkeeper on a phone call and an Artha badge",
+  "imagePrompt": "Designed cover (scripts/blog-covers/20-punjabi-ai-voice-agent.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Office for National Statistics: Language, England and Wales, Census 2021",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/culturalidentity/language/bulletins/languageenglandandwales/census2021"
+    },
+    {
+      "title": "Statistics Canada, The Daily (22 January 2025): languages spoken in Canada, 2021 Census",
+      "url": "https://www150.statcan.gc.ca/n1/daily-quotidien/250122/dq250122b-eng.htm"
+    },
+    {
+      "title": "Statistics Canada: Number of speakers of selected non-official languages, Canada, 2021",
+      "url": "https://www150.statcan.gc.ca/n1/daily-quotidien/250122/t001b-eng.htm"
+    }
+  ],
+  "contextualLinks": "See a sample call on the [Punjabi AI voice calling agent page](/languages/punjabi) or add Punjabi help to your site with the [website voice widget](/product/widget).",
+  "inbound": [
+    {
+      "target": "language:punjabi",
+      "sentence": "For businesses in the UK and Canada, our guide to a [Punjabi AI voice agent for India, the UK and Canada](/resources/blog/punjabi-ai-voice-agent) covers phone routes, testing and disclosure."
+    },
+    {
+      "target": "blog:multilingual-ai-receptionist-hindi-punjabi-english",
+      "sentence": "If most of your callers speak Punjabi, read our focused guide to [choosing and testing a Punjabi AI voice agent](/resources/blog/punjabi-ai-voice-agent)."
+    }
+  ]
+}

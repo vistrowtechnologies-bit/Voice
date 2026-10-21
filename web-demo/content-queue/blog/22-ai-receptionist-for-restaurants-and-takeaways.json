@@ -1,0 +1,129 @@
+{
+  "n": 22,
+  "publishOn": "2026-11-11",
+  "primaryKeyword": "ai receptionist for restaurants",
+  "audience": "India + diaspora",
+  "slug": "ai-receptionist-for-restaurants-and-takeaways",
+  "title": "AI phone ordering and enquiries for restaurants and takeaways",
+  "seoTitle": "AI Receptionist for Restaurants: Phone Orders and Enquiries",
+  "metaDescription": "What an AI receptionist for restaurants and takeaways can handle at peak hour: menu questions, orders, table requests and timings, and where staff step in.",
+  "shortAnswer": "An AI receptionist for restaurants answers the phone when staff are busy: it gives opening hours, directions and menu details from your approved information, takes takeaway orders and table requests, and sends them to your team. Allergen questions, complaints and anything it cannot confirm should go to a person.",
+  "excerpt": "The phone rings hardest when the kitchen is busiest. Here is what an AI receptionist can take off your staff at peak hour, what it should never guess, and how to set it up.",
+  "category": "Industries",
+  "related": [
+    "what-is-an-ai-receptionist",
+    "multilingual-ai-receptionist-hindi-punjabi-english",
+    "connecting-voice-calls-to-your-crm"
+  ],
+  "sections": [
+    {
+      "heading": "Why do restaurants miss so many phone calls?",
+      "paragraphs": [
+        "Restaurant calls arrive in bursts. In most places the phone is busiest at dinner time and weekend lunch, exactly when every person is cooking, serving or packing orders. A call left ringing is often a takeaway order or a table that goes to the place down the road. An [AI receptionist that answers your business calls](/ai-receptionist) picks up those calls without pulling anyone off the floor.",
+        "Most of these calls are routine: are you open, where do I park, do you have a vegetarian thali, can I book for six on Saturday. They are the calls an agent handles well, because the answers are fixed and you can write them down once. Our guide to [what an AI receptionist is and what it should handle](/resources/blog/what-is-an-ai-receptionist) explains the role in general."
+      ]
+    },
+    {
+      "heading": "What can an AI receptionist handle for a restaurant?",
+      "paragraphs": [
+        "Start with the questions your staff answer twenty times a day, then add orders and bookings once those work. Vistrow Voice answers from a [knowledge base of approved answers](/product/knowledge-base), so timings, prices and policies come from your own information, not a guess."
+      ],
+      "points": [
+        "Opening hours, holiday timings, location, parking and delivery areas.",
+        "Menu questions: dishes, portion sizes, vegetarian and Jain options, and today’s specials if you update them.",
+        "Takeaway and collection orders: items, quantities, name, phone number and pickup time.",
+        "Table requests: date, time, party size and any occasion.",
+        "Event and catering enquiries: details captured for the manager to call back."
+      ]
+    },
+    {
+      "heading": "How does phone ordering work with an AI agent?",
+      "paragraphs": [
+        "Load your menu into the agent. On Vistrow Voice, on plans that include it, the [live catalog for menus and products](/help/knowledge-base/live-catalog) holds items with details such as price and availability, and the agent looks them up when a caller asks. The agent then reads the order back, confirms the pickup time and saves the details on the call.",
+        "Be clear about what happens next. Vistrow Voice does not connect directly to restaurant point-of-sale systems or delivery apps, and it does not take card payments on the call. Each order is saved with a transcript and summary and can be sent straight to a Google Sheet, a Slack channel or your own system through a webhook, using [CRM and app integrations](/product/integrations). A person in the kitchen or at the counter should see it within moments and confirm it in your usual system."
+      ]
+    },
+    {
+      "heading": "What does a good phone order call sound like?",
+      "paragraphs": [
+        "A good order call is short and leaves nothing to guess. The caller should never have to repeat themselves, and the kitchen should receive something it can act on without calling back. Listen for these steps when you test, and compare them with how your best staff member takes an order. The [guide to finding a call, transcript or recording](/help/calls/find-a-call) shows where each order is saved."
+      ],
+      "points": [
+        "Greets the caller with the restaurant’s name and asks how it can help.",
+        "Takes items one at a time and asks about spice level, size or extras only where your menu has options.",
+        "Reads the full order back, with quantities, and corrects anything the caller changes.",
+        "Confirms the name, phone number and pickup or delivery time, and says when the order will be ready only if you gave it that information.",
+        "Ends by telling the caller what happens next, for example that the restaurant will confirm by text or at the counter."
+      ]
+    },
+    {
+      "heading": "Can it take table bookings?",
+      "paragraphs": [
+        "It can take the request and, depending on how you seat people, book it. Vistrow Voice has built-in Appointments, which book slots inside the hours you set; the [guide to bookings and availability](/help/appointments/manage-appointments) shows the settings. That suits slot-based bookings such as a private dining room or a chef’s table.",
+        "For a dining room with many tables at the same time, the simpler setup is for the agent to capture the request (name, number, date, time and party size) and send it to the person who manages reservations, who confirms it. Tell callers that clearly, so nobody arrives expecting a table that was never confirmed."
+      ]
+    },
+    {
+      "heading": "What should always go to a person?",
+      "paragraphs": [
+        "Allergen questions are the clearest example. In the UK, the Food Standards Agency’s guidance says businesses that sell food by phone must give allergen information before the purchase is completed and again when the food is delivered, covering 14 named allergens. That information must be accurate, so many restaurants route allergen questions to a trained member of staff rather than let any automated system answer them.",
+        "The same applies to complaints, refunds, large party or catering quotes, and anything the agent cannot confirm. On phone calls, Vistrow Voice can transfer the caller to a colleague and stays on until they answer; if nobody picks up, it takes a callback request. The [guide to functions and transfers](/help/agents/agent-functions-and-transfer) explains the settings."
+      ]
+    },
+    {
+      "heading": "Can it speak to customers in their own language?",
+      "paragraphs": [
+        "Many restaurants, especially Indian restaurants and takeaways in the UK, Canada and the Gulf, have customers who would rather order in Hindi, Punjabi, Gujarati, Tamil or Bengali. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows the caller when they switch. See our guide to [one AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english).",
+        "Phone numbers connect through your own telephony provider, so overseas calling depends on that provider. The [website voice widget](/product/widget) lets visitors ask about the menu or a booking from any browser."
+      ]
+    },
+    {
+      "heading": "How do you set it up and test it before a busy weekend?",
+      "paragraphs": [
+        "Write down your hours, menu, delivery area, booking rules and the questions that must go to staff. Load them, then have staff ring it as customers would, on a mobile, with kitchen noise in the background. Check that it reads orders back correctly and never invents a dish or a price. On Vistrow Voice, the [inbound call answering overview](/product/inbound) shows how to route your number to the agent and set the hours it answers.",
+        "Go live on quieter days first, read the transcripts each evening, and fix anything it got wrong before the next Friday rush."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI receptionist take takeaway orders?",
+      "a": "Yes. It can take items, quantities, name, number and pickup time, read the order back and send it to your team. Staff confirm it in your usual system."
+    },
+    {
+      "q": "Does it connect to my restaurant POS or delivery apps?",
+      "a": "Vistrow Voice does not connect directly to point-of-sale systems or delivery apps. Orders reach your team through Google Sheets, Slack or a webhook."
+    },
+    {
+      "q": "Should an AI receptionist answer allergen questions?",
+      "a": "Only from accurate, approved allergen information, and many restaurants prefer to pass these questions to trained staff. Check the allergen rules where you trade."
+    },
+    {
+      "q": "Can it handle several calls at once at peak time?",
+      "a": "You set how many calls a number takes at once, and your telephony provider’s channels also limit it. Check both before a busy period."
+    },
+    {
+      "q": "Can it take payment over the phone?",
+      "a": "No. Vistrow Voice does not take card details or payments on a call. Customers pay on collection, at the table or through your usual payment link."
+    }
+  ],
+  "imageAlt": "Restaurant at dinner rush with a cook packing takeaway boxes, a cordless phone on the counter, and a card reading AI phone ordering for restaurants",
+  "imagePrompt": "Designed cover (scripts/blog-covers/22-ai-receptionist-for-restaurants-and-takeaways.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Food Standards Agency (GOV.UK): Allergen guidance for food businesses, section 3.2 distance selling",
+      "url": "https://www.gov.uk/government/publications/allergen-guidance-for-food-businesses/allergen-guidance-for-food-businesses"
+    }
+  ],
+  "contextualLinks": "To see how calls are answered, read about [inbound call answering](/product/inbound) or the wider [AI receptionist for business calls](/ai-receptionist).",
+  "inbound": [
+    {
+      "target": "blog:what-is-an-ai-receptionist",
+      "sentence": "For a worked example in hospitality, see our guide to an [AI receptionist for restaurants and takeaways](/resources/blog/ai-receptionist-for-restaurants-and-takeaways)."
+    },
+    {
+      "target": "page:/ai-receptionist",
+      "sentence": "Running a restaurant or takeaway? Read how an [AI receptionist handles phone orders and table requests](/resources/blog/ai-receptionist-for-restaurants-and-takeaways) at peak hour."
+    }
+  ]
+}

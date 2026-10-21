@@ -1,0 +1,137 @@
+{
+  "n": 23,
+  "publishOn": "2026-11-12",
+  "primaryKeyword": "missed calls small business",
+  "audience": "Global",
+  "slug": "missed-calls-small-business-cost",
+  "title": "What a missed call costs a small business, and how to stop it",
+  "seoTitle": "Missed Calls in Small Business: The Cost and How to Stop It",
+  "metaDescription": "How to work out what missed calls cost your small business, why they happen, and the options for answering every call, from call forwarding to AI.",
+  "shortAnswer": "A missed call costs a small business the value of any customer who does not call back. To measure it, count missed calls from new callers, multiply by your usual conversion rate and average sale, and add the time spent chasing callbacks. Then fix the gaps with forwarding, better rotas, an answering service or an AI receptionist.",
+  "excerpt": "Every small business misses calls: during a job, at lunch, after closing. Here is how to put a number on it using your own records, and the practical ways to stop it.",
+  "category": "Voice AI basics",
+  "related": [
+    "how-to-work-out-ai-receptionist-roi",
+    "ai-receptionist-vs-answering-service-vs-ivr",
+    "what-is-an-ai-receptionist"
+  ],
+  "sections": [
+    {
+      "heading": "Why do small businesses miss so many calls?",
+      "paragraphs": [
+        "Small teams do the work and answer the phone at the same time. The owner is on a site visit, the front desk is serving a customer, the clinic is mid-appointment, or the shop has just closed. Calls also bunch together: Monday mornings, lunch hours and the evening after people finish work. None of this is carelessness; it is what happens when the person who answers is also the person who delivers.",
+        "The fix starts with knowing when and why calls go unanswered. An [AI receptionist for your business line](/ai-receptionist) is one option, and the [inbound call answering overview](/product/inbound) shows how an agent picks up calls your team cannot. First, though, measure the problem."
+      ]
+    },
+    {
+      "heading": "What does a missed call actually cost?",
+      "paragraphs": [
+        "The direct cost is lost business: a new customer who rang you, got no answer and rang someone else. Existing customers are usually more patient, so the cost sits mostly with new enquiries. There are quieter costs too: time spent returning calls, playing phone tag, and listening to voicemails that say only “please call me back”. And a business that is hard to reach can feel less reliable to a new customer, even when the work itself is excellent.",
+        "There is no honest universal figure for this, because it depends on what you sell and how your customers behave. That is why the method below uses your own numbers. The same approach is set out step by step in our guide to [working out the return on an AI receptionist](/resources/blog/how-to-work-out-ai-receptionist-roi)."
+      ]
+    },
+    {
+      "heading": "How do you count your missed calls?",
+      "paragraphs": [
+        "Export a month of call records from your phone system or telephony provider. Most show unanswered calls with the time and caller number. If yours does not, keep a simple tally sheet by the phone for two normal weeks. Once an agent answers for you, every call also appears in [your call history with transcripts](/help/calls/find-a-call), which makes the next count easier."
+      ],
+      "points": [
+        "Separate new callers from existing customers by checking numbers against your customer list.",
+        "Group missed calls by time of day and day of week to see where the gaps are.",
+        "Count how many were returned, and how long it took. A callback the next day often reaches someone who has already chosen another business.",
+        "Remove spam, sales calls and repeat attempts from the same number."
+      ]
+    },
+    {
+      "heading": "How do you turn missed calls into a monthly figure?",
+      "paragraphs": [
+        "Take the missed calls from new callers in a month. Multiply by the share of new enquiries that normally become customers, from your own sales records. Multiply again by your average first sale or booking value. That is the business at risk each month. Add the staff hours spent returning calls, at their hourly cost.",
+        "Use cautious inputs, and write the source next to each one. If the figure is small, a simple fix such as a better rota may be enough. If it is large, it is worth comparing the options in our guide to [AI receptionists, answering services and IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr)."
+      ]
+    },
+    {
+      "heading": "What are the options for answering more calls?",
+      "paragraphs": [
+        "There is no single right answer; most businesses combine two or three of these. Choose based on when your calls are missed and what callers want."
+      ],
+      "points": [
+        "Call forwarding to a mobile: cheap and quick, but it moves the interruption rather than removing it.",
+        "Rotas and cover: someone owns the phone at peak times. Works if you have the people.",
+        "A human answering service: takes messages in your name, usually without your full product knowledge.",
+        "An IVR menu: routes callers but does not answer their question, as explained in [what an IVR is and how it works](/resources/blog/what-is-ivr-interactive-voice-response).",
+        "An AI receptionist: answers calls routed to it, up to the number you allow at once, gives approved answers, books and passes on the rest."
+      ]
+    },
+    {
+      "heading": "How does an AI receptionist stop missed calls?",
+      "paragraphs": [
+        "An AI receptionist answers when your team cannot: during jobs, at lunch, after hours or when two calls arrive at once. Vistrow Voice answers inbound calls in more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia). It answers from your [approved answers in the knowledge base](/product/knowledge-base), books appointments inside your hours, takes callback requests and transfers phone calls to a colleague when a person is needed.",
+        "Every call is saved with a transcript and summary, and the caller’s details can go straight to Zoho CRM, Google Sheets, Slack, ArthaLeads or a webhook. Phone numbers connect through your own telephony provider, and you choose the hours and days the agent answers. Website visitors can also talk to the same agent through the [website voice widget](/product/widget)."
+      ]
+    },
+    {
+      "heading": "What should a caller get when nobody can answer?",
+      "paragraphs": [
+        "Whatever you choose, judge it from the caller’s side. Someone who rings a small business wants one of a few things: an answer, a booking, or confidence that a person will call back soon. A ringing phone or a full voicemail gives none of them. A good setup gives at least one on every call. Our guide to [what an AI receptionist should handle](/resources/blog/what-is-an-ai-receptionist) goes into more detail."
+      ],
+      "points": [
+        "An answer to simple questions such as hours, location, services and what to bring.",
+        "A booking, or a clear callback time, rather than “someone will be in touch”.",
+        "A quick route to a person for urgent or sensitive matters.",
+        "A record for your team, so the callback starts where the caller left off."
+      ]
+    },
+    {
+      "heading": "How do you know the problem is fixed?",
+      "paragraphs": [
+        "Repeat the count a month after the change. Compare unanswered calls, enquiries captured, bookings made and the time staff spend returning calls. Read a sample of transcripts each week to check the captured enquiries are real and the answers were right. Our guide to [AI call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) explains what to look for when you review them.",
+        "If calls are still being missed, look at when. Gaps often move: once daytime calls are covered, the next problem is usually weekends or late evenings."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "How much does a missed call cost a small business?",
+      "a": "It depends on your conversion rate and average sale. Multiply missed calls from new callers by both, then add the time spent returning calls."
+    },
+    {
+      "q": "Do callers leave voicemails?",
+      "a": "Some do, but many new callers simply try the next business. Check your own records: compare missed calls with voicemails received."
+    },
+    {
+      "q": "Is call forwarding enough to stop missed calls?",
+      "a": "It helps when the person receiving the forwarded call is free. It does not help when everyone is busy at once or after hours."
+    },
+    {
+      "q": "Can an AI receptionist answer calls after hours?",
+      "a": "Yes. You choose the hours and days it answers. It can give approved answers, book appointments or take a callback request for the morning."
+    },
+    {
+      "q": "Which missed calls should I fix first?",
+      "a": "Start with the time slot where most new callers go unanswered, often lunch, evenings or weekends. Fixing one gap well is better than covering everything badly."
+    },
+    {
+      "q": "Will an AI receptionist replace my staff on the phone?",
+      "a": "It usually takes routine and overflow calls so staff handle fewer interruptions. Calls that need a person can be transferred or returned."
+    }
+  ],
+  "imageAlt": "Before and after: a busy shop owner misses a ringing phone on the counter, and on the right Artha in a headset answers with a speech bubble",
+  "imagePrompt": "Designed cover (scripts/blog-covers/23-missed-calls-small-business-cost.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists (what the phone-answering role involves)",
+      "url": "https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm"
+    }
+  ],
+  "contextualLinks": "To put a value on the fix, use our [AI receptionist ROI method](/resources/blog/how-to-work-out-ai-receptionist-roi) or see how [inbound call answering](/product/inbound) works.",
+  "inbound": [
+    {
+      "target": "blog:how-to-work-out-ai-receptionist-roi",
+      "sentence": "Not sure how many calls you lose? Start with our guide to [what a missed call costs a small business](/resources/blog/missed-calls-small-business-cost)."
+    },
+    {
+      "target": "page:/product/inbound",
+      "sentence": "Before you set up an agent, read [what missed calls cost a small business and how to stop them](/resources/blog/missed-calls-small-business-cost)."
+    }
+  ]
+}

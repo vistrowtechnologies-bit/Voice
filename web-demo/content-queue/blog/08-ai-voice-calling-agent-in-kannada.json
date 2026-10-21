@@ -1,0 +1,127 @@
+{
+  "n": 8,
+  "publishOn": "2026-10-28",
+  "primaryKeyword": "ai voice calling agent in kannada",
+  "audience": "India",
+  "slug": "ai-voice-calling-agent-in-kannada",
+  "title": "AI voice calling agent in Kannada: what to test before launch",
+  "seoTitle": "AI Voice Calling Agent in Kannada: What to Test First",
+  "metaDescription": "A test plan for an AI voice calling agent in Kannada: greeting, Kanglish, regional speech, Bengaluru localities, numbers, handoffs and the first week.",
+  "shortAnswer": "Before you launch an AI voice calling agent in Kannada, test six things with real callers: the Kannada greeting, Kannada mixed with English, speech from different parts of Karnataka, locality and project names, amounts and dates, and handoffs to your team. Run the tests on phone and website calls, then review every transcript in the first week.",
+  "excerpt": "A Kannada voice agent can sound great in a demo and still stumble on a caller from Hubballi or an area name in Bengaluru. This is the test plan to run before your customers call.",
+  "category": "Languages & speech",
+  "related": [
+    "hindi-ai-voice-agent",
+    "how-to-choose-a-multilingual-voice-agent",
+    "ai-voice-agents-for-real-estate-leads"
+  ],
+  "sections": [
+    {
+      "heading": "Why test a Kannada AI voice calling agent before launch?",
+      "paragraphs": [
+        "Kannada is the main language of Karnataka. The 2011 Census counted about 4.37 crore Kannada speakers, 3.6% of India's population. Many of them would rather explain what they need in Kannada than in English, and they hang up quickly on an agent that sounds foreign or misunderstands them.",
+        "A demo call from your own office proves very little. Real callers speak faster, mix languages, name places the agent has never heard and interrupt. Our [Kannada AI voice calling agent page](/languages/kannada) shows sample lines and a written property enquiry, and the [real estate calling solution](/solutions/real-estate) shows the most common Kannada use case. Use both as the baseline you test against."
+      ],
+      "points": [
+        "Test with callers, not only with your own team.",
+        "Test on the channel customers will use: a phone line, the website widget or both.",
+        "Write down what a good answer looks like before each test."
+      ]
+    },
+    {
+      "heading": "Does the Kannada greeting sound right?",
+      "paragraphs": [
+        "Start with the first sentence, because it decides whether the caller stays. Write the welcome message in Kannada script, opening with ನಮಸ್ಕಾರ, rather than in romanised Kannada, so the voice pronounces it properly. Name your business and offer help in one short sentence.",
+        "Then listen to it on a real phone, not only on laptop speakers. Preview a few voices first; the [voice selection guide](/help/voices/choose-voices) explains how. Ask two or three Kannada-speaking colleagues whether it sounds like someone from Karnataka would say it. If the call is recorded, check that the notice about recording and the AI assistant also sounds natural."
+      ]
+    },
+    {
+      "heading": "Can the agent follow Kannada mixed with English?",
+      "paragraphs": [
+        "Bengaluru callers mix Kannada and English constantly. Words like 2BHK, budget, site visit, EMI, booking and most area names stay in English. A good agent follows that mix, keeps replying in Kannada, and switches to English if the caller does. Some Bengaluru callers move to Hindi, Tamil or Telugu, and the agent should follow them there too.",
+        "Vistrow Voice can speak more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and can switch between them mid-call. Our guide on [choosing a multilingual voice agent](/resources/blog/how-to-choose-a-multilingual-voice-agent) explains how to score a language switch, and the [Hindi AI voice agent guide](/resources/blog/hindi-ai-voice-agent) covers the same mixing problem for Hindi."
+      ],
+      "points": [
+        "A caller who starts in Kannada and switches to English for the budget.",
+        "A caller who uses only English product words inside Kannada sentences.",
+        "A caller who switches to Hindi or Tamil halfway."
+      ]
+    },
+    {
+      "heading": "Does it understand callers from across Karnataka?",
+      "paragraphs": [
+        "Kannada in Bengaluru sounds different from Kannada in Mysuru, Hubballi-Dharwad, Belagavi or Mangaluru. Calls from outside Bengaluru tend to stay in Kannada for longer and use different words and rhythm. If you take calls from across the state, recruit test callers from each region you serve.",
+        "Run each test call twice: once in a quiet room and once with background noise, such as traffic or a busy shop. The [Testing Lab guide](/help/testing-lab/run-a-test) covers built-in scenarios for noise, interruptions and language switching, and you can save your own scenarios for callers from specific regions.",
+        "Older callers deserve their own test. They often speak more slowly, pause mid-sentence and use more formal Kannada. Check that the agent waits for them to finish rather than talking over them, and adjust the silence and interruption settings if it cuts in too early. Write down every word the agent mishears, because the same few words usually cause most of the trouble."
+      ]
+    },
+    {
+      "heading": "Does it recognise localities, project names and numbers?",
+      "paragraphs": [
+        "Area and project names are the words most likely to be misheard. Add the localities your callers mention, such as Whitefield, Sarjapur Road, Electronic City, Hebbal or Kanakapura Road, together with your project and product names, to the [knowledge base for approved answers](/product/knowledge-base). Then test each one by name.",
+        "Numbers need the same check. Callers say budgets in lakh and crore, often in English, and flat sizes in square feet or BHK. Test that the agent repeats them back correctly, and set up post-call fields for budget, location and configuration so the values reach your team in a consistent form. Switch on strict mode if the agent must quote only what you have approved."
+      ],
+      "points": [
+        "Five or more locality names, said quickly.",
+        "Budgets in lakh and crore, and one correction mid-call.",
+        "A phone number read out in groups."
+      ]
+    },
+    {
+      "heading": "What happens when the caller needs a person?",
+      "paragraphs": [
+        "Test the handover as carefully as the conversation. On phone calls, set a transfer number; the agent dials your colleague into the call and stays on until they answer, and takes a callback request if nobody picks up. The [functions and transfer guide](/help/agents/agent-functions-and-transfer) explains the settings.",
+        "A website widget call cannot be transferred to a phone, so there the agent takes a callback number instead. Make sure the person who receives the transfer or callback speaks Kannada; a Kannada call that ends with an English-only colleague undoes the good work."
+      ]
+    },
+    {
+      "heading": "How should you run the first week of Kannada calls?",
+      "paragraphs": [
+        "Go live on one line or one website page first, with one job, for example property enquiries and site-visit requests. Read every transcript daily for the first week. Mark each call as understood or misheard, natural or awkward, and handed over correctly or not.",
+        "Ask your sales or support team to listen to a handful of recordings too. They know how real customers talk, and they will spot an awkward phrase or a wrong locality name faster than anyone else. Keep a short shared list of fixes and the date each one was tested again.",
+        "Fix the cause of each problem in the prompt, the knowledge base or the post-call fields, then test the same case again. The [call recordings and transcripts guide](/resources/blog/ai-call-recordings-and-transcripts) shows what to look for, and when results are steady you can widen the scope or move on to outbound follow-ups."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI voice calling agent speak Kannada on phone calls?",
+      "a": "Yes. It can answer and make phone calls in Kannada and answer website widget calls, with transcripts saved for every call. Phone numbers connect through your own telephony provider."
+    },
+    {
+      "q": "Does it understand Bengaluru Kannada mixed with English?",
+      "a": "Yes. It follows everyday Kannada with English words inside a sentence and keeps replying in Kannada unless the caller moves to English. Test with your own product words first."
+    },
+    {
+      "q": "Should the welcome message be in Kannada script?",
+      "a": "Yes. Write it in Kannada script, opening with ನಮಸ್ಕಾರ, so the voice pronounces it properly. Keep the English words callers already use, such as site visit or EMI."
+    },
+    {
+      "q": "How many test calls should I run before launch?",
+      "a": "There is no fixed number. Cover each region you serve, each type of call you expect, noisy and quiet lines, and every handover path, then review the first week of real calls daily."
+    },
+    {
+      "q": "Can a Kannada caller be transferred to my team?",
+      "a": "On phone calls, yes. The agent dials your colleague into the call and stays on until they answer. Website widget calls take a callback number instead."
+    }
+  ],
+  "imageAlt": "Checklist board for testing a Kannada AI voice calling agent, with the greeting ನಮಸ್ಕಾರ and a round photo of a Bengaluru property adviser on her phone",
+  "imagePrompt": "Designed cover (scripts/blog-covers/08-ai-voice-calling-agent-in-kannada.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Census of India 2011, Language: India, States and Union Territories (Table C-16), Statement 4",
+      "url": "https://censusindia.gov.in/nada/index.php/catalog/42458"
+    }
+  ],
+  "contextualLinks": "To see a Kannada agent at work, read about the [Kannada AI voice calling agent](/languages/kannada) or the [Kannada real estate calling flow in Bengaluru](/solutions/real-estate/kannada-ai-voice-bot-bangalore-real-estate).",
+  "inbound": [
+    {
+      "target": "language:kannada",
+      "sentence": "Before going live, work through our test plan for an [AI voice calling agent in Kannada](/resources/blog/ai-voice-calling-agent-in-kannada)."
+    },
+    {
+      "target": "blog:ai-voice-agents-for-real-estate-leads",
+      "sentence": "Selling in Bengaluru? Our checklist for an [AI voice calling agent in Kannada](/resources/blog/ai-voice-calling-agent-in-kannada) covers locality names, budgets and handoffs."
+    }
+  ]
+}

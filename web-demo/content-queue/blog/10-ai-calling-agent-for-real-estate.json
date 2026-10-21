@@ -1,0 +1,134 @@
+{
+  "n": 10,
+  "publishOn": "2026-10-30",
+  "primaryKeyword": "ai calling agent for real estate",
+  "audience": "India + UAE",
+  "slug": "ai-calling-agent-for-real-estate",
+  "title": "AI calling agent for real estate: from enquiry to site visit",
+  "seoTitle": "AI Calling Agent for Real Estate: Enquiry to Site Visit",
+  "metaDescription": "How an AI calling agent for real estate calls new enquiries back, qualifies buyers, books site visits and reminds them, with the guardrails to set first.",
+  "shortAnswer": "An AI calling agent for real estate calls every new enquiry back within seconds, asks the questions your sales team would ask, answers project questions from approved facts and books a site visit on your calendar. It sends each qualified lead to your CRM with the transcript and hands serious buyers to a person on the phone.",
+  "excerpt": "Most property leads go cold between the enquiry and the first call back. Here is how an AI calling agent covers that gap, step by step, from the form fill to the site visit.",
+  "category": "Industries",
+  "related": [
+    "ai-voice-agents-for-real-estate-leads",
+    "connecting-voice-calls-to-your-crm",
+    "website-voice-widget-for-lead-generation"
+  ],
+  "sections": [
+    {
+      "heading": "What does an AI calling agent for real estate do?",
+      "paragraphs": [
+        "Property enquiries arrive at all hours, from ad forms, portals, your website and missed calls. Sales teams call back when they can, often hours later, and by then the buyer has spoken to someone else. An AI calling agent takes the first conversation for every lead, the same way every time.",
+        "It answers your enquiry line, calls new leads back, qualifies them, answers project questions from approved material and books a site visit. The [AI calling agent for real estate](/solutions/real-estate) page shows the full flow, and [outbound calling campaigns](/product/outbound) cover the reminder and follow-up calls that come after. Our earlier guide to [AI voice agents for real estate leads](/resources/blog/ai-voice-agents-for-real-estate-leads) covers the basics if the idea is new to you."
+      ],
+      "points": [
+        "Enquiry: a lead fills a form or calls your number.",
+        "Callback: the agent calls within seconds and qualifies the buyer.",
+        "Site visit: it offers free slots and confirms one.",
+        "Handover: the lead reaches your CRM and your sales team."
+      ]
+    },
+    {
+      "heading": "How fast should an AI agent call a new property lead?",
+      "paragraphs": [
+        "As fast as you can reach them while they still remember filling in the form. With the [Instant Lead Follow-up webhook](/help/integrations/instant-lead-follow-up), any source that can send a webhook, such as your website form, CRM or an automation tool, queues a call within about 15 to 30 seconds. Leads from ArthaLeads can be called the same way.",
+        "Speed never overrides your rules. Every queued call is checked against your Do-Not-Call list and calling window before it is dialled, so a lead that arrives at midnight is called once the window opens. In India the default window is 9 am to 9 pm, Monday to Saturday, and you can narrow it."
+      ]
+    },
+    {
+      "heading": "What questions does the agent ask to qualify a buyer?",
+      "paragraphs": [
+        "The same ones a good sales adviser asks, in a normal conversation rather than a form: budget, preferred location, property type and configuration, timeline and whether it is for living in or investment. The agent saves each answer as a lead field on the call. If a buyer names two areas, both are kept, and a corrected budget replaces the earlier one.",
+        "Buyers speak the language they think in. Vistrow Voice can speak more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows a buyer who switches mid-call. The [Kannada AI voice calling agent guide](/resources/blog/ai-voice-calling-agent-in-kannada) shows how to test locality names and budgets in lakh and crore."
+      ],
+      "points": [
+        "Budget: a range or a ceiling, as the buyer says it.",
+        "Location: preferred areas or projects.",
+        "Configuration: flat, villa or plot; 2BHK or 3BHK.",
+        "Timeline and purpose: when, and for living in or investment."
+      ]
+    },
+    {
+      "heading": "How does the agent book a site visit?",
+      "paragraphs": [
+        "Bookings go into the Appointments calendar built into Vistrow Voice, so no outside calendar has to be connected first. The agent offers free slots inside the business hours, slot length and blackout dates you set, collects the buyer's name and number, and confirms the visit only after the booking has saved. The [bookings and availability guide](/help/appointments/manage-appointments) explains each setting.",
+        "If nothing suits the buyer, the agent takes a callback request with a preferred time instead. Your team can reschedule a visit, or mark it confirmed, completed, cancelled or no-show, which shows you later which sources bring buyers who actually turn up."
+      ]
+    },
+    {
+      "heading": "Can it remind buyers before the visit?",
+      "paragraphs": [
+        "Yes, as an outbound campaign rather than an automatic call attached to each booking. Select the buyers with visits the next day, personalise the greeting with their name and visit time from your contact list, and launch the campaign. The agent confirms the visit or takes a request to move it, and your team updates the booking.",
+        "Retries for busy lines and unanswered calls, the number of attempts and the gap between them are all set on the campaign. The [outbound campaign guide](/help/outbound/run-a-campaign) shows the setup, and each campaign reports connected, no-answer, failed and blocked calls while it runs."
+      ]
+    },
+    {
+      "heading": "How do you stop the agent inventing prices or RERA details?",
+      "paragraphs": [
+        "Property buyers ask about price, possession dates, approvals and availability, and a wrong answer causes real harm. Upload your project facts to the [knowledge base for approved answers](/product/knowledge-base), review the extracted answers and switch on strict mode, so the agent quotes only what you approved and says it will check with the team when something is not covered.",
+        "This matters for registration details in particular. Andhra Pradesh RERA, for example, reminds promoters that the project's registration number must appear on their website and in every advertisement. Give the agent the registration number exactly as registered, and never let it guess one."
+      ],
+      "points": [
+        "Never invent inventory, price, possession date or approval status.",
+        "Never call a site visit confirmed until the booking has saved.",
+        "Send negotiation, discounts and legal questions to a person."
+      ]
+    },
+    {
+      "heading": "Does it work for NRI and Gulf buyers?",
+      "paragraphs": [
+        "Many Indian developers sell to buyers in the UAE and the wider Gulf, who often prefer Hindi, Malayalam, Tamil or another Indian language. The same agent can talk to them in those languages. Phone numbers connect through your own telephony provider, so calling buyers abroad depends on what that provider supports.",
+        "The [website voice widget for property sites](/product/widget) works from any browser in any country, which makes it the simplest way to let an overseas buyer ask a question out loud on a project page. Page rules can send each project page to an agent that knows only that project."
+      ]
+    },
+    {
+      "heading": "How should a developer or broker pilot it?",
+      "paragraphs": [
+        "Start with one project and one lead source, for example a single ad campaign. Load the project facts, set your site-visit hours, connect your CRM and test with colleagues playing difficult buyers: one who negotiates, one who switches language, one who asks about a project you do not sell.",
+        "Read every transcript for the first week, and check that each booked visit was real and each hot lead reached a person quickly. The guide to [connecting voice calls to your CRM](/resources/blog/connecting-voice-calls-to-your-crm) shows how lead fields and transcripts flow into Zoho CRM, ArthaLeads, Google Sheets or a webhook. Compare plans on the [Vistrow Voice pricing page](/pricing) when you are ready to add more projects."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI calling agent book property site visits?",
+      "a": "Yes. It offers free slots from the built-in calendar inside the hours you set and confirms a visit only after the booking saves. If nothing suits, it takes a callback request."
+    },
+    {
+      "q": "How quickly can it call a new property lead?",
+      "a": "Leads sent to the Instant Lead Follow-up webhook are queued for a call within about 15 to 30 seconds, subject to your calling window and Do-Not-Call list."
+    },
+    {
+      "q": "Will it quote prices or possession dates?",
+      "a": "Only from your approved project facts. With strict mode on, it quotes your answers and says it will check with the team when a question is not covered."
+    },
+    {
+      "q": "Can it talk to buyers in Hindi and regional languages?",
+      "a": "Yes. Hindi, Marathi, Gujarati, Kannada, Telugu, Tamil and the other supported Indian languages, plus English, with switching mid-call."
+    },
+    {
+      "q": "Can a buyer speak to a sales adviser during the call?",
+      "a": "On phone calls, yes. Set a transfer number and the agent dials your adviser into the call and stays on until they answer, or takes a callback request."
+    }
+  ],
+  "imageAlt": "Before and after: a home buyer outside a construction site frowning at an unanswered call, beside Artha, the AI calling agent, booking his site visit",
+  "imagePrompt": "Designed cover (scripts/blog-covers/10-ai-calling-agent-for-real-estate.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Andhra Pradesh Real Estate Regulatory Authority: Advertisement guidelines under the RERA Act, 2016",
+      "url": "https://rera.ap.gov.in/RERA/Views/AdvertisementGuidelines.aspx"
+    }
+  ],
+  "contextualLinks": "To set this up, start with the [AI calling agent for real estate](/solutions/real-estate) and the [outbound calling campaigns for follow-ups](/product/outbound).",
+  "inbound": [
+    {
+      "target": "blog:ai-voice-agents-for-real-estate-leads",
+      "sentence": "For the full journey from a new enquiry to a booked visit, read our guide to an [AI calling agent for real estate](/resources/blog/ai-calling-agent-for-real-estate)."
+    },
+    {
+      "target": "page:/solutions/real-estate",
+      "sentence": "See each step, from the first callback to the site-visit reminder, in our guide to an [AI calling agent for real estate](/resources/blog/ai-calling-agent-for-real-estate)."
+    }
+  ]
+}
