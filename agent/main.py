@@ -5295,6 +5295,8 @@ class RealEstateAgent(Agent):
         text = new_message.text_content
         self._booking_confirmed_this_turn = False
         _userdata = self.session.userdata
+        # Read by the thinking-ack watcher: an ack is only for a committed turn.
+        _userdata["turn_committed_at"] = time.monotonic()
         # A colleague has been dialled into this call (tools._bridge_in_human).
         # The two of them are talking now; an agent that keeps answering would
         # be talking over a real conversation.
@@ -8178,6 +8180,11 @@ async def entrypoint(ctx: JobContext) -> None:
                     # The opener is itself a say(); acking over it would land
                     # before the caller has said anything at all.
                     or not userdata.get("greeting_played", False)
+                    # Call 1451 (21 Oct 2026): "जी." played during the caller's
+                    # own mid-sentence pause - "thinking" had started before
+                    # their turn was committed (final transcript 2.6 s later).
+                    # Only ack a turn committed after the caller last spoke.
+                    or userdata.get("turn_committed_at", 0) < userdata.get("speech_ended_at", 0)
                 ):
                     return
                 # Never on consecutive turns. Even at a correct threshold a

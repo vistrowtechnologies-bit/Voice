@@ -39,6 +39,12 @@ class SourceGuards(unittest.TestCase):
         self.assertIn("_GEMINI_PROVIDERS.values()", block)
         self.assertIn('_provider == "google-native"', block)
 
+    def test_backchannel_needs_a_committed_turn(self):
+        src = inspect.getsource(main)
+        i = src.index("def _arm_backchannel")
+        self.assertIn('userdata.get("turn_committed_at", 0) < userdata.get("speech_ended_at", 0)', src[i:i + 3000])
+        self.assertIn('_userdata["turn_committed_at"] = time.monotonic()', inspect.getsource(main.RealEstateAgent.on_user_turn_completed))
+
     def test_tts_node_counts_chars_and_audio(self):
         src = inspect.getsource(main.RealEstateAgent.tts_node)
         self.assertIn('usage["ttsCharsSent"]', src)
