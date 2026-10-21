@@ -220,6 +220,8 @@ export function Agents() {
       <PageHeader
         title="Agents"
         subtitle={`${agents.length} total ${agents.length === 1 ? 'agent' : 'agents'}`}
+        // New Agent moves into the team bar below whenever that bar shows.
+        hideNewAgent={!loading && agents.length > 0}
         lead={
           <p className="flex items-center gap-1.5 text-xs text-text-muted">
             <span className="hidden sm:inline">Changes go live on the next call</span>
@@ -243,11 +245,16 @@ export function Agents() {
                 <HeroStat value={teamBooked} label="booked this week" />
               </div>
             </div>
-            {filterCounts['needs-setup'] > 0 && (
-              <button type="button" onClick={() => setFilter('needs-setup')} className="bento-pill bento-pill-light">
-                {filterCounts['needs-setup']} need setup <Icon name="arrow_forward" className="text-[16px]" />
+            <div className="flex flex-wrap items-center gap-2">
+              {filterCounts['needs-setup'] > 0 && (
+                <button type="button" onClick={() => setFilter('needs-setup')} className="bento-pill bento-pill-glass">
+                  {filterCounts['needs-setup']} need setup <Icon name="arrow_forward" className="text-[16px]" />
+                </button>
+              )}
+              <button type="button" onClick={() => setChooserOpen(true)} className="bento-pill bento-pill-light">
+                <Icon name="add" className="text-[18px]" /> New agent
               </button>
-            )}
+            </div>
           </section>
         )}
 

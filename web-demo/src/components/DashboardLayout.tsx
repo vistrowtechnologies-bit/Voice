@@ -381,6 +381,7 @@ function FullPageHeader({
   refreshSignal = 0,
   ownWatchHow = false,
   lead,
+  hideNewAgent = false,
 }: {
   title: string
   subtitle?: string
@@ -390,12 +391,14 @@ function FullPageHeader({
   ownWatchHow?: boolean
   /** Shown at the left of the page's action row, e.g. a short note with an InfoTip. */
   lead?: ReactNode
+  /** The Agents page shows New Agent in its own team bar instead. */
+  hideNewAgent?: boolean
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
   // Agent creation belongs to the Agents page. Showing it on the overview
   // duplicated Quick actions and displaced dashboard-specific controls.
-  const showNewAgent = pathname === '/dashboard/agents'
+  const showNewAgent = pathname === '/dashboard/agents' && !hideNewAgent
   const videoSlug = helpVideoFor(pathname)
   const watchHow = videoSlug && !ownWatchHow && <WatchHowButton slug={videoSlug} />
 
@@ -514,7 +517,7 @@ function FullPageHeader({
   )
 }
 
-type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number; ownWatchHow?: boolean; lead?: ReactNode }
+type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number; ownWatchHow?: boolean; lead?: ReactNode; hideNewAgent?: boolean }
 
 /** The page title bar. Inside a Settings tab the tab itself is the title, so only the page's own
  * action buttons and its one-line description are kept. */
