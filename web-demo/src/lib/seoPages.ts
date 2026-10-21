@@ -33,6 +33,10 @@ export interface SeoPage {
   noindex?: boolean
   /** Service schema type, when the default `AI voice <label>` reads wrong. */
   serviceType?: string
+  /** Absolute URLs of images shown in the page content, for the image sitemap. */
+  images?: string[]
+  /** Help video (lib/helpVideos.ts) shown on the page, for VideoObject schema. */
+  helpVideo?: string
 }
 
 export interface OgCardSpec {
@@ -47,6 +51,25 @@ export interface OgCardSpec {
 import { BUYER_GUIDES, COMPARE_VENDORS, DEMO_CALLS, LOCAL_REAL_ESTATE_PAGES } from './seoExpansionContent'
 import { HELP_TOPICS } from '../content/helpArticles'
 import { BLOG_PAGE_COUNT, VOICE_BLOG_POSTS, blogPagePath } from '../content/voiceBlog'
+import { HELP_VIDEOS, helpVideoPoster, helpVideoSrc } from './helpVideos'
+
+// The English launch film on the homepage (components/LaunchFilm.tsx FILMS.en;
+// keep the two in sync). It went live on 21 Oct 2026 (PR #212).
+const LAUNCH_FILM = {
+  name: 'Meet Artha, your AI receptionist',
+  description: 'The Vistrow Voice launch film: meet Artha, the AI voice agent that answers your business calls as an AI receptionist.',
+  file: '/media/launch-film-v5-en.mp4',
+  poster: '/media/launch-film-v5-en-poster.jpg',
+  duration: 'PT2M52S',
+  uploadDate: '2026-10-21',
+}
+
+// Help videos were added to public/media/help/ on 12 Oct 2026.
+const HELP_VIDEO_UPLOAD_DATE = '2026-10-12'
+
+// og cards are JPEG; the competitor compare cards stay PNG until the owner
+// decides on their redesign.
+const ogExtension = (imageName: string) => (imageName.startsWith('compare-') ? 'png' : 'jpg')
 
 const page = (
   path: string,
@@ -61,7 +84,7 @@ const page = (
   path,
   title,
   description,
-  image: `${SEO_ORIGIN}/og/${imageName}.png`,
+  image: `${SEO_ORIGIN}/og/${imageName}.${ogExtension(imageName)}`,
   imageAlt,
   kind,
   label,
@@ -115,15 +138,18 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
 }
 
 export const SEO_PAGES: SeoPage[] = [
-  page(
-    '/',
-    'AI Voice Agent for India in 130+ Languages | Vistrow Voice',
-    'An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 130+ languages.',
-    'home',
-    'Vistrow Voice multilingual AI voice agent orb: 130+ languages including Hindi and English across phone and web',
-    'home',
-    'Home',
-  ),
+  {
+    ...page(
+      '/',
+      'AI Voice Agent for India in 130+ Languages | Vistrow Voice',
+      'An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 130+ languages.',
+      'home',
+      'Vistrow Voice multilingual AI voice agent orb: 130+ languages including Hindi and English across phone and web',
+      'home',
+      'Home',
+    ),
+    images: [`${SEO_ORIGIN}${LAUNCH_FILM.poster}`],
+  },
   page(
     '/product',
     'AI Voice Agent Platform | Vistrow Voice',
@@ -133,15 +159,18 @@ export const SEO_PAGES: SeoPage[] = [
     'collection',
     'Product',
   ),
-  page(
-    '/product/agents',
-    'AI Voice Agent Builder | Vistrow Voice',
-    'Build a no-code AI voice agent with its own persona, knowledge, voice, language, tools, and handoff rules, then test it before publishing.',
-    'product-agents',
-    'Vistrow Voice no-code AI voice agent builder represented by the real Artha orb',
-    'product',
-    'Voice Agents',
-  ),
+  {
+    ...page(
+      '/product/agents',
+      'AI Voice Agent Builder | Vistrow Voice',
+      'Build a no-code AI voice agent with its own persona, knowledge, voice, language, tools, and handoff rules, then test it before publishing.',
+      'product-agents',
+      'Vistrow Voice no-code AI voice agent builder represented by the real Artha orb',
+      'product',
+      'Voice Agents',
+    ),
+    serviceType: 'AI voice agent builder',
+  },
   page(
     '/product/inbound',
     'Inbound Call Answering with AI | Vistrow Voice',
@@ -389,8 +418,8 @@ export const SEO_PAGES: SeoPage[] = [
     ),
   ),
   ...HELP_TOPICS.flatMap((t) =>
-    t.articles.map((a) =>
-      page(
+    t.articles.map((a) => ({
+      ...page(
         `/help/${t.slug}/${a.slug}`,
         `${a.title} | Vistrow Voice Help`,
         `${a.summary} A step-by-step Vistrow Voice guide for ${t.title.toLowerCase()}, for AI voice agents in Indian businesses.`.slice(0, 158),
@@ -399,7 +428,10 @@ export const SEO_PAGES: SeoPage[] = [
         'docs',
         a.title,
       ),
-    ),
+      ...(a.video && HELP_VIDEOS[a.video]
+        ? { helpVideo: a.video, images: [`${SEO_ORIGIN}${helpVideoPoster(a.video)}`] }
+        : {}),
+    })),
   ),
   page(
     '/resources/docs',
@@ -564,6 +596,20 @@ function breadcrumbLabel(path: string): string {
   return SEO_BY_PATH.get(path)?.label ?? path.split('/').filter(Boolean).at(-1)?.replace(/-/g, ' ') ?? 'Page'
 }
 
+function videoObject(video: typeof LAUNCH_FILM): object {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'VideoObject',
+    name: video.name,
+    description: video.description,
+    thumbnailUrl: `${SEO_ORIGIN}${video.poster}`,
+    contentUrl: `${SEO_ORIGIN}${video.file}`,
+    duration: video.duration,
+    uploadDate: video.uploadDate,
+    publisher: { '@id': `${SEO_ORIGIN}/#organization` },
+  }
+}
+
 export function baseStructuredData(entry: SeoPage): object[] {
   const pageUrl = `${SEO_ORIGIN}${entry.path}`
   const schemas: object[] = []
@@ -615,8 +661,25 @@ export function baseStructuredData(entry: SeoPage): object[] {
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web',
         description: entry.description,
+        image: entry.image,
         publisher: { '@id': `${SEO_ORIGIN}/#organization` },
       },
+      videoObject(LAUNCH_FILM),
+    )
+  }
+
+  if (entry.helpVideo) {
+    const video = HELP_VIDEOS[entry.helpVideo]
+    const [minutes, seconds] = video.length.split(':')
+    schemas.push(
+      videoObject({
+        name: video.title,
+        description: `${video.title}: a short how-to video for the Vistrow Voice dashboard, with captions.`,
+        file: helpVideoSrc(entry.helpVideo),
+        poster: helpVideoPoster(entry.helpVideo),
+        duration: `PT${Number(minutes)}M${Number(seconds)}S`,
+        uploadDate: HELP_VIDEO_UPLOAD_DATE,
+      }),
     )
   }
 
@@ -649,6 +712,7 @@ export function baseStructuredData(entry: SeoPage): object[] {
       name: entry.label,
       description: entry.description,
       url: pageUrl,
+      image: entry.image,
       provider: { '@id': `${SEO_ORIGIN}/#organization` },
       areaServed: 'Worldwide',
       serviceType: entry.serviceType ?? (entry.kind === 'solution' ? `${entry.label} AI voice agent` : `AI voice ${entry.label}`),
@@ -669,6 +733,7 @@ export function baseStructuredData(entry: SeoPage): object[] {
       name: `${entry.label} AI Voice Agent`,
       description: entry.description,
       url: pageUrl,
+      image: entry.image,
       provider: { '@id': `${SEO_ORIGIN}/#organization` },
       areaServed: 'Worldwide',
     })

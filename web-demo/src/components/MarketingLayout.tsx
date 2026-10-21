@@ -8,15 +8,16 @@ import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL
 import type { NavGroup } from '../lib/marketingContent'
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
-import vistrowMark from '../assets/vistrow-mark.png'
 import { Tooltip } from './ui/Tooltip'
 import { SeoRelatedLinks } from './SeoRelatedLinks'
 import { PageGuides } from './PageGuides'
 
 // The official logo mark - used everywhere the brand appears (marketing
-// site, dashboard, auth pages) for one consistent visual identity.
+// site, dashboard, auth pages) for one consistent visual identity. Marketing
+// pages preload it on every page, so they use a 96px WebP copy of
+// src/assets/vistrow-mark.png (about 2 KB instead of 76 KB).
 function OrbMark() {
-  return <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
+  return <img src="/media/vistrow-mark-96.webp" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
 }
 
 // Matches the official lockup: "Vistrow" bold, "Voice" regular.
