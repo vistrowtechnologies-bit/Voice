@@ -3313,6 +3313,29 @@ def _new_llm_usage() -> dict:
     return {"requests": 0, "cancelledRequests": 0, "promptTokens": 0, "cachedTokens": 0, "completionTokens": 0}
 
 
+def _add_usage_units(timings: dict, metric_type: str, metric) -> None:
+    """Exact billable units for the call, from the providers' own metrics.
+
+    Owner, 21 Oct 2026: price each voice combo from what was actually sent,
+    not from the transcript. LiveKit reports the characters (and, for Gemini
+    TTS, tokens) each synthesis consumed and the seconds of audio each STT
+    stream received. Cancelled synthesis is counted too: the text was sent,
+    so it is billed. Saved into latency_metrics_json as "usage".
+    """
+    usage = timings.setdefault("usage", {
+        "ttsChars": 0, "ttsAudioS": 0.0, "ttsInputTokens": 0, "ttsOutputTokens": 0,
+        "ttsRequests": 0, "sttAudioS": 0.0,
+    })
+    if metric_type == "tts_metrics":
+        usage["ttsChars"] += int(getattr(metric, "characters_count", 0) or 0)
+        usage["ttsAudioS"] = round(usage["ttsAudioS"] + float(getattr(metric, "audio_duration", 0) or 0), 2)
+        usage["ttsInputTokens"] += int(getattr(metric, "input_tokens", 0) or 0)
+        usage["ttsOutputTokens"] += int(getattr(metric, "output_tokens", 0) or 0)
+        usage["ttsRequests"] += 1
+    elif metric_type == "stt_metrics":
+        usage["sttAudioS"] = round(usage["sttAudioS"] + float(getattr(metric, "audio_duration", 0) or 0), 2)
+
+
 def _add_llm_usage(usage: dict, metric) -> None:
     """Adds one LiveKit LLMMetrics to a call's running token totals. Cheap:
     the counts are already on the metric, no extra request is made."""
@@ -8561,6 +8584,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 completionTokens=rt_completion,
                 cancelled=bool(getattr(metric, "cancelled", False)),
             )
+        _add_usage_units(timings, metric_type, metric)
         if metric_type == "eou_metrics":
             samples = (
                 ("endpointing", "eouMs", "Caller turn detected", metric.end_of_utterance_delay),
