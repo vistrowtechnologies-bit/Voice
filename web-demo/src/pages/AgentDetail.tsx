@@ -1338,51 +1338,85 @@ function SetupGuide({ steps, onStep, onClose }: { steps: SetupStep[]; onStep: (s
   )
 }
 
-/** B: the panel beside the editor on wide screens: talk to the agent, hear it, see setup. */
+/** B: the panel beside the editor on wide screens: talk to the agent, hear it, see setup.
+ * Its cards use the same header as the editor's tiles (Panel) and keep one height
+ * whatever the state, so nothing jumps while you edit. */
+function SideCardHeader({ icon, title, subtitle }: { icon: string; title: ReactNode; subtitle: string }) {
+  return (
+    <div className="mb-4 flex min-w-0 items-center gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon name={icon} className="text-[18px]" />
+      </span>
+      <span className="min-w-0">
+        <span className="bento-title block truncate text-[15px]">{title}</span>
+        <span className="block truncate text-xs text-text-muted">{subtitle}</span>
+      </span>
+    </div>
+  )
+}
+
 function TryPanel({ name, dirty, saving, model, voice, voiceName, language, steps, onTalk, onStep }: {
   name: string; dirty: boolean; saving: boolean; model: string; voice: string; voiceName: ReactNode; language: string
   steps: SetupStep[]; onTalk: () => void; onStep: (step: SetupStep) => void
 }) {
   const realtime = isRealtimeModel(model)
+  const canPreview = !realtime && Boolean(voice) && !voice.startsWith('custom:')
   return (
     <aside className="sticky top-4 hidden flex-col gap-4 xl:flex">
-      <section className="bento-tile flex flex-col items-center gap-3 text-center">
-        <p className="bento-title text-[15px]">Try {name || 'your agent'}</p>
-        <button
-          type="button"
-          onClick={onTalk}
-          disabled={saving}
-          aria-label={dirty ? `Save and talk to ${name}` : `Talk to ${name}`}
-          className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#7c3aed] to-[#c026d3] text-white shadow-[0_14px_40px_-12px_rgb(168_85_247/0.8)] transition-transform hover:scale-105 disabled:opacity-60"
-        >
-          <Icon name="mic" className="text-[34px]" />
-        </button>
-        <p className="text-xs text-text-muted">{dirty ? 'Saves your changes, then starts a browser call.' : 'Starts a browser call with your microphone.'}</p>
-        <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-surface-high/30 px-3 py-2 text-left">
+      <section className="bento-tile">
+        <SideCardHeader icon="mic" title={`Try ${name || 'your agent'}`} subtitle="A browser call with your microphone" />
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onTalk}
+            disabled={saving}
+            aria-label={dirty ? `Save and talk to ${name}` : `Talk to ${name}`}
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7c3aed] to-[#c026d3] text-white shadow-[0_12px_32px_-12px_rgb(168_85_247/0.8)] transition-transform hover:scale-105 disabled:opacity-60"
+          >
+            <Icon name="mic" className="text-[28px]" />
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-bold">{saving ? 'Saving…' : dirty ? 'Save & talk' : 'Talk now'}</p>
+            {/* Always two lines tall, so the card keeps its height when the text changes. */}
+            <p className="line-clamp-2 min-h-[2rem] text-xs leading-4 text-text-muted">
+              {dirty ? 'Your unsaved changes are saved first.' : 'Uses the saved agent.'}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex h-14 items-center justify-between gap-2 rounded-xl border border-border bg-surface-high/30 px-3">
           <span className="min-w-0">
-            <span className="block text-[11px] text-text-muted">Voice</span>
+            <span className="block text-[11px] text-text-muted">{realtime ? 'Live voice' : 'Voice'}</span>
             <span className="block truncate text-xs font-bold">{voiceName}</span>
           </span>
-          {/* The preview plays the standard voice; a realtime call speaks the Live version. */}
-          {!realtime && voice && !voice.startsWith('custom:') && (
+          {/* The preview plays the standard voice; a realtime call speaks the Live version,
+              so the button stays in place but disabled there. */}
+          {canPreview ? (
             <VoicePreviewButton voice={voice} lang={(language || 'hi').startsWith('en') ? 'en' : 'hi'} />
+          ) : (
+            <span title="Preview plays standard voices only" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-high text-text-muted opacity-50">
+              <Icon name="play_arrow" className="text-[18px]" />
+            </span>
           )}
         </div>
       </section>
       <section className="bento-tile">
-        <p className="mb-2 text-xs font-bold">Setup {steps.filter((s) => s.done).length}/{steps.length}</p>
+        <SideCardHeader
+          icon="rocket_launch"
+          title={`Setup ${steps.filter((s) => s.done).length}/${steps.length}`}
+          subtitle={steps.every((s) => s.done) ? 'Ready for calls' : 'What is left before going live'}
+        />
         <ul className="flex flex-col gap-1">
           {steps.map((step) => (
             <li key={step.key}>
-              <button type="button" onClick={() => onStep(step)} className="flex w-full items-center gap-2 rounded-lg bg-transparent px-2 py-1.5 text-left text-xs hover:bg-surface-high">
-                <Icon name={step.done ? 'check_circle' : 'radio_button_unchecked'} className={`text-[16px] ${step.done ? 'text-success' : 'text-text-muted'}`} />
-                <span className={step.done ? 'text-text-muted line-through decoration-text-muted/40' : 'font-semibold'}>{step.label}</span>
-                {!step.done && <Icon name="arrow_forward" className="ml-auto text-[14px] text-text-muted" />}
+              <button type="button" onClick={() => onStep(step)} className="flex w-full items-center gap-2.5 rounded-xl bg-transparent px-2 py-2 text-left text-sm hover:bg-surface-high">
+                <Icon name={step.done ? 'check_circle' : 'radio_button_unchecked'} className={`text-[18px] ${step.done ? 'text-success' : 'text-text-muted'}`} />
+                <span className={step.done ? 'text-text-muted' : 'font-semibold'}>{step.label}</span>
+                {!step.done && <Icon name="arrow_forward" className="ml-auto text-[16px] text-text-muted" />}
               </button>
             </li>
           ))}
         </ul>
-        <Link to="/dashboard/testing" className="mt-3 flex items-center gap-1.5 text-xs font-bold text-primary hover:underline">
+        <Link to="/dashboard/testing" className="mt-3 flex items-center gap-1.5 border-t border-border bg-transparent pt-3 text-xs font-bold text-primary hover:underline">
           <Icon name="science" className="text-[15px]" /> Run a scenario in Testing Lab
         </Link>
       </section>
