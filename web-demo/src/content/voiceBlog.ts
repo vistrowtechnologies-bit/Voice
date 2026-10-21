@@ -262,7 +262,7 @@ const NEW_POSTS: typeof ORIGINAL_POSTS = [
   {
     slug: 'ai-voice-agents-for-real-estate-leads', title: 'AI voice agents for real estate leads: qualify without interrogating',
     excerpt: 'A practical call flow for property enquiries: answer the first question, confirm the requirement, and leave the sales team a clear next action.',
-    category: 'Voice AI basics', publishedAt: '2026-10-07', readTime: '', sections: [
+    category: 'Industries', publishedAt: '2026-10-07', readTime: '', sections: [
       { heading: 'Answer the question that brought the lead in', paragraphs: ['“What is the price?” is a reasonable first question. Do not respond with five qualification questions. Give the approved price range if you have one, explain what changes the final price, and distinguish a starting figure from a confirmed quote. If you cannot verify current pricing, say the sales team needs to confirm it.', 'For plots, size and use matter. A request for ten thousand square feet should not be saved as an interest in a standard apartment. Ask whether the buyer wants self-use, investment, or both; then follow the answer rather than marching through a generic BHK script.'] },
       { heading: 'Use a short qualification sequence', paragraphs: ['Collect only what helps the next conversation: property type, preferred location, approximate budget, intended use, and timeline. Some details may already be supplied by the enquiry. Confirm those briefly instead of asking the caller to repeat the form.', 'If the caller asks a new project question, answer it before returning to qualification. A useful agent holds the thread of the conversation. It should not keep asking for budget when the caller is trying to find out whether the requested plot size exists.'], points: ['Requirement: “What size are you considering?”', 'Purpose: “Is this for your own use or an investment?”', 'Budget: ask for a range; allow “not decided yet.”', 'Timing: distinguish exploring from a near-term purchase.', 'Next action: offer a visit or callback only when appropriate.'] },
       { heading: 'A visit request is not a confirmed visit', paragraphs: ['If the agent does not have a working calendar integration, describe the next step as a request. “I will pass your preferred Saturday slot to the team” is more honest than “Your visit is booked.” Confirm the date and contact number, and make it clear who will follow up.', 'Do not invent scarcity, discounts, approval status, or guaranteed returns to make the conversation sound persuasive. Give the agent a current, approved project fact sheet and instructions to defer uncertain claims. The cost of a confident wrong answer is borne by your sales team.'] },
@@ -302,16 +302,16 @@ const NEW_POSTS: typeof ORIGINAL_POSTS = [
 ]
 
 const IMAGE_ALTS: Record<string, string> = {
-  'what-is-an-ai-voice-agent': 'Business owner listening on a phone and taking notes beside a laptop',
-  'how-to-choose-a-multilingual-voice-agent': 'Two colleagues testing a spoken conversation with a phone and headphones',
-  'voice-ai-latency-how-to-measure-it': 'Engineer comparing audio waveforms with handwritten call timing notes',
-  'website-voice-widget-for-lead-generation': 'Visitor viewing a property website with a voice conversation control on a laptop',
-  'connecting-voice-calls-to-your-crm': 'Coordinator reviewing a customer pipeline while wearing a headset',
-  'when-to-use-voice-ai-instead-of-ivr': 'Customer using a mobile phone beside a desk telephone',
-  'ai-voice-agents-for-real-estate-leads': 'Property advisor taking a call beside an architectural housing model',
-  'ai-voice-agent-pricing-india': 'Calculator, budget notebook, and phone on a desk for a call cost comparison',
-  'write-ai-voice-agent-prompts': 'Operations manager drafting conversation instructions beside a laptop',
-  'ai-call-recordings-and-transcripts': 'Laptop showing illustrative audio and transcript panels beside headphones and a padlock',
+  'what-is-an-ai-voice-agent': 'Artha, an AI voice agent with a headset, on a call in a bright office, with chips for listens, answers and books',
+  'how-to-choose-a-multilingual-voice-agent': 'Greetings in Hindi, Tamil, Kannada and Bengali scripts beside a smiling shop owner on a phone call',
+  'voice-ai-latency-how-to-measure-it': 'Question about the pause after a caller stops speaking, a waveform with a timed gap, and a man waiting on a phone',
+  'website-voice-widget-for-lead-generation': 'Laptop showing a website voice widget with Artha talking, a Lead captured card, and a visitor speaking on a sofa',
+  'connecting-voice-calls-to-your-crm': 'Before and after: a stressed caller with sticky notes, then Artha with a CRM record showing summary, next step, recording',
+  'when-to-use-voice-ai-instead-of-ivr': 'Business owner deciding between two cards, an IVR keypad menu and a highlighted AI voice agent, on a purple background',
+  'ai-voice-agents-for-real-estate-leads': 'Couple on a property enquiry call while a phone shows Artha and a site visit request card',
+  'ai-voice-agent-pricing-india': 'Purple card asking what one useful call really costs, listing cost items, with a business owner thinking',
+  'write-ai-voice-agent-prompts': 'Woman writing a script at a warm desk beside a prompt card with goal, tone and handoff lines',
+  'ai-call-recordings-and-transcripts': 'Checklist card for recorded calls: recording, transcript, summary, CRM link and playback, beside a woman with headphones',
 }
 
 const SOURCES: Record<string, VoiceBlogPost['sources']> = {
