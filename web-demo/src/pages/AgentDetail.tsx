@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BrowserTestModal } from '../components/AgentTestCall'
@@ -171,6 +171,16 @@ function AgentEditorForm({
 }) {
   const navigate = useNavigate()
   const [tab, setTab] = useState<AgentTab>('instructions')
+  const tabContentRef = useRef<HTMLDivElement>(null)
+  const firstTab = useRef(true)
+  useEffect(() => {
+    if (firstTab.current) { firstTab.current = false; return }
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    tabContentRef.current?.animate(
+      [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 280, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' },
+    )
+  }, [tab])
   const [catalogAccess, setCatalogAccess] = useState<boolean | null>(null)
   useEffect(() => { fetchEntitlements().then((e) => setCatalogAccess(!!e.features.live_catalog)).catch(() => setCatalogAccess(false)) }, [])
   const [form, setForm] = useState<AgentForm>({
@@ -458,7 +468,7 @@ function AgentEditorForm({
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="flex min-w-0 flex-col gap-4">
       <AgentTabBar tab={tab} onChange={setTab} />
-      <div className="flex flex-col gap-4">
+      <div ref={tabContentRef} className="flex flex-col gap-4">
         {/* Identity: one tile per tab; a tab with no field in this grid shows no empty tile. */}
         <div className="bento-tile hidden grid-cols-1 gap-4 sm:grid-cols-2 has-[>.contents]:grid">
           <TabPane tab="instructions" active={tab}>
@@ -488,7 +498,8 @@ function AgentEditorForm({
             {isPlatformOwner ? (
               <>
                 {/* Owner only: realtime stays admin-only on the server (_ADMIN_ONLY_MODEL_PREFIXES). */}
-                <div role="group" aria-label="Engine mode" className="inline-flex w-fit rounded-lg border border-border bg-surface-high p-0.5">
+                <div role="group" aria-label="Engine mode" className="relative grid w-fit grid-cols-2 rounded-2xl border border-border bg-surface-high/60 p-1">
+                  <span aria-hidden="true" className="vv-engine-thumb" data-live={String(isRealtimeModel(form.model))} />
                   {(['standard', 'live'] as const).map((mode) => {
                     const active = (mode === 'live') === isRealtimeModel(form.model)
                     return (
@@ -505,9 +516,18 @@ function AgentEditorForm({
                             changeModel(lastStandardModel.current)
                           }
                         }}
-                        className={`rounded-md px-3 py-1.5 text-xs font-semibold ${active ? 'bg-primary text-bg' : 'bg-transparent text-text-muted hover:text-text'}`}
+                        className={`relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-transparent px-4 py-2 text-xs font-bold transition-colors duration-300 ${
+                          active ? (mode === 'live' ? 'text-white' : 'text-surface') : 'text-text-muted hover:text-text'
+                        }`}
                       >
-                        {mode === 'live' ? 'Live (realtime)' : 'Standard'}
+                        {mode === 'live' ? (
+                          <>
+                            <Icon name="bolt" className={`text-[15px] ${active ? 'vv-live-spark' : 'text-magenta'}`} />
+                            Live (realtime)
+                          </>
+                        ) : (
+                          'Standard'
+                        )}
                       </button>
                     )
                   })}
@@ -1442,16 +1462,33 @@ function TabPane({ tab, active, children }: { tab: AgentTab; active: AgentTab; c
 }
 
 function AgentTabBar({ tab, onChange }: { tab: AgentTab; onChange: (next: AgentTab) => void }) {
+  // One dark pill that slides to the selected tab (measured, so it fits each label).
+  const listRef = useRef<HTMLDivElement>(null)
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    const measure = () => {
+      const active = list.querySelector<HTMLElement>('[aria-selected="true"]')
+      if (active) setPill({ x: active.offsetLeft, w: active.offsetWidth })
+    }
+    measure()
+    list.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const observer = new ResizeObserver(measure)
+    observer.observe(list)
+    return () => observer.disconnect()
+  }, [tab])
   return (
-    <div role="tablist" aria-label="Agent settings" className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-2xl border border-border bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div ref={listRef} role="tablist" aria-label="Agent settings" className="relative flex w-full min-w-0 gap-1 overflow-x-auto rounded-2xl border border-border bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {pill && <span aria-hidden="true" className="vv-slide-pill shadow-sm" style={{ width: pill.w, transform: `translateX(${pill.x}px)` }} />}
       {AGENT_TABS.map((item) => (
         <button
           key={item.id}
           role="tab"
           aria-selected={tab === item.id}
           onClick={() => onChange(item.id)}
-          className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
-            tab === item.id ? 'bg-text text-surface shadow-sm' : 'bg-transparent text-text-muted hover:bg-surface-high hover:text-text'
+          className={`relative z-10 shrink-0 whitespace-nowrap rounded-xl bg-transparent px-4 py-2 text-sm font-semibold transition-colors duration-300 ${
+            tab === item.id ? 'text-surface' : 'text-text-muted hover:text-text'
           }`}
         >
           {item.label}
