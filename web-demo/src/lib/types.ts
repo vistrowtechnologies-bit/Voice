@@ -101,6 +101,9 @@ export interface CallRecord {
   connectLatencyMs: number | null
   agentJoinLatencyMs: number | null
   firstResponseLatencyMs: number | null
+  // Per-turn timings the call agent stores (latency_metrics_json), e.g.
+  // callerStopToFirstAudioMs: one value per caller turn, on every model.
+  latencyMetrics?: { callerStopToFirstAudioMs?: number[] } & Record<string, unknown>
   // Browser-reported, widget calls only. For why a call of ANY channel
   // ended, use disconnectReason below.
   failureReason: string | null
@@ -368,6 +371,16 @@ export interface AgentVariable {
   /** Spoken/used only when the real per-call data has nothing for this
    * name - never overrides a genuine CRM/CSV value. */
   defaultValue: string
+}
+
+/** Per-agent call counts for the Agents page (GET /agents/activity). */
+export interface AgentActivity {
+  agentId: number
+  today: number
+  /** Calls per day for the last 7 days, oldest first, today last. */
+  daily: number[]
+  booked7: number
+  lastCallAt: string | null
 }
 
 export interface AgentConfig {

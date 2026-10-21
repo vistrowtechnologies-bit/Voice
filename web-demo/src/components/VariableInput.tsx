@@ -235,7 +235,7 @@ export function VariableInput({
         onClick={syncTriggerFromCaret}
         onBlur={() => setTrigger(null)}
         data-placeholder={placeholder}
-        className={`${className} whitespace-pre overflow-x-auto empty:before:text-text-muted empty:before:content-[attr(data-placeholder)] [&:not(:empty)]:before:content-none`}
+        className={`${className} whitespace-pre overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden empty:before:text-text-muted empty:before:content-[attr(data-placeholder)] [&:not(:empty)]:before:content-none`}
       />
       {trigger && filtered.length > 0 && (
         <div className="absolute left-0 top-full z-20 mt-1 max-h-48 w-56 overflow-y-auto rounded-md border border-border bg-surface-high py-1 text-sm shadow-lg">

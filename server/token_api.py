@@ -2447,6 +2447,7 @@ class PreferencesRequest(BaseModel):
     notify_calls: bool | None = None
     notify_billing: bool | None = None
     dashboard_checklist_dismissed: bool | None = None
+    agent_guide_dismissed: bool | None = None
     dashboard_hidden_cards: str | None = None
     bell_calls: bool | None = None
     bell_appointments: bool | None = None
@@ -3919,6 +3920,13 @@ def dashboard_feedback(user: dict = Depends(current_user)) -> dict:
 @app.get("/agents")
 def list_agents(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_agents(user["account_id"])
+
+
+@app.get("/agents/activity")
+def agents_activity(user: dict = Depends(current_user)) -> list[dict]:
+    """Calls today, 7-day daily calls, bookings and last call per agent, for
+    the Agents page tiles and table. Counts only: no caller details."""
+    return calls_db.agent_activity(user["account_id"])
 
 
 # Models restricted to the Vistrow admin account. Groq is the fastest

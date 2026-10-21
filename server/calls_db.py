@@ -354,6 +354,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     notify_billing INTEGER DEFAULT 1,
     notify_product INTEGER DEFAULT 0,
     dashboard_checklist_dismissed INTEGER DEFAULT 0,
+    agent_guide_dismissed INTEGER DEFAULT 0,
     dashboard_hidden_cards TEXT DEFAULT '[]',
     -- What the notification bell shows this person, and whether it also pops up / pings.
     bell_calls INTEGER DEFAULT 1,
@@ -1700,6 +1701,10 @@ def init_tables() -> None:
             conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_checklist_dismissed INTEGER DEFAULT 0"
             )
+            # The agent editor's first-time step guide; Skip hides it for good.
+            conn.execute(
+                "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS agent_guide_dismissed INTEGER DEFAULT 0"
+            )
             conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_hidden_cards TEXT DEFAULT '[]'"
             )
@@ -2344,6 +2349,7 @@ def get_user_preferences(user_id: int) -> dict:
             "notify_billing",
             "notify_product",
             "dashboard_checklist_dismissed",
+            "agent_guide_dismissed",
             "bell_calls",
             "bell_appointments",
             "desktop_popups",
@@ -2365,6 +2371,7 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_billing",
         "notify_product",
         "dashboard_checklist_dismissed",
+        "agent_guide_dismissed",
         "dashboard_hidden_cards",
         "bell_calls",
         "bell_appointments",
@@ -2382,6 +2389,7 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_billing",
         "notify_product",
         "dashboard_checklist_dismissed",
+        "agent_guide_dismissed",
         "bell_calls",
         "bell_appointments",
         "desktop_popups",
@@ -3915,6 +3923,56 @@ def period_comparison(account_id: int, days: int = 14) -> dict:
         }
     finally:
         conn.close()
+
+
+def agent_activity(account_id: int) -> list[dict]:
+    """Per-agent call activity for the Agents page: calls today, calls per
+    day for the last 7 days (oldest first, today last), calls with a booking
+    in those 7 days, and the agent's last call ever. Same rules as summary():
+    Testing Lab runs are not counted; dates are the database's CURRENT_DATE,
+    like period_comparison(). Agents with no calls are simply absent."""
+    conn = _connect()
+    try:
+        daily = conn.execute(
+            """
+            SELECT agent_id, (CURRENT_DATE - started_at::date) AS days_ago,
+                   COUNT(*) AS calls,
+                   COUNT(*) FILTER (WHERE site_visit_json IS NOT NULL) AS booked
+            FROM calls
+            WHERE account_id = ? AND agent_id IS NOT NULL AND COALESCE(test_run_id, '') = ''
+              AND started_at::date >= CURRENT_DATE - 6
+            GROUP BY 1, 2
+            """,
+            (account_id,),
+        ).fetchall()
+        last = conn.execute(
+            """
+            SELECT agent_id, MAX(started_at) AS last_call
+            FROM calls
+            WHERE account_id = ? AND agent_id IS NOT NULL AND COALESCE(test_run_id, '') = ''
+            GROUP BY 1
+            """,
+            (account_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    out: dict[int, dict] = {}
+
+    def entry(agent_id: int) -> dict:
+        return out.setdefault(agent_id, {"agentId": agent_id, "today": 0, "daily": [0] * 7, "booked7": 0, "lastCallAt": None})
+
+    for row in daily:
+        days_ago = int(row["days_ago"])
+        if not 0 <= days_ago <= 6:
+            continue
+        e = entry(row["agent_id"])
+        e["daily"][6 - days_ago] += int(row["calls"])
+        e["booked7"] += int(row["booked"])
+        if days_ago == 0:
+            e["today"] += int(row["calls"])
+    for row in last:
+        entry(row["agent_id"])["lastCallAt"] = row["last_call"]
+    return sorted(out.values(), key=lambda e: e["agentId"])
 
 
 def analytics(account_id: int) -> dict:
