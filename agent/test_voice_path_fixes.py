@@ -76,3 +76,20 @@ class BharatVoiceFollowsLanguage(unittest.TestCase):
     def test_sarvam_branch_stashes_its_primary(self):
         src = inspect.getsource(main)
         self.assertIn("_adapter._vistrow_primary = sarvam_tts", src)
+
+
+class NativeVoiceDropsHmm(unittest.TestCase):
+    """Call 1452: the LLM's "हम्म," sounds odd on a Native Standard voice."""
+
+    def _agent(self, voice, provider):
+        return SimpleNamespace(_tts_provider=provider, _speaking_voice=voice, _last_opener="")
+
+    def test_native_voice_drops_leading_hmm(self):
+        a = self._agent("google:hi-IN-Standard-A", "google-native")
+        self.assertEqual(main._vary_opener(a, "हम्म, पुढच्या महिन्यात"), "पुढच्या महिन्यात")
+
+    def test_other_voices_keep_it(self):
+        for voice, provider in (("google:chirp3:Callirrhoe", "google-native"), ("priya", "sarvam")):
+            with self.subTest(voice=voice):
+                a = self._agent(voice, provider)
+                self.assertTrue(main._vary_opener(a, "हम्म, ठीक है").startswith("हम्म"))

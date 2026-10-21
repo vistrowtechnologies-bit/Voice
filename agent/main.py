@@ -1745,6 +1745,15 @@ _SWAP_OPENERS = {"deva": ["अच्छा", "जी", "ओके", "हम्�
 _BACKCHANNEL_WORDS = {line.rstrip(".… ") for lines in _BACKCHANNEL_LINES.values() for line in lines}
 
 
+_PURE_FILLER_OPENERS = {"हम्म", "hmm"}
+
+
+def _is_native_standard_voice(agent) -> bool:
+    return getattr(agent, "_tts_provider", None) == "google-native" and not voice_catalog.chirp3_persona(
+        getattr(agent, "_speaking_voice", "") or ""
+    )
+
+
 def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
     # Call 982: the "हाँ..." latency filler reset the opener memory, so "देखिए" ran twice.
     if head.strip().rstrip(".… ") in _BACKCHANNEL_WORDS:
@@ -1754,6 +1763,11 @@ def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
         agent._last_opener = ""
         return head
     word = match.group("word").lower()
+    if word in _PURE_FILLER_OPENERS and _is_native_standard_voice(agent):
+        # Call 1452 (21 Oct 2026): a Native (locale Standard) voice reads the
+        # LLM's "हम्म," as a flat, odd syllable. Dropped for these voices.
+        rest = head[match.end():].lstrip(" ,।.—-")
+        return match.group("lead") + rest
     if word != getattr(agent, "_last_opener", ""):
         agent._last_opener = word
         return head
