@@ -143,10 +143,11 @@ function replyNavigation(content: string, currentPath: string) {
  * separate from the voice agent product. Answers are grounded in
  * server/help_content.py, plus live account data via server/help_tools.py,
  * via POST /help/chat. */
-/** Where the launcher sits when a page has a sticky action bar
- * (`.vv-action-bar`: Save changes, Create agent), or null when no bar is on
- * screen. The bar sits wherever the page's content ends, not always at the
- * screen edge, so it is measured rather than a fixed offset: on 19 Oct the
+/** Where the launcher sits when a page's sticky action bar
+ * (`.vv-action-bar`: Save changes, Create agent) is over its usual corner,
+ * or null when it is not (no bar, or the bar ends above it). The bar sits
+ * wherever the page's content ends, not always at the screen edge, so it is
+ * measured rather than a fixed offset: on 19 Oct the
  * launcher and its "Hi! Need help?" bubble covered Save changes and a click
  * there opened the chat instead of saving. Skipped while the chat is open.
  *
@@ -174,7 +175,17 @@ function useActionBarClearance(active: boolean): { bottom: number; docked: boole
         if (!visible) { unpad(); setClearance(null); return }
         const launcherLeft = window.innerWidth - LAUNCHER_RIGHT - LAUNCHER
         const overlap = rect.right - launcherLeft
-        if (window.innerWidth >= 640 && rect.height >= LAUNCHER - 8 && overlap > 0) {
+        // Where the launcher sits on its own (see the root's classes and the
+        // tab-bar rule in index.css). Pages keep empty space at their foot
+        // for it, so when the bar ends above that spot nothing has to move
+        // (owner, 21 Oct: lifting it put it on the Setup card).
+        const wide = window.innerWidth >= 640
+        const size = wide ? LAUNCHER : 56
+        const natural = window.innerWidth < 1024 && document.documentElement.classList.contains('vv-tabbar') ? 88 : wide ? 24 : 12
+        const spotTop = window.innerHeight - natural - size
+        const spotBottom = window.innerHeight - natural
+        if (overlap <= 0 || rect.bottom <= spotTop || rect.top >= spotBottom) { unpad(); setClearance(null); return }
+        if (wide && rect.height >= LAUNCHER - 8) {
           if (padded !== bar) {
             unpad()
             bar.dataset.vvPad = bar.style.paddingRight
