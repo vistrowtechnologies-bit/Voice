@@ -2416,10 +2416,11 @@ async def log_lead(
             approximation approximate.
         location: One preferred locality. Call again with the second one if
             they name more than one — they accumulate, they do not replace.
-        timeline: When they want to buy, e.g. "next month".
-        property_type: apartment, plot, villa, commercial, etc.
-        configuration: e.g. "2 BHK", "3 BHK", "2000 sqft plot".
-        purpose: "investment" or "self-use" — ONLY if they actually said it.
+        timeline: When they want it, e.g. "next month".
+        property_type: Property businesses only: apartment, plot, villa, etc.
+        configuration: Property businesses only: e.g. "2 BHK", "2000 sqft plot".
+        purpose: Property businesses only: "investment" or "self-use", ONLY
+            if they actually said it. Never ask it for any other business.
         need: What this caller actually wants, in their own words, for ANY
             business — "root canal, in pain, wants tomorrow", "dinner for 20
             next Friday", "field-service software for 12 technicians", "car
