@@ -3871,6 +3871,18 @@ class RealEstateAgent(Agent):
             "book_appointment, compute the date argument (YYYY-MM-DD) from this real date."
         )
         instructions += "\n\n" + VOICE_STYLE_PROMPT
+        if (config.get("model") or "").startswith("gpt-"):
+            # Call 1443 (21 Oct 2026, gpt-5.4-nano): the one-sentence rule above
+            # held only on paper. Replies ran ~150 chars, joined clauses with
+            # dashes, semicolons and slashes, asked two questions per turn, and
+            # promised to send details on WhatsApp. Sarvam 105B follows the
+            # rule as written, so this is added for GPT models only.
+            instructions += (
+                "\n\n# Reply length (hard limit)\n"
+                "At most 20 spoken words and ONE question per turn. Never join clauses with a "
+                "dash, semicolon or slash, and never offer options as \"x/y\": say \"x ya y\". "
+                "You cannot send WhatsApp, SMS, email or links, so never promise to."
+            )
         if needs_human_speech_layer:
             instructions += "\n\n" + build_human_speech_manner()
         if voice_value.startswith(_ELEVENLABS_VOICE_PREFIX):
