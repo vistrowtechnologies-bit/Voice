@@ -50,7 +50,7 @@ function applyPage(template, page, bodyHtml) {
   return template
     .replace(/<title>.*?<\/title>/, `<title>${title}</title>`)
     .replace(/(<meta\s+name="description"\s+content=")[^"]*(")/, `$1${description}$2`)
-    .replace(/(<meta\s+name="robots"\s+content=")[^"]*(")/, `$1${page.noindex ? 'noindex, follow' : 'index, follow'}$2`)
+    .replace(/(<meta\s+name="robots"\s+content=")[^"]*(")/, `$1${page.noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large'}$2`)
     .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${url}$2`)
     .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`)
     .replace(/(<meta\s*\n?\s*property="og:description"\s*\n?\s*content=")[^"]*(")/, `$1${description}$2`)

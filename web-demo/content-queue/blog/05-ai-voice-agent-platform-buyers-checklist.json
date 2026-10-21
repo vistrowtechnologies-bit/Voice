@@ -101,8 +101,8 @@
       "a": "Many can. Vistrow Voice sends call details to Zoho CRM, Google Sheets, Slack, ArthaLeads or any webhook as the call ends."
     }
   ],
-  "imageAlt": "Two colleagues in a glass-walled meeting room reviewing printed pages together and making notes beside a closed laptop",
-  "imagePrompt": "Create ONE photorealistic editorial photograph, 16:9 landscape, and save it as cover.png in the current directory. Use style-ref.jpg only as a reference for mood, colour grading and photographic style (do not copy its scene). Natural daylight, warm tones, soft purple accents in clothing or decor, candid documentary feel, shallow depth of field, real workplace. ABSOLUTELY NO text, letters, numbers, logos, signage, labels, posters with writing, or screens with readable content anywhere in the image; any phone or laptop screen must be dark, turned away, or out of focus. Scene: Two Indian colleagues, a woman and a man, in a small glass-walled meeting room reviewing blank printed pages together and making notes with a pen, a closed laptop and two coffee cups on the table, focused and collaborative. A purple notebook on the table.",
+  "imageAlt": "A man reviewing papers at a desk beside a checklist of languages, speed on real calls, approved answers, handoffs, cost and controls",
+  "imagePrompt": "Designed cover (scripts/blog-covers/05-ai-voice-agent-platform-buyers-checklist.html) per docs/SEO-BLOG-COVER-GUIDE.md",
   "sources": [
     {
       "title": "MDN Web Docs: MediaDevices.getUserMedia() (secure contexts and user permission)",

@@ -100,8 +100,8 @@
       "a": "Yes. Patients can speak Hindi, Hinglish, Marathi, Tamil, Telugu, Kannada and the other supported Indian languages, or English, and switch mid-call."
     }
   ],
-  "imageAlt": "Older woman in a sari talking on her mobile phone in a clinic waiting area while a receptionist helps a patient at the desk",
-  "imagePrompt": "Create ONE photorealistic editorial photograph, 16:9 landscape, and save it as cover.png in the current directory. Use style-ref.jpg only as a reference for mood, colour grading and photographic style (do not copy its scene). Natural daylight, warm tones, soft purple accents in clothing or decor, candid documentary feel, shallow depth of field, real workplace. ABSOLUTELY NO text, letters, numbers, logos, signage, labels, posters with writing, or screens with readable content anywhere in the image; any phone or laptop screen must be dark, turned away, or out of focus. Scene: Reception area of a small, clean Indian neighbourhood clinic. An older woman patient sits in the waiting area speaking on her mobile phone, while in the background a receptionist in a lavender uniform helps another patient at the counter. Calm, caring atmosphere.",
+  "imageAlt": "An older woman on her phone in a clinic waiting area, with Artha answering patient calls and labels for bookings, reminders and handoffs",
+  "imagePrompt": "Designed cover (scripts/blog-covers/06-ai-receptionist-for-clinics.html) per docs/SEO-BLOG-COVER-GUIDE.md",
   "sources": [
     {
       "title": "NHS: When to use 111",

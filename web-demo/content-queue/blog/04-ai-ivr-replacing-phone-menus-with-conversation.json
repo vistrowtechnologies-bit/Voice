@@ -103,8 +103,8 @@
       "a": "No. Move one line with predictable calls first, read the transcripts for a week, and keep the old flow until the new one has proved itself on real traffic."
     }
   ],
-  "imageAlt": "Middle-aged man on a sunlit apartment balcony talking naturally on his mobile phone, surrounded by plants and bougainvillea",
-  "imagePrompt": "Create ONE photorealistic editorial photograph, 16:9 landscape, and save it as cover.png in the current directory. Use style-ref.jpg only as a reference for mood, colour grading and photographic style (do not copy its scene). Natural daylight, warm tones, soft purple accents in clothing or decor, candid documentary feel, shallow depth of field, real workplace. ABSOLUTELY NO text, letters, numbers, logos, signage, labels, posters with writing, or screens with readable content anywhere in the image; any phone or laptop screen must be dark, turned away, or out of focus. Scene: A middle-aged Indian man standing on a sunlit apartment balcony with plants, speaking naturally and relaxed into his mobile phone held to his ear, mid-sentence with a slight smile, as if explaining what he needs in his own words. Purple bougainvillea in the background.",
+  "imageAlt": "A caller smiling on his phone while a press-1 phone menu is replaced by Artha, the AI agent, asking how she can help",
+  "imagePrompt": "Designed cover (scripts/blog-covers/04-ai-ivr-replacing-phone-menus-with-conversation.html) per docs/SEO-BLOG-COVER-GUIDE.md",
   "sources": [
     {
       "title": "W3C: Voice Extensible Markup Language (VoiceXML) Version 2.0, Recommendation 16 March 2004",

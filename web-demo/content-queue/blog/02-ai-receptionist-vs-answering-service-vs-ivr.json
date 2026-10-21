@@ -10,7 +10,11 @@
   "shortAnswer": "An IVR routes callers through a keypad menu, a human answering service takes messages and handles judgment calls, and an AI receptionist holds a conversation that can answer questions, book appointments and hand over to staff. Compare them on your most common call types, after-hours coverage, languages, what gets recorded, and how each handles the calls that go wrong.",
   "excerpt": "Three ways to answer a business phone, three very different caller experiences. Here is how to compare an AI receptionist, a human answering service and an IVR using the calls you actually receive.",
   "category": "Voice AI basics",
-  "related": ["when-to-use-voice-ai-instead-of-ivr", "what-is-an-ai-voice-agent", "multilingual-ai-receptionist-hindi-punjabi-english"],
+  "related": [
+    "when-to-use-voice-ai-instead-of-ivr",
+    "what-is-an-ai-voice-agent",
+    "multilingual-ai-receptionist-hindi-punjabi-english"
+  ],
   "sections": [
     {
       "heading": "What is the difference between an AI receptionist, an answering service and an IVR?",
@@ -80,20 +84,44 @@
     }
   ],
   "faqs": [
-    { "q": "Is an AI receptionist the same as an answering service?", "a": "No. An answering service is a team of people who answer on your behalf. An AI receptionist is software that holds the conversation itself, answers from your approved information and hands over to a person when needed." },
-    { "q": "Can an AI receptionist replace my IVR menu?", "a": "Often, yes. Callers say what they need instead of pressing keys, and the agent answers, books or transfers. Keep a keypad option where callers must enter long numbers or prefer keys." },
-    { "q": "Which option is best for after-hours calls?", "a": "An AI receptionist suits after-hours calls well because it can answer, book a slot or take a callback request at any hour the line allows. Urgent issues still need a human or emergency route you define." },
-    { "q": "Can I use an AI receptionist and a human team together?", "a": "Yes, and most businesses do. Let the agent handle routine calls and transfer phone calls to your staff for complaints, sensitive topics or anything it is not sure about." },
-    { "q": "What should I test before choosing?", "a": "Run the same set of real call types through each option, including difficult callers and a second language, and judge them on outcomes, handovers and what reaches your team afterwards." }
+    {
+      "q": "Is an AI receptionist the same as an answering service?",
+      "a": "No. An answering service is a team of people who answer on your behalf. An AI receptionist is software that holds the conversation itself, answers from your approved information and hands over to a person when needed."
+    },
+    {
+      "q": "Can an AI receptionist replace my IVR menu?",
+      "a": "Often, yes. Callers say what they need instead of pressing keys, and the agent answers, books or transfers. Keep a keypad option where callers must enter long numbers or prefer keys."
+    },
+    {
+      "q": "Which option is best for after-hours calls?",
+      "a": "An AI receptionist suits after-hours calls well because it can answer, book a slot or take a callback request at any hour the line allows. Urgent issues still need a human or emergency route you define."
+    },
+    {
+      "q": "Can I use an AI receptionist and a human team together?",
+      "a": "Yes, and most businesses do. Let the agent handle routine calls and transfer phone calls to your staff for complaints, sensitive topics or anything it is not sure about."
+    },
+    {
+      "q": "What should I test before choosing?",
+      "a": "Run the same set of real call types through each option, including difficult callers and a second language, and judge them on outcomes, handovers and what reaches your team afterwards."
+    }
   ],
-  "imageAlt": "Small business owner at her office desk on a desk phone call, weighing options over three blank sheets of paper",
-  "imagePrompt": "Create ONE photorealistic editorial photograph, 16:9 landscape, and save it as cover.png in the current directory. Use style-ref.jpg only as a reference for mood, colour grading and photographic style (do not copy its scene). Natural daylight, warm tones, soft purple accents in clothing or decor, candid documentary feel, shallow depth of field, real workplace. ABSOLUTELY NO text, letters, numbers, logos, signage, labels, posters with writing, or screens with readable content anywhere in the image; any phone or laptop screen must be dark, turned away, or out of focus. Scene: A South Asian woman who owns a small service business sits at a wooden desk in her bright office, holding a desk phone handset to her ear while looking thoughtfully at a few blank paper notes in front of her, as if weighing options. A potted plant and a lavender cushion on her chair.",
+  "imageAlt": "Comparison cover: Artha, the AI receptionist, wearing a headset beside three cards for an IVR menu, an answering service and an AI receptionist",
+  "imagePrompt": "Designed cover (scripts/blog-covers/02-ai-receptionist-vs-answering-service-vs-ivr.html) per docs/SEO-BLOG-COVER-GUIDE.md",
   "sources": [
-    { "title": "US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists", "url": "https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm" }
+    {
+      "title": "US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists",
+      "url": "https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm"
+    }
   ],
   "contextualLinks": "To go deeper on the options, read [how an AI voice agent works on a call](/resources/blog/what-is-an-ai-voice-agent) or see [how an AI receptionist answers and routes calls](/ai-receptionist).",
   "inbound": [
-    { "target": "blog:when-to-use-voice-ai-instead-of-ivr", "sentence": "If you are also weighing a human service, our [AI receptionist vs answering service vs IVR comparison](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr) puts all three side by side." },
-    { "target": "page:/ai-receptionist", "sentence": "Still deciding between options? Read our guide to [comparing an AI receptionist with an answering service and an IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr)." }
+    {
+      "target": "blog:when-to-use-voice-ai-instead-of-ivr",
+      "sentence": "If you are also weighing a human service, our [AI receptionist vs answering service vs IVR comparison](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr) puts all three side by side."
+    },
+    {
+      "target": "page:/ai-receptionist",
+      "sentence": "Still deciding between options? Read our guide to [comparing an AI receptionist with an answering service and an IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr)."
+    }
   ]
 }

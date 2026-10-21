@@ -1,0 +1,32 @@
+/* Shared styles for blog covers (docs/SEO-BLOG-COVER-GUIDE.md). 1200x675. */
+@font-face { font-family: Sora; src: url(../../public/fonts/sora-latin.woff2) format('woff2'); font-weight: 100 900; }
+@font-face { font-family: Manrope; src: url(../../public/fonts/manrope-latin.woff2) format('woff2'); font-weight: 200 800; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1200px; height: 675px; overflow: hidden; }
+body { font-family: Manrope, sans-serif; color: #fff; position: relative;
+  background: radial-gradient(700px 500px at 88% 18%, rgba(168,85,247,.45), transparent 60%), radial-gradient(600px 420px at 8% 100%, rgba(217,70,239,.28), transparent 60%), linear-gradient(135deg, #12061f 0%, #1e0b3a 55%, #2a0f52 100%); }
+.brand { position: absolute; z-index: 5; top: 44px; left: 60px; display: flex; align-items: center; gap: 12px; font-family: Sora; font-weight: 700; font-size: 22px; }
+.brand img { width: 38px; height: 38px; border-radius: 10px; }
+.text { position: absolute; z-index: 4; left: 60px; top: 50%; transform: translateY(-46%); width: 500px; }
+.pill { display: inline-block; font-family: Sora; font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: #e9d5ff; background: rgba(168,85,247,.25); border: 1px solid rgba(216,180,254,.4); padding: 9px 16px; border-radius: 999px; }
+h1 { font-family: Sora; font-weight: 800; font-size: 56px; line-height: 1.05; letter-spacing: -.035em; margin-top: 20px; text-shadow: 0 2px 24px rgba(10,3,20,.35); }
+h1 em { font-style: normal; color: #d8b4fe; }
+.sub { margin-top: 18px; font-size: 24px; line-height: 1.35; color: #e4d7f5; font-weight: 500; }
+/* studio: portrait cut out on the right */
+.person { position: absolute; right: -10px; bottom: 0; height: 675px; width: 540px; background-position: center top; background-size: cover; background-repeat: no-repeat;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 30%), linear-gradient(to top, transparent 0%, #000 18%); -webkit-mask-composite: source-in; }
+/* scene: full-bleed photo, darkened on the left */
+.scene { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.scene.flip { transform: scaleX(-1); }
+.shade { position: absolute; inset: 0; z-index: 2; background: linear-gradient(90deg, rgba(18,6,31,.96) 0%, rgba(24,8,44,.9) 34%, rgba(30,11,58,.55) 52%, rgba(30,11,58,0) 68%), linear-gradient(0deg, rgba(18,6,31,.55), transparent 30%); }
+/* chips and cards */
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.chip { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; font-size: 18px; padding: 10px 16px; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(8px); }
+.chip svg { flex: none; }
+.chip.hl { background: linear-gradient(135deg, #9333ea, #c026d3); border-color: rgba(245,208,254,.6); }
+.card { position: absolute; z-index: 4; border-radius: 20px; padding: 16px 18px; background: rgba(24,9,44,.82); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(10px); }
+.card.hl { background: linear-gradient(135deg, rgba(147,51,234,.95), rgba(192,38,211,.9)); border-color: rgba(245,208,254,.6); box-shadow: 0 0 60px rgba(168,85,247,.5); }
+.badge { position: absolute; z-index: 4; display: flex; align-items: center; gap: 12px; padding: 10px 18px 10px 10px; border-radius: 999px; background: rgba(24,9,44,.85); border: 1px solid rgba(245,208,254,.45); box-shadow: 0 0 40px rgba(168,85,247,.45); }
+.badge img { width: 54px; height: 54px; border-radius: 50%; border: 2px solid #d8b4fe; object-fit: cover; }
+.badge b { display: block; font-family: Sora; font-size: 18px; }
+.badge span { font-size: 15px; color: #e9d5ff; }

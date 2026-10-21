@@ -106,8 +106,8 @@
       "a": "Yes. A short disclosure in the greeting, plus a clear route to a person, builds trust. Check recording and disclosure rules for each market you serve."
     }
   ],
-  "imageAlt": "Smiling receptionist at a bright dental clinic front desk greeting a visitor, with a cordless phone on the counter",
-  "imagePrompt": "Create ONE photorealistic editorial photograph, 16:9 landscape, and save it as cover.png in the current directory. Use style-ref.jpg only as a reference for mood, colour grading and photographic style (do not copy its scene). Natural daylight, warm tones, soft purple accents in clothing or decor, candid documentary feel, shallow depth of field, real workplace. ABSOLUTELY NO text, letters, numbers, logos, signage, labels, posters with writing, or screens with readable content anywhere in the image; any phone or laptop screen must be dark, turned away, or out of focus. Scene: The front desk of a small, modern Indian dental clinic. A young receptionist in a lavender top smiles while greeting a walk-in visitor, and a cordless phone rests on the counter beside a small plant. Bright, airy, welcoming interior.",
+  "imageAlt": "Artha, an AI receptionist with a headset, at a bright front desk, with labels for answering calls, booking appointments and handing over",
+  "imagePrompt": "Designed cover (scripts/blog-covers/03-what-is-an-ai-receptionist.html) per docs/SEO-BLOG-COVER-GUIDE.md",
   "sources": [
     {
       "title": "US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists",

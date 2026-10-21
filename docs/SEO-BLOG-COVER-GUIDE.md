@@ -6,6 +6,16 @@ Owner review, 21 Oct 2026: the first photo-only covers scored about 3.5/10. They
 
 Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-service-vs-ivr.html` with `people/artha-headset.jpg`, rendered to 1200x675.
 
+
+## Two styles (owner, 21 Oct: not every cover should look the same)
+
+| Style | Look | Use for |
+|---|---|---|
+| **Studio** | Dark brand gradient, a person cut out on the right, topic cards over their shoulder | Comparisons and flows (posts 2 and 4) |
+| **Scene** | A full-width realistic photo of people in a real place, darkened on the left for the headline, topic chips under it, and an "Artha" badge when the AI agent is part of the story | Guides, checklists and industry posts (posts 3, 5 and 6) |
+
+Shared styles: `web-demo/scripts/blog-covers/cover.css`. Alternate the styles so consecutive posts do not look alike.
+
 ## Rules
 
 1. **Show the topic, not a mood.** The visual must contain the subject itself: keypad, headset, voice waveform, appointment card, language script, calendar, chat bubble. A person on a phone is not enough.
@@ -59,8 +69,8 @@ Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-s
 
 ## Site changes that go with this
 
-- Add `max-image-preview:large` to the robots meta tag on all indexable pages. Google Discover shows large images only when this is set, and our pages had only `index, follow` (checked 21 Oct).
-- The caption under blog covers currently says "AI-generated editorial illustration; not a customer photograph." Designed covers need a caption such as "Illustration: Vistrow Voice", and `check-blog-seo.ts` must accept it.
+- `max-image-preview:large` is now in the robots meta tag of every indexable page (index.html, Seo.tsx, prerender.mjs; added 21 Oct). Google Discover shows large images only when it is set.
+- Keep the caption "AI-generated editorial illustration; not a customer photograph." It stays accurate, because the people and artwork on covers are AI-generated.
 
 ## Cover briefs, posts 2 to 30
 
