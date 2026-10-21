@@ -3918,17 +3918,18 @@ class RealEstateAgent(Agent):
             "Use the tool that fits what this call is about:\n"
             "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
             "any detail at all — what they need, a timeline, a budget (any language or unit: \"50 "
-            "hazaar\", \"एक करोड़\"), a location, a name. Pass only "
+            "hazaar\", \"एक करोड़\"), a name. Pass only "
             "what you just learned; omitted fields keep their value. You do NOT need their name or "
             "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
             "your very next tool call, before you reply and before any booking or end_call; many "
-            "one-field calls are exactly right. Two localities: call it twice (locations accumulate). "
-            # Call 1439 (21 Oct 2026): a website enquiry on a digital-marketing
-            # agent was asked "business ke liye ya investment ke liye?" and for a
-            # locality - property wording here and in log_lead, from when every
-            # tenant sold property. Property tenants' own prompts ask these.
-            "Ask only questions that fit THIS business: locality, property type, BHK, investment "
-            "or self-use are for a business that sells property, never for any other.\n"
+            "one-field calls are exactly right. "
+            # Call 1458 (21 Oct 2026, Sarvam 105B): naming the property questions
+            # here, even to forbid them, primed the model to ask "business ya
+            # investment?" and "kis city ya area mein?" on a website enquiry
+            # (calls 1439/1458). Property tenants' own prompts ask those, so
+            # nothing property-specific is named in the platform rules at all.
+            "Ask only about what THIS business offers, as its own prompt and knowledge base describe "
+            "it.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "

@@ -2406,16 +2406,15 @@ async def log_lead(
     """Record what you have learned about this caller so far.
 
     Call this the MOMENT the caller gives you any detail — what they want, a
-    budget, a locality, a timeline. You do NOT need their name, you do NOT
+    budget, a timeline. You do NOT need their name, you do NOT
     need a phone number, and you do NOT need the full picture. Pass only the
     fields you actually just learned; everything you omit is left exactly as
     it was. Calling it eight times across a call with one field each is
     correct and expected.
 
-    `need` works for every business; budget, location, property_type and
-    configuration are property-specific. Put the need in `need`, in the
-    caller's own words, and use the property fields only when they genuinely
-    apply — never wait for a budget before recording what they want.
+    `need` works for every business: put what they want there, in the
+    caller's own words. Fill the other fields only with what they said -
+    never wait for a budget before recording what they want.
 
     Args:
         name: Caller's name, once they give it.
@@ -2423,13 +2422,14 @@ async def log_lead(
             known from caller ID — do not ask for it.
         budget: Budget as they expressed it, e.g. "around 1 crore". Keep an
             approximation approximate.
-        location: One preferred locality. Call again with the second one if
-            they name more than one — they accumulate, they do not replace.
+        location: A place the caller named. Call again for a second one -
+            they accumulate, they do not replace.
         timeline: When they want it, e.g. "next month".
-        property_type: Property businesses only: apartment, plot, villa, etc.
-        configuration: Property businesses only: e.g. "2 BHK", "2000 sqft plot".
-        purpose: Property businesses only: "investment" or "self-use", ONLY
-            if they actually said it. Never ask it for any other business.
+        property_type: Only if this business sells property: the type they named.
+        configuration: Only if this business sells property: the size or
+            layout they named.
+        purpose: Only if this business sells property: why they are buying,
+            as they said it.
         need: What this caller actually wants, in their own words, for ANY
             business — "root canal, in pain, wants tomorrow", "dinner for 20
             next Friday", "field-service software for 12 technicians", "car
