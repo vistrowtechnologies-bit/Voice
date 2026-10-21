@@ -36,7 +36,7 @@ STALE_CLAIM_HOURS = 72
 # Large shared files where even edits in different functions often conflict.
 HOT_FILES = {"agent/main.py", "agent/tools.py", "server/calls_db.py", "server/token_api.py"}
 
-_PATH_RE = re.compile(r"(?<![\w/.-])((?:[\w.-]+/)+[\w.-]*\.(?:py|tsx|ts|mts|js|md|json|toml|css|html|sql|sh|yml|yaml)|(?:[\w.-]+/)+)(?![\w/-])")
+_PATH_RE = re.compile(r"(?<![\w/.-])((?:[\w.-]+/)+[\w.-]*\.(?:py|tsx|ts|mts|jsx|js|mjs|cjs|md|json|toml|css|html|sql|sh|yml|yaml|gs|txt)|(?:[\w.-]+/)+)(?![\w/-])")
 _BRANCH_RE = re.compile(r"\b((?:claude|codex)/[\w./-]+?)(?=[`'\")\s,;:·]|$)")
 
 
