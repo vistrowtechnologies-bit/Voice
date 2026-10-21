@@ -4,7 +4,7 @@ Every blog post's cover is also its og:image (link previews on WhatsApp, LinkedI
 
 Owner review, 21 Oct 2026: the first photo-only covers scored about 3.5/10. They were good photos, but did not show the topic (no IVR, no "vs", no headline). This guide replaces them.
 
-Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-service-vs-ivr.html`, rendered to 1200x675.
+Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-service-vs-ivr.html` with `people/receptionist-headset.jpg`, rendered to 1200x675.
 
 ## Rules
 
@@ -16,12 +16,20 @@ Approved sample: `web-demo/scripts/blog-covers/02-ai-receptionist-vs-answering-s
 6. **Brand frame:** Vistrow mark and "Vistrow Voice" top left; dark purple gradient background (#12061f to #2a0f52, with #a855f7 and #d946ef glows); the highlighted element in the brand gradient. Every cover uses this frame so the series is recognisable.
 7. **Safe area:** keep everything inside the central 1200x600 (no text within 40 px of the top or bottom edge), because some platforms crop 1200x675 to 1.91:1.
 8. **No prices, no competitor or vendor names or logos, no invented numbers, no em dash.** Product claims follow docs/SEO-BLOG-PLAN-2026-10-21.md (for languages: "130+ languages").
-9. **Accessible alt text** describes what the cover shows (for example: "Comparison card: IVR menu, answering service and AI receptionist, with the AI receptionist highlighted"), more than 30 characters.
+9. **A person on every cover (owner, 21 Oct).** A photoreal person makes the cover feel human and draws the eye in a feed. Put them on the right edge, fading into the gradient, with the topic visual overlapping their shoulder or torso, never their face. The face must stay visible at 400 px wide.
+10. **Accessible alt text** describes what the cover shows (for example: "Comparison card: IVR menu, answering service and AI receptionist, with the AI receptionist highlighted"), more than 30 characters.
+
+## The person (photo layer)
+
+- Generate with Codex, using an approved cover as the colour reference: one photorealistic studio portrait, 4:5, chest-up, a plain smooth dark purple background close to #1e0b3a, a purple-magenta rim light, a soft key light from the left, eyes or body turned slightly left (toward the headline), and absolutely no text or logos. Choose a role that fits the post: receptionist with headset, clinic front-desk staff, property adviser, shop owner on a phone, bank officer, older caller on a mobile. Use Indian or South Asian people unless the post's audience suggests otherwise.
+- Resize to 900 px on the long side (`sips -Z 900`), save it in `web-demo/scripts/blog-covers/people/<role>.jpg`, and reuse a portrait across posts when the role fits. Not every post needs a new photo.
+- In the HTML: `.person { position:absolute; right:-10px; bottom:0; height:675px; width:540px; background:url(people/<role>.jpg) center top / cover; }` with a left-to-right and bottom fade mask (see the post 2 sample). Cards go in the lower middle (left about 520 px), over the person's shoulder.
+- Look at the result at full size and at 400 px. If the cards cover the face, or the face is unreadable, move the cards or pick another portrait.
 
 ## Layout
 
 - Canvas 1200x675. Left column (about 500 px): brand, pill, headline, sub-line.
-- Right column: the concept visual. Use one of the five types below.
+- Right side: the person (photo layer), with the concept visual overlapping the person's shoulder in the lower middle. Use one of the five types below.
 - Highlight the option or outcome we recommend with the brand gradient and glow; keep the others muted.
 
 ## Cover types

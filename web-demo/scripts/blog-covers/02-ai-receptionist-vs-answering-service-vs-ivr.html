@@ -34,10 +34,24 @@
   .card.ai p { color: #f3e8ff; }
   .badge { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-family: Sora; font-weight: 700; font-size: 14px; letter-spacing: .1em; color: #2a0f52; background: #f5d0fe; padding: 7px 12px; border-radius: 999px; }
   .card { position: relative; }
+
+  .person { position: absolute; right: -10px; bottom: 0; height: 675px; width: 540px; background: url(people/receptionist-headset.jpg) center top / cover no-repeat;
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 30%, #000 100%), linear-gradient(to top, transparent 0%, #000 18%);
+    -webkit-mask-composite: source-in; mask-composite: intersect; }
+  .wrap { grid-template-columns: 470px 1fr; }
+  .cards { position: absolute; left: 520px; bottom: 54px; width: 372px; gap: 12px; padding-top: 0; }
+  .card { grid-template-columns: 56px 1fr; gap: 14px; padding: 12px 16px; border-radius: 18px; background: rgba(24, 9, 44, .78); backdrop-filter: blur(10px); }
+  .card .ic { width: 56px; height: 56px; border-radius: 14px; }
+  .card .ic svg { transform: scale(.78); }
+  .card h2 { font-size: 21px; }
+  .card p { font-size: 16px; }
+  .card.ai { background: linear-gradient(135deg, rgba(147,51,234,.92), rgba(192,38,211,.85)); }
+  h1 { font-size: 56px; }
 </style>
 </head>
 <body>
   <div class="grain"></div>
+  <div class="person"></div>
   <div class="brand"><img src="../../src/assets/vistrow-mark.png" alt=""> Vistrow Voice</div>
   <div class="wrap">
     <div>
