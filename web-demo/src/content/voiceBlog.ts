@@ -1,3 +1,4 @@
+import { DAILY_CONTEXTUAL_LINKS, DAILY_IMAGE_ALTS, DAILY_POSTS, DAILY_SOURCES } from './dailyBlogPosts'
 import { IVR_CONTEXTUAL_LINKS, IVR_IMAGE_ALTS, IVR_POSTS } from './ivrBlogPosts'
 
 export interface VoiceBlogSection {
@@ -18,6 +19,16 @@ export interface VoiceBlogPost {
   imageAlt: string
   updatedAt: string
   sources: { title: string; url: string }[]
+  /** Search-result title, 60 characters or fewer, used instead of "title | Vistrow Voice". */
+  seoTitle?: string
+  /** Meta description, 155 characters or fewer, used instead of the excerpt. */
+  metaDescription?: string
+  /** 40 to 60 word direct answer shown at the top (answer engines quote it). */
+  shortAnswer?: string
+  /** Rendered as a FAQ section with FAQPage structured data. Answers may contain [text](/path) links. */
+  faqs?: { q: string; a: string }[]
+  /** Slugs shown first under "Suggested reading". */
+  related?: string[]
 }
 
 const ORIGINAL_POSTS: Omit<VoiceBlogPost, 'image' | 'imageAlt' | 'updatedAt' | 'sources'>[] = [
@@ -313,7 +324,7 @@ const SOURCES: Record<string, VoiceBlogPost['sources']> = {
 // related idea. The bracket syntax is rendered as real links by BlogPost.
 const CONTEXTUAL_LINK_PARAGRAPHS: Record<string, string> = {
   'what-is-an-ai-voice-agent': 'If your current calls mostly ask people to choose a department, start with our [AI voice agent versus IVR comparison](/resources/blog/when-to-use-voice-ai-instead-of-ivr). When the task calls for a conversation, the [voice agents product overview](/product/agents) shows where an agent fits in the wider calling workflow.',
-  'how-to-choose-a-multilingual-voice-agent': 'Language quality also depends on how quickly the system recognises when a caller has finished. Use the [voice AI latency testing guide](/resources/blog/voice-ai-latency-how-to-measure-it) alongside your language tests, and review the [languages available for voice agents](/languages) before choosing your pilot scope.',
+  'how-to-choose-a-multilingual-voice-agent': 'Language quality also depends on how quickly the system recognises when a caller has finished. Use the [voice AI latency testing guide](/resources/blog/voice-ai-latency-how-to-measure-it) alongside your language tests, and review the [languages available for voice agents](/languages) before choosing your pilot scope. If your callers are abroad, our guide to a [multilingual AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english) applies these checks to businesses in the UK, Canada, the US and the Gulf.',
   'voice-ai-latency-how-to-measure-it': 'A language switch can change recognition and synthesis time, so use the [multilingual voice agent evaluation checklist](/resources/blog/how-to-choose-a-multilingual-voice-agent) for mixed-language calls. For visitors speaking from a browser, the [website voice widget guide](/resources/blog/website-voice-widget-for-lead-generation) covers permission and connection steps that a phone-only test misses.',
   'website-voice-widget-for-lead-generation': 'Before placing the microphone on a high-intent page, review what the [website call widget](/product/widget) can offer visitors. The conversation becomes useful to a sales team only when it has a reliable next step; our [CRM handoff guide](/resources/blog/connecting-voice-calls-to-your-crm) covers what that record should contain.',
   'connecting-voice-calls-to-your-crm': 'If the transcript appears but the audio does not, trace the [recording and transcript delivery steps](/resources/blog/ai-call-recordings-and-transcripts) before retrying the lead. The [integrations overview](/product/integrations) explains where the CRM connection sits in the product.',
@@ -326,8 +337,11 @@ const CONTEXTUAL_LINK_PARAGRAPHS: Record<string, string> = {
 
 Object.assign(IMAGE_ALTS, IVR_IMAGE_ALTS)
 Object.assign(CONTEXTUAL_LINK_PARAGRAPHS, IVR_CONTEXTUAL_LINKS)
+Object.assign(IMAGE_ALTS, DAILY_IMAGE_ALTS)
+Object.assign(CONTEXTUAL_LINK_PARAGRAPHS, DAILY_CONTEXTUAL_LINKS)
+Object.assign(SOURCES, DAILY_SOURCES)
 
-export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS, ...IVR_POSTS].map((post) => {
+export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS, ...IVR_POSTS, ...DAILY_POSTS].map((post) => {
   const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? [])].map((section, index) => index === 0
     ? { ...section, paragraphs: [...section.paragraphs, CONTEXTUAL_LINK_PARAGRAPHS[post.slug]] }
     : section)

@@ -437,6 +437,18 @@ export function LanguageDetail() {
 
       <FaqSection items={faqs} />
 
+      {lang.readMore && (
+        <section className="mx-auto max-w-7xl px-5 pt-12 md:px-8">
+          <p className="max-w-3xl text-base leading-relaxed text-text-muted">
+            {lang.readMore.lead}{' '}
+            <Link to={lang.readMore.to} className="font-semibold text-primary underline-offset-4 hover:underline">
+              {lang.readMore.label}
+            </Link>
+            .
+          </p>
+        </section>
+      )}
+
       {/* ---------- Related and other languages: chip rows ---------- */}
       <section className="mx-auto max-w-7xl space-y-8 px-5 pb-12 md:px-8">
         {lang.related && (
