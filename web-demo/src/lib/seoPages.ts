@@ -472,7 +472,7 @@ export const SEO_PAGES: SeoPage[] = [
     'Vistrow Voice journal featuring practical guides to voice AI and customer conversations',
     'collection',
     'Blog',
-  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Business owner listening on a phone and taking notes beside a laptop' },
+  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Artha, an AI voice agent with a headset, on a call in a bright office, with chips for listens, answers and books' },
   ...Array.from({ length: BLOG_PAGE_COUNT - 1 }, (_, index) => index + 2).map((n) => ({ ...page(
     blogPagePath(n),
     `Voice AI Guides and Playbooks, Page ${n} | Vistrow Voice`,
@@ -481,7 +481,7 @@ export const SEO_PAGES: SeoPage[] = [
     'Vistrow Voice journal featuring practical guides to voice AI and customer conversations',
     'collection',
     `Blog, page ${n}`,
-  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Business owner listening on a phone and taking notes beside a laptop' })),
+  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Artha, an AI voice agent with a headset, on a call in a bright office, with chips for listens, answers and books' })),
   ...VOICE_BLOG_POSTS.map((post) => ({ ...page(
     `/resources/blog/${post.slug}`,
     post.seoTitle ?? `${post.title} | Vistrow Voice`,

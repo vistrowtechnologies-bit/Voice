@@ -80,7 +80,7 @@ export const DAILY_POSTS: DailyBlogPost[] = [
 ]
 
 export const DAILY_IMAGE_ALTS: Record<string, string> = {
-  'multilingual-ai-receptionist-hindi-punjabi-english': 'Receptionist at a small clinic front desk answering a phone call while a customer waits',
+  'multilingual-ai-receptionist-hindi-punjabi-english': 'Large Hindi and Punjabi greetings and Hello beside a Sikh caller at a front desk, with an Artha AI badge',
 }
 
 export const DAILY_SOURCES: Record<string, VoiceBlogPost['sources']> = {

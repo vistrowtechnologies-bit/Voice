@@ -240,10 +240,10 @@ export const IVR_POSTS: IvrBlogPost[] = [
 ]
 
 export const IVR_IMAGE_ALTS: Record<string, string> = {
-  'what-is-ivr-interactive-voice-response': 'Caller holding a mobile phone beside an office desk telephone with a keypad',
-  'ivr-vs-ai-voice-agent-india': 'Support coordinator wearing a headset while listening to a caller at her desk',
-  'ivr-in-banking-and-finance': 'Calculator, notebook and smartphone on a desk while someone works through figures',
-  'how-to-choose-an-ivr-service-provider-india': 'Colleague wearing headphones and holding a pen while listening to a test call',
+  'what-is-ivr-interactive-voice-response': 'Woman looking at her phone beside a keypad menu card reading Press 1, Press 2, Press 0, with an AI tag',
+  'ivr-vs-ai-voice-agent-india': 'Artha with a headset beside two cards: IVR menu versus AI voice agent, with the AI voice agent highlighted',
+  'ivr-in-banking-and-finance': 'Before and after: a frustrated bank customer stuck in a phone menu, then Artha answering, OTP and PIN kept safe',
+  'how-to-choose-an-ivr-service-provider-india': 'Checklist card for choosing an IVR provider: languages, call quality, reports, handoffs and support',
 }
 
 // Appended to the first section of each article (see voiceBlog.ts), where the
