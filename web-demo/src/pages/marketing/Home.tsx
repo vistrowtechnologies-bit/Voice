@@ -79,12 +79,12 @@ const BHARAT_POINTS = [
     body: 'Hindi, Marathi, Gujarati, and Punjabi verbs agree with the speaker’s gender. Most models get the first line right and drift after that. Artha stays consistent with its own voice, every turn.',
   },
   {
-    glyph: '😤',
+    glyph: 'बकवास',
     title: 'It knows “bakwas” means trouble',
     body: 'Frustration in an Indian call rarely arrives in textbook English. Artha reads the cues people actually use - bekaar, faltu, bakwas - and softens its tone before the caller escalates.',
   },
   {
-    glyph: '🎭',
+    glyph: 'आवाज़',
     title: 'A voice that reacts to the caller',
     body: 'Built by an Indian team, tuned for Indian callers: Artha reads frustration, confusion, or excitement in your caller’s voice and shifts its own pace and warmth to match - live, mid-call, not a flat text-to-speech read.',
   },
