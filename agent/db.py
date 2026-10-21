@@ -1008,9 +1008,27 @@ def _hhmm_to_minutes(t: str) -> int:
     return int(h) * 60 + int(m)
 
 
+# 60 s, like get_account_country: a booking read this once for the past-time
+# check and again for the slots, each a round-trip over the DB proxy (call
+# 1459: booking took 4.7 s). An edit on the dashboard applies within a minute.
+_AVAILABILITY_CACHE_TTL_S = 60.0
+_availability_cache: dict[int, tuple[float, dict]] = {}
+
+
 def get_availability_config(account_id: int | None) -> dict:
     if account_id is None:
         return dict(_AVAILABILITY_DEFAULTS)
+    hit = _availability_cache.get(account_id)
+    if hit and time.monotonic() - hit[0] < _AVAILABILITY_CACHE_TTL_S:
+        return dict(hit[1])
+    cfg = _read_availability_config(account_id)
+    if cfg is None:
+        return dict(_AVAILABILITY_DEFAULTS)
+    _availability_cache[account_id] = (time.monotonic(), cfg)
+    return dict(cfg)
+
+
+def _read_availability_config(account_id: int) -> dict | None:
     conn = dbconn.connect()
     try:
         row = conn.execute(
@@ -1024,7 +1042,7 @@ def get_availability_config(account_id: int | None) -> dict:
                 cfg.update({k: v for k, v in stored.items() if k in _AVAILABILITY_DEFAULTS})
         return cfg
     except psycopg.Error:
-        return dict(_AVAILABILITY_DEFAULTS)
+        return None  # not cached: the next call retries the real setting
     finally:
         conn.close()
 
@@ -1133,6 +1151,9 @@ def book_native_appointment(
     # booking for a time that has already passed in the account's timezone.
     if _appointment_in_past(account_id, date, time):
         return {"ok": False, "error": "that time has already passed"}
+    # Before the transaction, not inside it: one fewer round-trip while the
+    # advisory lock is held.
+    stored_phone = account_phone(account_id, phone) or phone
     conn = dbconn.connect()
     try:
         with conn:
@@ -1143,7 +1164,7 @@ def book_native_appointment(
                 "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, contact_phone, "
                 "contact_email, purpose, appt_date, start_time, duration_minutes, status, source) "
                 "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, ?, 'confirmed', 'agent')",
-                (account_id, agent_id, name, account_phone(account_id, phone) or phone, purpose, date, time,
+                (account_id, agent_id, name, stored_phone, purpose, date, time,
                  duration_minutes),
             )
             return {"ok": True}

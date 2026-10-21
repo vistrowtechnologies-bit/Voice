@@ -129,3 +129,30 @@ class PromptToday(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AvailabilityConfigCache(unittest.TestCase):
+    """Call 1459: the availability config was read twice per booking, each a
+    round-trip over the DB proxy. Cached 60 s; a failed read is not cached."""
+
+    def setUp(self):
+        db._availability_cache.clear()
+        self.addCleanup(db._availability_cache.clear)
+
+    def test_second_read_is_served_from_the_cache(self):
+        conn = mock.MagicMock()
+        conn.execute.return_value.fetchone.return_value = None
+        with mock.patch.object(db.dbconn, "connect", return_value=conn) as connect:
+            db.get_availability_config(7)
+            db.get_availability_config(7)
+        self.assertEqual(connect.call_count, 1)
+
+    def test_a_failed_read_is_not_cached(self):
+        bad = mock.MagicMock()
+        bad.execute.side_effect = db.psycopg.OperationalError("down")
+        good = mock.MagicMock()
+        good.execute.return_value.fetchone.return_value = None
+        with mock.patch.object(db.dbconn, "connect", side_effect=[bad, good]) as connect:
+            self.assertEqual(db.get_availability_config(7), dict(db._AVAILABILITY_DEFAULTS))
+            db.get_availability_config(7)
+        self.assertEqual(connect.call_count, 2)
