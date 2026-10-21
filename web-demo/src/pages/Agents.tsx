@@ -232,7 +232,8 @@ export function Agents() {
       />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
-        {view === 'tiles' && !loading && agents.length > 0 && (
+        {/* Both views: switching to the list used to drop it (owner, 21 Oct). */}
+        {!loading && agents.length > 0 && (
           <section className="bento-tile bento-hero flex flex-wrap items-end justify-between gap-5">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/75">Your AI team today</p>
@@ -666,13 +667,18 @@ function AgentDrawer({ agent, readiness, activity, voice, knowledge, phone, copi
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // The help launcher would sit on the drawer's buttons (index.css hides it).
+    document.documentElement.classList.add('vv-sheet-open')
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.documentElement.classList.remove('vv-sheet-open')
+    }
   }, [onClose])
   const live = agent.status === 'live'
   return (
     <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={`${agent.name} details`}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <aside className="bento-reveal absolute inset-y-0 right-0 flex w-full max-w-md flex-col gap-4 overflow-y-auto border-l border-border bg-surface p-5 pb-24 shadow-2xl">
+      <aside className="bento-reveal absolute inset-y-0 right-0 flex w-full max-w-md flex-col gap-4 overflow-y-auto border-l border-border bg-surface p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <Avatar agent={agent} />
@@ -720,12 +726,16 @@ function AgentDrawer({ agent, readiness, activity, voice, knowledge, phone, copi
             </div>
           )}
         </div>
-        <div className="mt-auto flex flex-wrap gap-2">
-          <button type="button" onClick={actions.onTest} className="bento-pill bento-pill-dark"><Icon name="mic" className="text-[16px]" />Test in browser</button>
-          <button type="button" onClick={actions.onDial} className="bento-pill bento-pill-soft"><Icon name="call" className="text-[16px]" />Call test</button>
-          <button type="button" onClick={onEdit} className="bento-pill bento-pill-soft"><Icon name="edit" className="text-[16px]" />Edit</button>
-          <button type="button" onClick={actions.onTogglePause} className="bento-pill bento-pill-soft"><Icon name={live ? 'pause' : 'play_arrow'} className="text-[16px]" />{live ? 'Pause' : 'Resume'}</button>
-          <button type="button" onClick={actions.onDelete} className="ml-auto flex items-center gap-1 rounded-full bg-transparent px-3 text-xs font-bold text-destructive hover:underline"><Icon name="delete" className="text-[16px]" />Delete</button>
+        {/* One main action, three equal secondary ones, and Delete set apart
+            so it is never next to a button people press often. */}
+        <div className="mt-auto flex flex-col gap-2 border-t border-border pt-4">
+          <button type="button" onClick={actions.onTest} className="bento-pill bento-pill-dark w-full justify-center"><Icon name="mic" className="text-[16px]" />Test in browser</button>
+          <div className="grid grid-cols-3 gap-2">
+            <button type="button" onClick={actions.onDial} className="bento-pill bento-pill-soft justify-center"><Icon name="call" className="text-[16px]" />Call test</button>
+            <button type="button" onClick={onEdit} className="bento-pill bento-pill-soft justify-center"><Icon name="edit" className="text-[16px]" />Edit</button>
+            <button type="button" onClick={actions.onTogglePause} className="bento-pill bento-pill-soft justify-center"><Icon name={live ? 'pause' : 'play_arrow'} className="text-[16px]" />{live ? 'Pause' : 'Resume'}</button>
+          </div>
+          <button type="button" onClick={actions.onDelete} className="mt-1 flex items-center justify-center gap-1 self-center rounded-full bg-transparent px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10"><Icon name="delete" className="text-[16px]" />Delete agent</button>
         </div>
       </aside>
     </div>
