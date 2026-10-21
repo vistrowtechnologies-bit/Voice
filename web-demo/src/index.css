@@ -1366,3 +1366,24 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
    scrolls with the wheel, trackpad, touch and keyboard focus. */
 .vv-quiet-scroll { scrollbar-width: none; }
 .vv-quiet-scroll::-webkit-scrollbar { display: none; }
+
+/* Phone tab bar (MobileTabBar). Below lg the bar floats at the bottom, so the
+   help launcher and the sticky save bars sit above it instead of under it.
+   The help launcher's inline bottom (set when a save bar is showing) still
+   wins, and it is measured from the lifted bar. */
+/* The marketing site's own voice widget is not meant for the dashboard
+   (index.html only loads it off app.*); where it still loads, it would cover
+   the More tab. */
+html.vv-tabbar #vistrow-voice-widget-host { display: none !important; }
+html.vv-sheet-open .vv-help-root { display: none !important; }
+@media (max-width: 1023.98px) {
+  html.vv-tabbar .vv-help-root { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  html.vv-tabbar .vv-action-bar { bottom: calc(5rem + env(safe-area-inset-bottom)); }
+}
+@keyframes vv-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes vv-sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+.vv-sheet-up { animation: vv-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+.vv-sheet-fade { animation: vv-sheet-fade 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .vv-sheet-up, .vv-sheet-fade { animation: none; }
+}
