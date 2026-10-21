@@ -5,6 +5,13 @@
 // off. Vercel Web Analytics is cookieless and stores nothing in the browser,
 // so it is not part of this choice.
 //
+// Since 2026-10-21 the banner offers two categories (owner: "accept all /
+// partial", no vendor names on the banner; they are on /privacy):
+//   analytics        - visit statistics (Google Analytics), key below
+//   session insights - how pages are used (Microsoft Clarity), SESSION_CONSENT_KEY
+// A visitor who answered before the split has only the analytics key; that one
+// answer still covers both.
+//
 // index.html reads the same storage key before the app boots so a returning
 // visitor who accepted gets GA from the first page view. Keep the key and the
 // GA id in sync with the inline script there.
@@ -15,11 +22,13 @@ export type AnalyticsChoice = 'granted' | 'denied'
 
 export const ANALYTICS_CONSENT_KEY = 'vv-analytics-consent'
 export const ANALYTICS_CONSENT_EVENT = 'vv-analytics-consent'
+export const SESSION_CONSENT_KEY = 'vv-session-consent'
 const GA_ID = 'G-YSY7Z22NS2'
 
 // Storage can be blocked (private modes, sandboxed frames); the choice then
 // lasts for this page view only.
 let memoryChoice: AnalyticsChoice | null = null
+let memorySession: AnalyticsChoice | null = null
 
 export function getAnalyticsConsent(storage: Pick<Storage, 'getItem'> | null = safeStorage()): AnalyticsChoice | null {
   if (memoryChoice) return memoryChoice
@@ -33,6 +42,38 @@ export function getAnalyticsConsent(storage: Pick<Storage, 'getItem'> | null = s
 
 export function analyticsAllowed(): boolean {
   return getAnalyticsConsent() === 'granted'
+}
+
+/** Session insights (Clarity). Falls back to the analytics answer for visitors
+ * who chose before the two categories existed. */
+export function getSessionConsent(storage: Pick<Storage, 'getItem'> | null = safeStorage()): AnalyticsChoice | null {
+  if (memorySession) return memorySession
+  try {
+    const value = storage?.getItem(SESSION_CONSENT_KEY)
+    if (value === 'granted' || value === 'denied') return value
+  } catch {
+    /* blocked storage: fall back below */
+  }
+  return getAnalyticsConsent(storage)
+}
+
+export function sessionInsightsAllowed(): boolean {
+  return getSessionConsent() === 'granted'
+}
+
+/** The banner's answer: each category on or off. Necessary cookies need no choice. */
+export function setCookieChoices(
+  choices: { analytics: boolean; sessions: boolean },
+  storage: Pick<Storage, 'setItem'> | null = safeStorage(),
+): void {
+  memorySession = choices.sessions ? 'granted' : 'denied'
+  try {
+    storage?.setItem(SESSION_CONSENT_KEY, memorySession)
+  } catch {
+    /* blocked storage: the in-memory choice still applies to this page view */
+  }
+  // Last: it fires the change event, after both answers are in place.
+  setAnalyticsConsent(choices.analytics ? 'granted' : 'denied', storage)
 }
 
 export function setAnalyticsConsent(
@@ -75,9 +116,21 @@ export function useAnalyticsConsent(): AnalyticsChoice | null {
   return choice
 }
 
-/** Test hook: forget an in-memory choice. */
+/** Session-insights choice, updated when the visitor answers the banner. */
+export function useSessionInsightsConsent(): AnalyticsChoice | null {
+  const [choice, setChoice] = useState<AnalyticsChoice | null>(() => getSessionConsent())
+  useEffect(() => {
+    const onChange = () => setChoice(getSessionConsent())
+    window.addEventListener(ANALYTICS_CONSENT_EVENT, onChange)
+    return () => window.removeEventListener(ANALYTICS_CONSENT_EVENT, onChange)
+  }, [])
+  return choice
+}
+
+/** Test hook: forget in-memory choices. */
 export function resetAnalyticsConsentForTests(): void {
   memoryChoice = null
+  memorySession = null
 }
 
 function safeStorage(): Storage | null {
