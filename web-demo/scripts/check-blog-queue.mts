@@ -2,9 +2,20 @@
 // docs/SEO-BLOG-PLAN-2026-10-21.md before they are scheduled.
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import { VOICE_BLOG_POSTS } from '../src/content/voiceBlog'
 import { seoForPath } from '../src/lib/seoPages'
+
+// [width, height] from a JPEG's start-of-frame marker, so the check runs on
+// Linux CI as well as macOS (no sips).
+function jpegSize(buf: Buffer): [number, number] | null {
+  let i = 2
+  while (i + 9 < buf.length && buf[i] === 0xff) {
+    const marker = buf[i + 1]
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return [buf.readUInt16BE(i + 7), buf.readUInt16BE(i + 5)]
+    i += 2 + buf.readUInt16BE(i + 2)
+  }
+  return null
+}
 
 const DIR = 'content-queue/blog'
 const files = readdirSync(DIR).filter(f => /^\d{2}-.+\.json$/.test(f)).sort()
@@ -71,8 +82,8 @@ for (const p of posts) {
   for (const [img, w, h] of [[`${p.slug}.jpg`, 1200, 675], [`${p.slug}-640.jpg`, 640, 360]] as const) {
     const f = `${DIR}/${img}`
     if (!existsSync(f)) { check(false, `${id}: missing image ${img}`); continue }
-    const out = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', f]).toString()
-    check(out.includes(`pixelWidth: ${w}`) && out.includes(`pixelHeight: ${h}`), `${id}: ${img} must be ${w}x${h}`)
+    const size = jpegSize(readFileSync(f))
+    check(size?.[0] === w && size?.[1] === h, `${id}: ${img} must be ${w}x${h}`)
   }
 }
 const dates = posts.map(p => p.publishOn); check(new Set(dates).size === dates.length, 'two posts share a publishOn date')
