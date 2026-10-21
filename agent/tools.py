@@ -594,7 +594,11 @@ async def _post_webhook(context: RunContext, payload: dict) -> None:
     """
     userdata = context.userdata or {}
     urls = []
-    for url in (db.get_webhook_url(userdata.get("account_id")), userdata.get("agent_webhook_url")):
+    # to_thread: a synchronous DB read here held the agent's event loop for
+    # ~0.9 s on every lead save (calls 1447-1448, "event loop blocked ... psycopg"),
+    # stalling the very reply the caller was waiting for.
+    account_url = await asyncio.to_thread(db.get_webhook_url, userdata.get("account_id"))
+    for url in (account_url, userdata.get("agent_webhook_url")):
         # The account's webhook (Integrations page) and this agent's own
         # (Agents → Webhook); the same URL in both gets one delivery, not two.
         if url and url.startswith(("https://", "http://")) and url not in urls:

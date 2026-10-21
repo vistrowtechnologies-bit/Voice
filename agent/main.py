@@ -3371,10 +3371,12 @@ def _add_usage_units(timings: dict, metric_type: str, metric) -> None:
     stream received. Cancelled synthesis is counted too: the text was sent,
     so it is billed. Saved into latency_metrics_json as "usage".
     """
-    usage = timings.setdefault("usage", {
-        "ttsChars": 0, "ttsAudioS": 0.0, "ttsInputTokens": 0, "ttsOutputTokens": 0,
-        "ttsRequests": 0, "sttAudioS": 0.0,
-    })
+    usage = timings.setdefault("usage", {})
+    for key, zero in (
+        ("ttsChars", 0), ("ttsAudioS", 0.0), ("ttsInputTokens", 0), ("ttsOutputTokens", 0),
+        ("ttsRequests", 0), ("sttAudioS", 0.0),
+    ):
+        usage.setdefault(key, zero)  # tts_node may have created "usage" first
     if metric_type == "tts_metrics":
         usage["ttsChars"] += int(getattr(metric, "characters_count", 0) or 0)
         usage["ttsAudioS"] = round(usage["ttsAudioS"] + float(getattr(metric, "audio_duration", 0) or 0), 2)
@@ -5190,11 +5192,25 @@ class RealEstateAgent(Agent):
             self._tts_full_texts.append("".join(_full_text))
 
         _first_audio = None
-        async for frame in Agent.default.tts_node(self, _timed(text), model_settings):
-            if _first_audio is None:
-                _first_audio = (time.monotonic() - _t0) * 1000
-                logger.info("[tts_node] FIRST AUDIO at +%.0fms", _first_audio)
-            yield frame
+        _audio_s = 0.0
+        try:
+            async for frame in Agent.default.tts_node(self, _timed(text), model_settings):
+                if _first_audio is None:
+                    _first_audio = (time.monotonic() - _t0) * 1000
+                    logger.info("[tts_node] FIRST AUDIO at +%.0fms", _first_audio)
+                _audio_s += float(getattr(frame, "duration", 0) or 0)
+                yield frame
+        finally:
+            # Call 1449: Studio / Studio Lite (GeminiInteractionsTTS) emit no
+            # TTS metrics, so "usage" read 0 characters and the voice cost could
+            # not be priced. Counted here for every voice: the text sent to the
+            # TTS and the audio it returned (Gemini TTS bills ~25 tokens/s).
+            try:
+                usage = self.session.userdata["latency_metrics"].setdefault("usage", {})
+                usage["ttsCharsSent"] = usage.get("ttsCharsSent", 0) + len("".join(_full_text))
+                usage["ttsAudioSOut"] = round(usage.get("ttsAudioSOut", 0.0) + _audio_s, 2)
+            except Exception:
+                pass
 
     async def _handoff_if_requested(self, text: str, userdata: dict) -> bool:
         """Put the caller through when they ask, without consulting the model.
@@ -8124,6 +8140,15 @@ async def entrypoint(ctx: JobContext) -> None:
             # Speech-to-speech has no separate LLM leg to cover, and
             # session.say() raises outright on a model with supports_say=False
             # (the mute that cost three test calls before it was understood).
+            return
+        _provider = getattr(agent, "_tts_provider", None)
+        if _provider in _GEMINI_PROVIDERS.values() or (
+            _provider == "google-native"
+            and not voice_catalog.chirp3_persona(getattr(agent, "_speaking_voice", "") or "")
+        ):
+            # Call 1449 (21 Oct 2026, Studio): these voices take ~0.8-1.6 s to
+            # start any line, so a 2.0 s ack began at ~3 s, on top of the reply
+            # it was meant to cover, and sounded tacked on after it.
             return
         _cancel_backchannel()
 
