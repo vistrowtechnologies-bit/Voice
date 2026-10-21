@@ -2983,6 +2983,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 **_rate,
                 prompt=style,
                 model_name=_GOOGLE_31_MODEL,
+                # _google_fallback_tts wraps this backup as non-streaming, so it
+                # runs synthesize(), where Google rejects the plugin's default
+                # PCM for 3.1 with 400 "Unsupported audio encoding" (call 1441,
+                # 21 Oct 2026: every 3.8 quota hit skipped the backup and the
+                # call switched to the female ElevenLabs safety net). LINEAR16
+                # returns a WAV, verified against the API the same day.
+                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
             )
             return (
                 _google_fallback_tts(gemini38_tts, backup, model, reply_language, tone_name),
