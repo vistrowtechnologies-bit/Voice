@@ -46,7 +46,7 @@ export interface OgCardSpec {
 
 import { BUYER_GUIDES, COMPARE_VENDORS, DEMO_CALLS, LOCAL_REAL_ESTATE_PAGES } from './seoExpansionContent'
 import { HELP_TOPICS } from '../content/helpArticles'
-import { VOICE_BLOG_POSTS } from '../content/voiceBlog'
+import { BLOG_PAGE_COUNT, VOICE_BLOG_POSTS, blogPagePath } from '../content/voiceBlog'
 
 const page = (
   path: string,
@@ -473,6 +473,15 @@ export const SEO_PAGES: SeoPage[] = [
     'collection',
     'Blog',
   ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Business owner listening on a phone and taking notes beside a laptop' },
+  ...Array.from({ length: BLOG_PAGE_COUNT - 1 }, (_, index) => index + 2).map((n) => ({ ...page(
+    blogPagePath(n),
+    `Voice AI Guides and Playbooks, Page ${n} | Vistrow Voice`,
+    `Page ${n} of the Vistrow Voice blog: more practical guides to AI voice agents, multilingual calls, IVR, latency and CRM integrations.`,
+    'blog',
+    'Vistrow Voice journal featuring practical guides to voice AI and customer conversations',
+    'collection',
+    `Blog, page ${n}`,
+  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Business owner listening on a phone and taking notes beside a laptop' })),
   ...VOICE_BLOG_POSTS.map((post) => ({ ...page(
     `/resources/blog/${post.slug}`,
     post.seoTitle ?? `${post.title} | Vistrow Voice`,
