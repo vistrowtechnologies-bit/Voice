@@ -1,5 +1,6 @@
 import { DAILY_CONTEXTUAL_LINKS, DAILY_IMAGE_ALTS, DAILY_POSTS, DAILY_SOURCES } from './dailyBlogPosts'
 import { IVR_CONTEXTUAL_LINKS, IVR_IMAGE_ALTS, IVR_POSTS } from './ivrBlogPosts'
+import { OLDER_POST_UPGRADES } from './olderPostUpgrades'
 
 export interface VoiceBlogSection {
   heading: string
@@ -274,7 +275,7 @@ const NEW_POSTS: typeof ORIGINAL_POSTS = [
     excerpt: 'Per-minute prices tell only part of the story. Compare telephony, speech, model usage, failed calls, recordings, and the work your team still needs to do.',
     category: 'Voice AI basics', publishedAt: '2026-10-07', readTime: '', sections: [
       { heading: 'Ask what a quoted minute actually includes', paragraphs: ['Two per-minute quotes are not comparable until you know the billing boundaries. Does the price include the phone connection, speech recognition, speech synthesis, language-model usage, storage, and platform fees? Are unanswered calls or setup time billed? Ask for a worked invoice example based on your expected traffic.', 'Check minimum commitments, concurrency limits, rounding, currency, taxes, and support separately. A low headline rate may still be a good deal, but it should not be compared with an all-in rate as if both cover the same service.'] },
-      { heading: 'Use a simple cost worksheet', paragraphs: ['Estimate attempted calls, connected calls, average connected duration, and monthly fixed fees. Add the usage charges included in the contract and any provider charges billed separately. Keep retry traffic and testing traffic visible rather than hiding them inside an optimistic average.', 'For illustration only: if 1,000 connected calls average three minutes, that is 3,000 connected minutes before retries or other charges. At a hypothetical all-in rate of ₹4 per minute, the usage component is ₹12,000. This is arithmetic, not a Vistrow quote or a market price. Replace the assumptions with an actual proposal.'], points: ['Connected minutes × applicable usage rate.', 'Phone numbers, platform minimums, and other fixed fees.', 'Additional storage, model, or integration charges if excluded.', 'Retries, testing, and unsuccessful attempts where billable.', 'Staff review and follow-up time.'] },
+      { heading: 'Use a simple cost worksheet', paragraphs: ['Estimate attempted calls, connected calls, average connected duration, and monthly fixed fees. Add the usage charges included in the contract and any provider charges billed separately. Keep retry traffic and testing traffic visible rather than hiding them inside an optimistic average.', 'For illustration only: if 1,000 connected calls average three minutes, that is 3,000 connected minutes before retries or other charges. Multiply those minutes by the all-in per-minute rate in the proposal you are comparing to get the usage component. Replace the assumptions with your own call volumes.'], points: ['Connected minutes × applicable usage rate.', 'Phone numbers, platform minimums, and other fixed fees.', 'Additional storage, model, or integration charges if excluded.', 'Retries, testing, and unsuccessful attempts where billable.', 'Staff review and follow-up time.'] },
       { heading: 'Cheap turns can produce expensive conversations', paragraphs: ['A cheaper model that needs repeated clarification may lengthen calls or collect the wrong details. A more expensive voice can still be worthwhile if callers understand it better, but that should be tested rather than assumed. Compare task completion and field accuracy alongside minutes and cost.', 'Define “useful” before calculating cost per outcome. For a callback flow, it might mean a valid contact, a clear reason, and an agreed next action. Do not label every connected call a success. Divide total operating cost by verified useful outcomes, and report the underlying sample size.'] },
       { heading: 'Run a limited pilot before committing volume', paragraphs: ['Use one campaign or inbound call reason. Track actual duration, abandoned calls, human escalations, and correction work. Ask the vendor to explain discrepancies between your records and the invoice.', 'Provider rates change, so use current written pricing and keep its date with the worksheet. Once the pilot shows reliable outcomes, project a conservative monthly range rather than a single best-case saving.'] },
     ],
@@ -315,8 +316,6 @@ const IMAGE_ALTS: Record<string, string> = {
 }
 
 const SOURCES: Record<string, VoiceBlogPost['sources']> = {
-  'what-is-an-ai-voice-agent': [{ title: 'LiveKit: voice agent architecture', url: 'https://docs.livekit.io/agents/' }],
-  'voice-ai-latency-how-to-measure-it': [{ title: 'LiveKit: turn detection and interruptions', url: 'https://docs.livekit.io/agents/logic/turns/' }],
   'website-voice-widget-for-lead-generation': [{ title: 'MDN: microphone permissions and secure contexts', url: 'https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia' }],
 }
 
@@ -342,11 +341,13 @@ Object.assign(CONTEXTUAL_LINK_PARAGRAPHS, DAILY_CONTEXTUAL_LINKS)
 Object.assign(SOURCES, DAILY_SOURCES)
 
 export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS, ...IVR_POSTS, ...DAILY_POSTS].map((post) => {
-  const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? [])].map((section, index) => index === 0
+  const upgrade = OLDER_POST_UPGRADES[post.slug]
+  const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? []), ...(upgrade?.extraSections ?? [])].map((section, index) => index === 0
     ? { ...section, paragraphs: [...section.paragraphs, CONTEXTUAL_LINK_PARAGRAPHS[post.slug]] }
     : section)
   const words = sections.flatMap(section => [section.heading, ...section.paragraphs, ...(section.points ?? [])]).join(' ').replace(/\[([^\]]+)\]\(\/[^)]+\)/g, '$1').trim().split(/\s+/).length
-  return { ...post, sections, readTime: `${Math.max(1, Math.ceil(words / 200))} min read`, updatedAt: post.publishedAt > '2026-10-07' ? post.publishedAt : '2026-10-07', image: `/blog/${post.slug}.jpg`, imageAlt: IMAGE_ALTS[post.slug], sources: SOURCES[post.slug] ?? [] }
+  const seo = upgrade ? { seoTitle: upgrade.seoTitle, metaDescription: upgrade.metaDescription, shortAnswer: upgrade.shortAnswer, faqs: upgrade.faqs } : {}
+  return { ...post, ...seo, sections, readTime: `${Math.max(1, Math.ceil(words / 200))} min read`, updatedAt: upgrade?.updatedAt ?? (post.publishedAt > '2026-10-07' ? post.publishedAt : '2026-10-07'), image: `/blog/${post.slug}.jpg`, imageAlt: IMAGE_ALTS[post.slug], sources: [...(SOURCES[post.slug] ?? []), ...(upgrade?.sources ?? [])] }
 })
 
 /** Blog index: newest first; post 0 is the featured post on page 1, the rest are listed 12 per page. */
