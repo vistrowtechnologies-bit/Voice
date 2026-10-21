@@ -83,13 +83,15 @@ class TheOfferMachineryIsGone(unittest.TestCase):
         """Every transform sits between the LLM and the TTS, so each one is a
         chance to re-break streaming. The repeated-opener transform is allowed
         because it never holds text back (test_repeated_opener proves the first
-        chunk leaves unchanged)."""
+        chunk leaves unchanged); the slash transform holds back only a chunk
+        ending in "word/" (test_speak_slashes)."""
         i = self.src.index("tts_text_transforms=")
-        block = self.src[i:i + 240]
+        block = self.src[i:i + 280]
         self.assertIn("filter_markdown", block)
         self.assertIn("_make_repeated_opener_transform", block)
         self.assertIn("_make_caller_gender_guard_transform", block)
-        self.assertEqual(block.count("_make_"), 2)
+        self.assertIn("_make_slash_transform", block)
+        self.assertEqual(block.count("_make_"), 3)
 
 
 if __name__ == "__main__":

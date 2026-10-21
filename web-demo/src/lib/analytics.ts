@@ -1,4 +1,4 @@
-import { analyticsAllowed } from './analyticsConsent'
+import { analyticsAllowed, sessionInsightsAllowed } from './analyticsConsent'
 
 // Nothing here sends anything until the visitor accepts analytics cookies
 // (analyticsConsent.ts); GA4's tag itself is only loaded after that.
@@ -27,7 +27,8 @@ const APP_HOST = 'app.vistrowvoice.com'
 
 export function initClarity(path: string, signedInCustomer = false): void {
   if (typeof window === 'undefined' || !CLARITY_PROJECT_ID || window.clarity) return
-  if (!analyticsAllowed()) return
+  // Clarity is the "Session insights" category of the cookie banner.
+  if (!sessionInsightsAllowed()) return
   const host = window.location.hostname
   if (!MARKETING_HOSTS.has(host) && host !== APP_HOST) return
   if (cleanPath(path).startsWith('/admin')) return

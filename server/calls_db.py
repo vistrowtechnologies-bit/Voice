@@ -39,6 +39,7 @@ import storage_usage
 from storage import b2_client
 import campaign_window
 import lead_quality
+import budget_parse
 import retry_rules
 from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
@@ -353,6 +354,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     notify_billing INTEGER DEFAULT 1,
     notify_product INTEGER DEFAULT 0,
     dashboard_checklist_dismissed INTEGER DEFAULT 0,
+    agent_guide_dismissed INTEGER DEFAULT 0,
     dashboard_hidden_cards TEXT DEFAULT '[]',
     -- What the notification bell shows this person, and whether it also pops up / pings.
     bell_calls INTEGER DEFAULT 1,
@@ -1091,6 +1093,11 @@ STARTER_AGENT_DESCRIPTION = "Default sales agent — qualifies leads and books a
 ONBOARDING_AGENT_SETTING = "onboarding_agent_id"
 
 
+# Free trial minutes on a new account, and what the billing views assume when
+# an account has no credits_total row at all.
+TRIAL_CREDITS = 10
+
+
 def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
     """Starter state for a brand-new (non-legacy) account: one default agent
     to test with, its own copy of the well-known integrations, and its own
@@ -1108,7 +1115,7 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
     for key, value in (
         # Free trial allowance for a brand-new signup — deliberately small;
         # an operator upgrades the account's plan for more.
-        ("credits_total", "10"),
+        ("credits_total", str(TRIAL_CREDITS)),
         # All three channels burn credits at the same rate. Phone was 1.5x
         # on the reasoning quoted here for a long time - "they carry an
         # EnableX telephony cost the others don't" - but telephony is the
@@ -1329,12 +1336,21 @@ def init_tables() -> None:
                 ("test_scenario_name", "TEXT DEFAULT ''"),
                 # Per-call LLM token totals from LiveKit's llm_metrics,
                 # cancelled requests included; written by the agent right
-                # after the call row (agent/db.py set_call_llm_usage). NULL =
-                # calls before these columns, realtime calls, or no request.
+                # after the call row (agent/db.py set_call_llm_usage); realtime
+                # (Gemini Live) generations count too since 2026-10-18. NULL =
+                # calls before these columns or no request.
                 ("llm_requests", "INTEGER"),
                 ("llm_prompt_tokens", "INTEGER"),
                 ("llm_cached_tokens", "INTEGER"),
                 ("llm_completion_tokens", "INTEGER"),
+                # Realtime (Gemini Live) split of the same totals: input and
+                # output tokens by text vs audio, because audio tokens are
+                # billed at a multiple of text and the totals alone cannot
+                # show which one a call burned. NULL = no realtime generation.
+                ("llm_rt_text_in", "INTEGER"),
+                ("llm_rt_audio_in", "INTEGER"),
+                ("llm_rt_text_out", "INTEGER"),
+                ("llm_rt_audio_out", "INTEGER"),
                 # Automatic conversation intelligence (campaign_dialer's
                 # auto-analysis sweep): how many times the sweep has tried
                 # this call, when it last claimed it, and the last error or
@@ -1599,6 +1615,22 @@ def init_tables() -> None:
             conn.execute(
                 "ALTER TABLE agents ALTER COLUMN model SET DEFAULT 'sarvam/sarvam-105b-conversations'"
             )
+            # Owner, 19 Oct 2026: GPT-4 was retired 14 Oct and the call
+            # runtime already runs each retired name on its GPT-5 successor
+            # (plan_policy.OPENAI_MODEL_SUCCESSORS). Store the successor too, so
+            # the dashboard and billing see the model that actually answers.
+            # Agents only: call history keeps the model it was recorded with.
+            # Idempotent: a second run finds no retired names.
+            for _retired, _successor in plan_policy.OPENAI_MODEL_SUCCESSORS.items():
+                conn.execute("UPDATE agents SET model = ? WHERE model = ?", (_successor, _retired))
+            # Same date: accounts given orchestrator_pipeline=1 by the old
+            # signup default (only account 8 in production) go back to the
+            # LiveKit path. Nothing sets the flag any more; remove this once
+            # the orchestrator can run sarvam/ models.
+            conn.execute(
+                "UPDATE settings SET value = '0' WHERE key = ? AND value = '1'",
+                (_ORCHESTRATOR_PIPELINE_KEY,),
+            )
             # Same reasoning as the model default above: the column default is
             # what provision_account_defaults' bare INSERT relies on, so a new
             # tenant's starter agent gets the fastest measured voice. Existing
@@ -1669,6 +1701,10 @@ def init_tables() -> None:
             conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_checklist_dismissed INTEGER DEFAULT 0"
             )
+            # The agent editor's first-time step guide; Skip hides it for good.
+            conn.execute(
+                "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS agent_guide_dismissed INTEGER DEFAULT 0"
+            )
             conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_hidden_cards TEXT DEFAULT '[]'"
             )
@@ -1723,6 +1759,13 @@ def init_tables() -> None:
             # contact whose call is still live (room in active_calls) from one
             # whose agent job never ran or crashed before reconciling it.
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS room_name TEXT")
+            # When the dialer first dialled this contact (speed_to_lead). last_attempt_at
+            # is overwritten by every retry, so it cannot answer "how fast was the first call".
+            conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS first_attempt_at TEXT")
+            # Who the lead was, for every source (speed_to_lead, missed_money_queue):
+            # only ArthaLeads leads get a contacts row at intake.
+            conn.execute("ALTER TABLE inbound_lead_events ADD COLUMN IF NOT EXISTS name TEXT")
+            conn.execute("ALTER TABLE inbound_lead_events ADD COLUMN IF NOT EXISTS phone TEXT")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS consent_basis TEXT DEFAULT ''")
             # When the CRM was told this contact ran out of attempts (the
             # dialer's "Not Reachable" report to ArthaLeads), so it is sent once.
@@ -2021,8 +2064,9 @@ def create_account_with_owner(
                 # integrations rows under account_id=1 from the old SQLite
                 # migrations — only top up whichever keys a from-scratch
                 # install wouldn't have yet.
+                # credits_total is not seeded here: provision_account_defaults
+                # gives account 1 the same free trial as every other signup.
                 for key, value in (
-                    ("credits_total", "300"),
                     ("credit_rate_browser", "1"),
                     ("credit_rate_phone", "1"),
                     ("credit_rate_widget", "1"),
@@ -2044,17 +2088,14 @@ def create_account_with_owner(
                     provision_account_defaults(conn, account_id)
             else:
                 provision_account_defaults(conn, account_id)
-                # New tenants default onto the Railway-native orchestrator
-                # pipeline for phone calls rather than LiveKit's SIP bridge
-                # - account_id == 1 (above) is Vistrow's own legacy/first
-                # account and is migrated onto it explicitly instead, not
-                # defaulted here, since it already has real phone numbers
-                # and campaigns depending on today's behavior.
-                conn.execute(
-                    "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
-                    "ON CONFLICT (account_id, key) DO NOTHING",
-                    (account_id, _ORCHESTRATOR_PIPELINE_KEY, "1"),
-                )
+                # New tenants used to default onto the Railway-native
+                # orchestrator pipeline (orchestrator_pipeline=1). Owner, 19 Oct
+                # 2026: removed. orchestrator/llm.py sends every model that is
+                # not "gemini..." to OpenAI, so the default agent model
+                # (sarvam/sarvam-105b-conversations, Vistrow Bharat) got a 400
+                # and the caller heard the greeting, then silence - on phone
+                # calls and on the dashboard's Test agent button alike. New
+                # tenants run on the LiveKit path the live accounts use.
             return {"account_id": account_id, "user_id": user_id}
     finally:
         conn.close()
@@ -2308,6 +2349,7 @@ def get_user_preferences(user_id: int) -> dict:
             "notify_billing",
             "notify_product",
             "dashboard_checklist_dismissed",
+            "agent_guide_dismissed",
             "bell_calls",
             "bell_appointments",
             "desktop_popups",
@@ -2329,6 +2371,7 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_billing",
         "notify_product",
         "dashboard_checklist_dismissed",
+        "agent_guide_dismissed",
         "dashboard_hidden_cards",
         "bell_calls",
         "bell_appointments",
@@ -2346,6 +2389,7 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_billing",
         "notify_product",
         "dashboard_checklist_dismissed",
+        "agent_guide_dismissed",
         "bell_calls",
         "bell_appointments",
         "desktop_popups",
@@ -3168,9 +3212,7 @@ def _call_dict(
         rate = credit_rates_by_type.get(call_type, 1.0)
         tier = voice_tier(row["voice"])
         mtier = model_tier(_row_get(row, "model"))
-        credits_per_minute = _credits_per_minute(
-            rate, _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]
-        )
+        credits_per_minute = plan_policy.credits_per_minute(rate, tier, mtier)
         out["creditsUsed"] = round(
             minutes * credits_per_minute,
             2,
@@ -3883,6 +3925,56 @@ def period_comparison(account_id: int, days: int = 14) -> dict:
         conn.close()
 
 
+def agent_activity(account_id: int) -> list[dict]:
+    """Per-agent call activity for the Agents page: calls today, calls per
+    day for the last 7 days (oldest first, today last), calls with a booking
+    in those 7 days, and the agent's last call ever. Same rules as summary():
+    Testing Lab runs are not counted; dates are the database's CURRENT_DATE,
+    like period_comparison(). Agents with no calls are simply absent."""
+    conn = _connect()
+    try:
+        daily = conn.execute(
+            """
+            SELECT agent_id, (CURRENT_DATE - started_at::date) AS days_ago,
+                   COUNT(*) AS calls,
+                   COUNT(*) FILTER (WHERE site_visit_json IS NOT NULL) AS booked
+            FROM calls
+            WHERE account_id = ? AND agent_id IS NOT NULL AND COALESCE(test_run_id, '') = ''
+              AND started_at::date >= CURRENT_DATE - 6
+            GROUP BY 1, 2
+            """,
+            (account_id,),
+        ).fetchall()
+        last = conn.execute(
+            """
+            SELECT agent_id, MAX(started_at) AS last_call
+            FROM calls
+            WHERE account_id = ? AND agent_id IS NOT NULL AND COALESCE(test_run_id, '') = ''
+            GROUP BY 1
+            """,
+            (account_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    out: dict[int, dict] = {}
+
+    def entry(agent_id: int) -> dict:
+        return out.setdefault(agent_id, {"agentId": agent_id, "today": 0, "daily": [0] * 7, "booked7": 0, "lastCallAt": None})
+
+    for row in daily:
+        days_ago = int(row["days_ago"])
+        if not 0 <= days_ago <= 6:
+            continue
+        e = entry(row["agent_id"])
+        e["daily"][6 - days_ago] += int(row["calls"])
+        e["booked7"] += int(row["booked"])
+        if days_ago == 0:
+            e["today"] += int(row["calls"])
+    for row in last:
+        entry(row["agent_id"])["lastCallAt"] = row["last_call"]
+    return sorted(out.values(), key=lambda e: e["agentId"])
+
+
 def analytics(account_id: int) -> dict:
     conn = _connect()
     try:
@@ -4041,6 +4133,362 @@ _AGENT_CAMEL_TO_SNAKE = {
     "followUpPolicy": "follow_up_policy",
 }
 
+
+# --- Speed to lead and the missed-money queue (owner, 19 Oct) -------------
+# Both read leads that reached us through inbound_lead_events (ArthaLeads,
+# Facebook Lead Ads, the inbound-lead API) and what the dialer did with them.
+_FOLLOW_UP_LABELS = {
+    "callback": "Callback they asked for",
+    "visit_reminder": "Appointment reminder",
+    "nurture": "Follow-up on their interest",
+}
+# A queued contact the dialer has not touched this long after it was due is
+# stuck (campaign paused, outside the calling window, worker down), not waiting.
+_QUEUE_STUCK_AFTER = "15 minutes"
+
+
+# inbound_lead_events.source -> how a person would name it.
+_SOURCE_LABELS = {
+    "facebook_lead_ads": "Facebook lead", "facebook_lead_ads_native": "Facebook lead",
+    "whatsapp": "WhatsApp lead", "website": "Website lead", "api": "API lead", "arthaleads": "CRM lead",
+}
+
+
+def _lead_channel_label(fields: dict, source: str = "") -> str:
+    """'WhatsApp lead', 'Facebook lead', ... for a lead's custom fields. A
+    click-to-WhatsApp ad runs on Facebook, so ArthaLeads can store it as
+    channel_source 'facebook' while the person only messaged on WhatsApp;
+    same rule as agent/contact_notes.py _came_on_whatsapp."""
+    said = {str(fields.get(k) or "").strip().casefold() for k in ("lead_source", "arthaleads_source")}
+    if "whatsapp" in said or "wa.me/" in str(fields.get("ad_source_url") or "").casefold() \
+            or str(fields.get("channel_source") or "").casefold() == "whatsapp":
+        return "WhatsApp lead"
+    channel = str(fields.get("channel_source") or fields.get("lead_source") or "").replace("_", " ").strip()
+    if channel and channel.casefold() not in ("unknown", "arthaleads"):
+        return f"{channel[:1].upper()}{channel[1:]} lead"
+    return _SOURCE_LABELS.get(str(source or "").casefold(), "New lead")
+
+
+def speed_to_lead(account_id: int, days: int = 14) -> dict:
+    """How fast new leads got their first call: seconds from the lead
+    reaching us to the first dial. The first dial is first_attempt_at; rows
+    older than that column fall back to the call the contact produced, or to
+    last_attempt_at when there was only one attempt. A lead that was never
+    queued or never dialled counts as received but not called."""
+    days = max(1, min(int(days or 14), 90))
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT EXTRACT(EPOCH FROM (
+                       COALESCE(cc.first_attempt_at::timestamp, ca.started_at::timestamp,
+                                CASE WHEN cc.attempts = 1 THEN cc.last_attempt_at::timestamp END)
+                       - e.created_at::timestamp)) AS seconds
+            FROM inbound_lead_events e
+            LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
+            LEFT JOIN calls ca ON ca.id = cc.call_id AND ca.account_id = e.account_id
+            WHERE e.account_id = ?
+              AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - (? || ' days')::interval
+            """,
+            (account_id, days),
+        ).fetchall()
+    finally:
+        conn.close()
+    times = sorted(max(0.0, float(r["seconds"])) for r in rows if r["seconds"] is not None)
+    called = len(times)
+
+    def pct(q: float) -> int | None:
+        if not times:
+            return None
+        return round(times[min(called - 1, int(q * (called - 1) + 0.5))])
+
+    return {
+        "days": days,
+        "received": len(rows),
+        "called": called,
+        "notCalled": len(rows) - called,
+        "medianSeconds": pct(0.5),
+        "p90Seconds": pct(0.9),
+        "withinMinutePct": round(100 * sum(1 for t in times if t <= 60) / called) if called else None,
+    }
+
+
+def _queue_name(name: str | None, phone: str | None, fallback: str) -> str:
+    """A contact's name, unless it is a placeholder ('Unknown', 'n/a') that a
+    call saved before the caller gave one; then the phone number."""
+    clean = (name or "").strip()
+    if clean and clean.casefold() not in lead_quality.PLACEHOLDER_VALUES:
+        return clean
+    return (phone or "").strip() or fallback
+
+
+def missed_money_queue(account_id: int, limit: int = 20) -> dict:
+    """People worth calling now, most urgent first: leads that came in but
+    were never called, follow-ups (callbacks, visit reminders, nurture calls)
+    whose time passed without a dial, phone calls that dropped with no call
+    since, and follow-ups the AI will place in the next 24 hours. Each section
+    is best-effort, so one bad row never blanks the queue."""
+    limit = max(1, min(int(limit or 20), 50))
+    items: list[dict] = []
+    conn = _connect()
+    try:
+        # 1. New leads never called (7 days), unless the person has been on a
+        #    call since the lead arrived.
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT DISTINCT ON (COALESCE(NULLIF(e.phone, ''), ct.phone))
+                       ct.id AS contact_id, COALESCE(NULLIF(ct.name, ''), e.name) AS name,
+                       COALESCE(NULLIF(e.phone, ''), ct.phone) AS phone,
+                       COALESCE(ct.custom_fields, cc.custom_fields) AS custom_fields, e.source, e.created_at AS at
+                FROM inbound_lead_events e
+                LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
+                LEFT JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL AND (
+                     (COALESCE(e.phone, '') <> '' AND ct.phone = e.phone)
+                     OR (COALESCE(e.phone, '') = '' AND ct.custom_fields LIKE ?
+                         AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id))
+                WHERE e.account_id = ?
+                  AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'
+                  AND COALESCE(NULLIF(e.phone, ''), ct.phone) IS NOT NULL
+                  AND (cc.id IS NULL OR (COALESCE(cc.attempts, 0) = 0 AND cc.status = 'pending'
+                       AND COALESCE(cc.next_attempt_at::timestamp, e.created_at::timestamp)
+                           < (now() AT TIME ZONE 'UTC') - INTERVAL '{_QUEUE_STUCK_AFTER}'))
+                  AND NOT EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                                  AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                                  AND l.started_at::timestamp >= e.created_at::timestamp)
+                ORDER BY COALESCE(NULLIF(e.phone, ''), ct.phone), e.created_at DESC
+                """,
+                ("{%", account_id),
+            ).fetchall()
+            for r in rows:
+                fields = _load_json_field(r["custom_fields"], {})
+                channel = _lead_channel_label(fields, r["source"])
+                topic = str(fields.get("project") or fields.get("ad_headline") or fields.get("ad_name") or "").strip()
+                items.append({
+                    "kind": "uncalled_lead", "priority": 1,
+                    "title": _queue_name(r["name"], r["phone"], "New lead"),
+                    "name": r["name"] or "", "phone": r["phone"] or "",
+                    "detail": " · ".join(x for x in (channel, topic[:60]) if x) + " · not called yet",
+                    "at": r["at"], "contactId": r["contact_id"], "callId": None,
+                })
+        except Exception:
+            logger.warning("missed_money_queue: uncalled-leads section failed", exc_info=True)
+
+        # 2 + 4. Follow-ups: overdue ones are missed money, the next 24 hours
+        #    are what the AI will place on its own.
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT cc.name, cc.phone, cc.next_attempt_at AS at, cc.custom_fields,
+                       cc.next_attempt_at::timestamp < (now() AT TIME ZONE 'UTC') - INTERVAL '{_QUEUE_STUCK_AFTER}' AS overdue,
+                       ct.id AS contact_id
+                FROM campaign_contacts cc
+                LEFT JOIN contacts ct ON ct.account_id = cc.account_id AND ct.phone = cc.phone AND ct.deleted_at IS NULL
+                WHERE cc.account_id = ? AND cc.status = 'pending' AND cc.next_attempt_at IS NOT NULL
+                  AND cc.custom_fields LIKE ?
+                  AND cc.next_attempt_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'
+                  AND cc.next_attempt_at::timestamp < (now() AT TIME ZONE 'UTC') + INTERVAL '24 hours'
+                ORDER BY cc.next_attempt_at
+                """,
+                (account_id, "%follow_up_kind%"),
+            ).fetchall()
+            for r in rows:
+                fields = _load_json_field(r["custom_fields"], {})
+                label = _FOLLOW_UP_LABELS.get(str(fields.get("follow_up_kind") or ""), "Follow-up call")
+                items.append({
+                    "kind": "overdue_follow_up" if r["overdue"] else "upcoming_follow_up",
+                    "priority": 2 if r["overdue"] else 4,
+                    "title": _queue_name(r["name"], r["phone"], "Follow-up"),
+                    "name": r["name"] or "", "phone": r["phone"] or "",
+                    "detail": label + (" · time has passed, not called" if r["overdue"] else " · the AI will call"),
+                    "at": r["at"], "contactId": r["contact_id"], "callId": None,
+                })
+        except Exception:
+            logger.warning("missed_money_queue: follow-ups section failed", exc_info=True)
+
+        # 3. Phone calls that dropped without a conversation (3 days) with no
+        #    call to or from that number since. Same rule as the bell's
+        #    "ended without a conversation" item.
+        try:
+            rows = conn.execute(
+                """
+                SELECT c.id, c.lead_phone, c.direction, c.started_at AS at, ct.id AS contact_id, ct.name
+                FROM calls c
+                LEFT JOIN contacts ct ON ct.account_id = c.account_id AND ct.phone = c.lead_phone AND ct.deleted_at IS NULL
+                WHERE c.account_id = ? AND c.call_type = 'phone' AND COALESCE(c.lead_phone, '') <> ''
+                  AND COALESCE(c.test_run_id, '') = ''
+                  AND COALESCE(c.duration_seconds, 0) < 10 AND c.lead_name IS NULL
+                  AND COALESCE(json_array_length(NULLIF(c.transcript_json, '')::json), 0) < 2
+                  AND c.started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '3 days'
+                  AND NOT EXISTS (SELECT 1 FROM calls l WHERE l.account_id = c.account_id AND l.id <> c.id
+                                  AND l.lead_phone = c.lead_phone AND l.started_at::timestamp > c.started_at::timestamp)
+                ORDER BY c.started_at DESC LIMIT 20
+                """,
+                (account_id,),
+            ).fetchall()
+            for r in rows:
+                items.append({
+                    "kind": "dropped_call", "priority": 3,
+                    "title": _queue_name(r["name"], r["lead_phone"], "Phone call"),
+                    "name": r["name"] or "", "phone": r["lead_phone"] or "",
+                    "detail": ("Our call" if r["direction"] == "outbound" else "Their call") + " dropped before a conversation · no call since",
+                    "at": r["at"], "contactId": r["contact_id"], "callId": r["id"],
+                })
+        except Exception:
+            logger.warning("missed_money_queue: dropped-calls section failed", exc_info=True)
+    finally:
+        conn.close()
+    items.sort(key=lambda i: (i["priority"], str(i["at"] or "")), reverse=False)
+    # Inside a priority, newest first for leads and drops; follow-ups keep due order.
+    ordered: list[dict] = []
+    for priority in (1, 2, 3, 4):
+        group = [i for i in items if i["priority"] == priority]
+        if priority in (1, 3):
+            group.sort(key=lambda i: str(i["at"] or ""), reverse=True)
+        ordered.extend(group)
+    counts = {k: sum(1 for i in items if i["kind"] == k) for k in ("uncalled_lead", "overdue_follow_up", "dropped_call", "upcoming_follow_up")}
+    return {
+        "items": [{k: v for k, v in i.items() if k != "priority"} for i in ordered[:limit]],
+        "counts": counts,
+        "toCall": counts["uncalled_lead"] + counts["overdue_follow_up"] + counts["dropped_call"],
+    }
+
+
+
+def _contact_budget_inr(fields: dict) -> int | None:
+    """A contact's form budget: numeric budget_min/budget_max when the form
+    sent them, else its free-text budget."""
+    try:
+        low, high = float(fields.get("budget_min") or 0), float(fields.get("budget_max") or 0)
+    except (TypeError, ValueError):
+        low = high = 0
+    if low or high:
+        return round(((low or high) + (high or low)) / 2)
+    return budget_parse.budget_midpoint_inr(str(fields.get("budget") or ""))
+
+
+def _ad_label(fields: dict, source: str = "") -> str:
+    for key in ("ad_headline", "ad_name", "campaign_name", "utm_campaign", "form_name",
+                "project", "product", "service", "interested_in"):
+        value = str(fields.get(key) or "").strip()
+        if value:
+            return value[:80]
+    return _lead_channel_label(fields, source)
+
+
+def growth_insights(account_id: int, days: int = 30) -> dict:
+    """The Analytics tab's business view (Growth and Scale): buyer budget
+    qualified and booked, which ads bring leads that qualify, how each
+    language performs, and the best and worst scored call of the period."""
+    days = max(1, min(int(days or 30), 90))
+    since = "(now() AT TIME ZONE 'UTC') - (? || ' days')::interval"
+    conn = _connect()
+    try:
+        qualified = conn.execute(
+            f"""
+            SELECT DISTINCT ON (COALESCE(NULLIF(c.lead_phone, ''), c.room_name))
+                   c.lead_budget, COALESCE(c.site_visit_json, '') <> '' AS booked, ct.custom_fields
+            FROM calls c
+            LEFT JOIN contacts ct ON ct.account_id = c.account_id AND ct.phone = c.lead_phone AND ct.deleted_at IS NULL
+            WHERE c.account_id = ? AND COALESCE(c.test_run_id, '') = '' AND {lead_quality.QUALIFIED_SQL}
+              AND c.started_at::timestamp >= {since}
+            ORDER BY COALESCE(NULLIF(c.lead_phone, ''), c.room_name),
+                     (COALESCE(c.site_visit_json, '') <> '') DESC, (COALESCE(c.lead_budget, '') <> '') DESC, c.started_at DESC
+            """,
+            (account_id, days),
+        ).fetchall()
+        pipeline = {"qualifiedLeads": len(qualified), "withBudget": 0, "totalInr": 0, "bookedLeads": 0, "bookedInr": 0}
+        for r in qualified:
+            value = budget_parse.budget_midpoint_inr(r["lead_budget"]) or _contact_budget_inr(_load_json_field(r["custom_fields"], {}))
+            if r["booked"]:
+                pipeline["bookedLeads"] += 1
+            if value:
+                pipeline["withBudget"] += 1
+                pipeline["totalInr"] += value
+                if r["booked"]:
+                    pipeline["bookedInr"] += value
+
+        ads: dict[str, dict] = {}
+        lead_rows = conn.execute(
+            f"""
+            SELECT e.source, COALESCE(ct.custom_fields, cc.custom_fields) AS custom_fields,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                           AND l.started_at::timestamp >= e.created_at::timestamp) AS called,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                           AND l.started_at::timestamp >= e.created_at::timestamp
+                           AND {lead_quality.QUALIFIED_SQL.replace('lead_', 'l.lead_')}) AS qualified,
+                   EXISTS (SELECT 1 FROM calls l WHERE l.account_id = e.account_id
+                           AND l.lead_phone = COALESCE(NULLIF(e.phone, ''), ct.phone)
+                           AND l.started_at::timestamp >= e.created_at::timestamp
+                           AND COALESCE(l.site_visit_json, '') <> '') AS booked
+            FROM inbound_lead_events e
+            LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
+                LEFT JOIN contacts ct ON ct.account_id = e.account_id AND ct.deleted_at IS NULL AND (
+                     (COALESCE(e.phone, '') <> '' AND ct.phone = e.phone)
+                     OR (COALESCE(e.phone, '') = '' AND ct.custom_fields LIKE ?
+                         AND (ct.custom_fields::jsonb ->> 'external_id') = e.external_id))
+            WHERE e.account_id = ? AND e.created_at::timestamp >= {since}
+            """,
+            ("{%", account_id, days),
+        ).fetchall()
+        for r in lead_rows:
+            label = _ad_label(_load_json_field(r["custom_fields"], {}), r["source"])
+            row = ads.setdefault(label, {"ad": label, "leads": 0, "called": 0, "qualified": 0, "booked": 0})
+            row["leads"] += 1
+            row["called"] += int(bool(r["called"]))
+            row["qualified"] += int(bool(r["qualified"]))
+            row["booked"] += int(bool(r["booked"]))
+
+        languages = [
+            {"language": r["lang"], "calls": r["calls"], "qualified": r["qualified"] or 0,
+             "avgSeconds": round(float(r["avg_seconds"] or 0))}
+            for r in conn.execute(
+                f"""
+                SELECT COALESCE(NULLIF(reply_language, ''), 'unknown') AS lang, COUNT(*) AS calls,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
+                       AVG(COALESCE(duration_seconds, 0)) AS avg_seconds
+                FROM calls
+                WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::timestamp >= {since}
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 12
+                """,
+                (account_id, days),
+            ).fetchall()
+        ]
+
+        scored = []
+        for r in conn.execute(
+            f"""
+            SELECT id, lead_name, lead_phone, started_at, duration_seconds, intelligence_json,
+                   COALESCE(recording_key, '') <> '' AS has_recording
+            FROM calls
+            WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND intelligence_json LIKE ?
+              AND started_at::timestamp >= {since}
+            """,
+            (account_id, "%qa_score%", days),
+        ).fetchall():
+            intel = _load_json_field(r["intelligence_json"], {})
+            score = intel.get("qa_score") if isinstance(intel, dict) else None
+            if isinstance(score, (int, float)) and not isinstance(score, bool):
+                scored.append({
+                    "id": r["id"], "title": _queue_name(r["lead_name"], r["lead_phone"], f"Call #{r['id']}"),
+                    "qaScore": round(score), "summary": str(intel.get("summary") or "")[:220],
+                    "durationSeconds": round(float(r["duration_seconds"] or 0)),
+                    "hasRecording": bool(r["has_recording"]), "at": r["started_at"],
+                })
+    finally:
+        conn.close()
+    scored.sort(key=lambda c: (c["qaScore"], str(c["at"])))
+    return {
+        "days": days,
+        "pipeline": pipeline,
+        "ads": sorted(ads.values(), key=lambda a: (-a["leads"], a["ad"]))[:8],
+        "languages": languages,
+        "bestCall": scored[-1] if scored else None,
+        "worstCall": scored[0] if len(scored) > 1 else None,
+        "scoredCalls": len(scored),
+    }
 
 def _load_json_field(raw: str | None, default):
     if not raw:
@@ -6492,7 +6940,8 @@ def _arthaleads_agent_route(account_id: int, agent_ref: str, source: str) -> tup
     auto_call is true and only with agent_id, no fallback). agent_ref is the
     agent id our picker gave ArthaLeads (internal id; the public Agent ID is
     accepted too). The caller number is the agent's own assigned number,
-    else the number of a Voice-side ArthaLeads route for the same agent.
+    else the number of a Voice-side ArthaLeads route for the same agent,
+    else the workspace's only active number.
     Returns (route, "") or (None, reason)."""
     ref = str(agent_ref or "").strip()
     if not ref or len(ref) > 40:
@@ -6527,6 +6976,18 @@ def _arthaleads_agent_route(account_id: int, agent_ref: str, source: str) -> tup
                 ).fetchone():
                     from_number = str(route.get("fromNumber"))
                     break
+        if not from_number:
+            # An agent with no number of its own (a second agent for WhatsApp
+            # leads, say) in a workspace with exactly ONE active number calls
+            # from that number. Two or more numbers: which one is ambiguous, so
+            # refuse as before. Live 17 Oct: agent 223 got a WhatsApp lead and
+            # was refused although the workspace has one number.
+            only = conn.execute(
+                "SELECT number FROM phone_numbers WHERE account_id = ? AND status = 'active' ORDER BY id LIMIT 2",
+                (account_id,),
+            ).fetchall()
+            if len(only) == 1:
+                from_number = only[0]["number"]
         if not from_number:
             return None, "agent_has_no_caller_number"
         return {"source": source or "arthaleads", "match": f"agent:{agent['id']}",
@@ -6637,6 +7098,25 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
         conn.close()
 
 
+def _record_lead_event(account_id: int, source: str, external_id: str, name: str, phone: str) -> None:
+    """A lead that arrived but could not be queued for a call (no running
+    auto-call campaign): recorded so the dashboard still counts it. Best-effort."""
+    try:
+        conn = _connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT (account_id, source, external_id) DO NOTHING",
+                    (account_id, source, external_id or f"auto:{secrets.token_hex(8)}", (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or (phone or "").strip()),
+                )
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("could not record unqueued lead for account %s", account_id, exc_info=True)
+
+
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
     external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
@@ -6687,6 +7167,8 @@ def ingest_inbound_lead(
         # carrier circuit breaker; that pause wins.
         no_call_reason = "auto_call_campaign_paused"
     if campaign_id is None and source != "arthaleads":
+        # Not queued, but it is still a lead that came in and was not called.
+        _record_lead_event(account_id, source, external_id, name, phone)
         return {"ok": False, "reason": "auto_call_not_ready_or_paused"}
     fields["source"] = source
     if external_id:
@@ -6696,10 +7178,11 @@ def ingest_inbound_lead(
         with conn:
             if external_id:
                 reserved = conn.execute(
-                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id) "
-                    "VALUES (?, ?, ?, NULL) ON CONFLICT (account_id, source, external_id) DO NOTHING "
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT (account_id, source, external_id) DO NOTHING "
                     "RETURNING external_id",
-                    (account_id, source, external_id),
+                    (account_id, source, external_id, (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or phone.strip()),
                 ).fetchone()
                 if not reserved:
                     prior = conn.execute(
@@ -6773,6 +7256,15 @@ def ingest_inbound_lead(
                     "UPDATE inbound_lead_events SET campaign_contact_id = ? "
                     "WHERE account_id = ? AND source = ? AND external_id = ?",
                     (contact_id, account_id, source, external_id),
+                )
+            elif not external_id and not deduped:
+                # A source that sends no lead id (a plain webhook, Zapier) is
+                # still a lead to time and to follow up; its own row, no dedupe.
+                conn.execute(
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id, name, phone) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (account_id, source, f"auto:{secrets.token_hex(8)}", contact_id, (name or "").strip()[:200],
+                     canonical_contact_phone(phone, account_id) or phone.strip()),
                 )
             if source == "arthaleads":
                 contact_phone = canonical_contact_phone(phone, account_id)
@@ -7332,7 +7824,8 @@ def claim_next_campaign_contact(campaign_id: int) -> dict | None:
             # same contact. Losing the race claims nothing this tick.
             cur = conn.execute(
                 f"UPDATE campaign_contacts SET status = 'calling', attempts = attempts + 1, "
-                f"last_attempt_at = {_NOW}, room_name = NULL WHERE id = ? AND status = ?",
+                f"last_attempt_at = {_NOW}, first_attempt_at = COALESCE(first_attempt_at, {_NOW}), "
+                f"room_name = NULL WHERE id = ? AND status = ?",
                 (row["id"], row["status"]),
             )
             if cur.rowcount != 1:
@@ -9220,8 +9713,10 @@ TOPUP_MAX_CREDITS = plan_policy.TOPUP_MAX_CREDITS
 
 
 def topup_quote(plan: str, credits: int | None = None, pack_key: str | None = None) -> dict:
-    """Price of a one-off credit purchase at the plan's own per-credit rate
-    (trial/no-plan accounts pay the Starter rate). A pack sets the credits
+    """Price of a one-off credit purchase at the plan's per-minute rate,
+    plan_overage_rate_inr (₹7/6/5; trial/no-plan accounts pay the Starter
+    rate). Owner, 17 Oct: a top-up minute costs the same as an overage minute,
+    not price ÷ plan minutes (which made Starter ₹7.50). A pack sets the credits
     and a bonus percentage; the bonus is granted, only the base is billed.
     Raises ValueError for an unknown pack or credits outside the allowed range."""
     bonus_pct = 0
@@ -9232,9 +9727,7 @@ def topup_quote(plan: str, credits: int | None = None, pack_key: str | None = No
         credits, bonus_pct = pack["credits"], pack["bonus_pct"]
     if not isinstance(credits, int) or isinstance(credits, bool) or not TOPUP_MIN_CREDITS <= credits <= TOPUP_MAX_CREDITS:
         raise ValueError(f"credits must be between {TOPUP_MIN_CREDITS} and {TOPUP_MAX_CREDITS}")
-    plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
-    # Rounded first so the rate shown (₹10.00/credit) times the credits is the invoice base.
-    per_credit = round(plan_pricing["price_inr"] / plan_pricing["credits"], 2)
+    per_credit = plan_overage_rate_inr(plan)
     pricing = with_gst(credits * per_credit)
     return {
         "credits": credits,
@@ -9256,15 +9749,19 @@ def gst_from_total(total_inr: float) -> dict:
     return {"base_inr": base_inr, "gst_inr": round(total_inr - base_inr, 2), "total_inr": total_inr}
 
 
-# Annual billing pays 10 months' worth up front for 12 months of service —
-# matches the "-15%"-ish framing on the marketing pricing page without
-# hardcoding a percentage that drifts from the actual monthly price.
-ANNUAL_MONTHS_CHARGED = 10
-# Usage beyond a plan's included credits isn't blocked (see billing engine
-# design doc) — it's billed at this multiple of the plan's own effective
-# per-credit rate, added as a Razorpay subscription addon on the FOLLOWING
-# cycle's invoice once the period that generated it has fully closed.
-OVERAGE_RATE_MULTIPLIER = 1.4
+# Annual price and per-month allowance live in plan_policy (ANNUAL_PRICE_INR,
+# PLANS[...]["annual_credits_per_month"]).
+ANNUAL_MONTHS_CHARGED = plan_policy.ANNUAL_MONTHS_CHARGED
+
+
+def plan_overage_rate_inr(plan: str) -> float:
+    """Rs per standard minute (= credit) beyond a paid plan's allowance:
+    plan_policy.PLANS overage_per_minute_inr (7/6/5 on Starter/Growth/Scale).
+    Usage past the allowance isn't blocked for an active subscription; it is
+    added as a Razorpay subscription addon on the FOLLOWING cycle's invoice
+    once the period that generated it has fully closed."""
+    entry = plan_policy.PLANS.get(plan, plan_policy.PLANS["starter"])
+    return float(entry["overage_per_minute_inr"])
 # Flat monthly line item per provisioned phone number — EnableX charges
 # Vistrow for every number regardless of tenant usage; this recovers that
 # cost instead of absorbing it silently.
@@ -9316,18 +9813,14 @@ def set_credit_rate(call_type: str, rate: float, account_id: int) -> None:
 # earned Rs2.60 against Rs2.23 of real cost - a 14% margin that one FX move
 # or a month of LiveKit overage erases. 0.75x is still a genuine discount
 # and takes that combo to roughly 43%.
-# economy 0.5 (owner, 2026-10-14): Native = 1 credit/min on Vistrow Bharat. Real
-# cost ~Rs 3.3/min (Google Standard TTS ~Rs 0.15/min); thinner margin on Scale accepted.
-_VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}
-# Hard floor on billable credits per minute, for the same reason: no
-# combination of discounts may price a minute below the fixed cost of
-# serving it. Applied after every multiplier.
-_MIN_CREDITS_PER_MINUTE = 0.75
-
-
-def _credits_per_minute(call_type_rate: float, voice_mult: float, model_mult: float) -> float:
-    """Effective credits charged per minute, never below the fixed-cost floor."""
-    return max(_MIN_CREDITS_PER_MINUTE, call_type_rate * voice_mult * model_mult)
+# economy 0.5 (owner, 2026-10-14): Native = 1 credit/min on Vistrow Bharat.
+# Minute pricing (owner, 2026-10-17): 1 credit = 1 standard minute, so economy
+# is 1x now (Native = 1 minute per minute on any model) and the floor is 1.
+# The tables live in plan_policy so the call worker's trial cutoff uses them too.
+_VOICE_TIER_MULTIPLIERS = plan_policy.VOICE_TIER_MULTIPLIERS
+# Hard floor on billable credits per minute: no combination of discounts may
+# price a minute below the fixed cost of serving it.
+_MIN_CREDITS_PER_MINUTE = plan_policy.MIN_CREDITS_PER_MINUTE
 
 
 def credits_for_call(row, rates: dict, minutes: float) -> float:
@@ -9336,10 +9829,8 @@ def credits_for_call(row, rates: dict, minutes: float) -> float:
     The one place the formula lives: billing_summary, the overage webhook
     and the Usage page all go through here so they can never disagree."""
     call_type = row["call_type"] if row["call_type"] in rates else "browser"
-    return minutes * _credits_per_minute(
-        rates.get(call_type, 1.0),
-        _VOICE_TIER_MULTIPLIERS[voice_tier(row["voice"])],
-        _MODEL_TIER_MULTIPLIERS[model_tier(_row_get(row, "model"))],
+    return minutes * plan_policy.credits_per_minute(
+        rates.get(call_type, 1.0), voice_tier(row["voice"]), model_tier(_row_get(row, "model")),
     )
 # Same Sarvam bulbul:v2 speaker set as agent/main.py's _SARVAM_V2_SPEAKERS and
 # web-demo/src/pages/Agents.tsx's SARVAM_V2_VOICES — duplicated across all
@@ -9396,7 +9887,7 @@ _STANDARD_VOICE_PREFIXES = ("google:chirp3:", "sarvam4:")
 # rather than to bill them punitively. These recover the bulk of the spread
 # while staying legible to an operator; revisit alongside any change to the
 # offered model list.
-_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime_plus": 6.0}
+_MODEL_TIER_MULTIPLIERS = plan_policy.MODEL_TIER_MULTIPLIERS
 # Anything unlisted bills at "standard" - the same don't-guess default
 # voice_tier() uses, so a newly added model can never silently bill as free.
 _PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
@@ -9416,29 +9907,19 @@ def model_tier(model: str | None) -> str:
     # testing, so it must never bill a tenant at a premium rate.
     if name.startswith("groq/"):
         return "standard"
-    # Sarvam ("Vistrow Bharat") bills premium, matching Vistrow Swift.
-    # (It billed standard 1x on 2026-10-12/13 only; the owner reversed that.)
-    #
-    # Prefixed rather than named, because falling through to "standard" is
-    # what happened when it shipped and that was materially wrong: measured on
-    # this product's real 10k-token prompt, a Bharat turn costs ~Rs 0.299
-    # against Swift's ~Rs 0.101. Sarvam does not cache the prompt — usage
-    # comes back with prompt_tokens_details=None and all 10,018 tokens billed
-    # on every turn, where OpenAI caches 9,600 of 9,757 at a quarter rate — so
-    # the vendor cost is roughly 3x Swift's despite lower headline rates.
-    # Billing it at 1x while Swift bills 2x meant charging tenants half for the
-    # option that costs us triple.
-    #
-    # A prefix also means the next Sarvam model cannot silently bill at 1x.
+    # Sarvam ("Vistrow Bharat") is the standard pipeline: 1 credit = 1 standard
+    # minute (owner, minute pricing 2026-10-17). It billed 2x (premium) from
+    # 2026-10-13 because a Bharat turn costs ~3x a cached GPT turn; the plan
+    # minute prices now carry that cost instead (~Rs 2.3-3.2 per minute).
     if name.startswith("sarvam/"):
-        return "premium"
-    # Gemini Live (speech-to-speech) replaces STT+LLM+TTS with one model
-    # billed per audio token. Oct 6-9 bill: 3.1 ~Rs 16.8/min, 2.5 ~Rs 4.6/min.
-    # Unlisted, both fell through to 1x - a loss on every 3.1 minute.
+        return "standard"
+    # Gemini Live ("Vistrow Live", speech-to-speech) replaces STT+LLM+TTS with
+    # one model billed per audio token: 2.5 ~Rs 4.7/min, 3.8 ~Rs 7.0/min,
+    # 3.1 ~Rs 12/min. Every version bills 3 standard minutes per minute; 2.5
+    # is "realtime", 3.1/3.8 "realtime_plus", kept apart for the Usage page
+    # and so the two can be repriced separately.
     if name.startswith("gemini-live"):
-        # Only the 2.5 default ("gemini-live", or an explicit 2.5 model) is
-        # the cheap one; 3.1 and its GA successor 3.8 cost the same.
-        return "premium" if name == "gemini-live" or "2.5" in name else "realtime_plus"
+        return "realtime" if name == "gemini-live" or "2.5" in name else "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:
@@ -9791,7 +10272,7 @@ def billing_summary(account_id: int) -> dict:
         total_row = conn.execute(
             "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'", (account_id,)
         ).fetchone()
-        credits_total = int(total_row["value"]) if total_row else 300
+        credits_total = int(total_row["value"]) if total_row else TRIAL_CREDITS
         rates = credit_rates(account_id, conn=conn)
 
         sub = conn.execute(
@@ -9816,8 +10297,7 @@ def billing_summary(account_id: int) -> dict:
         )
         plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
         overage_credits = max(0.0, round(used - credits_total, 1))
-        per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
-        overage_rate_inr = round(per_credit_rate * OVERAGE_RATE_MULTIPLIER, 2)
+        overage_rate_inr = plan_overage_rate_inr(plan)
         overage_amount_inr = round(overage_credits * overage_rate_inr, 2)
 
         phone_row = conn.execute(
@@ -9855,6 +10335,13 @@ def billing_summary(account_id: int) -> dict:
             "phoneNumberCount": phone_row["c"],
             "phoneNumberFeesInr": phone_number_fees_inr,
             "estimatedNextInvoiceInr": round(overage_amount_inr + phone_number_fees_inr, 2),
+            # Minute pricing (2026-10-17): 1 credit = 1 standard minute, so every
+            # credits* figure above is also standard minutes. minutesUsed above
+            # is raw talk time; a Vistrow Live minute uses liveMinutesPerMinute.
+            "creditUnit": "standard_minute",
+            "liveMinutesPerMinute": plan_policy.LIVE_MINUTES_PER_MINUTE,
+            "planAnnualPriceInr": plan_policy.ANNUAL_PRICE_INR.get(plan),
+            "plans": plan_policy.public_plans(),
         }
     finally:
         conn.close()
@@ -9867,7 +10354,7 @@ def billing_summary(account_id: int) -> dict:
 # credits_for_call, cut by the caller's local calendar days.
 
 _USAGE_MAX_DAYS = 366
-_MODEL_TIER_LABELS = {"standard": "Standard", "premium": "Premium", "premium_plus": "Premium Plus", "realtime_plus": "Realtime"}
+_MODEL_TIER_LABELS = {"standard": "Standard", "premium": "Premium", "premium_plus": "Premium Plus", "realtime": "Realtime", "realtime_plus": "Realtime"}
 _DIRECTION_LABELS = {"inbound": "Inbound", "outbound": "Outbound", "web": "Web / widget", "phone": "Phone (direction unknown)"}
 
 
@@ -9990,7 +10477,7 @@ def usage_report(account_id: int, from_date: str | None, to_date: str | None, ti
         total_row = conn.execute(
             "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'", (account_id,)
         ).fetchone()
-        credits_total = int(total_row["value"]) if total_row else 300
+        credits_total = int(total_row["value"]) if total_row else TRIAL_CREDITS
         sub = conn.execute(
             "SELECT current_period_start, current_period_end FROM subscriptions WHERE account_id = ?", (account_id,)
         ).fetchone()
@@ -10602,22 +11089,23 @@ def list_topups(account_id: int, limit: int = 20) -> list[dict]:
         conn.close()
 
 
-def reset_plan_credits(account_id: int, plan: str) -> None:
+def reset_plan_credits(account_id: int, plan: str, billing_cycle: str = "monthly") -> None:
     """Start a paid billing period with exactly that plan's allowance.
 
+    Monthly: the plan's monthly minutes. Annual: the period is a year, so
+    12 x the annual per-month minutes at once (plan_policy.plan_allowance).
     Top-ups are added during the period by ``mark_topup_paid_and_credit`` and are
     therefore part of that period's allowance.  A renewal begins a fresh
     allowance; carrying the previous period's top-ups forward would grant
     them repeatedly.
     """
-    plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 "INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', ?) "
                 "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value",
-                (account_id, str(int(plan_pricing["credits"]))),
+                (account_id, str(plan_policy.plan_allowance(plan, billing_cycle))),
             )
     finally:
         conn.close()
@@ -10654,8 +11142,7 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
         ).fetchone()
         allowance = int(allowance_row["value"]) if allowance_row else plan_pricing["credits"]
         overage_credits = max(0.0, round(used - allowance, 1))
-        per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
-        overage_rate_inr = round(per_credit_rate * OVERAGE_RATE_MULTIPLIER, 2)
+        overage_rate_inr = plan_overage_rate_inr(plan)
         return {
             "creditsUsed": used,
             "overageCredits": overage_credits,

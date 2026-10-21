@@ -2447,6 +2447,7 @@ class PreferencesRequest(BaseModel):
     notify_calls: bool | None = None
     notify_billing: bool | None = None
     dashboard_checklist_dismissed: bool | None = None
+    agent_guide_dismissed: bool | None = None
     dashboard_hidden_cards: str | None = None
     bell_calls: bool | None = None
     bell_appointments: bool | None = None
@@ -2481,7 +2482,7 @@ def update_profile_preferences(req: PreferencesRequest, user: dict = Depends(cur
             hidden_cards = json.loads(values["dashboard_hidden_cards"])
         except (TypeError, ValueError):
             raise HTTPException(400, "Dashboard card preferences must be a JSON list")
-        allowed_cards = {"attention", "quick_actions", "funnel", "followups", "appointments", "channels", "feedback"}
+        allowed_cards = {"attention", "quick_actions", "funnel", "followups", "appointments", "channels", "feedback", "speed_to_lead", "missed_money"}
         if not isinstance(hidden_cards, list) or len(hidden_cards) > len(allowed_cards) or any(card not in allowed_cards for card in hidden_cards):
             raise HTTPException(400, "Unknown dashboard card preference")
         values["dashboard_hidden_cards"] = json.dumps(list(dict.fromkeys(hidden_cards)))
@@ -3140,7 +3141,8 @@ def admin_pricing(admin: dict = Depends(require_platform_owner)) -> dict:
         "voiceTiers": dict(calls_db._VOICE_TIER_MULTIPLIERS),
         "modelTiers": dict(calls_db._MODEL_TIER_MULTIPLIERS),
         "minCreditsPerMinute": calls_db._MIN_CREDITS_PER_MINUTE,
-        "overageMultiplier": calls_db.OVERAGE_RATE_MULTIPLIER,
+        "overagePerMinuteInr": {k: calls_db.plan_overage_rate_inr(k) for k in plan_policy.PLANS},
+        "annualPriceInr": dict(plan_policy.ANNUAL_PRICE_INR),
     }
 
 
@@ -3837,6 +3839,8 @@ def push_call_to_arthaleads(call_id: int, user: dict = Depends(require_role("adm
 
 @app.get("/dashboard/intelligence")
 def dashboard_intelligence(days: int = 30, user: dict = Depends(current_user)) -> dict:
+    # Analytics tab only: Growth and Scale.
+    calls_db.require_feature(user["account_id"], "analytics")
     return calls_db.intelligence_summary(user["account_id"], days=days)
 
 
@@ -3870,9 +3874,34 @@ def dashboard_period_comparison(days: int = 14, user: dict = Depends(current_use
     return calls_db.period_comparison(user["account_id"], days=days)
 
 
+# Breakdowns only the Analytics tab shows (Growth and Scale). The Overview's
+# funnel and channel tiles read this same response on every plan.
+ANALYTICS_TAB_ONLY = {"languages": [], "peakHours": [], "durationTrend": [], "byAgent": [], "sentiment": {"positive": 0, "neutral": 0, "negative": 0}}
+
+
 @app.get("/dashboard/analytics")
 def dashboard_analytics(user: dict = Depends(current_user)) -> dict:
-    return calls_db.analytics(user["account_id"])
+    result = calls_db.analytics(user["account_id"])
+    if not calls_db.account_features(user["account_id"]).get("analytics"):
+        result.update(ANALYTICS_TAB_ONLY)
+    return result
+
+
+@app.get("/dashboard/speed-to-lead")
+def dashboard_speed_to_lead(days: int = 14, user: dict = Depends(current_user)) -> dict:
+    return calls_db.speed_to_lead(user["account_id"], days=days)
+
+
+@app.get("/dashboard/insights")
+def dashboard_insights(days: int = 30, user: dict = Depends(current_user)) -> dict:
+    # Analytics tab only: Growth and Scale.
+    calls_db.require_feature(user["account_id"], "analytics")
+    return calls_db.growth_insights(user["account_id"], days=days)
+
+
+@app.get("/dashboard/missed-money")
+def dashboard_missed_money(user: dict = Depends(current_user)) -> dict:
+    return calls_db.missed_money_queue(user["account_id"])
 
 
 @app.get("/dashboard/launch-readiness")
@@ -3893,6 +3922,13 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_agents(user["account_id"])
 
 
+@app.get("/agents/activity")
+def agents_activity(user: dict = Depends(current_user)) -> list[dict]:
+    """Calls today, 7-day daily calls, bookings and last call per agent, for
+    the Agents page tiles and table. Counts only: no caller details."""
+    return calls_db.agent_activity(user["account_id"])
+
+
 # Models restricted to the Vistrow admin account. Groq is the fastest
 # time-to-first-token option available but its model list is open-weight
 # only and unevaluated for Hindi/Marathi quality on real calls — speed was
@@ -3908,10 +3944,18 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
 # median against 1,058ms over eight comparable calls.
 _ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live")
 _ADMIN_ONLY_MODELS = {"gpt-5-nano"}
+# Owner, 19 Oct 2026: Vistrow Live 3.8 opens to every plan, billed 2 credits
+# per call minute (plan_policy). Measured on real calls that day: ~Rs 3.3-3.7
+# per minute on the website and ~Rs 3.7-4.1 on a phone line at a normal pace,
+# with prompts held to ~1,000 tokens and the realtime KB capped. The retired
+# 3.1 and 2.5 ids stay owner-only.
+_TENANT_REALTIME_MODELS = {"gemini-live:gemini-3.8-live"}
 
 
 def _guard_admin_only_model(data: dict | None, account_id: int) -> None:
     model = str((data or {}).get("model") or "")
+    if model in _TENANT_REALTIME_MODELS:
+        return
     if (model.startswith(_ADMIN_ONLY_MODEL_PREFIXES) or model in _ADMIN_ONLY_MODELS) and not calls_db.is_platform_owner(account_id):
         raise HTTPException(400, "That model is available only to the Vistrow admin account.")
 
@@ -4002,8 +4046,7 @@ def _guard_realtime_voice(data: dict, account_id: int, agent_id: int | None = No
     if model.startswith("gemini-live") and voice and not _realtime_voice_usable(voice):
         raise HTTPException(
             400,
-            "Realtime models can only speak with a Gemini realtime voice (for example Aoede or Kore). "
-            "Pick one of those voices for this agent.",
+            "Vistrow Live can only speak with a Live voice. Pick one of your Live voices for this agent.",
         )
 
 
@@ -6018,6 +6061,17 @@ def billing(user: dict = Depends(current_user)) -> dict:
     return calls_db.billing_summary(user["account_id"])
 
 
+@app.get("/billing/plans")
+def billing_plans(user: dict = Depends(current_user)) -> dict:
+    """Minute-based plan list for the billing screen (prices INR, GST extra)."""
+    return {
+        "plans": plan_policy.public_plans(),
+        "creditUnit": "standard_minute",
+        "liveMinutesPerMinute": plan_policy.LIVE_MINUTES_PER_MINUTE,
+        "gstRate": calls_db.GST_RATE,
+    }
+
+
 def _usage_timezone(user: dict, tz: str | None) -> str:
     """Days on the Usage page follow the caller's own preference unless the
     request names a zone; Asia/Kolkata when nothing is stored."""
@@ -6479,7 +6533,7 @@ def _process_razorpay_event(event: dict) -> dict:
                 current_period_end=_epoch_to_iso(sub.get("current_end")),
             )
             if not existing or existing.get("status") != "active":
-                calls_db.reset_plan_credits(account_id, plan)
+                calls_db.reset_plan_credits(account_id, plan, existing["billing_cycle"] if existing else "monthly")
             admin_db.change_plan(account_id, plan)
         else:
             # Confirmed real gap: this used to fall through silently — a real
@@ -6548,7 +6602,7 @@ def _process_razorpay_event(event: dict) -> dict:
                 sub.get("customer_id"), sub["id"], status="active",
                 current_period_start=new_period_start, current_period_end=new_period_end,
             )
-            calls_db.reset_plan_credits(account_id, plan)
+            calls_db.reset_plan_credits(account_id, plan, existing["billing_cycle"] if existing else "monthly")
             admin_db.change_plan(account_id, plan)
         else:
             logger.warning("razorpay subscription.charged: no account for subscription %s", sub.get("id"))

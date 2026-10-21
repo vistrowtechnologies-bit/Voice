@@ -99,7 +99,7 @@ export function TypedText({ text, animate, onDone }: { text: string; animate: bo
 const TOPICS: Array<[RegExp, string]> = [
   [/agent/i, 'Checking your agents'],
   [/integrat|sheet|zoho|slack|webhook|crm/i, 'Checking your integrations'],
-  [/credit|billing|plan|invoice|top.?up/i, 'Checking credits and billing'],
+  [/credit|billing|plan|invoice|top.?up/i, 'Checking minutes and billing'],
   [/appointment|book|callback|calendar|week/i, 'Looking at your calendar'],
   [/number|phone/i, 'Looking at your phone numbers'],
   [/call|caller|lead|contact|ask/i, 'Reading your calls'],

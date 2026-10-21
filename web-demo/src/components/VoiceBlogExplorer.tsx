@@ -3,6 +3,12 @@ import { Link } from 'react-router-dom'
 import { VOICE_BLOG_POSTS, type VoiceBlogPost } from '../content/voiceBlog'
 import { SectionEyebrow } from './MarketingBits'
 
+// Hand-picked related posts first (post.related order), then the usual order.
+function relatedRank(post: VoiceBlogPost, item: VoiceBlogPost) {
+  const index = post.related?.indexOf(item.slug) ?? -1
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index
+}
+
 export function VoiceBlogExplorer({ post }: { post: VoiceBlogPost }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All')
@@ -11,7 +17,7 @@ export function VoiceBlogExplorer({ post }: { post: VoiceBlogPost }) {
   const results = useMemo(() => VOICE_BLOG_POSTS
     .filter((item) => item.slug !== post.slug && (category === 'All' || item.category === category)
       && `${item.title} ${item.excerpt} ${item.category}`.toLowerCase().includes(query.trim().toLowerCase()))
-    .sort((a, b) => Number(b.category === post.category) - Number(a.category === post.category) || b.publishedAt.localeCompare(a.publishedAt))
+    .sort((a, b) => relatedRank(post, a) - relatedRank(post, b) || Number(b.category === post.category) - Number(a.category === post.category) || b.publishedAt.localeCompare(a.publishedAt))
     .slice(0, 3), [post, category, query])
   const content = <>
     <SectionEyebrow>Explore the journal</SectionEyebrow>

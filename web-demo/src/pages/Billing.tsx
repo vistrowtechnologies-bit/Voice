@@ -19,7 +19,7 @@ import { Tooltip } from '../components/ui/Tooltip'
 const INVOICE_KIND_LABELS: Record<string, string> = {
   subscription: 'Plan renewal',
   overage: 'Overage + phone numbers',
-  topup: 'Credit top-up',
+  topup: 'Minute top-up',
   phone_number: 'Phone number',
 }
 
@@ -28,8 +28,9 @@ export function Billing() {
   const [billing, setBilling] = useState<BillingSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [razorpayConfigured, setRazorpayConfigured] = useState(false)
-  // Annual offers remain unavailable until monthly grants on annual subscriptions are verified.
-  const [cycle] = useState<'monthly' | 'annual'>('monthly')
+  // Annual (minute pricing, 17 Oct): pay 11 months, get the year's minutes at once
+  // (agent/plan_policy.py plan_allowance), so it is offered next to monthly.
+  const [cycle, setCycle] = useState<'monthly' | 'annual'>('monthly')
   const [busyPlan, setBusyPlan] = useState<string | null>(null)
   const [topupOpen, setTopupOpen] = useState(false)
   const [error, setError] = useState('')
@@ -61,7 +62,14 @@ export function Billing() {
   const usedPct = billing && billing.creditsTotal > 0 ? Math.max(0, Math.min(100, Math.round((billing.creditsUsed / billing.creditsTotal) * 100))) : 0
   const currentPlanKey = billing?.plan || (user?.plan || 'starter').toLowerCase()
   const currentPlanName = PLANS.find((p) => p.key === currentPlanKey)?.name || 'Starter'
-  const currentPlanCredits = PLANS.find((p) => p.key === currentPlanKey)?.creditsNum || billing?.creditsTotal || 1
+  // The server's plan list (minutes, annual prices, overage); local PLANS keeps names and features.
+  const serverPlan = (key: string) => billing?.plans?.find((p) => p.plan === key)
+  // An annual subscription is granted the whole year's minutes, so compare with that.
+  const currentPlanCredits =
+    (billing?.billingCycle === 'annual' ? serverPlan(currentPlanKey)?.annualMinutesPerYear : serverPlan(currentPlanKey)?.monthlyMinutes) ||
+    PLANS.find((p) => p.key === currentPlanKey)?.creditsNum ||
+    billing?.creditsTotal ||
+    1
 
   async function handleUpgrade(planKey: 'starter' | 'growth' | 'scale', planName: string) {
     setError('')
@@ -107,7 +115,7 @@ export function Billing() {
                   <Icon name="toll" className="text-[20px]" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Remaining workspace credits</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Remaining minutes</p>
                   <p className="text-2xl font-bold">
                     {billing?.creditsRemaining ?? '-'}
                     <span className="ml-1 text-sm font-normal text-text-muted">of {billing?.creditsTotal ?? '-'} allocated</span>
@@ -119,7 +127,7 @@ export function Billing() {
                 disabled={!razorpayConfigured || !PRICING_FINALIZED}
                 className="rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-bold text-cyan hover:bg-cyan/10 disabled:opacity-40"
               >
-                + Buy credits
+                + Buy minutes
               </button></Tooltip>
             </div>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-high">
@@ -130,24 +138,24 @@ export function Billing() {
             </div>
             {billing && billing.creditsTotal !== currentPlanCredits && (
               <p className="mt-3 rounded-lg border border-border p-3 text-xs text-text-muted">
-                This workspace has a custom allocation of {billing.creditsTotal.toLocaleString()} credits, separate from the standard {currentPlanName} allowance of {currentPlanCredits.toLocaleString()} credits/month. Testing and manually allocated workspaces can differ from paid plans. Your existing balance is unchanged.
+                This workspace has a custom allocation of {billing.creditsTotal.toLocaleString()} minutes, separate from the standard {currentPlanName} allowance of {currentPlanCredits.toLocaleString()} minutes{billing.billingCycle === 'annual' ? ' a year' : ' a month'}. Testing and manually allocated workspaces can differ from paid plans. Your existing balance is unchanged.
               </p>
             )}
             <p className="mt-2 text-xs text-text-muted">
-              {billing ? `${billing.minutesUsed} call minutes used this cycle. Final credits include call type, voice tier, and model tier.` : 'Loading usage…'}
+              {billing ? `${billing.minutesUsed} call minutes used this cycle. Standard voices use 1 minute per call minute, premium voices 2, Vistrow Live ${billing.liveMinutesPerMinute ?? 2}.` : 'Loading usage…'}
             </p>
             {billing && billing.overageCredits > 0 && (
               <p className="mt-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
-                {billing.overageCredits} credits over plan this cycle
+                {billing.overageCredits} minutes over plan this cycle
                 {PRICING_FINALIZED
-                  ? ` · estimated ₹${billing.overageAmountInr} at ₹${billing.overageRateInr}/credit. This estimate is not a payment confirmation or invoice.`
+                  ? ` · estimated ₹${billing.overageAmountInr} at ₹${billing.overageRateInr}/min. This estimate is not a payment confirmation or invoice.`
                   : ' · overage pricing is being finalized'}
               </p>
             )}
             {billing && billing.phoneNumberCount > 0 && (
               <p className="mt-1 text-xs text-text-muted">
                 {billing.phoneNumberCount} active phone number{billing.phoneNumberCount === 1 ? '' : 's'}
-                {' · Telephony is separate from AI credits. Provider charges and any number rental depend on your setup; contact us to confirm your allocation.'}
+                {' · Telephony is separate from AI minutes. Provider charges and any number rental depend on your setup; contact us to confirm your allocation.'}
               </p>
             )}
           </Card>
@@ -192,7 +200,7 @@ export function Billing() {
         </div>
 
         <p className="text-xs text-text-muted">
-          Credits = call minutes × channel rate × voice multiplier × model multiplier. The full breakdown by day, channel, agent, voice and model is on{' '}
+          Plan minutes used = call minutes × voice multiplier × model multiplier: 1 for standard voices, 2 for premium voices, 3 for Vistrow Live. The full breakdown by day, channel, agent, voice and model is on{' '}
           <Link to="/dashboard/usage" className="font-semibold text-cyan hover:underline">Usage</Link>.
         </p>
 
@@ -200,7 +208,21 @@ export function Billing() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">Available plans</h2>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-text-muted">Monthly pricing · INR</span>
+              <div role="radiogroup" aria-label="Billing cycle" className="flex rounded-lg border border-border bg-surface p-0.5 text-xs font-semibold">
+                {(['monthly', 'annual'] as const).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={cycle === c}
+                    onClick={() => setCycle(c)}
+                    className={`rounded-md px-3 py-1 ${cycle === c ? 'bg-primary text-white' : 'bg-transparent text-text-muted hover:text-text'}`}
+                  >
+                    {c === 'monthly' ? 'Monthly' : `Annual · pay ${ANNUAL_MONTHS_CHARGED} months`}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-text-muted">INR, GST extra</span>
             </div>
           </div>
           {!PRICING_FINALIZED ? (
@@ -210,7 +232,7 @@ export function Billing() {
           ) : (
             !razorpayConfigured && (
               <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2 text-xs text-amber">
-                Online payments and self-service plan changes are currently unavailable. Your existing access and credits are unchanged.{' '}
+                Online payments and self-service plan changes are currently unavailable. Your existing access and minutes are unchanged.{' '}
                 <a className="underline" href={`mailto:${CONTACT_EMAIL}?subject=Billing assistance`}>Contact us for activation or billing assistance.</a>
               </p>
             )
@@ -232,9 +254,19 @@ export function Billing() {
               // which is actually a downgrade.
               const currentRank = PLANS.findIndex((p) => p.key === currentPlanKey)
               const isDowngrade = PLANS.findIndex((p) => p.key === plan.key) < currentRank
-              const displayPrice =
-                cycle === 'annual' ? `₹${(plan.priceInr * ANNUAL_MONTHS_CHARGED).toLocaleString('en-IN')}` : plan.price
-              const gstInr = plan.priceInr * (cycle === 'annual' ? ANNUAL_MONTHS_CHARGED : 1) * 0.18
+              // Prices and minutes come from the server's plan list when it has
+              // sent one; the local copy is only the fallback.
+              const sp = serverPlan(plan.key)
+              // Annual leads with what it works out to per month (owner, 17 Oct);
+              // the amount actually charged once a year stays in the small print,
+              // since that is what checkout takes upfront.
+              // Prices come only from the server (none are kept in the public bundle);
+              // without its plan list the card shows a dash rather than a guess.
+              const yearInr = sp ? sp.annualPrice : null
+              const priceInr = sp ? (cycle === 'annual' ? Math.round(sp.annualPrice / 12) : sp.monthlyPrice) : null
+              const displayPrice = priceInr == null ? '—' : `₹${priceInr.toLocaleString('en-IN')}`
+              const gstInr = (priceInr ?? 0) * 0.18
+              const minutesLine = `${(cycle === 'annual' ? sp?.annualMinutesPerMonth ?? plan.creditsNum : sp?.monthlyMinutes ?? plan.creditsNum).toLocaleString('en-IN')} minutes a month`
               return (
                 <div
                   key={plan.name}
@@ -261,18 +293,29 @@ export function Billing() {
                       <>
                         <p className="mt-3 text-2xl font-bold">
                           {displayPrice}
-                          <span className="text-xs font-normal text-text-muted"> {cycle === 'annual' ? '/year' : '/month'}</span>
+                          <span className="text-xs font-normal text-text-muted"> /month</span>
                         </p>
                         <p className="text-xs text-text-muted">
-                          + ₹{gstInr.toLocaleString('en-IN', { maximumFractionDigits: 0 })} GST (18%)
+                          {priceInr == null
+                            ? 'Price unavailable right now'
+                            : cycle === 'annual'
+                              ? `Billed ₹${(yearInr ?? 0).toLocaleString('en-IN')} once a year + 18% GST`
+                              : `+ ₹${gstInr.toLocaleString('en-IN', { maximumFractionDigits: 0 })} GST (18%)`}
                         </p>
                       </>
                     ) : (
                       <p className="mt-3 text-lg font-bold text-text-muted">Pricing coming soon</p>
                     )}
-                    <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-surface-high px-3 py-2 text-xs font-semibold text-cyan">
-                      <Icon name="bolt" className="text-[14px]" />
-                      {plan.credits}
+                    <div className="mt-3 flex flex-col gap-0.5 rounded-lg bg-surface-high px-3 py-2 text-xs">
+                      <span className="flex items-center gap-1.5 font-semibold text-cyan">
+                        <Icon name="bolt" className="text-[14px]" />
+                        {minutesLine}
+                      </span>
+                      {sp && (
+                        <span className="text-text-muted">
+                          Then ₹{sp.overagePerMinute}/min · Vistrow Live uses {billing?.liveMinutesPerMinute ?? 2} min per min
+                        </span>
+                      )}
                     </div>
                     <ul className="mt-3 flex flex-col gap-1.5 text-xs text-text-muted">
                       {planHighlights(plan).map((f) => (
@@ -369,7 +412,7 @@ export function Billing() {
                   <div>
                     <p>
                       {INVOICE_KIND_LABELS[inv.kind] || inv.kind}
-                      {inv.kind === 'topup' && inv.credits ? ` · +${(inv.credits + (inv.bonus_credits || 0)).toLocaleString('en-IN')} credits` : ''}
+                      {inv.kind === 'topup' && inv.credits ? ` · +${(inv.credits + (inv.bonus_credits || 0)).toLocaleString('en-IN')} minutes` : ''}
                     </p>
                     <p className="text-xs text-text-muted">{new Date(inv.created_at).toLocaleDateString()}{inv.invoice_number ? ` · ${inv.invoice_number}` : ''}</p>
                   </div>

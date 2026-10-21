@@ -82,6 +82,16 @@ class SamePersonaBackup(unittest.TestCase):
         self.assertEqual(backup._opts.model_name, "gemini-3.1-flash-tts-preview")
         self.assertEqual(backup._opts.voice.language_code, "ta-IN")
 
+    def test_backup_asks_for_linear16_not_pcm(self):
+        # Call 1441 (21 Oct 2026): synthesize() with the plugin's default PCM
+        # is a 400 "Unsupported audio encoding" on 3.1, so every 3.8 quota hit
+        # fell through to the female ElevenLabs safety net mid-call.
+        tts, _ = self.build("google38:zubenelgenubi")
+        backup = tts._tts_instances[1]._inner
+        self.assertEqual(backup._opts.encoding, main.texttospeech.AudioEncoding.LINEAR16)
+        tts.update_options(language="ta-IN", voice_name="Zubenelgenubi", model_name="gemini-3.8-flash-lite-tts")
+        self.assertEqual(backup._opts.encoding, main.texttospeech.AudioEncoding.LINEAR16)
+
     def test_a_gemini_failure_retries_once_not_five_times(self):
         tts, _ = self.build("google38:sulafat")
         self.assertEqual(tts._max_retry_per_tts, 1)

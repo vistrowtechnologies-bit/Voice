@@ -23,7 +23,7 @@ def test_native_endpointing_models_are_independent(monkeypatch):
         assert aad.end_of_speech_sensitivity.value == (
             "END_SENSITIVITY_HIGH" if model == config.DEFAULT_MODEL else "END_SENSITIVITY_LOW"
         )
-        assert aad.prefix_padding_ms == (20 if model == config.DEFAULT_MODEL else 200)
+        assert aad.prefix_padding_ms == (20 if model == config.DEFAULT_MODEL else 400)
         assert not aad.disabled
 
 
@@ -112,3 +112,88 @@ def test_native_language_hints_are_model_scoped():
     assert config.input_transcription(config.DEFAULT_MODEL, "en-US").language_codes == ["en-US"]
     assert config.input_transcription(config.DEFAULT_MODEL, "auto").language_codes is None
     assert config.input_transcription(config.MODEL_31, "hi-IN").language_codes is None
+
+
+def _compression(chars, **kw):
+    cfg = config.context_compression("x" * chars, **kw)
+    return cfg.trigger_tokens, cfg.sliding_window.target_tokens, chars // 3 + 1
+
+
+def test_compression_engages_within_first_minute_for_demo_sized_prompt():
+    # Oct 17 2026 bill: caller audio re-billed ~8x because the old
+    # instruction + 10k trigger was never reached in a 5-minute call.
+    trigger, target, instruction_tokens = _compression(55_000)
+    assert trigger - instruction_tokens <= 4_000
+    assert target < trigger
+
+
+def test_compression_target_below_trigger_and_above_instruction():
+    for chars in (0, 1, 500, 55_000, 200_000):
+        trigger, target, instruction_tokens = _compression(chars)
+        assert instruction_tokens < target < trigger
+
+
+def test_compression_keep_seconds_scales_target():
+    _, t60, _ = _compression(55_000, keep_seconds=60)
+    _, t90, _ = _compression(55_000, keep_seconds=90)
+    _, t120, _ = _compression(55_000, keep_seconds=120)
+    assert t90 - t60 == 30 * config.AUDIO_TOKENS_PER_SECOND
+    assert t120 - t90 == 30 * config.AUDIO_TOKENS_PER_SECOND
+
+
+def test_compression_tiny_instruction_is_sane():
+    trigger, target, instruction_tokens = _compression(10)
+    assert instruction_tokens == 4
+    assert target == 4 + 25 * 45
+    assert trigger == 4 + 25 * 45 + 750
+    assert 0 < target < trigger
+
+
+def test_compression_keeps_45_seconds_and_trims_30_seconds_later():
+    # 30 s with a low instruction estimate wiped the call (1420); 60 s with
+    # 1,500 tokens of headroom let audio pile up to ~3,800 per turn (1421).
+    trigger, target, instruction_tokens = _compression(55_000)
+    assert target - instruction_tokens == 45 * config.AUDIO_TOKENS_PER_SECOND
+    assert trigger - target == 750
+
+
+def test_compression_never_trims_into_a_hindi_heavy_instruction():
+    # Call 1420: a ~17,200-char Artha instruction really cost 4,808 tokens
+    # (~3.6 chars/token). The window must still hold the instruction plus
+    # the full keep after a trim, or the conversation is wiped.
+    chars, real_tokens = 17_200, 4_808
+    trigger, target, _ = _compression(chars)
+    assert target - real_tokens >= 45 * config.AUDIO_TOKENS_PER_SECOND
+    assert trigger > target
+
+
+def test_38_live_is_a_supported_primary_model_on_the_31_profile():
+    """Owner, 18 Oct 2026: gemini-3.8-live is the primary realtime model (Google GA,
+    same price as 3.1); 3.1 retires. 3.8 must resolve through the verified 3.1
+    profile (LOW end sensitivity, 700 ms silence) and get context compression."""
+    import realtime_config as rc
+    assert rc.MODEL_38 in rc.API_MODELS
+    ad = rc.activity_detection(rc.MODEL_38).automatic_activity_detection
+    assert ad.silence_duration_ms == 700 and ad.prefix_padding_ms == 400
+    cc = rc.context_compression("x" * 12000)
+    assert cc.trigger_tokens > cc.sliding_window.target_tokens
+
+
+def test_3x_models_hear_soft_speech_but_need_400ms_of_it():
+    # 1421 (HIGH, 200 ms): noise became "¿Qué?" turns. 1425 (LOW): the caller
+    # was not heard for ~17 s. HIGH plus 400 ms of required speech.
+    for m in (config.MODEL_38, config.MODEL_31):
+        ad = config.activity_detection(m).automatic_activity_detection
+        assert ad.start_of_speech_sensitivity == config.types.StartSensitivity.START_SENSITIVITY_HIGH
+        assert ad.prefix_padding_ms == 400
+    ad25 = config.activity_detection(config.DEFAULT_MODEL).automatic_activity_detection
+    assert ad25.start_of_speech_sensitivity == config.types.StartSensitivity.START_SENSITIVITY_HIGH
+    assert ad25.prefix_padding_ms == 20
+
+
+def test_38_captions_are_hinted_hindi_and_english():
+    # Call 1427: 3.8 captioned Hinglish as Spanish ("Pucharon con Pune").
+    assert config.input_transcription(config.MODEL_38, "en-IN").language_codes == ["en-IN", "hi-IN"]
+    assert config.input_transcription(config.MODEL_38, "hi-IN").language_codes == ["hi-IN", "en-IN"]
+    assert config.input_transcription(config.MODEL_38, "auto").language_codes is None
+    assert config.input_transcription(config.MODEL_31, "en-IN").language_codes is None

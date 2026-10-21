@@ -59,7 +59,7 @@ export const IVR_POSTS: IvrBlogPost[] = [
         'It does not have to replace everything at once. A common pattern is to keep the IVR for one or two stable choices and send the rest to an AI agent, or to put the agent on a single line such as after-hours calls first. The article on [IVR versus an AI voice agent](/resources/blog/ivr-vs-ai-voice-agent-india) walks through that decision, and the [AI voice agent vs traditional IVR comparison](/vs-ivr) has a side-by-side table.',
       ] },
       { heading: 'What an AI IVR call looks like on Vistrow Voice', paragraphs: [
-        'On Vistrow Voice, a number is routed to an agent with its own hours, active days and concurrent-call limit. The agent opens in the language you choose and follows the caller across Hindi, English and nine other Indian languages, so there is no language menu. It answers from the knowledge base you upload, books into the built-in Appointments calendar, takes callback requests, and on phone calls can transfer to a colleague’s number when a person is needed.',
+        'On Vistrow Voice, a number is routed to an agent with its own hours, active days and concurrent-call limit. The agent opens in the language you choose and follows the caller across more than 130 languages, including Hindi, English and nine other Indian languages, so there is no language menu. It answers from the knowledge base you upload, books into the built-in Appointments calendar, takes callback requests, and on phone calls can transfer to a colleague’s number when a person is needed.',
         'Every call is saved with a transcript, a summary and the details captured, plus the recording if recording is on. Leads can be sent to Zoho CRM, ArthaLeads, Slack, Google Sheets or any webhook. The menu you used to maintain becomes a set of written instructions and approved answers that you can edit and test in the browser before publishing.',
       ] },
       { heading: 'Common IVR terms, briefly', paragraphs: [
@@ -116,7 +116,7 @@ export const IVR_POSTS: IvrBlogPost[] = [
         'Which details must be captured on every call, and where should they go?',
       ] },
       { heading: 'What changes for callers and for your team', paragraphs: [
-        'For callers, the main change is speed to the point. They do not wait through options or choose a language first. On Vistrow Voice the agent starts in your default language and switches when the caller does, across Hindi, English and nine other Indian languages, including mixed speech such as Hinglish.',
+        'For callers, the main change is speed to the point. They do not wait through options or choose a language first. On Vistrow Voice the agent starts in your default language and switches when the caller does, across more than 130 languages, including Hindi, English and nine other Indian languages and mixed speech such as Hinglish.',
         'For your team, the change is what arrives with each call. A menu IVR tells you which keys were pressed. An agent leaves a transcript, a summary and the details it was asked to capture, which can be sent to Zoho CRM, ArthaLeads, Slack, Google Sheets or a webhook. Transfers work on phone calls; a conversation started from the website widget runs in the browser, so the agent takes a callback number instead.',
       ] },
       { heading: 'When to keep the IVR', paragraphs: [
@@ -233,17 +233,17 @@ export const IVR_POSTS: IvrBlogPost[] = [
       ] },
       { heading: 'How Vistrow Voice fits this checklist', paragraphs: [
         'Vistrow Voice is an AI-first platform: it replaces the menu with a conversational agent rather than selling a keypad IVR. Phone calls connect over SIP through EnableX, an Indian telecom provider, and an existing number from a compatible provider can be connected once the setup is confirmed. Each number is routed to an agent with its own hours, active days and concurrent-call limit.',
-        'Agents speak Hindi, English and nine other Indian languages, answer from your knowledge base with an optional strict mode, book into the built-in Appointments calendar, and transfer to a person on phone calls. Each call keeps a transcript, summary and captured fields, with the recording if you turn it on, and leads can go to Zoho CRM, ArthaLeads, Slack, Google Sheets or any webhook. Spoken consent, retention, calling-window and Do-Not-Call controls are dashboard settings. Current plans are on the [Vistrow Voice pricing page](/pricing).',
+        'Agents speak more than 130 languages, including Hindi, English and nine other Indian languages, answer from your knowledge base with an optional strict mode, book into the built-in Appointments calendar, and transfer to a person on phone calls. Each call keeps a transcript, summary and captured fields, with the recording if you turn it on, and leads can go to Zoho CRM, ArthaLeads, Slack, Google Sheets or any webhook. Spoken consent, retention, calling-window and Do-Not-Call controls are dashboard settings. Current plans are on the [Vistrow Voice pricing page](/pricing).',
       ] },
     ],
   },
 ]
 
 export const IVR_IMAGE_ALTS: Record<string, string> = {
-  'what-is-ivr-interactive-voice-response': 'Caller holding a mobile phone beside an office desk telephone with a keypad',
-  'ivr-vs-ai-voice-agent-india': 'Support coordinator wearing a headset while listening to a caller at her desk',
-  'ivr-in-banking-and-finance': 'Calculator, notebook and smartphone on a desk while someone works through figures',
-  'how-to-choose-an-ivr-service-provider-india': 'Colleague wearing headphones and holding a pen while listening to a test call',
+  'what-is-ivr-interactive-voice-response': 'Woman looking at her phone beside a keypad menu card reading Press 1, Press 2, Press 0, with an AI tag',
+  'ivr-vs-ai-voice-agent-india': 'Artha with a headset beside two cards: IVR menu versus AI voice agent, with the AI voice agent highlighted',
+  'ivr-in-banking-and-finance': 'Before and after: a frustrated bank customer stuck in a phone menu, then Artha answering, OTP and PIN kept safe',
+  'how-to-choose-an-ivr-service-provider-india': 'Checklist card for choosing an IVR provider: languages, call quality, reports, handoffs and support',
 }
 
 // Appended to the first section of each article (see voiceBlog.ts), where the

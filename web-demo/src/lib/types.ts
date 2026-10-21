@@ -101,6 +101,9 @@ export interface CallRecord {
   connectLatencyMs: number | null
   agentJoinLatencyMs: number | null
   firstResponseLatencyMs: number | null
+  // Per-turn timings the call agent stores (latency_metrics_json), e.g.
+  // callerStopToFirstAudioMs: one value per caller turn, on every model.
+  latencyMetrics?: { callerStopToFirstAudioMs?: number[] } & Record<string, unknown>
   // Browser-reported, widget calls only. For why a call of ANY channel
   // ended, use disconnectReason below.
   failureReason: string | null
@@ -228,6 +231,38 @@ export interface DashboardPeriodSnapshot {
   bookingRate: number
 }
 
+/** GET /dashboard/speed-to-lead: seconds from a lead reaching us to its first call. */
+export interface SpeedToLead {
+  days: number
+  received: number
+  called: number
+  notCalled: number
+  medianSeconds: number | null
+  p90Seconds: number | null
+  withinMinutePct: number | null
+}
+
+/** GET /dashboard/insights (Growth and Scale): the Analytics tab's business view. */
+export interface InsightCall { id: number; title: string; qaScore: number; summary: string; durationSeconds: number; hasRecording: boolean; at: string | null }
+export interface GrowthInsights {
+  days: number
+  pipeline: { qualifiedLeads: number; withBudget: number; totalInr: number; bookedLeads: number; bookedInr: number }
+  ads: { ad: string; leads: number; called: number; qualified: number; booked: number }[]
+  languages: { language: string; calls: number; qualified: number; avgSeconds: number }[]
+  bestCall: InsightCall | null
+  worstCall: InsightCall | null
+  scoredCalls: number
+}
+
+export type MissedMoneyKind = 'uncalled_lead' | 'overdue_follow_up' | 'dropped_call' | 'upcoming_follow_up'
+
+/** GET /dashboard/missed-money: people worth calling now, most urgent first. */
+export interface MissedMoneyQueue {
+  items: { kind: MissedMoneyKind; title: string; detail: string; at: string | null; contactId: number | null; callId: number | null; name: string; phone: string }[]
+  counts: Record<MissedMoneyKind, number>
+  toCall: number
+}
+
 export interface DashboardPeriodComparison {
   days: number
   current: DashboardPeriodSnapshot
@@ -336,6 +371,16 @@ export interface AgentVariable {
   /** Spoken/used only when the real per-call data has nothing for this
    * name - never overrides a genuine CRM/CSV value. */
   defaultValue: string
+}
+
+/** Per-agent call counts for the Agents page (GET /agents/activity). */
+export interface AgentActivity {
+  agentId: number
+  today: number
+  /** Calls per day for the last 7 days, oldest first, today last. */
+  daily: number[]
+  booked7: number
+  lastCallAt: string | null
 }
 
 export interface AgentConfig {
@@ -608,7 +653,29 @@ export interface Integration {
   newConnectionsUnavailable?: boolean
 }
 
+/** One plan as the server sells it (agent/plan_policy.py public_plans). Prices INR,
+ * GST extra; minutes are standard minutes (1 credit = 1 standard minute). */
+export interface PublicPlan {
+  plan: 'starter' | 'growth' | 'scale'
+  monthlyPrice: number
+  annualPrice: number
+  monthlyMinutes: number
+  annualMinutesPerMonth: number
+  annualMinutesPerYear: number
+  overagePerMinute: number
+  clonedVoicesIncluded: number | null
+  agents: number
+  concurrentCalls: number
+  knowledgeBases: number
+  storageGb: number
+}
+
 export interface BillingSummary {
+  // Minute pricing (17 Oct): "standard_minute" = 1 credit is 1 standard minute.
+  creditUnit?: string
+  liveMinutesPerMinute?: number
+  planAnnualPriceInr?: number | null
+  plans?: PublicPlan[]
   creditsTotal: number
   creditsUsed: number
   creditsRemaining: number

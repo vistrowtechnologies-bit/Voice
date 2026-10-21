@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BrowserTestModal } from '../components/AgentTestCall'
 import { ClonedVoiceOptions, clonedVoiceFallbackName, useClonedVoices } from '../components/ClonedVoiceOptions'
-import { AgentIdChip } from '../components/AgentIdChip'
 import { AmbiencePreviewButton } from '../components/AmbiencePreviewButton'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { UpgradeRequiredModal } from '../components/UpgradeRequiredModal'
 import { VariableInput } from '../components/VariableInput'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
-import { useAuth } from '../lib/auth'
+import { apiProfilePreferences, apiUpdateProfilePreferences, useAuth } from '../lib/auth'
 import {
   deleteAgent,
   fetchAgents,
   fetchEntitlements,
   fetchIntegrations,
   fetchKnowledgeBases,
+  fetchLaunchReadiness,
   fetchMyVoices,
   fetchProjectListings,
   fetchVoiceCatalog,
@@ -27,12 +27,16 @@ import {
   geminiLiveVoiceName,
   LANGUAGES,
   isRealtimeModel,
+  LIVE_MODEL,
   modelOptionsFor,
   modelLabel,
+  nearestVoiceFor,
   NOISE_CANCELLATION_OPTIONS,
+  STANDARD_MODEL,
   TONES,
   voiceLabel,
   voicePickerGroups,
+  voiceWorksWithModel,
 } from '../lib/agentOptions'
 import type { AgentConfig, AgentVariable, CustomFunction, FollowUpPolicy, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
 import { FIRST_CALL_DELAY_CHOICES, FOLLOW_UP_DEFAULTS } from '../lib/types'
@@ -107,20 +111,12 @@ export function AgentDetail() {
   return (
     <DashboardLayout>
       <PageHeader title={agent.name} subtitle={agent.description || 'No description yet'}>
-        <AgentIdChip publicId={agent.publicId ?? ''} />
         <Link
           to="/dashboard/agents"
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-text"
         >
           <Icon name="arrow_back" className="text-[15px]" />
-          Back to agents
-        </Link>
-        <Link
-          to="/dashboard/testing"
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
-        >
-          <Icon name="science" className="text-[15px]" />
-          Test agent
+          Agents
         </Link>
       </PageHeader>
       <section className="p-4 sm:p-6">
@@ -151,8 +147,8 @@ export function AgentDetail() {
           agent={agent}
           kbs={kbs}
           isPlatformOwner={user?.isPlatformOwner ?? false}
-          onCancel={backToList}
           onDeleted={backToList}
+          onTest={() => setTesting(true)}
         />
       </section>
     </DashboardLayout>
@@ -163,16 +159,27 @@ function AgentEditorForm({
   agent,
   kbs,
   isPlatformOwner,
-  onCancel,
   onDeleted,
+  onTest,
 }: {
   agent: AgentConfig
   kbs: KnowledgeBase[]
   isPlatformOwner: boolean
-  onCancel: () => void
   onDeleted: () => void
+  onTest: () => void
 }) {
+  const navigate = useNavigate()
   const [tab, setTab] = useState<AgentTab>('instructions')
+  const tabContentRef = useRef<HTMLDivElement>(null)
+  const firstTab = useRef(true)
+  useEffect(() => {
+    if (firstTab.current) { firstTab.current = false; return }
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    tabContentRef.current?.animate(
+      [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 280, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' },
+    )
+  }, [tab])
   const [catalogAccess, setCatalogAccess] = useState<boolean | null>(null)
   useEffect(() => { fetchEntitlements().then((e) => setCatalogAccess(!!e.features.live_catalog)).catch(() => setCatalogAccess(false)) }, [])
   const [form, setForm] = useState<AgentForm>({
@@ -267,6 +274,41 @@ function AgentEditorForm({
   const set = <K extends keyof AgentForm>(key: K, value: AgentForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
 
+  const voiceName = (value: string) =>
+    myVoices.find((v) => v.value === value)?.name ??
+    clonedVoiceFallbackName(value, clonedVoices) ??
+    catalog.find((v) => v.value === value)?.name ??
+    voiceLabel(value)
+  // The voice a model switch replaced automatically, so the notice can name
+  // both and Undo (or switching back) can restore it.
+  const [voiceSwitch, setVoiceSwitch] = useState<{ from: string; fromModel: string; to: string | null } | null>(null)
+  const changeModel = (model: string) => {
+    const auto = voiceSwitch && form.voice === (voiceSwitch.to ?? form.voice) ? voiceSwitch : null
+    if (auto && voiceWorksWithModel(model, auto.from)) {
+      // Back on a model that can speak the voice we replaced: put it back.
+      setForm((f) => ({ ...f, model, voice: auto.from }))
+      setVoiceSwitch(null)
+      return
+    }
+    if (voiceWorksWithModel(model, form.voice)) {
+      set('model', model)
+      return
+    }
+    const gender = (myVoices.find((v) => v.value === form.voice) ?? catalog.find((v) => v.value === form.voice))?.gender
+    const pick = nearestVoiceFor(model, form.voice, gender, myVoices)
+    setForm((f) => ({ ...f, model, voice: pick?.value ?? f.voice }))
+    setVoiceSwitch({ from: auto?.from ?? form.voice, fromModel: auto?.fromModel ?? form.model, to: pick?.value ?? null })
+  }
+  // Engine picker: tenants have exactly one standard engine; the owner also
+  // has Live (realtime) and an Advanced list of the other standard models.
+  const [showModels, setShowModels] = useState(false)
+  const lastStandardModel = useRef(isRealtimeModel(agent.model) ? STANDARD_MODEL : agent.model || STANDARD_MODEL)
+  const undoVoiceSwitch = () => {
+    if (!voiceSwitch) return
+    setForm((f) => ({ ...f, model: voiceSwitch.fromModel, voice: voiceSwitch.from }))
+    setVoiceSwitch(null)
+  }
+
   // enabledFunctions is a comma list of the OPTIONAL built-ins that are on;
   // empty string means "all default on". end_call, web_search and send_dtmf
   // are toggled here - transfer_call is governed by whether a transfer
@@ -298,13 +340,15 @@ function AgentEditorForm({
 
   const promptTokens = Math.max(0, Math.ceil(form.systemPrompt.length / 4))
 
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     setSaving(true)
     setSaveError(null)
     try {
       await updateAgent(agent.id, form)
+      savedSnapshot.current = JSON.stringify(form)
       setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
+      setTimeout(() => setSaved(false), 4000)
+      return true
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not save changes. Please try again.'
       // The dashboard's own voice picker only ever offers voices already in
@@ -318,9 +362,70 @@ function AgentEditorForm({
       } else {
         setSaveError(msg)
       }
+      return false
     } finally {
       setSaving(false)
     }
+  }
+
+  // Unsaved edits: the form against what was last loaded or saved.
+  const savedSnapshot = useRef(JSON.stringify(form))
+  const dirty = JSON.stringify(form) !== savedSnapshot.current
+  const discard = () => setForm(JSON.parse(savedSnapshot.current) as AgentForm)
+
+  // Live / paused applies at once (like the switch on the Agents page), and
+  // the saved copy follows so Save never puts the old status back.
+  const [statusBusy, setStatusBusy] = useState(false)
+  const toggleLive = async () => {
+    const next: AgentForm['status'] = form.status === 'live' ? 'paused' : 'live'
+    setStatusBusy(true)
+    try {
+      await updateAgent(agent.id, { status: next })
+      setForm((f) => ({ ...f, status: next }))
+      savedSnapshot.current = JSON.stringify({ ...(JSON.parse(savedSnapshot.current) as AgentForm), status: next })
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not change the status.')
+    } finally {
+      setStatusBusy(false)
+    }
+  }
+
+  // A test call uses the saved agent, so unsaved edits are saved first.
+  const talk = async () => {
+    if (dirty && !(await save())) return
+    onTest()
+  }
+
+  // Setup, from the form as it is now (so it moves while you edit); only the
+  // channel comes from the server, which knows numbers and website widgets.
+  const [channelReady, setChannelReady] = useState(false)
+  useEffect(() => {
+    fetchLaunchReadiness()
+      .then((r) => setChannelReady(Boolean(r.agents.find((a) => a.id === agent.id)?.checks.channel)))
+      .catch(() => setChannelReady(false))
+  }, [agent.id])
+  const steps: SetupStep[] = [
+    { key: 'persona', label: 'Persona', action: 'Write the prompt', hint: 'Write what the agent says and does', done: Boolean(form.systemPrompt.trim() || form.welcomeMessage.trim()), tab: 'instructions' },
+    { key: 'voice', label: 'Voice', action: 'Pick a voice', hint: 'Pick how it sounds', done: Boolean(form.voice), tab: 'voice' },
+    { key: 'knowledge', label: 'Knowledge', action: 'Attach knowledge', hint: 'Attach your answers and documents', done: Boolean(form.kbId), tab: 'tools' },
+    { key: 'channel', label: 'Channel', action: 'Connect a channel', hint: 'Connect a phone number or website', done: channelReady, to: '/dashboard/numbers' },
+    { key: 'live', label: 'Go live', action: 'Turn it on', hint: 'Turn the agent on', done: form.status === 'live' },
+  ]
+  const nextStep = steps.find((step) => !step.done) ?? null
+  const goToStep = (step: SetupStep) => {
+    if (step.key === 'live') void toggleLive()
+    else if (step.to) navigate(step.to)
+    else if (step.tab) setTab(step.tab)
+  }
+
+  // First-time guide (C): shown until this user skips or finishes it, once.
+  const [guideOpen, setGuideOpen] = useState(false)
+  useEffect(() => {
+    apiProfilePreferences().then((p) => setGuideOpen(!p.agent_guide_dismissed)).catch(() => setGuideOpen(false))
+  }, [])
+  const closeGuide = () => {
+    setGuideOpen(false)
+    apiUpdateProfilePreferences({ agent_guide_dismissed: true }).catch(() => undefined)
   }
 
   const handleDelete = async () => {
@@ -330,7 +435,7 @@ function AgentEditorForm({
   }
 
   const inputCls =
-    'w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary'
+    'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10'
 
   // Offered after typing "{{" in a Welcome Message field - the built-ins
   // agent/main.py always fills from the contact record, plus whatever this
@@ -342,10 +447,29 @@ function AgentEditorForm({
 
   return (
     <div className="flex flex-col gap-4">
+      <AgentHero
+        agent={agent}
+        name={form.name}
+        description={form.description}
+        model={form.model}
+        voice={voiceName(form.voice)}
+        language={form.language}
+        live={form.status === 'live'}
+        statusBusy={statusBusy}
+        steps={steps}
+        nextStep={nextStep}
+        onToggleLive={() => void toggleLive()}
+        onStep={goToStep}
+        onTalk={() => void talk()}
+        onDelete={() => void handleDelete()}
+      />
+      {guideOpen && <SetupGuide steps={steps} onStep={goToStep} onClose={closeGuide} />}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="flex min-w-0 flex-col gap-4">
       <AgentTabBar tab={tab} onChange={setTab} />
-      <div className="flex flex-col gap-4">
-        {/* Identity */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div ref={tabContentRef} className="flex flex-col gap-4">
+        {/* Identity: one tile per tab; a tab with no field in this grid shows no empty tile. */}
+        <div className="bento-tile hidden grid-cols-1 gap-4 sm:grid-cols-2 has-[>.contents]:grid">
           <TabPane tab="instructions" active={tab}>
 <Field label="Name">
             <input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputCls} />
@@ -363,23 +487,112 @@ function AgentEditorForm({
 </TabPane>
           <TabPane tab="instructions" active={tab}>
 <Field
-            label="Model"
+            label="Engine"
             hint={
               isRealtimeModel(form.model)
                 ? 'Speech-to-speech: the model listens and speaks directly, so speech recognition, the AI model and the voice below are bypassed. It speaks in the Live version of the voice you pick. Compare "Reply audio reached caller" in the call diagnostics.'
                 : undefined
             }
           >
-            <select value={form.model} onChange={(e) => set('model', e.target.value)} className={inputCls}>
-              {modelOptionsFor(isPlatformOwner).map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label} - {m.tag}
-                </option>
-              ))}
-              {!modelOptionsFor(isPlatformOwner).some((m) => m.value === form.model) && form.model && (
-                <option value={form.model}>{modelLabel(form.model)} - no longer offered, pick a model above</option>
-              )}
-            </select>
+            {isPlatformOwner ? (
+              <>
+                {/* Owner only: realtime stays admin-only on the server (_ADMIN_ONLY_MODEL_PREFIXES). */}
+                <div role="group" aria-label="Engine mode" className="relative grid w-fit grid-cols-2 rounded-2xl border border-border bg-surface-high/60 p-1">
+                  <span aria-hidden="true" className="vv-engine-thumb" data-live={String(isRealtimeModel(form.model))} />
+                  {(['standard', 'live'] as const).map((mode) => {
+                    const active = (mode === 'live') === isRealtimeModel(form.model)
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => {
+                          if (active) return
+                          if (mode === 'live') {
+                            lastStandardModel.current = form.model
+                            changeModel(LIVE_MODEL)
+                          } else {
+                            changeModel(lastStandardModel.current)
+                          }
+                        }}
+                        className={`relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-transparent px-4 py-2 text-xs font-bold transition-colors duration-300 ${
+                          active ? (mode === 'live' ? 'text-white' : 'text-surface') : 'text-text-muted hover:text-text'
+                        }`}
+                      >
+                        {mode === 'live' ? (
+                          <>
+                            <Icon name="bolt" className={`text-[15px] ${active ? 'vv-live-spark' : 'text-magenta'}`} />
+                            Live (realtime)
+                          </>
+                        ) : (
+                          'Standard'
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-text-muted">
+                  {modelLabel(form.model)}
+                  {!modelOptionsFor(true).some((m) => m.value === form.model) && form.model ? ' (no longer offered)' : ''}
+                  {!isRealtimeModel(form.model) && (
+                    <>
+                      {' · '}
+                      <button type="button" onClick={() => setShowModels((v) => !v)} className="bg-transparent font-medium text-primary hover:underline">
+                        {showModels ? 'Hide advanced' : 'Advanced'}
+                      </button>
+                    </>
+                  )}
+                </p>
+                {showModels && !isRealtimeModel(form.model) && (
+                  <select value={form.model} onChange={(e) => changeModel(e.target.value)} className={`${inputCls} mt-2`}>
+                    {modelOptionsFor(true)
+                      .filter((m) => !isRealtimeModel(m.value))
+                      .map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label} - {m.tag}
+                        </option>
+                      ))}
+                    {!modelOptionsFor(true).some((m) => m.value === form.model) && form.model && (
+                      <option value={form.model}>{modelLabel(form.model)} - no longer offered, pick a model above</option>
+                    )}
+                  </select>
+                )}
+              </>
+            ) : (
+              // Tenants have one engine (MODEL_OPTIONS), so no picker: just say which.
+              <p className="text-sm text-text">
+                {modelLabel(form.model || STANDARD_MODEL)}
+                {form.model && form.model !== STANDARD_MODEL && (
+                  <>
+                    <span className="text-text-muted"> (no longer offered) · </span>
+                    <button type="button" onClick={() => changeModel(STANDARD_MODEL)} className="bg-transparent text-xs font-medium text-primary hover:underline">
+                      Switch to {modelLabel(STANDARD_MODEL)}
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+            {voiceSwitch && (
+              <p role="status" className="mt-2 text-xs text-muted-foreground">
+                {voiceSwitch.to ? (
+                  <>
+                    Voice changed to <span className="font-medium text-foreground">{voiceName(voiceSwitch.to)}</span>:{' '}
+                    {modelLabel(form.model).split(' · ')[0]} can’t speak {voiceName(voiceSwitch.from)}.{' '}
+                  </>
+                ) : (
+                  <>
+                    None of your voices work with {modelLabel(form.model).split(' · ')[0]}.{' '}
+                    <Link to="/dashboard/voices" className="text-primary hover:underline">
+                      Add a Live voice
+                    </Link>{' '}
+                    or{' '}
+                  </>
+                )}
+                <button type="button" onClick={undoVoiceSwitch} className="font-medium text-primary hover:underline">
+                  {voiceSwitch.to ? 'Undo' : 'undo'}
+                </button>
+              </p>
+            )}
           </Field>
 </TabPane>
           <TabPane tab="voice" active={tab}>
@@ -390,8 +603,9 @@ function AgentEditorForm({
                 'Loading your voices…'
               ) : (
                 <>
-                  {isRealtimeModel(form.model)
-                    ? 'Realtime lists the Live voices you have added (Voices → Live tabs); your other voices are greyed out. '
+                  {isRealtimeModel(form.model) ? `Only the voices ${modelLabel(form.model).split(' · ')[0]} can speak are listed. ` : null}
+                  {isRealtimeModel(form.model) && myVoices.length > realtimeVoices.length
+                    ? `${myVoices.length - realtimeVoices.length} of your other voices work only with standard models. `
                     : null}
                   Only voices you’ve added appear here.{' '}
                   <Link to="/dashboard/voices" className="text-primary hover:underline">
@@ -402,25 +616,32 @@ function AgentEditorForm({
             }
           >
             <div className="flex items-center gap-2">
-              <select value={form.voice} onChange={(e) => set('voice', e.target.value)} className={inputCls}>
+              <select
+                value={form.voice}
+                onChange={(e) => {
+                  set('voice', e.target.value)
+                  setVoiceSwitch(null)
+                }}
+                className={inputCls}
+              >
                 {/* Current voice isn't in this account's menu (a legacy voice, or
                     one removed from the menu since it was set) - surface it so the
                     browser doesn't silently show a different option as selected and
                     re-persist the wrong voice on Save. */}
                 {isRealtimeModel(form.model) ? (
                   <>
+                    {/* Only an agent saved before this check can land here; Save
+                        refuses the pair, so say so instead of naming a fallback. */}
                     {!realtimeVoices.some((v) => v.value === form.voice) && (
                       <option value={form.voice}>
-                        {clonedVoiceFallbackName(form.voice, clonedVoices) ?? catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)}
-                        {geminiLiveVoiceName(form.voice)
-                          ? ' → Live voice'
-                          : ' (not available on realtime, calls use Kirti)'}
+                        {voiceName(form.voice)}
+                        {voiceWorksWithModel(form.model, form.voice) ? '' : ' (can’t be used on realtime - pick a voice below)'}
                       </option>
                     )}
                     <optgroup label={`Your voices for ${modelLabel(form.model)}`}>
                       {realtimeVoices.length === 0 && (
                         <option value="" disabled>
-                          No realtime voices added yet - add one on the Voices page
+                          No Live voices added yet - add one on the Voices page
                         </option>
                       )}
                       {realtimeVoices.map((v) => (
@@ -429,48 +650,25 @@ function AgentEditorForm({
                         </option>
                       ))}
                     </optgroup>
-                    {/* Shown, but not selectable: a realtime model cannot speak with them. */}
-                    {myVoices.some((v) => !geminiLiveVoiceName(v.value)) && (
-                      <optgroup label="Not available on realtime">
-                        {myVoices
-                          .filter((v) => !geminiLiveVoiceName(v.value))
-                          .map((v) => (
-                            <option key={v.value} value={v.value} disabled>
-                              {v.name}
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
                   </>
                 ) : (
                   <>
-                {isRealtimeModel(form.model) && !geminiLiveVoiceName(form.voice) ? (
-                  <option value={form.voice}>{voiceLabel(form.voice)} (not available on realtime, calls use Kore)</option>
-                ) : (
-                  !myVoices.some((v) => v.value === form.voice) &&
+                {!myVoices.some((v) => v.value === form.voice) &&
                   !clonedReady && (
                     <option value={form.voice}>
                       {clonedVoiceFallbackName(form.voice, clonedVoices) ??
                         `${catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)} (not in your voices)`}
                     </option>
-                  )
-                )}
+                  )}
                 <ClonedVoiceOptions voices={clonedVoices} />
-                {voicePickerGroups(
-                  isRealtimeModel(form.model) ? myVoices.filter((v) => geminiLiveVoiceName(v.value)) : myVoices,
-                ).map((group) => {
+                {voicePickerGroups(myVoices).map((group) => {
                   if (group.voices.length === 0) return null
                   return (
                     <optgroup key={group.key} label={`${group.label} - ${group.note}`}>
                       {group.voices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.name}
-                          {/* Realtime speaks as the Live voice of the same name. */}
-                          {isRealtimeModel(form.model)
-                            ? ' → Live voice'
-                            : v.note
-                              ? ` - ${v.note}`
-                              : ''}
+
                         </option>
                       ))}
                     </optgroup>
@@ -513,15 +711,24 @@ function AgentEditorForm({
           </Field>
 </TabPane>
                     <TabPane tab="voice" active={tab}>
-{isRealtimeModel(form.model) ? null : <Field label="Voice delivery">
-            <select value={form.tone} onChange={(e) => set('tone', e.target.value as AgentForm['tone'])} className={inputCls}>
+{isRealtimeModel(form.model) ? null : <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-text-muted">Voice delivery</span>
+            <div role="radiogroup" aria-label="Voice delivery" className="flex flex-wrap gap-1.5">
               {TONES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label} - {t.description.split('-')[0].trim()}
-                </option>
+                <button
+                  key={t.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.tone === t.value}
+                  onClick={() => set('tone', t.value as AgentForm['tone'])}
+                  className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${form.tone === t.value ? 'border-text bg-text text-surface' : 'border-border bg-surface text-text-muted hover:text-text'}`}
+                >
+                  {t.label}
+                </button>
               ))}
-            </select>
-          </Field>}
+            </div>
+            <p className="text-[11px] leading-snug text-text-muted">{TONES.find((t) => t.value === form.tone)?.description}</p>
+          </div>}
 </TabPane>
                     <TabPane tab="conversation" active={tab}>
 <Field
@@ -535,10 +742,11 @@ function AgentEditorForm({
             >
               {NOISE_CANCELLATION_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
-                  {o.label} - {o.description}
+                  {o.label}
                 </option>
               ))}
             </select>
+            <span className="text-[11px] leading-snug text-text-muted">{NOISE_CANCELLATION_OPTIONS.find((o) => o.value === (form.noiseCancellation ?? ''))?.description}</span>
           </Field>
 </TabPane>
           <TabPane tab="instructions" active={tab}>
@@ -558,9 +766,9 @@ function AgentEditorForm({
               read together. Volume stays visible but disabled when the sound is Off, so
               the layout does not jump. */}
           <TabPane tab="voice" active={tab}>
-<div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-high/40 p-3 sm:col-span-2">
+<div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface-high/30 p-4 sm:col-span-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Background sound</span>
+              <span className="text-xs font-semibold text-text-muted">Background sound</span>
               <span className="text-[11px] text-text-muted">What the caller hears behind the agent</span>
             </div>
             <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -610,7 +818,7 @@ function AgentEditorForm({
             ambience"), paired with Caller noise suppression instead of
             dangling here alone; this block just holds what it controls. */}
         <TabPane tab="instructions" active={tab}>
-<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+<div className="bento-tile grid grid-cols-1 gap-4 sm:grid-cols-2 empty:hidden">
           {form.firstSpeaker === 'agent' && (
             <>
               <Field label="Welcome message — inbound (blank = auto-generated)">
@@ -631,6 +839,13 @@ function AgentEditorForm({
                   className={inputCls}
                 />
               </Field>
+              {/* agent/main.py: on 3.x realtime the opener is an instruction
+                  ("open with this line, or as close to it as reads naturally"). */}
+              {isRealtimeModel(form.model) && (
+                <p className="text-xs text-text-muted sm:col-span-2">
+                  Realtime models say the welcome message in their own words, close to what you wrote, not word for word.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -638,25 +853,45 @@ function AgentEditorForm({
 
         {/* System prompt */}
         <TabPane tab="instructions" active={tab}>
+<div className="bento-tile">
 <Field label="System prompt (blank = built-in generic assistant prompt)">
           <textarea
             value={form.systemPrompt}
             onChange={(e) => set('systemPrompt', e.target.value)}
             placeholder="Leave empty to use the built-in generic business assistant prompt, or write a custom persona here…"
-            className="min-h-[160px] w-full resize-y rounded-lg border border-border bg-surface-high p-3 text-xs leading-relaxed outline-none focus:border-primary"
+            className="min-h-[200px] w-full resize-y rounded-xl border border-border bg-surface p-3.5 text-[13px] leading-relaxed outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
           />
           <div className="flex items-center justify-between text-[10px] text-text-muted">
             <span>
               Use <code className="rounded bg-surface-high px-1 py-0.5 text-primary">{'{{variable}}'}</code> for
               dynamic values filled per call.
             </span>
-            <span>~{promptTokens} tokens</span>
+            <span
+              className={
+                isRealtimeModel(form.model) && promptTokens > 2000
+                  ? 'text-destructive'
+                  : isRealtimeModel(form.model) && promptTokens > 1000
+                    ? 'text-amber-600'
+                    : undefined
+              }
+            >
+              ~{promptTokens} tokens
+            </span>
           </div>
+          {/* Realtime re-sends the whole prompt every turn (measured 19 Oct:
+              about ₹0.072 per 1,000 prompt tokens per turn); pipeline models don't. */}
+          {isRealtimeModel(form.model) && promptTokens > 1000 && (
+            <p className={`mt-1 text-xs ${promptTokens > 2000 ? 'text-destructive' : 'text-amber-600'}`}>
+              Realtime re-bills the whole prompt every turn; keep it under ~1,000 tokens.
+            </p>
+          )}
         </Field>
+</div>
 </TabPane>
 
         {isPlatformOwner && (
-          <label className="flex items-start gap-2 rounded-lg border border-border bg-surface-high/40 p-3">
+          <TabPane tab="instructions" active={tab}>
+          <label className="bento-tile flex items-start gap-3">
             <input
               type="checkbox"
               checked={form.isPlatformDemo}
@@ -667,8 +902,10 @@ function AgentEditorForm({
               <span className="font-bold text-text">Use as public website demo agent.</span> Powers the "talk
               to Artha live" demo on the Vistrow Voice marketing site. Only one agent platform-wide can hold
               this - enabling it here turns it off on any other agent.
+              <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">Owner only</span>
             </span>
           </label>
+          </TabPane>
         )}
 
         {/* Collapsible advanced panels */}
@@ -742,6 +979,14 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
+          {/* agent/realtime_prompt.py compact(kb_limit=5500): realtime re-bills
+              the prompt every turn, so the knowledge base is cut there. */}
+          {isRealtimeModel(form.model) && form.kbId && (
+            <p className="mt-2 text-xs text-text-muted">
+              Realtime models use only the first ~5,500 characters (about 1,500 tokens) of the knowledge base, cut at a
+              whole question and answer. Put the most important answers first.
+            </p>
+          )}
         </Panel>
 </TabPane>
 
@@ -780,29 +1025,10 @@ function AgentEditorForm({
         <TabPane tab="conversation" active={tab}>
 <Panel icon="graphic_eq" title="Speech settings" subtitle="Turn-taking and silence handling">
           <div className="flex flex-col gap-4">
-{!isRealtimeModel(form.model) && (
-            <Field label={`Interruption sensitivity - ${Math.round(form.interruptionSensitivity * 100)}%`}>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.1}
-                value={form.interruptionSensitivity}
-                onChange={(e) => set('interruptionSensitivity', Number(e.target.value))}
-                className="w-full accent-primary"
-              />
-              <span className="text-[10px] text-text-muted">
-                Higher = the agent yields the floor faster when the caller starts talking. Lower = it ignores
-                brief noise and finishes its sentence.
-              </span>
-            </Field>
-)}
-{isRealtimeModel(form.model) && (
-            <p className="text-xs text-text-muted">
-              This agent uses a realtime model, which decides on its own when the caller has finished speaking and
-              handles interruptions itself, so interruption sensitivity does not apply.
-            </p>
-)}
+            {/* No interruption-sensitivity control: with vad=None (agent/main.py)
+                livekit-agents only reads interruption.min_duration from VAD events,
+                so the saved value never changed a call (verified 19 Oct 2026).
+                The field stays in the form so a save keeps the stored value. */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <NumberField
                 label="Silence check-in after (sec)"
@@ -937,24 +1163,43 @@ function AgentEditorForm({
         </Panel>
 </TabPane>
       </div>
+      </div>
+      <TryPanel
+        name={form.name}
+        dirty={dirty}
+        saving={saving}
+        model={form.model}
+        voice={form.voice}
+        voiceName={voiceName(form.voice)}
+        language={form.language}
+        steps={steps}
+        onTalk={() => void talk()}
+        onStep={goToStep}
+      />
+      </div>
 
-      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <button
-          onClick={handleDelete}
-          className="flex items-center gap-1.5 rounded-lg border border-destructive/40 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10"
-        >
-          <Icon name="delete" className="text-[16px]" />
-          Delete agent
-        </button>
-        <div className="flex items-center gap-3">
-          {saveError && <p className="text-xs font-semibold text-destructive">{saveError}</p>}
-          {saved && <p className="text-xs font-semibold text-green-500">Saved</p>}
-          <button onClick={onCancel} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary">
-            Back
-          </button>
+      <div className="vv-action-bar sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+        <p className="flex min-w-0 items-center gap-2 text-xs font-semibold" role="status">
+          {saveError ? (
+            <span className="text-destructive">{saveError}</span>
+          ) : saved ? (
+            <span className="flex items-center gap-1 text-success"><Icon name="check_circle" className="text-[15px]" />Changes saved</span>
+          ) : dirty ? (
+            <span className="flex items-center gap-2 text-amber"><span className="h-2 w-2 rounded-full bg-amber" />Unsaved changes</span>
+          ) : (
+            <span className="text-text-muted">All changes saved</span>
+          )}
+        </p>
+        <div className="flex items-center gap-2">
+          {dirty && (
+            <button type="button" onClick={discard} disabled={saving} className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-bold hover:border-primary disabled:opacity-50">
+              Discard
+            </button>
+          )}
           <button
-            onClick={save}
-            disabled={saving}
+            type="button"
+            onClick={() => void save()}
+            disabled={saving || !dirty}
             className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save changes'}
@@ -966,6 +1211,256 @@ function AgentEditorForm({
         <UpgradeRequiredModal message={upgradeMessage} onClose={() => setUpgradeMessage(null)} />
       )}
     </div>
+  )
+}
+
+type SetupStep = {
+  key: 'persona' | 'voice' | 'knowledge' | 'channel' | 'live'
+  label: string
+  /** Two or three words for the hero ("Attach knowledge"). */
+  action: string
+  hint: string
+  done: boolean
+  tab?: AgentTab
+  to?: string
+}
+
+/** Setup ring for the purple hero: white on the gradient. */
+function HeroRing({ done, total }: { done: number; total: number }) {
+  const c = 2 * Math.PI * 24
+  return (
+    <svg viewBox="0 0 60 60" className="h-[60px] w-[60px] shrink-0" role="img" aria-label={`Setup ${done} of ${total}`}>
+      <circle cx="30" cy="30" r="24" fill="none" stroke="rgb(255 255 255 / 0.22)" strokeWidth="6" />
+      <circle
+        cx="30" cy="30" r="24" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round"
+        strokeDasharray={`${((done / total) * c).toFixed(1)} ${c.toFixed(1)}`} transform="rotate(-90 30 30)" className="bento-ring"
+      />
+      <text x="30" y="34" textAnchor="middle" fill="#fff" className="font-display text-[13px] font-extrabold">{done}/{total}</text>
+    </svg>
+  )
+}
+
+/** A: who this agent is, whether it is on, how far setup is, and what to do next.
+ * Three zones: identity (left), setup progress (middle), actions (right), each
+ * vertically centred; on phones they stack. */
+function AgentHero({ agent, name, description, model, voice, language, live, statusBusy, steps, nextStep, onToggleLive, onStep, onTalk, onDelete }: {
+  agent: AgentConfig; name: string; description: string; model: string; voice: ReactNode; language: string
+  live: boolean; statusBusy: boolean; steps: SetupStep[]; nextStep: SetupStep | null
+  onToggleLive: () => void; onStep: (step: SetupStep) => void; onTalk: () => void; onDelete: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const done = steps.filter((s) => s.done).length
+  const publicId = agent.publicId || String(agent.id)
+  const copyId = async () => {
+    try {
+      await navigator.clipboard.writeText(publicId)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      alert('Could not copy the agent ID. Check clipboard permission and try again.')
+    }
+  }
+  const glass = 'h-10 rounded-xl bg-white/12 ring-1 ring-white/25 transition-colors hover:bg-white/20'
+  return (
+    <section className="bento-tile bento-hero grid grid-cols-1 items-center gap-5 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 font-display text-lg font-extrabold ring-1 ring-white/30">
+          {(name || 'A').slice(0, 2).toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <p className="bento-title truncate text-xl">{name || 'Untitled agent'}</p>
+          <p className="truncate text-sm text-white/75">{description || 'No description yet'}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={live}
+              disabled={statusBusy}
+              onClick={onToggleLive}
+              className="inline-flex items-center gap-2 rounded-full bg-white/15 py-1 pl-1 pr-3 font-bold ring-1 ring-white/30 disabled:opacity-60"
+            >
+              <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${live ? 'bg-success' : 'bg-white/25'}`}>
+                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${live ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+              </span>
+              {live ? 'Live' : 'Paused'}
+            </button>
+            <span className="rounded-full bg-white/15 px-2.5 py-1 font-bold ring-1 ring-white/30">{isRealtimeModel(model) ? 'Vistrow Live' : modelLabel(model).split(' · ')[0]}</span>
+            <span className="truncate text-white/80">{voice} · {language}</span>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => (nextStep ? onStep(nextStep) : undefined)}
+        disabled={!nextStep}
+        className="flex items-center gap-3 rounded-2xl bg-white/10 p-2 pr-4 text-left ring-1 ring-white/20 transition-colors hover:bg-white/15 disabled:cursor-default disabled:hover:bg-white/10"
+      >
+        <HeroRing done={done} total={steps.length} />
+        <span className="min-w-0">
+          <span className="block text-[11px] font-bold uppercase tracking-wider text-white/70">Setup {done} of {steps.length}</span>
+          <span className="flex items-center gap-1.5 text-sm font-bold">
+            {nextStep ? <>Next: {nextStep.action}<Icon name="arrow_forward" className="text-[16px]" /></> : <><Icon name="check_circle" className="text-[16px]" />Ready for calls</>}
+          </span>
+        </span>
+      </button>
+
+      <div className="flex items-center gap-2 lg:justify-end">
+        {/* Below xl the Try panel is hidden, so the hero carries the test button. */}
+        <button type="button" onClick={onTalk} className={`${glass} flex items-center gap-1.5 px-3.5 text-xs font-bold xl:hidden`}>
+          <Icon name="mic" className="text-[16px]" /> Talk
+        </button>
+        <button type="button" onClick={() => void copyId()} title="Copy agent ID" aria-label={copied ? 'Agent ID copied' : `Copy agent ID ${publicId}`} className={`${glass} flex items-center gap-2 px-3.5 text-xs`}>
+          <span className="font-semibold text-white/70">ID</span>
+          <code className="font-mono font-semibold tracking-wide">{publicId}</code>
+          <Icon name={copied ? 'check' : 'content_copy'} className="text-[15px]" />
+        </button>
+        <div className="relative">
+          <button type="button" aria-label="More actions" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)} className={`${glass} flex w-10 items-center justify-center`}>
+            <Icon name="more_horiz" className="text-[18px]" />
+          </button>
+          {menuOpen && (
+            <div role="menu" className="bento-reveal absolute right-0 top-12 z-20 w-44 rounded-xl border border-border bg-surface p-1 text-text shadow-xl">
+              <Link role="menuitem" to="/dashboard/testing" className="flex items-center gap-2 rounded-lg bg-transparent px-3 py-2 text-xs font-semibold hover:bg-surface-high">
+                <Icon name="science" className="text-[16px]" /> Testing Lab
+              </Link>
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onDelete() }} className="flex w-full items-center gap-2 rounded-lg bg-transparent px-3 py-2 text-left text-xs font-semibold text-destructive hover:bg-destructive/10">
+                <Icon name="delete" className="text-[16px]" /> Delete agent
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/** C: first-time guide. Skip (or finishing) hides it for this user for good. */
+function SetupGuide({ steps, onStep, onClose }: { steps: SetupStep[]; onStep: (step: SetupStep) => void; onClose: () => void }) {
+  const current = steps.find((s) => !s.done)
+  return (
+    <section aria-label="Set up your agent" className="bento-tile bento-reveal">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="bento-title text-[15px]">{current ? 'Set up your agent in 5 steps' : 'Your agent is ready'}</p>
+          <p className="text-xs text-text-muted">{current ? `Next: ${current.hint}.` : 'Everything is set. Test it once, then share your number or website.'}</p>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-lg bg-transparent px-2 py-1 text-xs font-bold text-text-muted hover:text-text">
+          {current ? 'Skip guide' : 'Done'}
+        </button>
+      </div>
+      <ol className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+        {steps.map((step, i) => {
+          const isCurrent = step === current
+          return (
+            <li key={step.key}>
+              <button
+                type="button"
+                onClick={() => onStep(step)}
+                className={`flex h-full w-full items-start gap-2 rounded-2xl border p-3 text-left transition-colors ${
+                  isCurrent ? 'border-primary bg-primary/8' : step.done ? 'border-success/30 bg-success/5' : 'border-border bg-surface hover:border-primary/50'
+                }`}
+              >
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold ${step.done ? 'bg-success text-bg' : isCurrent ? 'bg-primary text-bg' : 'bg-surface-high text-text-muted'}`}>
+                  {step.done ? <Icon name="check" className="text-[14px]" /> : i + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-bold">{step.label}</span>
+                  <span className="block text-[11px] leading-snug text-text-muted">{step.hint}</span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
+/** B: the panel beside the editor on wide screens: talk to the agent, hear it, see setup.
+ * Its cards use the same header as the editor's tiles (Panel) and keep one height
+ * whatever the state, so nothing jumps while you edit. */
+function SideCardHeader({ icon, title, subtitle }: { icon: string; title: ReactNode; subtitle: string }) {
+  return (
+    <div className="mb-4 flex min-w-0 items-center gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon name={icon} className="text-[18px]" />
+      </span>
+      <span className="min-w-0">
+        <span className="bento-title block truncate text-[15px]">{title}</span>
+        <span className="block truncate text-xs text-text-muted">{subtitle}</span>
+      </span>
+    </div>
+  )
+}
+
+function TryPanel({ name, dirty, saving, model, voice, voiceName, language, steps, onTalk, onStep }: {
+  name: string; dirty: boolean; saving: boolean; model: string; voice: string; voiceName: ReactNode; language: string
+  steps: SetupStep[]; onTalk: () => void; onStep: (step: SetupStep) => void
+}) {
+  const realtime = isRealtimeModel(model)
+  const canPreview = !realtime && Boolean(voice) && !voice.startsWith('custom:')
+  return (
+    <aside className="sticky top-4 hidden flex-col gap-4 xl:flex">
+      <section className="bento-tile">
+        <SideCardHeader icon="mic" title={`Try ${name || 'your agent'}`} subtitle="A browser call with your microphone" />
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onTalk}
+            disabled={saving}
+            aria-label={dirty ? `Save and talk to ${name}` : `Talk to ${name}`}
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7c3aed] to-[#c026d3] text-white shadow-[0_12px_32px_-12px_rgb(168_85_247/0.8)] transition-transform hover:scale-105 disabled:opacity-60"
+          >
+            <Icon name="mic" className="text-[28px]" />
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-bold">{saving ? 'Saving…' : dirty ? 'Save & talk' : 'Talk now'}</p>
+            {/* Always two lines tall, so the card keeps its height when the text changes. */}
+            <p className="line-clamp-2 min-h-[2rem] text-xs leading-4 text-text-muted">
+              {dirty ? 'Your unsaved changes are saved first.' : 'Uses the saved agent.'}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex h-14 items-center justify-between gap-2 rounded-xl border border-border bg-surface-high/30 px-3">
+          <span className="min-w-0">
+            <span className="block text-[11px] text-text-muted">{realtime ? 'Live voice' : 'Voice'}</span>
+            <span className="block truncate text-xs font-bold">{voiceName}</span>
+          </span>
+          {/* The preview plays the standard voice; a realtime call speaks the Live version,
+              so the button stays in place but disabled there. */}
+          {canPreview ? (
+            <VoicePreviewButton voice={voice} lang={(language || 'hi').startsWith('en') ? 'en' : 'hi'} />
+          ) : (
+            <span title="Preview plays standard voices only" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-high text-text-muted opacity-50">
+              <Icon name="play_arrow" className="text-[18px]" />
+            </span>
+          )}
+        </div>
+      </section>
+      <section className="bento-tile">
+        <SideCardHeader
+          icon="rocket_launch"
+          title={`Setup ${steps.filter((s) => s.done).length}/${steps.length}`}
+          subtitle={steps.every((s) => s.done) ? 'Ready for calls' : 'What is left before going live'}
+        />
+        <ul className="flex flex-col gap-1">
+          {steps.map((step) => (
+            <li key={step.key}>
+              <button type="button" onClick={() => onStep(step)} className="flex w-full items-center gap-2.5 rounded-xl bg-transparent px-2 py-2 text-left text-sm hover:bg-surface-high">
+                <Icon name={step.done ? 'check_circle' : 'radio_button_unchecked'} className={`text-[18px] ${step.done ? 'text-success' : 'text-text-muted'}`} />
+                <span className={step.done ? 'text-text-muted' : 'font-semibold'}>{step.label}</span>
+                {!step.done && <Icon name="arrow_forward" className="ml-auto text-[16px] text-text-muted" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <Link to="/dashboard/testing" className="mt-3 flex items-center gap-1.5 border-t border-border bg-transparent pt-3 text-xs font-bold text-primary hover:underline">
+          <Icon name="science" className="text-[15px]" /> Run a scenario in Testing Lab
+        </Link>
+      </section>
+    </aside>
   )
 }
 
@@ -987,16 +1482,33 @@ function TabPane({ tab, active, children }: { tab: AgentTab; active: AgentTab; c
 }
 
 function AgentTabBar({ tab, onChange }: { tab: AgentTab; onChange: (next: AgentTab) => void }) {
+  // One dark pill that slides to the selected tab (measured, so it fits each label).
+  const listRef = useRef<HTMLDivElement>(null)
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    const measure = () => {
+      const active = list.querySelector<HTMLElement>('[aria-selected="true"]')
+      if (active) setPill({ x: active.offsetLeft, w: active.offsetWidth })
+    }
+    measure()
+    list.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const observer = new ResizeObserver(measure)
+    observer.observe(list)
+    return () => observer.disconnect()
+  }, [tab])
   return (
-    <div role="tablist" aria-label="Agent settings" className="flex w-full min-w-0 gap-1 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div ref={listRef} role="tablist" aria-label="Agent settings" className="relative flex w-full min-w-0 gap-1 overflow-x-auto rounded-2xl border border-border bg-surface p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {pill && <span aria-hidden="true" className="vv-slide-pill shadow-sm" style={{ width: pill.w, transform: `translateX(${pill.x}px)` }} />}
       {AGENT_TABS.map((item) => (
         <button
           key={item.id}
           role="tab"
           aria-selected={tab === item.id}
           onClick={() => onChange(item.id)}
-          className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors ${
-            tab === item.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'
+          className={`relative z-10 shrink-0 whitespace-nowrap rounded-xl bg-transparent px-4 py-2 text-sm font-semibold transition-colors duration-300 ${
+            tab === item.id ? 'text-surface' : 'text-text-muted hover:text-text'
           }`}
         >
           {item.label}
@@ -1017,25 +1529,19 @@ function Panel({
   subtitle?: string
   children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(false)
   return (
-    <div className="rounded-lg border border-border bg-surface-high/30">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left"
-      >
-        <span className="flex items-center gap-3">
-          <Icon name={icon} className="text-[18px] text-text-muted" />
-          <span>
-            <span className="block text-sm font-bold">{title}</span>
-            {subtitle && <span className="block text-[11px] text-text-muted">{subtitle}</span>}
-          </span>
+    <section className="bento-tile">
+      <div className="mb-4 flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Icon name={icon} className="text-[18px]" />
         </span>
-        <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[20px] text-text-muted" />
-      </button>
-      {open && <div className="border-t border-border px-4 py-4">{children}</div>}
-    </div>
+        <span className="min-w-0">
+          <span className="bento-title block text-[15px]">{title}</span>
+          {subtitle && <span className="block text-xs text-text-muted">{subtitle}</span>}
+        </span>
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -1051,11 +1557,15 @@ function Toggle({
   hint?: string
 }) {
   return (
-    <label className="flex items-start gap-2">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5" />
+    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl px-1 py-1">
       <span className="text-xs leading-relaxed">
         <span className="font-bold text-text">{label}</span>
         {hint && <span className="mt-0.5 block text-text-muted">{hint}</span>}
+      </span>
+      {/* A real checkbox (keyboard and screen readers), drawn as a switch. */}
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+      <span aria-hidden="true" className="relative mt-0.5 inline-flex h-6 w-10 shrink-0 items-center rounded-full bg-surface-high transition-colors peer-checked:bg-success peer-focus-visible:ring-4 peer-focus-visible:ring-primary/20 [&>span]:translate-x-[3px] peer-checked:[&>span]:translate-x-[19px]">
+        <span className="inline-block h-[18px] w-[18px] rounded-full bg-white shadow transition-transform" />
       </span>
     </label>
   )
@@ -1117,7 +1627,7 @@ function CustomFunctionsEditor({
       {value.map((fn, i) => (
         <div key={i} className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
+            <span className="text-xs font-semibold text-text-muted">
               Function {i + 1}
             </span>
             <button onClick={() => remove(i)} aria-label="Remove function" className="text-text-muted hover:text-destructive">
@@ -1179,7 +1689,7 @@ function ParamsEditor({
     onChange(value.map((p, idx) => (idx === i ? { ...p, ...patch } : p)))
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-border/60 bg-surface-high/30 p-2">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Parameters</span>
+      <span className="text-xs font-semibold text-text-muted">Parameters</span>
       {value.map((p, i) => (
         <div key={i} className="flex items-center gap-1.5">
           <input
@@ -1432,7 +1942,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-text-muted">
+      <span className="flex items-center gap-1 text-xs font-semibold text-text-muted">
         {label}
         {hint && <InfoTip label={`More info about ${label}`}>{hint}</InfoTip>}
       </span>

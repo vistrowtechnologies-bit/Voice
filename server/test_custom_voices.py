@@ -336,7 +336,7 @@ class CustomVoiceTests(unittest.TestCase):
         status, q = self.call(self.client("growth", "member"), "GET", "/voices/custom/quote")
         self.assertEqual((q["limit"], q["used"], q["setupCredits"], q["firstCloneFree"], q["canCreate"]),
                          (1, 0, 0, True, True))
-        self.assertEqual(q["creditsPerMinute"], 2)
+        self.assertEqual(q["creditsPerMinute"], 1)
         self.assertIn("Co growth", q["consentSentence"])
         self.assertTrue(q["script"] and q["scriptHi"])
         self.assertEqual(q["balance"], 1000)
@@ -1065,6 +1065,18 @@ class ReferenceChooser(unittest.TestCase):
         detail = self.refused(synth(16.0, bursts(0.5, 9.5), noise=40))
         self.assertIn("seconds of you speaking", detail)
 
+    def test_normal_reading_with_pauses_accepted(self):
+        # Owner's live test 17 Oct: a person reading aloud pauses between
+        # phrases. 0.9 s phrases with 0.6 s pauses (60% voiced) over 20 s;
+        # refused while the clip needed 10 s of speech.
+        start, end = self.cv.choose_reference(synth(20.0, bursts(0.5, 19.5, on=0.9, off=0.6), noise=40))
+        self.assertGreaterEqual((end - start) / RATE, 12.0)
+
+    def test_refusal_logs_numbers_only(self):
+        with self.assertLogs("custom_voices", level="INFO") as logs:
+            self.refused(synth(16.0, bursts(0.5, 9.5), noise=40))
+        self.assertRegex(logs.output[-1], r"voice sample refused \(too little speech\): 16\.0 s long, [0-9.]+ s of speech")
+
     def test_digital_silence_refused(self):
         self.refused(b"\0\0" * RATE * 20, self.cv._TOO_LITTLE_SPEECH.format(secs=0))
         self.refused(b"", self.cv._TOO_LITTLE_SPEECH.format(secs=0))
@@ -1127,9 +1139,9 @@ class Billing(unittest.TestCase):
         import calls_db
         self.assertEqual(calls_db.voice_tier("custom:vv_abcdefghijklmnop"), "standard")
         row = {"call_type": "phone", "voice": "custom:vv_abcdefghijklmnop", "model": "sarvam/sarvam-105b-conversations"}
-        self.assertEqual(calls_db.credits_for_call(row, {"phone": 1.0}, 1.0), 2.0)
+        self.assertEqual(calls_db.credits_for_call(row, {"phone": 1.0}, 1.0), 1.0)
         import custom_voices
-        self.assertEqual(custom_voices.BHARAT_CREDITS_PER_MINUTE, 2.0)
+        self.assertEqual(custom_voices.BHARAT_CREDITS_PER_MINUTE, 1.0)
 
 
 class StockPremiumVoicesOwnerOnly(unittest.TestCase):

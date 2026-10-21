@@ -54,7 +54,7 @@ const BASE_COMPARE_VENDORS: CompareVendor[] = [
     rows: [
       { dimension: 'Core use case', vendor: 'Business calling, IVR, tracking, and routing.', vistrow: 'AI-led inbound, outbound, and web conversations.' },
       { dimension: 'Caller experience', vendor: 'Structured call flows and routing logic.', vistrow: 'Natural spoken conversation with knowledge-grounded answers.' },
-      { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'Hindi, English and 9 more Indian languages, with a default language per agent and mid-call switching.' },
+      { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'More than 130 languages, including Hindi, English and 9 more Indian languages, with a default language per agent and mid-call switching.' },
       { dimension: 'CRM output', vendor: 'Depends on integration configuration.', vistrow: 'Lead fields, transcript, call outcome, and recording link are prepared for CRM sync.' },
       { dimension: 'Where it fits', vendor: 'Telephony-first teams.', vistrow: 'Teams that want the AI agent to do the first conversation.' },
     ],
@@ -331,7 +331,7 @@ export const COMPARE_EXTRAS: Record<string, CompareExtra> = {
     extraFaqs: [
       { q: 'When does building make more sense?', a: 'When voice is core to your own product, when you need deep control over every component, or when you already have a platform team that will maintain the system.' },
       { q: 'What does Vistrow Voice already include?', a: 'An agent builder, a knowledge base with strict mode, phone and website channels, call transcripts and recordings, a Testing Lab, and CRM and webhook delivery. See the product pages for each.' },
-      { q: 'Does Vistrow Voice cover Indian languages?', a: 'It supports ten Indian languages plus English, including mixed Hindi-English speech, and keeps the same voice when the caller switches language. The languages page lists each one.' },
+      { q: 'Does Vistrow Voice cover Indian languages?', a: 'It speaks more than 130 languages, including ten Indian languages and English, including mixed Hindi-English speech, and keeps the same voice when the caller switches language. The languages page lists each one.' },
     ],
     related: [R_PRODUCT, R_LANG, R_HINDI, R_KB, R_INTEG, R_GUIDE],
   },
@@ -577,7 +577,7 @@ const BASE_BUYER_GUIDES: BuyerGuide[] = [
       { q: 'Why are voice AI calls priced per minute?', a: 'Because live calls consume streaming speech recognition, language-model reasoning, voice synthesis, transport, and storage while the conversation is happening.' },
       { q: 'Can I reduce cost by using a smaller LLM?', a: 'Yes, for structured qualification flows a smaller fast model can work well. You still need to test accuracy, hallucination controls, and latency on real calls.' },
       { q: 'Is a website voice widget cheaper than phone calls?', a: 'Usually, because a browser call needs no phone number or carrier minutes. The AI part of the conversation still costs the same kind of usage, so check how your vendor prices each channel.' },
-      { q: 'Where are Vistrow Voice prices listed?', a: 'Plan prices, the credits each plan includes and how many credits a minute uses are on the pricing page. Each call in the dashboard also shows the credits it used.' },
+      { q: 'Where are Vistrow Voice prices listed?', a: 'Pricing is shared on request while plans are being finalised; the pricing page lists what each plan includes. Each call in the dashboard shows the minutes it used.' },
     ],
   },
 ]

@@ -594,7 +594,11 @@ async def _post_webhook(context: RunContext, payload: dict) -> None:
     """
     userdata = context.userdata or {}
     urls = []
-    for url in (db.get_webhook_url(userdata.get("account_id")), userdata.get("agent_webhook_url")):
+    # to_thread: a synchronous DB read here held the agent's event loop for
+    # ~0.9 s on every lead save (calls 1447-1448, "event loop blocked ... psycopg"),
+    # stalling the very reply the caller was waiting for.
+    account_url = await asyncio.to_thread(db.get_webhook_url, userdata.get("account_id"))
+    for url in (account_url, userdata.get("agent_webhook_url")):
         # The account's webhook (Integrations page) and this agent's own
         # (Agents → Webhook); the same URL in both gets one delivery, not two.
         if url and url.startswith(("https://", "http://")) and url not in urls:
@@ -1824,10 +1828,10 @@ async def check_calendar_availability(
     if not requested_time and date in _offered:
         _same = _offered[date]
         return (
-            f"You have ALREADY offered these times for {date}: {', '.join(_same)}. They have not "
-            f"changed. Do not list them a third time and do not produce a different set. Say once "
-            f"that nothing else is open that day, and ask them to pick one of those or name a "
-            f"different day."
+            f"You have ALREADY offered these times for {date}: {', '.join(_same)}. Do not list them "
+            f"a third time and do not produce a different set. Do not say nothing else is open: ask "
+            f"which time they would like, then call this tool again with that requested_time to "
+            f"check it, or offer a different day."
         )
 
     logger.info(
@@ -2024,11 +2028,16 @@ async def check_calendar_availability(
         f"specific doctor or staff member, offer ONLY times that fall inside that person's days "
         f"and hours as written in the knowledge base — if none of these do, say which days they "
         f"actually work and offer one of those instead of booking one of these. "
-        f"Offer ONLY these open choices on {date_phrase}: {', '.join(_say(c) for c in choices)}. "
+        # Call 1437 (21 Oct 2026): offered these three, the caller asked for
+        # 10:30, and the model answered "10:30 is not free" without calling
+        # this tool again - "Offer ONLY these" read as "only these are free".
+        f"Offer these open choices on {date_phrase}: {', '.join(_say(c) for c in choices)}. "
+        "They are three examples from a fuller free list, not the only free times: if the caller names "
+        "any other time, call check_calendar_availability again with requested_time before you answer, "
+        "and never say a time is taken without that check. "
         "Where a \"(say: ...)\" phrase is given, speak that phrase, not the raw digits before it — "
-        "it's there so the time is pronounced correctly. Do not mention any other time or read a "
-        "full-day list. If none suits, ask whether the caller prefers morning, afternoon, or evening, "
-        "then check their exact requested time."
+        "it's there so the time is pronounced correctly. Do not read a full-day list. If none suits, ask "
+        "whether the caller prefers morning, afternoon, or evening, then check their exact requested time."
     )
 
 
@@ -2416,10 +2425,11 @@ async def log_lead(
             approximation approximate.
         location: One preferred locality. Call again with the second one if
             they name more than one — they accumulate, they do not replace.
-        timeline: When they want to buy, e.g. "next month".
-        property_type: apartment, plot, villa, commercial, etc.
-        configuration: e.g. "2 BHK", "3 BHK", "2000 sqft plot".
-        purpose: "investment" or "self-use" — ONLY if they actually said it.
+        timeline: When they want it, e.g. "next month".
+        property_type: Property businesses only: apartment, plot, villa, etc.
+        configuration: Property businesses only: e.g. "2 BHK", "2000 sqft plot".
+        purpose: Property businesses only: "investment" or "self-use", ONLY
+            if they actually said it. Never ask it for any other business.
         need: What this caller actually wants, in their own words, for ANY
             business — "root canal, in pain, wants tomorrow", "dinner for 20
             next Friday", "field-service software for 12 technicians", "car
@@ -2544,6 +2554,11 @@ async def log_lead(
 _PLACEHOLDER_VALUES = PLACEHOLDER_VALUES
 
 
+_EMAIL_RE = re.compile(r"[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}")
+# Our own addresses: a caller's contact is never one of these.
+_OUR_EMAIL_DOMAINS = frozenset({"vistrow.com", "vistrowvoice.com", "arthaleads.com"})
+
+
 def _looks_like_valid_indian_mobile(digits: str) -> bool:
     """10 digits, first digit 6-9 — the actual shape of a real Indian mobile
     number once a leading +91/91/0 is stripped."""
@@ -2624,17 +2639,33 @@ async def capture_platform_lead(
             "applicable' or leave it blank."
         )
     # Confirmed real failure (call 762): caller said "808019794" - nine
-    # digits, not a real Indian mobile number - and it was recorded and
-    # thanked without question. An unreachable number defeats the entire
-    # point of capturing a lead. Only phone-shaped contacts are checked;
-    # an email address (has an "@") is accepted as-is.
-    if "@" not in contact_stripped:
-        digits = re.sub(r"\D", "", contact_stripped)
-        if not digits or not _looks_like_valid_indian_mobile(digits):
+    # digits - and it was recorded and thanked without question. Call 1408
+    # (18 Oct 2026): our OWN address info@vistrow.com was saved as an Angolan
+    # prospect's contact, and his +244 number could not have been saved at
+    # all (only Indian mobiles were accepted). Emails are now checked for
+    # shape and against our own domains; phones use the international-aware
+    # _looks_like_a_phone_number.
+    email = ""
+    if "@" in contact_stripped:
+        email = contact_stripped.lower()
+        if not _EMAIL_RE.fullmatch(email):
             return (
-                f"That number ('{contact}') doesn't look like a complete 10-digit Indian mobile number - "
-                "nothing was recorded. Ask the caller to repeat their phone number, digit by digit if "
-                "needed, then call this tool again with the corrected number."
+                f"'{contact}' is not a complete email address - nothing was recorded. Ask the caller to "
+                "spell their email address, read it back to confirm, then call this tool again."
+            )
+        if email.rsplit("@", 1)[1] in _OUR_EMAIL_DOMAINS:
+            return (
+                f"'{contact}' is OUR company's address, not the caller's - nothing was recorded. Ask "
+                "the caller for their own email address (or phone number with country code), read "
+                "it back to confirm, then call this tool again."
+            )
+    else:
+        digits = re.sub(r"\D", "", contact_stripped)
+        if not _looks_like_a_phone_number(digits):
+            return (
+                f"That number ('{contact}') doesn't look like a complete phone number - nothing was "
+                "recorded. Ask the caller to repeat it with the country code, digit by digit if needed, "
+                "read it back to confirm, then call this tool again."
             )
     logger.info(
         "platform lead captured: name=%s company=%s contact=%s use_case=%s team_size=%s",
@@ -2642,7 +2673,11 @@ async def capture_platform_lead(
     )
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
-        lead_data.update(name=name, phone=contact, company=company, use_case=use_case, team_size=team_size)
+        lead_data.update(name=name, company=company, use_case=use_case, team_size=team_size)
+        if email:
+            lead_data["email"] = email
+        else:
+            lead_data["phone"] = contact
         if context.userdata is not None:
             context.userdata["lead_captured"] = True
     event = {
@@ -2650,7 +2685,8 @@ async def capture_platform_lead(
         "name": name,
         "company": company,
         "contact": contact,
-        "phone": contact,
+        "phone": "" if email else contact,
+        "email": email,
         "use_case": use_case,
         "team_size": team_size,
     }
@@ -2658,7 +2694,11 @@ async def capture_platform_lead(
         await _publish_event(context, event)
         await _post_webhook(context, event)
         await _fan_out_integrations(context, event)
-    return "Lead details recorded."
+    return (
+        "Recorded for the team. You may now tell the caller their request is recorded and the team "
+        "will contact them at the confirmed address or number. This saved a request only: nothing "
+        "was emailed or booked, so do not say it was."
+    )
 
 
 # A turn that is asking for something. Deliberately broad on the Indian
@@ -3017,7 +3057,24 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
             f"'{language}' isn't a language this line supports switching to — stay in "
             "the current language and don't mention this limitation to the caller."
         )
-    if getattr(agent, "_reply_language", None) == code:
+    _current = getattr(agent, "_reply_language", None)
+    if (
+        provider == "google-native"
+        and code != _current
+        and not voice_catalog.chirp3_persona(getattr(agent, "_speaking_voice", None) or getattr(agent, "_voice", "") or "")
+    ):
+        # Call 1447 (21 Oct 2026): a Native (locale Standard) voice is one
+        # language. Asked for Marathi, the text switched and the Hindi voice
+        # read Marathi; then "हिंदी is good" flipped it back and forth until
+        # the tool-step limit left the caller in silence. The voice is locked.
+        _name = LANGUAGE_NAMES.get(_current or "", "the current language")
+        logger.info("switch_reply_language -> %s refused: native voice locked to %s", language, _current)
+        return (
+            f"Not switched: this voice speaks only {_name}. Keep replying in {_name}. Tell the "
+            f"caller once, in one short line in {_name}, that this line continues in {_name}, "
+            "then answer what they said. Do not call this tool again for this request."
+        )
+    if _current == code:
         # Bake-off 2026-10-16 #16/#19: called with the active language on a
         # plain question. Nothing changes; the reply must still be the answer.
         return (
@@ -3147,7 +3204,8 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                     # handed a voice reading the wrong language.
                     voice_unsupported = True
             elif provider not in (None, "elevenlabs-v3"):
-                agent.tts.update_options(target_language_code=code)
+                # Bharat: Sarvam sits inside a FallbackAdapter (call 1450).
+                getattr(agent.tts, "_vistrow_primary", agent.tts).update_options(target_language_code=code)
             # elevenlabs-v3 (StreamAdapter) has no update_options — same
             # known limitation as the automatic switch path in main.py.
         except Exception:

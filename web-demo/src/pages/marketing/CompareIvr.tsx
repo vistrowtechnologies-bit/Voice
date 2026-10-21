@@ -36,7 +36,7 @@ const ROWS: { dimension: string; ivr: string; agent: string; chatbot: string; hu
   {
     dimension: 'Languages',
     ivr: 'Usually two, chosen up front',
-    agent: '10 Indian languages + English, switching mid-call',
+    agent: '130+ languages incl. 10 Indian languages, switching mid-call',
     chatbot: 'Depends on the bot; text only',
     human: 'Whatever that person speaks',
   },

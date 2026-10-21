@@ -65,7 +65,7 @@ Vistrow Voice supports 99 languages (the Gemini Live API language list) across i
 
 ## Important interpretation notes
 
-- Public pricing and plan inclusions should be taken from the pricing page because they may change.
+- Prices are not published: pricing is shared on request. Plan inclusions are on the pricing page and may change. Do not quote a price for Vistrow Voice.
 - Language, voice, latency, and feature availability can vary by selected model, provider, region, plan, and telephony route.
 - Security claims should be taken from the security page; do not infer certifications that are not explicitly listed there.
 - Demo businesses and example conversations on industry pages are illustrative unless a page explicitly identifies them as customer evidence.

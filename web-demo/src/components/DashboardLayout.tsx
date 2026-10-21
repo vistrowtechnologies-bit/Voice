@@ -11,7 +11,7 @@ import { BRAND } from '../lib/brand'
 import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
 import { openCommandMenu } from '../lib/commandMenu'
 import { initClarity, stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
-import { useAnalyticsConsent } from '../lib/analyticsConsent'
+import { useSessionInsightsConsent } from '../lib/analyticsConsent'
 import { useAuth, hasRole, type AuthUser } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
@@ -314,7 +314,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </button></Tooltip>
         )}
       </div>
-      <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto pb-3 [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
+      <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 vv-quiet-scroll overflow-x-hidden overflow-y-auto pb-3">
         {NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly).map((group) => group.standalone ? (
           <div key={group.title} className={group.showHeading ? 'mb-3' : 'mb-3 border-b border-border pb-3'}>
             {group.showHeading && <p className="mb-1.5 px-3 pt-2 text-[11px] font-bold tracking-[0.12em] text-text-muted">{group.title}</p>}
@@ -462,11 +462,14 @@ function FullPageHeader({
   subtitle,
   children,
   refreshSignal = 0,
+  ownWatchHow = false,
 }: {
   title: string
   subtitle?: string
   children?: ReactNode
   refreshSignal?: number
+  /** The page shows its own Watch how in its toolbar (the Dashboard). */
+  ownWatchHow?: boolean
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
@@ -474,7 +477,7 @@ function FullPageHeader({
   // duplicated Quick actions and displaced dashboard-specific controls.
   const showNewAgent = pathname === '/dashboard/agents'
   const videoSlug = helpVideoFor(pathname)
-  const watchHow = videoSlug && <WatchHowButton slug={videoSlug} />
+  const watchHow = videoSlug && !ownWatchHow && <WatchHowButton slug={videoSlug} />
 
   // "· Top up" only where it can work: checkout switched on for this
   // deployment and an admin who may pay. Everyone else keeps the plain pill.
@@ -505,13 +508,13 @@ function FullPageHeader({
   }, [desktop, mobileNav])
 
   const creditsPill = credits !== null && (
-    <Tooltip content={topupAvailable ? 'Buy credits · plan and invoices' : 'Plan and billing'}><Link
+    <Tooltip content={topupAvailable ? 'Buy minutes · plan and invoices' : 'Plan and billing'}><Link
       to={topupAvailable ? '/dashboard/settings?tab=billing&topup=1' : '/dashboard/settings?tab=billing'}
-      aria-label={topupAvailable ? `${credits} credits remaining. Buy credits` : `${credits} credits remaining. Open plan and billing`}
+      aria-label={topupAvailable ? `${credits} minutes remaining. Buy minutes` : `${credits} minutes remaining. Open plan and billing`}
       className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
     >
       <Icon name="toll" className="text-[15px] text-cyan" />
-      {credits} credits
+      {credits} min
       {topupAvailable && <span className="hidden text-primary sm:inline">· Top up</span>}
     </Link></Tooltip>
   )
@@ -525,12 +528,14 @@ function FullPageHeader({
     </Link>
   )
 
-  // The top bar holds only what every page shares (search, Watch how,
-  // credits, alerts, account). A page's own buttons (Back, Test agent, New
-  // Agent, agent ID...) sit in a row at the top of the page instead, so the
-  // bar never changes shape from page to page (owner, 17 Oct).
-  const pageActions = (children || newAgent) && (
+  // The top bar holds only what every page shares (search, credits,
+  // alerts, account). A page's own buttons (Back, Test agent, New Agent,
+  // agent ID, its Watch how video...) sit in a row at the top of the page
+  // instead, so the bar never changes shape from page to page (owner, 17 and
+  // 19 Oct).
+  const pageActions = (children || newAgent || watchHow) && (
     <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4 sm:px-6">
+      {watchHow}
       {children}
       {newAgent}
     </div>
@@ -538,7 +543,7 @@ function FullPageHeader({
 
   if (!desktop) {
     // Phone and tablet: one app bar (menu, title, search, alerts, account)
-    // and a swipeable row for credits and Watch how.
+    // and a row for the minutes pill.
     return (
       <>
         <header className="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur-xl">
@@ -560,7 +565,6 @@ function FullPageHeader({
           </div>
           <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {creditsPill}
-            {watchHow}
           </div>
         </header>
         {pageActions}
@@ -577,7 +581,6 @@ function FullPageHeader({
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
           <CommandMenuButton />
-          {watchHow}
           {creditsPill}
           <NotificationBell />
           <HeaderAvatarMenu />
@@ -588,7 +591,7 @@ function FullPageHeader({
   )
 }
 
-type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number }
+type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number; ownWatchHow?: boolean }
 
 /** The page title bar. Inside a Settings tab the tab itself is the title, so only the page's own
  * action buttons and its one-line description are kept. */
@@ -715,9 +718,9 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
     return () => document.documentElement.removeAttribute('data-theme')
   }, [])
 
-  // Re-runs when the visitor accepts analytics from the banner, so Clarity
-  // starts without a reload (initClarity is a no-op until then).
-  const analyticsChoice = useAnalyticsConsent()
+  // Re-runs when the visitor allows session insights from the banner, so
+  // Clarity starts without a reload (initClarity is a no-op until then).
+  const sessionChoice = useSessionInsightsConsent()
   useEffect(() => {
     if (!user) return
     if (user.isPlatformOwner || user.impersonating) {
@@ -726,7 +729,7 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
       initClarity(window.location.pathname, true)
       tagClarityAccount(user.accountId, user.plan)
     }
-  }, [user, analyticsChoice])
+  }, [user, sessionChoice])
 
   return (
     <div data-dashboard-root className="min-h-screen bg-bg text-text">
@@ -745,7 +748,7 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
 
       {mobileNavOpen && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
-          <div className="flex w-64 flex-col overflow-x-hidden overflow-y-auto bg-surface p-4">
+          <div className="vv-quiet-scroll flex w-64 flex-col overflow-x-hidden overflow-y-auto bg-surface p-4">
             <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
           </div>
           <button

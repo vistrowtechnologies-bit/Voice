@@ -31,12 +31,18 @@ def activity_detection(model: str) -> types.RealtimeInputConfig:
         raise ValueError(f"{key} must be an integer between 200 and 2000 ms") from None
     return types.RealtimeInputConfig(
         automatic_activity_detection=types.AutomaticActivityDetection(
+            # HIGH for every model. Call 1421 (3.8, HIGH): room noise started
+            # turns transcribed as "¿Qué?". Call 1425 (3.8, LOW): the caller
+            # spoke and nothing was detected for ~17 s. Google: prefixPaddingMs
+            # is "the required duration of detected speech before
+            # start-of-speech is committed", so 3.x keeps HIGH and requires
+            # 400 ms of speech, which a breath or click does not reach.
             start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
             end_of_speech_sensitivity=(
                 types.EndSensitivity.END_SENSITIVITY_HIGH if model == DEFAULT_MODEL
                 else types.EndSensitivity.END_SENSITIVITY_LOW
             ),
-            prefix_padding_ms=20 if model == DEFAULT_MODEL else 200,
+            prefix_padding_ms=20 if model == DEFAULT_MODEL else 400,
             silence_duration_ms=silence_ms,
         ),
     )
@@ -81,11 +87,24 @@ def input_transcription(model: str, language: str) -> types.AudioTranscriptionCo
     """Hint 2.5's native recognition, without forcing the speech output language.
 
     Hints are not a language lock; English remains available for mixed speech.
-    Do not change 3.1's already tested automatic language detection.
+    Do not change 3.1's already tested automatic language detection; 3.8
+    gets Hindi + English hints (call 1427).
     """
     if model not in API_MODELS:
         raise ValueError(f"Unsupported realtime model: {model}")
     supported = {"hi", "en", "mr", "ta", "te", "kn", "ml", "bn", "gu", "pa", "ur"}
+    if model == MODEL_38:
+        # Call 1427 (19 Oct): with automatic detection, 3.8 captioned the
+        # caller's Hinglish as Spanish ("Pucharon con Pune", "Es guay"); the
+        # model still understood, but transcripts and lead summaries read the
+        # captions. Google accepted language_codes on gemini-3.8-live (live
+        # setup test, 19 Oct). Indian callers mix Hindi and English, so an
+        # English agent is hinted both ways.
+        base = language.split("-")[0].lower()
+        if base in supported:
+            hints = [language] + (["hi-IN"] if base == "en" else ["en-IN"])
+            return types.AudioTranscriptionConfig(language_codes=hints)
+        return types.AudioTranscriptionConfig()
     if model == DEFAULT_MODEL and language.split("-")[0].lower() in supported:
         hints = [language]
         if language.split("-")[0].lower() != "en":
@@ -109,19 +128,54 @@ def clean_browser_input(model: str, *, phone: bool) -> bool:
     return model == DEFAULT_MODEL and not phone
 
 
-def context_compression(instructions: str) -> types.ContextWindowCompressionConfig:
+AUDIO_TOKENS_PER_SECOND = 25  # Google's own figure on the Live API pricing page
+
+
+def context_compression(
+    instructions: str, *, keep_seconds: int = 45
+) -> types.ContextWindowCompressionConfig:
     """Cap the conversation history Google re-bills on every turn.
 
-    The bill (Oct 6-9 2026) showed the platform demo averaging ~44k text
-    input tokens per turn against a ~18k-token instruction: the rest is the
-    growing conversation, re-sent each turn. Once history passes ~10k tokens
-    beyond the instruction, Google's sliding window drops the oldest turns
-    back to ~6k (the system instruction is always kept). Roughly the last
-    few minutes of a call stay in context; facts already saved through the
-    lead tools are unaffected.
+    The whole context (instruction + every retained turn, caller audio
+    included) is re-sent and re-billed on each turn. Bill, 17 Oct 2026, on
+    3.1/3.8 Live: 181,111 audio-input tokens billed for ~15 min of caller
+    audio, i.e. ~22,500 real tokens at 25 tokens/s re-billed about 8x,
+    worth Rs 3.8 of the Rs 8.5/min. The old thresholds (instruction + 10k
+    to trigger, back to instruction + 6k) were sized on text and a 5-minute
+    call never reached them, so compression never ran. The re-bill factor is
+    roughly the number of turns kept in history, so compression must engage
+    within the first minute of a call: the trigger sits at the instruction
+    plus ~1 minute of audio (plus headroom), and the sliding window keeps
+    the instruction plus ``keep_seconds`` of audio (~1-2 recent turns at
+    the default 30 s, ~750 audio tokens plus transcripts). Call 1415 (19 Oct,
+    3.8, 90 s kept) still billed audio-in at ~Rs 3.5/min, over half the
+    call's cost; the owner chose 30 s. Google always retains the system
+    instruction and keeps the most recent turns. Facts already saved through
+    the lead tools are unaffected.
+
+    Call 1420 (19 Oct, 30 s): the window trimmed back to the bare
+    instruction about once a minute (context 7,142 -> 5,422 tokens, text
+    4,808), so Artha re-greeted mid-call and re-asked the company and use
+    case. The instruction was estimated at chars/4 (~4,300) but really cost
+    4,808 tokens (~3.6 chars/token: Devanagari and Hinglish tokenize worse
+    than English), so "instruction + 30 s" was about the instruction alone.
+    It is now estimated at chars/3, which errs high, and 60 s are kept (owner:
+    memory over the last rupee).
     """
-    instruction_tokens = len(instructions) // 4 + 1  # ~4.2 chars/token measured for these prompts
+    # chars/3 errs high for every prompt measured so far (4.31 chars/token on
+    # the English demo text, ~3.6 on the live Artha prompt), so the window
+    # never cuts into the conversation.
+    instruction_tokens = len(instructions) // 3 + 1
+    keep_tokens = AUDIO_TOKENS_PER_SECOND * keep_seconds
+    # Call 1421 (19 Oct, 60 s kept, 1,500 headroom): audio built up to ~3,800
+    # tokens per turn before each trim, ~Rs 5/min of re-billed caller audio.
+    # 45 s kept (call 1421 still remembered company and name after a trim at
+    # 60 s; 45 s holds the last several exchanges) and trimming 750 tokens
+    # (~30 s) past the target keep the average history far smaller.
+    trigger_tokens = instruction_tokens + max(1_500, keep_tokens + 750)
+    target_tokens = instruction_tokens + keep_tokens
+    assert instruction_tokens < target_tokens < trigger_tokens
     return types.ContextWindowCompressionConfig(
-        trigger_tokens=instruction_tokens + 10_000,
-        sliding_window=types.SlidingWindow(target_tokens=instruction_tokens + 6_000),
+        trigger_tokens=trigger_tokens,
+        sliding_window=types.SlidingWindow(target_tokens=target_tokens),
     )

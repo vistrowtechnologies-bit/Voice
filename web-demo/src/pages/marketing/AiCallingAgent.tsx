@@ -109,7 +109,7 @@ export function AiCallingAgent() {
     <MarketingLayout>
       <Seo
         title="AI Calling Agent & Automated Calling Software | Vistrow Voice"
-        description="An AI calling agent for Indian businesses: automated calling software that answers inbound calls, calls leads back and follows up in 11 languages."
+        description="An AI calling agent for Indian businesses: automated calling software that answers inbound calls, calls leads back and follows up in 130+ languages."
         path="/ai-calling-agent"
         jsonLd={FAQ_JSONLD}
       />

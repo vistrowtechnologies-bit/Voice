@@ -125,7 +125,7 @@ export function AiTelecaller() {
     <MarketingLayout>
       <Seo
         title="AI Telecaller for Indian Businesses | Vistrow Voice"
-        description="An AI telecaller that answers and calls back leads, qualifies them and runs follow-ups in Hindi, English and 9 more Indian languages, inside your calling rules."
+        description="An AI telecaller that answers and calls back leads, qualifies them and runs follow-ups in 130+ languages, including Hindi and English, inside your calling rules."
         path="/ai-telecaller"
         jsonLd={FAQ_JSONLD}
       />

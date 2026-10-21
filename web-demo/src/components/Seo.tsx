@@ -22,7 +22,7 @@ interface SeoProps {
   jsonLd?: object | object[]
 }
 
-const DEFAULT_IMAGE = `${SEO_ORIGIN}/og/home.png`
+const DEFAULT_IMAGE = `${SEO_ORIGIN}/og/home.jpg`
 const DEFAULT_IMAGE_ALT = 'Vistrow Voice multilingual AI voice agent orb for phone and web conversations'
 const SLACK_APP_ID = 'A0BPQRALFUN'
 
@@ -59,7 +59,7 @@ export function Seo({ title, description, path, image, imageAlt, noindex, jsonLd
     document.title = resolvedTitle
 
     upsertMeta('name', 'description', resolvedDescription)
-    upsertMeta('name', 'robots', resolvedNoindex ? 'noindex, follow' : 'index, follow')
+    upsertMeta('name', 'robots', resolvedNoindex ? 'noindex, follow' : 'index, follow, max-image-preview:large')
     upsertLink('canonical', url)
 
     upsertMeta('property', 'og:type', registered?.kind === 'article' ? 'article' : 'website')

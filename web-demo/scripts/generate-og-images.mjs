@@ -60,12 +60,15 @@ const temp = mkdtempSync(path.join(os.tmpdir(), 'vistrow-og-'))
 
 try {
   // Article covers are supplied JPEG assets, not generated OG template cards.
-  const imageNames = [...new Set(SEO_PAGES.filter((entry) => entry.image.includes('/og/')).map((entry) => path.basename(entry.image, '.png')))]
-  imageNames.forEach((name) => {
+  // Cards are written in the format their seoPages.ts URL names (JPEG, or PNG
+  // for the compare cards); Chrome picks the format from the file extension.
+  const imageFiles = [...new Set(SEO_PAGES.filter((entry) => entry.image.includes('/og/')).map((entry) => path.basename(entry.image)))]
+  imageFiles.forEach((file) => {
+    const name = file.replace(/\.(png|jpg)$/, '')
     const spec = OG_CARD_BY_IMAGE[name]
     if (!spec) throw new Error(`Missing OG card spec for ${name}`)
     const htmlPath = path.join(temp, `${name}.html`)
-    const imagePath = path.join(OUTPUT, `${name}.png`)
+    const imagePath = path.join(OUTPUT, file)
     writeFileSync(htmlPath, cardHtml(spec))
     execFileSync(CHROME, [
       '--headless',
@@ -83,7 +86,7 @@ try {
       `--screenshot=${imagePath}`,
       pathToFileURL(htmlPath).href,
     ], { stdio: 'ignore', timeout: 15000 })
-    console.log(`generated public/og/${name}.png`)
+    console.log(`generated public/og/${file}`)
   })
 } finally {
   rmSync(temp, { recursive: true, force: true })

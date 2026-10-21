@@ -98,64 +98,80 @@ export const voiceLabel = (voice: string) =>
 // A voice belongs to exactly one group: the old tier-first implementation
 // duplicated Google multilingual voices inside Premium, then showed their
 // 2x group again *after* two 1x groups.
-export const voicePickerGroups = (voices: VoiceEntry[]) => [
-  {
-    key: 'expressive',
-    label: 'Vistrow Expressive',
-    note: '2x credits · most expressive · switches languages live',
-    voices: voices.filter((v) => v.tier === 'premium' && v.multilingual && !v.preview),
-  },
-  {
-    key: 'premium',
-    label: 'Premium',
-    note: '2x credits · natural conversational voices',
-    voices: voices.filter((v) => v.tier === 'premium' && !v.multilingual && !v.preview),
-  },
-  {
-    key: 'standard',
-    label: 'Standard',
-    note: '1x credits',
-    voices: voices.filter(
-      (v) => v.tier === 'standard' && !v.multilingual && !v.preview && !v.value.toLowerCase().includes('chirp3'),
-    ),
-  },
-  {
-    key: 'chirp3-hd',
-    label: 'Vistrow HD',
-    note: '1x credits · fast HD · switches languages live',
-    voices: voices.filter((v) => v.value.toLowerCase().includes('chirp3') && !v.preview),
-  },
-  {
-    key: 'gemini38-lite',
-    label: 'Studio Lite',
-    note: '2x credits · lower latency and cost · test before live calls',
-    voices: voices.filter((v) => v.preview && v.value.startsWith('google38:')),
-  },
-  {
-    key: 'gemini38-flash',
-    label: 'Studio',
-    note: '2x credits · richer expression and voice fidelity · test before live calls',
-    voices: voices.filter((v) => v.preview && v.value.startsWith('google38flash:')),
-  },
-  {
-    key: 'native-lite',
-    label: 'Vistrow Native',
-    // FIXED 2026-10-14 (PR #93): the distortion below was Google answering a PCM
-    // request with MP3; main.py now asks for LINEAR16 (clean on call 1278).
-    // Measured on call 885 (agent 26 set to google:hi-IN-Standard-A / Aditi):
-    // audible distortion, 402ms TTS TTFB, and NOT ONE caller turn transcribed
-    // across the whole call — the agent checked in twice and hung up on a
-    // caller who was talking to it. Google rejects this whole family on the
-    // streaming endpoint ("only Chirp 3: HD voices are supported for
-    // streaming synthesis"), so main.py runs them through a StreamAdapter
-    // sentence-chunking workaround, and that is what the caller hears.
-    // Warned rather than hidden: they are cheaper and some tenants may be on
-    // one already, so an operator picking one deserves to know before a live
-    // call rather than after.
-    note: '0.5x credits · one language each · a little slower to start',
-    voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
-  },
-]
+// The agent's voice picker groups voices exactly as the Voices page tabs do,
+// so a voice added there always shows here under the same name. The old
+// fixed groups had no slot for Bharat (sarvam4:) voices, which are standard
+// AND multilingual, so every one an owner added silently vanished from the
+// picker (17 Oct). "Other" catches anything a future voice family adds
+// before it gets a group of its own: a voice the owner added is never hidden.
+export const voicePickerGroups = (voices: VoiceEntry[]) => {
+  const stable = voices.filter((v) => !v.preview)
+  const isChirp = (v: VoiceEntry) => v.value.toLowerCase().includes('chirp3')
+  const groups: { key: string; label: string; note: string; voices: VoiceEntry[] }[] = [
+    {
+      key: 'native',
+      label: 'Vistrow Native',
+      // FIXED 2026-10-14 (PR #93): the distortion below was Google answering a PCM
+      // request with MP3; main.py now asks for LINEAR16 (clean on call 1278).
+      // Measured on call 885 (agent 26 set to google:hi-IN-Standard-A / Aditi):
+      // audible distortion, 402ms TTS TTFB, and NOT ONE caller turn transcribed
+      // across the whole call — the agent checked in twice and hung up on a
+      // caller who was talking to it. Google rejects this whole family on the
+      // streaming endpoint ("only Chirp 3: HD voices are supported for
+      // streaming synthesis"), so main.py runs them through a StreamAdapter
+      // sentence-chunking workaround, and that is what the caller hears.
+      // Warned rather than hidden: they are cheaper and some tenants may be on
+      // one already, so an operator picking one deserves to know before a live
+      // call rather than after.
+      note: '1 min per min · one language each · a little slower to start',
+      voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
+    },
+    {
+      key: 'sarvam4',
+      label: 'Bharat',
+      note: '1 min per min · Indian persona voices · switches language live',
+      // New persona voices first, then the classic ids (priya, shubh, ...).
+      voices: [
+        ...stable.filter((v) => v.tier === 'standard' && v.value.startsWith('sarvam4:')),
+        ...stable.filter((v) => v.tier === 'standard' && !isChirp(v) && !v.value.startsWith('sarvam4:')),
+      ],
+    },
+    {
+      key: 'chirp3-hd',
+      label: 'Vistrow HD',
+      note: '1 min per min · fastest voices · switches language mid-call',
+      voices: stable.filter((v) => v.tier === 'standard' && isChirp(v)),
+    },
+    {
+      key: 'expressive',
+      label: 'Vistrow Expressive',
+      note: '2 min per min · follows the caller’s emotion · switches languages live',
+      voices: stable.filter((v) => v.tier === 'premium' && v.multilingual),
+    },
+    {
+      key: 'gemini38-lite',
+      label: 'Studio Lite',
+      note: '2 min per min · lower latency and cost · test before live calls',
+      voices: voices.filter((v) => v.preview && v.value.startsWith('google38:')),
+    },
+    {
+      key: 'gemini38-flash',
+      label: 'Studio',
+      note: '2 min per min · richer expression and voice fidelity · test before live calls',
+      voices: voices.filter((v) => v.preview && v.value.startsWith('google38flash:')),
+    },
+    {
+      key: 'premium',
+      label: 'Premium',
+      note: '2 min per min · natural conversational voices',
+      voices: stable.filter((v) => v.tier === 'premium' && !v.multilingual),
+    },
+  ]
+  const placed = new Set(groups.flatMap((g) => g.voices.map((v) => v.value)))
+  const rest = voices.filter((v) => !placed.has(v.value))
+  if (rest.length) groups.push({ key: 'other', label: 'Other voices', note: 'added on the Voices page', voices: rest })
+  return groups
+}
 // Vistrow tier name + quality tag is the primary label (see
 // platform_assistant.py - the vendor never gets named to a prospect on a
 // live call), but the dashboard's own model picker shows the raw model
@@ -308,13 +324,20 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
   { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest OpenAI cost; measure quality before rollout' },
   // Re-listed at the platform owner's request for a controlled retest. Keep
   // this owner-only: prior calls showed slower audio and turn-handling errors.
-  { value: 'gemini-live', label: 'Vistrow Live 2.5 · realtime', tag: 'Owner-only · replies in about 2-3 s · about a third of the cost of 3.1' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 · realtime', tag: 'Owner-only · fastest speech-to-speech (about 1-2 s) · recommended for realtime' },
-  { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · GA successor to 3.1, same price · in testing' },
+  // Owner, 18 Oct 2026: 3.8 Live is the primary realtime model (Google GA,
+  // same price as 3.1). 3.1 (Google shutdown from 17 Nov 2026) and 2.5 are
+  // retired and, from 19 Oct, no longer offered; RETIRED_MODELS keeps their
+  // names for call history (no agent used either on 19 Oct).
+  { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · primary realtime model · speech-to-speech in about 1-2 s' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
 export const isRealtimeModel = (value: string) => value.startsWith('gemini-live')
+
+/** The engine every tenant agent runs on (Vistrow Bharat), and the one Live
+ *  model still offered (owner-only). */
+export const STANDARD_MODEL = MODEL_OPTIONS[0].value
+export const LIVE_MODEL = ADMIN_ONLY_MODELS.find((m) => isRealtimeModel(m.value))!.value
 
 // Gemini Live's own voice list (agent/main.py _GEMINI_LIVE_VOICES). A realtime
 // agent speaks with the persona its voice value names; any other voice is
@@ -333,6 +356,30 @@ export const geminiLiveVoiceName = (value: string): string | null => {
   const tail = (value || '').split(':').pop()!.trim()
   const persona = tail.split('-').pop()!.toLowerCase()
   return GEMINI_LIVE_VOICES.has(persona) ? persona.charAt(0).toUpperCase() + persona.slice(1) : null
+}
+
+/** Whether an agent on this model can speak with this voice. The one rule the
+ *  voice picker uses; the server enforces the same on save
+ *  (token_api._guard_realtime_voice). */
+export const voiceWorksWithModel = (model: string, voice: string) =>
+  !isRealtimeModel(model) || geminiLiveVoiceName(voice) !== null
+
+/** The voice to switch to when the model changes and the current voice can't
+ *  be used: the same voice if it works, else one of the same gender, else
+ *  the first that works. null when none of the voices work with the model. */
+export const nearestVoiceFor = (
+  model: string,
+  currentVoice: string,
+  currentGender: VoiceEntry['gender'] | undefined,
+  voices: readonly VoiceEntry[],
+): VoiceEntry | null => {
+  const usable = voices.filter((v) => voiceWorksWithModel(model, v.value))
+  return (
+    usable.find((v) => v.value === currentVoice) ??
+    usable.find((v) => currentGender && v.gender === currentGender) ??
+    usable[0] ??
+    null
+  )
 }
 
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
@@ -355,6 +402,10 @@ export const modelOptionsFor = (isPlatformOwner: boolean) =>
 const RETIRED_MODELS = [
   { value: 'gpt-4.1-mini', label: 'Vistrow Swift' },
   { value: 'gpt-4.1', label: 'Vistrow Prime' },
+  // GPT-5 successors (plan_policy.OPENAI_MODEL_SUCCESSORS) that retired GPT-4
+  // agents are rewritten to: same names, still not offered for new picks.
+  { value: 'gpt-5.4-nano', label: 'Vistrow Swift' },
+  { value: 'gpt-5.4-mini', label: 'Vistrow Prime' },
   { value: 'gpt-4o', label: 'Vistrow Pro' },
   { value: 'gemini-3.6-flash', label: 'Vistrow Flash' },
   { value: 'gpt-4o-mini', label: 'Vistrow Standard' },
@@ -364,6 +415,7 @@ const RETIRED_MODELS = [
   // the lead tool, and premature hangups. It is now exposed only to the platform owner
   // for a controlled retest; tenant accounts cannot select it.
   { value: 'gemini-live', label: 'Vistrow Live 2.5 (retired)' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 (retired)' },
 ] as const
 
 export const modelLabel = (value: string) =>

@@ -206,6 +206,17 @@ def bhk_from_configuration(text: str) -> str | None:
     return "5BHK+" if n >= 5 else f"{n}BHK"
 
 
+_TIME_WORDS = re.compile(
+    r"\d|month|year|week|day|soon|asap|immediate|now|next|this|later|quarter|diwali|"
+    r"महीन|साल|हफ्त|दिन|जल्द|अभी|अगले|इस\b|बाद",
+    re.IGNORECASE,
+)
+
+
+def _purpose_not_time(text: str) -> bool:
+    return normalise_purpose(text) is not None and not _TIME_WORDS.search(text)
+
+
 def mid_call_facts(lead_data: dict) -> dict:
     """What log_lead / send_brochure captured during the call, in the
     standard shape. Unrecognised purpose/property text is kept as said, so
@@ -228,7 +239,13 @@ def mid_call_facts(lead_data: dict) -> dict:
     if (v := str(lead_data.get("location") or "").strip()):
         out["preferred_location"] = v
     if (v := str(lead_data.get("timeline") or "").strip()):
-        out["timeline"] = v
+        if _purpose_not_time(v):
+            # Call 1438 (21 Oct 2026): log_lead saved "future self-use" as the
+            # timeline and the CRM showed Timeline: future self-use. A purpose
+            # with no time word in it is a purpose.
+            out.setdefault("purpose", normalise_purpose(v))
+        else:
+            out["timeline"] = v
     if lead_data.get("brochure_requested"):
         out["brochure_requested"] = True
         if (v := str(lead_data.get("brochure_project") or "").strip()):
@@ -330,7 +347,9 @@ SYSTEM_PROMPT = (
     "not make Khopoli the caller's preference), and never a place only the agent said. Only a "
     "place in the CALLER's own lines counts. Write it in English letters "
     "(\"Panvel or Karjat\", not Devanagari). \"\" if the caller named no place.\n"
-    "- timeline: short English, as the caller said it.\n"
+    "- timeline: when they plan to buy or move in (e.g. \"within 3 months\", \"next year\"), short "
+    "English, as the caller said it. Never a callback, meeting or site-visit time (\"today 1 pm\", "
+    "\"Sunday 7 baje\" are not a timeline). \"\" if not said.\n"
     "- brochure_requested: true if the caller asked for a brochure, details, photos or a price "
     "list to be sent (e.g. on WhatsApp), OR the agent offered or promised to send one and the "
     "caller agreed (yes / ha / जी / ok) and did not refuse. false if the caller declined or it "

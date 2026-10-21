@@ -1132,9 +1132,22 @@ Left: owner review → push/PR → merge → `lk agent deploy` both workers + Ra
 - Unverified: staging UI in a browser (no staging login available to the agent), live call behaviour.
 - Next: owner signs in to app-staging so the UI can be checked, then push this branch and open a PR for the deployer.
 
+### Claude — 2026-10-17 — minute-based plans (branch `claude/minute-pricing`, LOCAL commit, NOT pushed)
+
+Owner decision: Starter ₹2,999 = 400 min, Growth ₹5,999 = 1,100, Scale ₹12,999 = 2,700 per month; annual 500/1,200/3,000 per month at a PENDING price (default pay 11 for 12: 32,989 / 65,989 / 1,42,989); 1 standard minute = 1; Vistrow Live = 3; overage ₹7/6/5.
+- Mapping: credit ledger kept, 1 credit = 1 standard minute. agent/plan_policy.py now owns PLANS (credits = monthly minutes, annual_credits_per_month, overage_per_minute_inr), ANNUAL_MONTHS_CHARGED/ANNUAL_PRICE_INR, plan_allowance(), public_plans(), and the tier tables + credits_per_minute() that server/calls_db.credits_for_call AND agent/db.py's trial cutoff both use. Sarvam/Bharat model tier = standard (was premium 2x); Live 2.5 = "realtime" 3x, 3.1/3.8 = "realtime_plus" 3x (was 2x/6x), Live ignores voice tier; economy voices 1x (was 0.5x); floor 1.0 (was 0.75). Premium voices 2x and legacy LLM tiers unchanged.
+- Existing balances: credits_total untouched (no migration). Usage is recomputed at current rates, so mid-period Bharat usage halves on deploy and Live 2.5 usage rises 1.5x.
+- New: GET /billing/plans; billing_summary adds creditUnit/liveMinutesPerMinute/planAnnualPriceInr/plans; reset_plan_credits takes billing_cycle (annual = 12 x annual monthly minutes, pooled); overage = plan's per-minute rate; /admin/pricing drops overageMultiplier for overagePerMinuteInr + annualPriceInr.
+- Verified: server suite 826 passed, 1 failed = VoicesPageCreditsTests (reads web-demo/src/lib/plans.ts BHARAT_MODEL_MULTIPLIER=2 / LIVE {2.5:2, default:6}; must become 1 / {3,3} in the dashboard lane before merge). New server/test_minute_pricing.py 12/13 fail on origin/main.
+- NEEDS (other lanes): web-demo plans.ts (creditsNum 400/1100/2700, multipliers, TopupModal per-credit), AdminSettings overageMultiplier; Razorpay annual Plans with the new amounts + GST; voice-clone-release also edits the PLANS rows (trivial merge conflict: add cloned_voices).
 ### Claude — 2026-10-17 IST — tool descriptions: size verified, cut, A/B
 
 - Branch `claude/tool-desc-ab` from main 322c9ba3. Files: `agent/tools.py` (docstrings of switch_reply_language, end_call, do_not_call, request_callback, book_appointment, check_calendar_availability, transfer_call, capture_platform_lead; no logic/name/schema change), `docs/TOOL-DESC-AB-2026-10-17.md`.
 - Verified: Sarvam's own prompt_tokens with vs without tools: tool block 2,625–2,735 tokens = 29–33% on agents 3/17/19/26, 9.8% on agent 4 (the old "23%" was the offline fixture before prompt cuts). After: 2,249–2,346 (−376…−389/request). A/B 2×30 real turns (read-only DB, accounts 1+2, PII masked): right tool 22/26 vs 21/26, no-tool 28/34 both, wrong end_call 0 vs 1, switch 2 vs 2, TTFT p50 266 both. Agent suite 899 passed / 0 failed (placeholder DB). A shortened log_lead dropped #26 log_lead to 2/5 and 0/5 → fully reverted (5/5). Spend ≈ ₹61 billed-rate estimate.
 - Not verified: do_not_call/transfer_call/booking completion turns (none in the replay set); non-Indian language switch on global voices; live call.
 - Next: owner review → push/PR → deployer merges and runs `lk agent deploy` on both workers. No line overlap with PR #153 (switch_reply_language logic).
+
+### 2026-10-19 · claude (dashboard session) · realtime voice picker
+- Branch claude/realtime-voice-picker, PR #192 (ready, not merged). Files: web-demo/src/pages/AgentDetail.tsx, web-demo/src/lib/agentOptions.ts.
+- Verified locally: picker on Live 3.8 lists only Live voices; Shubh→Live switches to Kiara HD with notice/Undo; switch back restores Shubh; server PATCH realtime+shubh → 400; npm run build passes.
+- Open: runtime lane asked to make the _guard_realtime_voice 400 text vendor-neutral (says "Gemini"). Next step: owner says "ship #192".

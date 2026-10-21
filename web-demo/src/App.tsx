@@ -194,6 +194,7 @@ function App() {
         <Route path="/careers" element={<Careers />} />
         <Route path="/changelog" element={<Changelog />} />
         <Route path="/resources/blog" element={<Blog />} />
+        <Route path="/resources/blog/page/:page" element={<Blog />} />
         <Route path="/resources/blog/:slug" element={<BlogPost />} />
         <Route path="/resources/docs" element={<Docs />} />
         <Route path="/help" element={<HelpCenter />} />

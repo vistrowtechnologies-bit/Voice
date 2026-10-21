@@ -47,7 +47,7 @@ TIER_META: dict[str, dict] = {
     # that claim to every Premium voice (including ElevenLabs) here.
     "premium": {"label": "Premium", "note": "2x credits · advanced natural voices", "rank": 0},
     "standard": {"label": "Standard", "note": "1x credits", "rank": 1},
-    "lite": {"label": "Lite", "note": "0.5x credits · economy", "rank": 2},
+    "lite": {"label": "Lite", "note": "1x credits · economy", "rank": 2},  # 1x since minute pricing, 2026-10-17
 }
 
 # The master catalog. Keep display names free of vendor branding.

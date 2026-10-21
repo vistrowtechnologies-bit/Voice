@@ -194,7 +194,7 @@ class DbTests(unittest.TestCase):
     def test_admin_credits_match_billing(self):
         aid = self.account()
         self.db.end_trial(aid)
-        self.call(aid, 10)  # Bharat: 2 credits/min on the default pipeline
+        self.call(aid, 10, model="gemini-live")  # Vistrow Live: 3 credits (standard minutes) per minute
         used = self.db.billing_summary(aid)["creditsUsed"]
         listed = next(a for a in self.admin.list_accounts(search="", limit=200)["accounts"] if a["id"] == aid)
         self.assertEqual(listed["credits_used"], round(used, 1))

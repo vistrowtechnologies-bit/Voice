@@ -437,6 +437,25 @@ export function LanguageDetail() {
 
       <FaqSection items={faqs} />
 
+      {lang.guides && lang.guides.length > 0 && (
+        <section className="mx-auto max-w-7xl space-y-3 px-5 pt-12 md:px-8">
+          {lang.guides.map((sentence) => (
+            <p key={sentence} className="max-w-3xl text-base leading-relaxed text-text-muted">
+              {sentence.split(/(\[[^\]]+\]\(\/[^)\s]+\))/g).map((part, index) => {
+                const link = /^\[([^\]]+)\]\((\/[^)\s]+)\)$/.exec(part)
+                return link ? (
+                  <Link key={index} to={link[2]} className="font-semibold text-primary underline-offset-4 hover:underline">
+                    {link[1]}
+                  </Link>
+                ) : (
+                  part
+                )
+              })}
+            </p>
+          ))}
+        </section>
+      )}
+
       {/* ---------- Related and other languages: chip rows ---------- */}
       <section className="mx-auto max-w-7xl space-y-8 px-5 pb-12 md:px-8">
         {lang.related && (

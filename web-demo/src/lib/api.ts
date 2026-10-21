@@ -1,4 +1,8 @@
 import type {
+  AgentActivity,
+  GrowthInsights,
+  MissedMoneyQueue,
+  SpeedToLead,
   ActiveCallInfo,
   AgentConfig,
   AgentDraft,
@@ -308,6 +312,9 @@ export const fetchDashboardSummary = () => get<DashboardSummary>('/dashboard/sum
 export const fetchUsageTrends = (days = 14) => get<UsageTrends>(`/dashboard/usage-trends?days=${days}`)
 export const fetchPeriodComparison = (days = 14) => get<DashboardPeriodComparison>(`/dashboard/period-comparison?days=${days}`)
 export const fetchAnalytics = () => get<Analytics>('/dashboard/analytics')
+export const fetchSpeedToLead = (days = 14) => get<SpeedToLead>(`/dashboard/speed-to-lead?days=${days}`)
+export const fetchMissedMoney = () => get<MissedMoneyQueue>('/dashboard/missed-money')
+export const fetchInsights = (days = 30) => get<GrowthInsights>(`/dashboard/insights?days=${days}`)
 export const fetchLaunchReadiness = () => get<LaunchReadiness>('/dashboard/launch-readiness')
 export const fetchFeedbackSummary = () => get<FeedbackSummary>('/dashboard/feedback')
 
@@ -338,6 +345,7 @@ export const fetchCallRecordingUrl = (id: number | string) => get<{ url: string 
 // ---------------------------------------------------------------- agents
 
 export const fetchAgents = () => get<AgentConfig[]>('/agents')
+export const fetchAgentActivity = () => get<AgentActivity[]>('/agents/activity')
 export const createAgent = (data: Partial<AgentConfig>) => send<AgentConfig>('POST', '/agents', data)
 export const updateAgent = (id: number, data: Partial<AgentConfig>) =>
   send<AgentConfig>('PATCH', `/agents/${id}`, data)

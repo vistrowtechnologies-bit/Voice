@@ -126,6 +126,12 @@ class MidCallValuesInTheStandardShape(unittest.TestCase):
         self.assertEqual(out, {"purpose": "abhi soch rahe", "property_type": "farmhouse"})
 
 
+class TimelineIsNotACallbackTime(unittest.TestCase):
+    def test_prompt_tells_the_model_a_callback_time_is_not_a_timeline(self):
+        # Live call 1399 saved timeline "today 1 pm" (the callback slot).
+        self.assertIn("Never a callback, meeting or site-visit time", lead_facts.SYSTEM_PROMPT)
+
+
 class Merge(unittest.TestCase):
     def test_post_call_wins_and_mid_call_fills_gaps(self):
         merged = lead_facts.merge_facts(
@@ -162,6 +168,30 @@ class Merge(unittest.TestCase):
     def test_mid_call_location_stands_when_the_post_call_read_did_not_run(self):
         mid = lead_facts.mid_call_facts({"location": "Panvel"})
         self.assertEqual(lead_facts.merge_facts(mid, {})["preferred_location"], "Panvel")
+
+    def test_call_1438_purpose_saved_as_timeline_is_dropped(self):
+        mid = lead_facts.mid_call_facts({"timeline": "future self-use", "purpose": "self-use"})
+        post, _ = lead_facts.facts_from_response({"purpose": "Buy", "property_type": "Plot", "configuration": "60x40"})
+        merged = lead_facts.merge_facts(mid, post)
+        self.assertNotIn("timeline", merged)
+        self.assertEqual(merged["purpose"], "Buy")
+
+    def test_purpose_only_timeline_becomes_the_purpose(self):
+        self.assertEqual(lead_facts.mid_call_facts({"timeline": "investment"}), {"purpose": "Invest"})
+
+    def test_a_timeline_with_a_time_word_stays_a_timeline(self):
+        for t in ("buy next year", "within 3 months", "अगले साल खुद के लिए"):
+            with self.subTest(t=t):
+                self.assertEqual(lead_facts.mid_call_facts({"timeline": t}).get("timeline"), t)
+
+    def test_caller_stated_timeline_is_kept(self):
+        mid = lead_facts.mid_call_facts({"timeline": "soon"})
+        merged = lead_facts.merge_facts(mid, {"timeline": "within 3 months"})
+        self.assertEqual(merged["timeline"], "within 3 months")
+
+    def test_mid_call_timeline_stands_when_the_post_call_read_did_not_run(self):
+        mid = lead_facts.mid_call_facts({"timeline": "next month"})
+        self.assertEqual(lead_facts.merge_facts(mid, {})["timeline"], "next month")
 
     def test_caller_named_location_is_kept(self):
         mid = lead_facts.mid_call_facts({"location": "Khopoli"})

@@ -50,7 +50,7 @@ function applyPage(template, page, bodyHtml) {
   return template
     .replace(/<title>.*?<\/title>/, `<title>${title}</title>`)
     .replace(/(<meta\s+name="description"\s+content=")[^"]*(")/, `$1${description}$2`)
-    .replace(/(<meta\s+name="robots"\s+content=")[^"]*(")/, `$1${page.noindex ? 'noindex, follow' : 'index, follow'}$2`)
+    .replace(/(<meta\s+name="robots"\s+content=")[^"]*(")/, `$1${page.noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large'}$2`)
     .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${url}$2`)
     .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`)
     .replace(/(<meta\s*\n?\s*property="og:description"\s*\n?\s*content=")[^"]*(")/, `$1${description}$2`)
@@ -80,9 +80,15 @@ function sitemapXml() {
   const rows = PAGES.filter((page) => !page.noindex)
     // We don't currently maintain modification timestamps per route. Omitting
     // lastmod is more accurate than publishing one stale date for every URL.
-    .map((page) => `  <url><loc>${CANONICAL_ORIGIN}${page.path}</loc></url>`)
+    .map((page) => {
+      // The page's social/cover image plus any images shown in its content.
+      const images = [...new Set([page.image, ...(page.images ?? [])])]
+        .map((image) => `<image:image><image:loc>${escapeHtml(image)}</image:loc></image:image>`)
+        .join('')
+      return `  <url><loc>${escapeHtml(`${CANONICAL_ORIGIN}${page.path}`)}</loc>${images}</url>`
+    })
     .join('\n')
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${rows}\n</urlset>\n`
 }
 
 function outputPathFor(route) {
@@ -122,7 +128,7 @@ async function main() {
     path: '/404',
     title: 'Page Not Found | Vistrow Voice',
     description: 'The page you requested could not be found.',
-    image: `${CANONICAL_ORIGIN}/og/home.png`,
+    image: `${CANONICAL_ORIGIN}/og/home.jpg`,
     imageAlt: 'Vistrow Voice multilingual AI voice agent orb',
     noindex: true,
   }

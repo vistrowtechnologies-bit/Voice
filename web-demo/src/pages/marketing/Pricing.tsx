@@ -9,16 +9,16 @@ import { PLANS, SHARED_PLAN_FEATURES, planHighlights } from '../../lib/plans'
 
 const FAQ = [
   {
-    q: 'What is a credit?',
-    a: 'A credit pays for conversation time. With the AI model you can choose today (Vistrow Bharat) and a Standard or HD voice, one minute of a call uses 2 credits, on the browser widget and on phone calls alike. Telephony is billed separately by whichever provider you connect. A Vistrow Native voice uses 1 credit a minute, and a Premium voice uses twice the Standard rate. Both channels draw from the same monthly pool.',
+    q: 'How much does it cost?',
+    a: 'We share pricing on request while plans are being finalised. Usage is measured in minutes of conversation, and the voice and model you choose change how quickly minutes are used. Telephony is billed separately by whichever provider you connect. Talk to us and we will quote for your call volume.',
   },
   {
     q: 'Which languages are supported?',
-    a: 'Artha speaks 10 Indian languages plus English, including Hindi, Tamil, Telugu, Bengali, Marathi, and Odia - switching mid-call to match the caller.',
+    a: 'Artha speaks more than 130 languages, including Hindi, Tamil, Telugu, Bengali, Marathi, and Odia - switching mid-call to match the caller.',
   },
   {
     q: 'Can I bring my own phone number?',
-    a: 'You can use a compatible provider and number after we confirm the connection setup. Carrier usage and number rental are separate from AI credits. The web call widget needs no phone number.',
+    a: 'You can use a compatible provider and number after we confirm the connection setup. Carrier usage and number rental are separate from your plan. The web call widget needs no phone number.',
   },
   {
     q: 'Is there a free way to try it?',
@@ -45,7 +45,7 @@ export function Pricing() {
     <MarketingLayout>
       <Seo
         title="Pricing - Vistrow Voice"
-        description="Credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics - scale up as your call volume grows."
+        description="Starter, Growth and Scale plans for AI voice agents. Every plan includes the web call widget and call history. Talk to us for pricing that fits your call volume."
         path="/pricing"
         jsonLd={FAQ_JSONLD}
       />
@@ -67,8 +67,7 @@ export function Pricing() {
           {PLANS.map((plan) => (
             <div key={plan.key} className="flex flex-col rounded-2xl border border-border bg-surface p-7">
               <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
-              <p className="mt-3 text-3xl font-bold">{plan.price}<span className="text-sm font-normal text-text-muted"> / month</span></p>
-              <p className="mt-3 font-semibold text-cyan">{plan.credits}</p>
+              <p className="mt-3 text-sm font-semibold text-cyan">Pricing on request</p>
               <p className="mt-2 text-sm text-text-muted">{plan.description}</p>
               <ul className="mt-6 flex flex-1 flex-col gap-2.5">
                 {planHighlights(plan).map((feat) => <li key={feat} className="flex items-start gap-2 text-sm text-text-muted"><Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />{feat}</li>)}
@@ -79,7 +78,7 @@ export function Pricing() {
                 onClick={() => trackMarketingCta('talk_to_sales', `pricing_plan_${plan.key}`)}
                 className="mt-6 rounded-full border border-primary px-5 py-3 text-center text-sm font-bold text-primary"
               >
-                Discuss {plan.name}
+                Talk to us for pricing
               </NavLink>
             </div>
           ))}
@@ -91,41 +90,16 @@ export function Pricing() {
           </ul>
           <p className="mt-4 text-sm text-text-muted">Basic inbound calling requires a configured, supported number. Advanced inbound routing and outbound campaigns require Growth or Scale. Telephony is billed separately.</p>
         </details>
-        <p className="mt-5 text-center text-sm text-text-muted">Prices are in INR per month, excluding applicable taxes and telephony. Voice and model choices affect credits per minute.</p>
+        <p className="mt-5 text-center text-sm text-text-muted">We share pricing on request while plans are being finalised. Telephony is billed separately by your provider.</p>
         <p className="mt-3 text-center text-sm text-text-muted">Not sure which plan fits? Our team can help estimate your usage and arrange setup.</p>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
         <SectionEyebrow>Estimate your plan</SectionEyebrow>
-        <h2 className="mt-3 max-w-2xl font-display text-2xl font-bold sm:text-3xl">How far a month of credits goes</h2>
+        <h2 className="mt-3 max-w-2xl font-display text-2xl font-bold sm:text-3xl">Work out what you need</h2>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-text-muted">
-          Credits pay for the minutes an agent spends in conversation. On Vistrow Bharat, the model every new agent uses,
-          a Standard or HD voice uses 2 credits a minute and a Vistrow Native voice uses 1. The table divides each plan's
-          monthly credits by those rates. It is arithmetic, not a promise of results: count only connected conversation
-          time, and leave room for test calls.
+          Share these three things with us and we will recommend a plan and quote for your call volume.
         </p>
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full min-w-[30rem] text-left text-sm">
-            <thead className="bg-surface text-xs uppercase tracking-wider text-text-muted">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Plan</th>
-                <th className="px-4 py-3 font-semibold">Credits / month</th>
-                <th className="px-4 py-3 font-semibold">Minutes, Standard or HD voice</th>
-                <th className="px-4 py-3 font-semibold">Minutes, Native voice</th>
-              </tr>
-            </thead>
-            <tbody>
-              {PLANS.map((plan) => (
-                <tr key={plan.key} className="border-t border-border">
-                  <td className="px-4 py-3 font-semibold">{plan.name}</td>
-                  <td className="px-4 py-3 text-text-muted">{plan.creditsNum.toLocaleString('en-IN')}</td>
-                  <td className="px-4 py-3 text-text-muted">about {(plan.creditsNum / 2).toLocaleString('en-IN')}</td>
-                  <td className="px-4 py-3 text-text-muted">about {plan.creditsNum.toLocaleString('en-IN')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           <div>
             <h3 className="font-display text-base font-semibold">Start from your call volume</h3>

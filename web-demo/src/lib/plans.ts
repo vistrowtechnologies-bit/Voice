@@ -7,12 +7,11 @@ export interface Plan {
   // Lowercase key matching server/calls_db.py's PLAN_PRICING / accounts.plan
   // values and the Razorpay plan-id env vars in server/razorpay_client.py.
   key: 'starter' | 'growth' | 'scale'
-  price: string
   // One line, shown under the plan name - who this tier is actually for.
   description: string
-  // Mirrors server/calls_db.py's PLAN_PRICING - keep both in sync by hand
-  // (see that dict's own comment for why they can't share a module).
-  priceInr: number
+  // No prices here (owner, 18 Oct: prices are not public). This file ships in
+  // the public pricing page's bundle; the dashboard reads prices from the
+  // server's plan list (billing.plans).
   creditsNum: number
   credits: string
   tag: string | null
@@ -24,27 +23,32 @@ export interface Plan {
   lockedFeatures?: string[]
 }
 
-// Months charged for an annual subscription - 10 months for 12 months of
-// service, matching server/calls_db.py's ANNUAL_MONTHS_CHARGED.
-export const ANNUAL_MONTHS_CHARGED = 10
+// Months charged for an annual subscription - 11 months for 12 months of
+// service, matching agent/plan_policy.py's ANNUAL_MONTHS_CHARGED.
+export const ANNUAL_MONTHS_CHARGED = 11
 
 // Real introductory prices are locked in - gates every ₹ figure and the
 // checkout/top-up actions across marketing + dashboard billing pages.
 // Mirrors server/calls_db.py's PRICING_FINALIZED - keep both in sync.
 export const PRICING_FINALIZED = true
 
-// Credits per minute = voice multiplier × model multiplier × channel rate (1).
-// Tenant agents run Vistrow Bharat (sarvam/*), which server/calls_db.model_tier
-// bills "premium" (2x); server/test_plan_policy.py checks this stays in sync.
-export const BHARAT_MODEL_MULTIPLIER = 2
-// Gemini Live replaces the voice pipeline; billed by model (calls_db.model_tier).
-export const LIVE_MODEL_MULTIPLIER: Record<string, number> = { '2.5': 2, default: 6 }
+// 1 credit = 1 standard minute (owner, 17 Oct). Minutes used per call minute
+// = voice multiplier × model multiplier × channel rate (1), never below 1
+// (agent/plan_policy.py credits_per_minute, MIN_CREDITS_PER_MINUTE). Tenant
+// agents run Vistrow Bharat (sarvam/*), billed standard (1x);
+// server/test_plan_policy.py checks these stay in sync with billing.
+export const BHARAT_MODEL_MULTIPLIER = 1
+// Vistrow Live (Gemini realtime, every version) uses 2 minutes per minute and
+// ignores the voice tier, since the model speaks itself (3 until 19 Oct 2026).
+export const LIVE_MODEL_MULTIPLIER: Record<string, number> = { '2.5': 2, default: 2 }
+export const MIN_MINUTES_PER_MINUTE = 1
 export function formatCredits(multiplier: number): string {
-  const n = Math.max(0.75, multiplier)
+  const n = Math.max(MIN_MINUTES_PER_MINUTE, multiplier)
   return `${Number.isInteger(n) ? n : n.toFixed(2).replace(/0$/, '')}`
 }
+/** "1 min per min", "3 min per min": plan minutes one call minute uses. */
 export function creditsPerMinuteLabel(multiplier: number): string {
-  return `${formatCredits(multiplier)} credits/min`
+  return `${formatCredits(multiplier)} min per min`
 }
 
 // One-off credit top-ups. Mirrors agent/plan_policy.py's TOPUP_PACKS /
@@ -74,18 +78,16 @@ export const PLANS: Plan[] = [
   {
     name: 'Starter',
     key: 'starter',
-    price: '₹2,999',
     description: 'For trying voice AI on one real use case before you scale it up.',
-    priceInr: 2999,
-    creditsNum: 300,
-    credits: '300 credits/mo',
+    creditsNum: 400,
+    credits: '400 minutes/mo',
     tag: null,
     features: [
       '1 AI agent',
       '1 knowledge base with approved answers',
       'Up to 5 concurrent calls',
       'Web calling widget',
-      'Call history & analytics',
+      'Call history & dashboard overview',
       'Call recording',
       'Post-call data extraction',
       'Live call transfer',
@@ -100,11 +102,9 @@ export const PLANS: Plan[] = [
   {
     name: 'Growth',
     key: 'growth',
-    price: '₹5,999',
     description: 'For teams automating inbound and outbound campaigns.',
-    priceInr: 5999,
-    creditsNum: 1000,
-    credits: '1,000 credits/mo',
+    creditsNum: 1100,
+    credits: '1,100 minutes/mo',
     tag: 'Recommended',
     features: [
       '5 AI agents',
@@ -112,7 +112,7 @@ export const PLANS: Plan[] = [
       'Agent-assigned live catalog (1 workspace feed)',
       'Up to 15 concurrent calls',
       'Web calling widget',
-      'Call history & analytics',
+      'Call history & full analytics',
       'Inbound + outbound campaigns',
       'CRM webhook integration',
       'Call recording',
@@ -129,17 +129,15 @@ export const PLANS: Plan[] = [
   {
     name: 'Scale',
     key: 'scale',
-    price: '₹12,999',
     description: 'Full API access and integrations, built for production volume.',
-    priceInr: 12999,
-    creditsNum: 2500,
-    credits: '2,500 credits/mo',
+    creditsNum: 2700,
+    credits: '2,700 minutes/mo',
     tag: 'Most Popular',
     features: [
       '20 AI agents',
       'Up to 30 concurrent calls',
       'Web calling widget',
-      'Call history & analytics',
+      'Call history & full analytics',
       'Inbound + outbound campaigns',
       'CRM webhook integration',
       'Call recording',

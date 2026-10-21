@@ -287,30 +287,30 @@ _PLATFORM_DEMO_OPENERS: dict[str, list[str]] = {
 # always spoke the Hinglish lines regardless of that setting.
 _PLATFORM_DEMO_OPENERS_EN: dict[str, list[str]] = {
     "female": [
-        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. What industry is your business in?",
-        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. So, what does your business do?",
-        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. What business are you in?",
-        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. Just tell me — what does your business do?",
-        "Hi, I'm Artha. So, what field is your business in?",
-        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. Right now, when you miss a call, what happens on your end?",
-        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? What's got you checking this out?",
-        "Hold on, before I say anything — when's the last time you called a business and the person on the other end actually helped, fast?",
-        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. What's your business?",
-        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. Straight up — what's the biggest headache with your calls right now?",
-        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? What industry are you in?",
+        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. You can talk to me in any language you like. What industry is your business in?",
+        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. You can talk to me in any language you like. So, what does your business do?",
+        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. You can talk to me in any language you like. What business are you in?",
+        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. You can talk to me in any language you like. Just tell me — what does your business do?",
+        "Hi, I'm Artha. You can talk to me in any language you like. So, what field is your business in?",
+        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. You can talk to me in any language you like. Right now, when you miss a call, what happens on your end?",
+        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? You can talk to me in any language you like. What's got you checking this out?",
+        "Hold on, before I say anything — you can talk to me in any language you like. Now: when's the last time you called a business and the person on the other end actually helped, fast?",
+        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. You can talk to me in any language you like. What's your business?",
+        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. You can talk to me in any language you like. Straight up — what's the biggest headache with your calls right now?",
+        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? You can talk to me in any language you like. What industry are you in?",
     ],
     "male": [
-        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. What industry is your business in?",
-        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. So, what does your business do?",
-        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. What business are you in?",
-        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. Just tell me — what does your business do?",
-        "Hi, I'm Artha. So, what field is your business in?",
-        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. Right now, when you miss a call, what happens on your end?",
-        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? What's got you checking this out?",
-        "Hold on, before I say anything — when's the last time you called a business and the person on the other end actually helped, fast?",
-        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. What's your business?",
-        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. Straight up — what's the biggest headache with your calls right now?",
-        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? What industry are you in?",
+        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. You can talk to me in any language you like. What industry is your business in?",
+        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. You can talk to me in any language you like. So, what does your business do?",
+        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. You can talk to me in any language you like. What business are you in?",
+        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. You can talk to me in any language you like. Just tell me — what does your business do?",
+        "Hi, I'm Artha. You can talk to me in any language you like. So, what field is your business in?",
+        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. You can talk to me in any language you like. Right now, when you miss a call, what happens on your end?",
+        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? You can talk to me in any language you like. What's got you checking this out?",
+        "Hold on, before I say anything — you can talk to me in any language you like. Now: when's the last time you called a business and the person on the other end actually helped, fast?",
+        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. You can talk to me in any language you like. What's your business?",
+        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. You can talk to me in any language you like. Straight up — what's the biggest headache with your calls right now?",
+        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? You can talk to me in any language you like. What industry are you in?",
     ],
 }
 
@@ -525,6 +525,35 @@ _FAREWELL_WORDS = (
 def _looks_like_farewell(text: str) -> bool:
     lowered = (text or "").lower()
     return any(word in lowered for word in _FAREWELL_WORDS)
+
+
+def _realtime_handoff_task(agent, userdata: dict, item):
+    """The caller-requested transfer check for a speech-to-speech call.
+
+    RealEstateAgent._handoff_if_requested runs from on_user_turn_completed,
+    which livekit-agents 1.8.6 calls only from AudioRecognition's end of turn
+    (STT/VAD). A realtime session has neither (stt=None, vad=None): Google's
+    final caption of the caller only lands as a conversation item. So on
+    gemini-live calls "connect me to someone" was never checked, and a
+    transfer happened only if the model chose to call transfer_call (found by
+    the Dashboard session, 19 Oct 2026). Returns the coroutine to schedule,
+    or None when there is nothing to check.
+    """
+    if not getattr(agent, "_is_realtime", False):
+        return None  # the pipeline runs the check in on_user_turn_completed
+    if getattr(item, "role", None) != "user" or not userdata.get("transfer_phone"):
+        return None
+    text = (getattr(item, "text_content", None) or "").strip()
+    if not text:
+        return None
+
+    async def _check() -> None:
+        try:
+            await agent._handoff_if_requested(text, userdata)
+        except Exception:
+            logger.exception("realtime transfer check failed")
+
+    return _check()
 
 
 def _caller_reopened_conversation(userdata: dict, text: str) -> bool:
@@ -807,8 +836,8 @@ def _facts_reminder(lead_data: dict, fact_status: dict | None = None) -> str:
         blocks.append(
             "# Heard, but NOT confirmed — you may verify these, and must not state them as fact\n"
             + "\n".join(unconfirmed)
-            + "\nAsk about these as a question (\"...self-use ke liye?\"), never as a summary "
-            "(\"...so you want self-use.\")."
+            + "\nAsk about these as a question (\"...next month tak?\"), never as a summary "
+            "(\"...so you want it next month.\")."
         )
     return "\n\n".join(blocks)
 
@@ -1716,6 +1745,15 @@ _SWAP_OPENERS = {"deva": ["अच्छा", "जी", "ओके", "हम्�
 _BACKCHANNEL_WORDS = {line.rstrip(".… ") for lines in _BACKCHANNEL_LINES.values() for line in lines}
 
 
+_PURE_FILLER_OPENERS = {"हम्म", "hmm"}
+
+
+def _is_native_standard_voice(agent) -> bool:
+    return getattr(agent, "_tts_provider", None) == "google-native" and not voice_catalog.chirp3_persona(
+        getattr(agent, "_speaking_voice", "") or ""
+    )
+
+
 def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
     # Call 982: the "हाँ..." latency filler reset the opener memory, so "देखिए" ran twice.
     if head.strip().rstrip(".… ") in _BACKCHANNEL_WORDS:
@@ -1725,6 +1763,11 @@ def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
         agent._last_opener = ""
         return head
     word = match.group("word").lower()
+    if word in _PURE_FILLER_OPENERS and _is_native_standard_voice(agent):
+        # Call 1452 (21 Oct 2026): a Native (locale Standard) voice reads the
+        # LLM's "हम्म," as a flat, odd syllable. Dropped for these voices.
+        rest = head[match.end():].lstrip(" ,।.—-")
+        return match.group("lead") + rest
     if word != getattr(agent, "_last_opener", ""):
         agent._last_opener = word
         return head
@@ -1749,6 +1792,48 @@ def _make_repeated_opener_transform(agent: "RealEstateAgent"):
             head = None
         if head:
             yield _vary_opener(agent, head)
+
+    return _transform
+
+
+# Call 1443 (21 Oct 2026, GPT-5.4 nano): replies wrote "business/portfolio",
+# "services/projects", "जोड़/अपडेट", and the voice read each slash aloud.
+# A slash between two words is spoken as "या" (or "or" in an all-Latin reply);
+# URLs, dates and numbers keep theirs.
+_WORD_SLASH = re.compile(r"(?<=[A-Za-z\u0900-\u097F])[ \t]*/[ \t]*(?=[A-Za-z\u0900-\u097F])")
+
+
+def _speak_slashes(text: str, devanagari: bool) -> str:
+    def _sub(m: re.Match) -> str:
+        head = text[: m.start()]
+        before = head.rsplit(None, 1)[-1] if head.strip() else ""
+        if "." in before or ":" in before:  # vistrow.com/contact, https://
+            return m.group(0)
+        return " या " if devanagari else " or "
+
+    return _WORD_SLASH.sub(_sub, text)
+
+
+def _make_slash_transform():
+    """Never holds text back, except a chunk ending in "/" after a word,
+    which waits for the next chunk ("business/" + "portfolio")."""
+    async def _transform(text):
+        devanagari = False
+        carry = ""  # trailing "word/" held for the next chunk
+        tail = ""  # last word already sent, for the URL check
+        async for chunk in text:
+            devanagari = devanagari or bool(re.search(r"[\u0900-\u097F]", chunk))
+            joined = carry + chunk
+            out = _speak_slashes(tail + joined, devanagari)[len(tail):] if tail and not carry else _speak_slashes(joined, devanagari)
+            carry = ""
+            m = re.search(r"[A-Za-z\u0900-\u097F][^\s/]*[ \t]*/[ \t]*$", out)
+            if m:
+                carry, out = out[m.start():], out[: m.start()]
+            if out:
+                tail = out.rsplit(None, 1)[-1] if out.strip() else tail
+                yield out
+        if carry:
+            yield carry
 
     return _transform
 
@@ -2954,6 +3039,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 **_rate,
                 prompt=style,
                 model_name=_GOOGLE_31_MODEL,
+                # _google_fallback_tts wraps this backup as non-streaming, so it
+                # runs synthesize(), where Google rejects the plugin's default
+                # PCM for 3.1 with 400 "Unsupported audio encoding" (call 1441,
+                # 21 Oct 2026: every 3.8 quota hit skipped the backup and the
+                # call switched to the female ElevenLabs safety net). LINEAR16
+                # returns a WAV, verified against the API the same day.
+                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
             )
             return (
                 _google_fallback_tts(gemini38_tts, backup, model, reply_language, tone_name),
@@ -3183,7 +3275,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         language=to_google_code(reply_language), credentials_info=_GOOGLE_CREDENTIALS,
         **_rate,
     )
-    return TtsFallbackAdapter([sarvam_tts, google_tts], **_rate), "sarvam"
+    _adapter = TtsFallbackAdapter([sarvam_tts, google_tts], **_rate)
+    # FallbackAdapter has no update_options, so a language switch could never
+    # reach Sarvam: call 1450 switched to Marathi and the Bharat voice kept
+    # Hindi pronunciation ("'FallbackAdapter' object has no attribute
+    # 'update_options'"). The switch paths update this primary directly.
+    _adapter._vistrow_primary = sarvam_tts
+    return _adapter, "sarvam"
 
 
 def _parse_json_config(raw, default):
@@ -3284,6 +3382,31 @@ def _new_llm_usage() -> dict:
     return {"requests": 0, "cancelledRequests": 0, "promptTokens": 0, "cachedTokens": 0, "completionTokens": 0}
 
 
+def _add_usage_units(timings: dict, metric_type: str, metric) -> None:
+    """Exact billable units for the call, from the providers' own metrics.
+
+    Owner, 21 Oct 2026: price each voice combo from what was actually sent,
+    not from the transcript. LiveKit reports the characters (and, for Gemini
+    TTS, tokens) each synthesis consumed and the seconds of audio each STT
+    stream received. Cancelled synthesis is counted too: the text was sent,
+    so it is billed. Saved into latency_metrics_json as "usage".
+    """
+    usage = timings.setdefault("usage", {})
+    for key, zero in (
+        ("ttsChars", 0), ("ttsAudioS", 0.0), ("ttsInputTokens", 0), ("ttsOutputTokens", 0),
+        ("ttsRequests", 0), ("sttAudioS", 0.0),
+    ):
+        usage.setdefault(key, zero)  # tts_node may have created "usage" first
+    if metric_type == "tts_metrics":
+        usage["ttsChars"] += int(getattr(metric, "characters_count", 0) or 0)
+        usage["ttsAudioS"] = round(usage["ttsAudioS"] + float(getattr(metric, "audio_duration", 0) or 0), 2)
+        usage["ttsInputTokens"] += int(getattr(metric, "input_tokens", 0) or 0)
+        usage["ttsOutputTokens"] += int(getattr(metric, "output_tokens", 0) or 0)
+        usage["ttsRequests"] += 1
+    elif metric_type == "stt_metrics":
+        usage["sttAudioS"] = round(usage["sttAudioS"] + float(getattr(metric, "audio_duration", 0) or 0), 2)
+
+
 def _add_llm_usage(usage: dict, metric) -> None:
     """Adds one LiveKit LLMMetrics to a call's running token totals. Cheap:
     the counts are already on the metric, no extra request is made."""
@@ -3296,6 +3419,28 @@ def _add_llm_usage(usage: dict, metric) -> None:
         ("completionTokens", "completion_tokens"),
     ):
         usage[key] = usage.get(key, 0) + max(0, int(getattr(metric, attr, 0) or 0))
+
+
+def _add_realtime_usage(usage: dict, metric) -> None:
+    """Adds one LiveKit RealtimeModelMetrics (Gemini Live generation) to the
+    same running totals as _add_llm_usage, plus the text/audio split the bill
+    is priced on: audio tokens cost several times text tokens, and the totals
+    alone cannot show which one a call burned. One metric = one generation."""
+    usage["requests"] = usage.get("requests", 0) + 1
+    if getattr(metric, "cancelled", False):
+        usage["cancelledRequests"] = usage.get("cancelledRequests", 0) + 1
+    in_details = getattr(metric, "input_token_details", None)
+    out_details = getattr(metric, "output_token_details", None)
+    for key, obj, attr in (
+        ("promptTokens", metric, "input_tokens"),
+        ("cachedTokens", in_details, "cached_tokens"),
+        ("completionTokens", metric, "output_tokens"),
+        ("rtTextIn", in_details, "text_tokens"),
+        ("rtAudioIn", in_details, "audio_tokens"),
+        ("rtTextOut", out_details, "text_tokens"),
+        ("rtAudioOut", out_details, "audio_tokens"),
+    ):
+        usage[key] = usage.get(key, 0) + max(0, int(getattr(obj, attr, 0) or 0))
 
 
 def _build_tools(config: dict) -> list:
@@ -3748,6 +3893,18 @@ class RealEstateAgent(Agent):
             "book_appointment, compute the date argument (YYYY-MM-DD) from this real date."
         )
         instructions += "\n\n" + VOICE_STYLE_PROMPT
+        if (config.get("model") or "").startswith("gpt-"):
+            # Call 1443 (21 Oct 2026, gpt-5.4-nano): the one-sentence rule above
+            # held only on paper. Replies ran ~150 chars, joined clauses with
+            # dashes, semicolons and slashes, asked two questions per turn, and
+            # promised to send details on WhatsApp. Sarvam 105B follows the
+            # rule as written, so this is added for GPT models only.
+            instructions += (
+                "\n\n# Reply length (hard limit)\n"
+                "At most 20 spoken words and ONE question per turn. Never join clauses with a "
+                "dash, semicolon or slash, and never offer options as \"x/y\": say \"x ya y\". "
+                "You cannot send WhatsApp, SMS, email or links, so never promise to."
+            )
         if needs_human_speech_layer:
             instructions += "\n\n" + build_human_speech_manner()
         if voice_value.startswith(_ELEVENLABS_VOICE_PREFIX):
@@ -3760,12 +3917,18 @@ class RealEstateAgent(Agent):
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
             "Use the tool that fits what this call is about:\n"
             "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
-            "any detail at all — a budget (any language or unit: \"एक करोड़\", \"50 lakh\", \"around "
-            "2 crore\"), a locality, a timeline, a property type, a configuration, a name. Pass only "
+            "any detail at all — what they need, a timeline, a budget (any language or unit: \"50 "
+            "hazaar\", \"एक करोड़\"), a location, a name. Pass only "
             "what you just learned; omitted fields keep their value. You do NOT need their name or "
             "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
             "your very next tool call, before you reply and before any booking or end_call; many "
-            "one-field calls are exactly right. Two localities: call it twice (locations accumulate).\n"
+            "one-field calls are exactly right. Two localities: call it twice (locations accumulate). "
+            # Call 1439 (21 Oct 2026): a website enquiry on a digital-marketing
+            # agent was asked "business ke liye ya investment ke liye?" and for a
+            # locality - property wording here and in log_lead, from when every
+            # tenant sold property. Property tenants' own prompts ask these.
+            "Ask only questions that fit THIS business: locality, property type, BHK, investment "
+            "or self-use are for a business that sells property, never for any other.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "
@@ -3780,13 +3943,28 @@ class RealEstateAgent(Agent):
                 "one more of company/contact/use case/team size, call "
                 "capture_platform_lead — call it again if more comes up later in the same "
                 "call.\n"
+                # Widget calls 1406-1408 (18 Oct 2026): the agent "played" voice samples it
+                # cannot play, described a phone-verification-code setup that does not exist,
+                # and ran web searches for our own product facts.
+                # Owner, 21 Oct 2026: "other accents" in this line read as a ban and
+                # Artha refused a Russian-accent request she had done before.
+                "- On these calls: you cannot play recordings or switch to a different voice; never "
+                "pretend a sample is playing, and say they can hear the other voices themselves after "
+                "signing up. You CAN speak any language and put on an accent yourself when asked "
+                "(English with a Russian or British accent, Hindi like a Mumbai local): just do it. "
+                "Never describe setup steps, screens or codes the knowledge base does not give. "
+                "Phone numbers: they connect a compatible telephony provider and number, and our "
+                "team confirms the setup with them; the website widget needs no number. Exact "
+                "prices are not given on calls: say the team confirms pricing, also in their "
+                "currency, and offer to record a request (platform rule 5).\n"
                 if self._is_platform_demo
                 else ""
             )
-            + "These tool calls are silent — never mention saving, logging or recording anything.\n\n"
+            + "These tool calls are silent — never mention saving, logging or recording anything, "
+            "except confirming a follow-up request after the tool succeeded (platform rule 5).\n\n"
             "# Only state back what they actually said\n"
-            "When you fill a gap by inference, ask it (\"...self-use ke liye dekh rahe hain?\"), never "
-            "state it as a summary (\"...self-use ke liye dekh rahe hain.\").\n\n"
+            "When you fill a gap by inference, ask it (\"...next month tak chahiye?\"), never "
+            "state it as a summary (\"...next month tak chahiye.\").\n\n"
             "Call the end_call tool once the caller clearly signals the conversation is over — they "
             "thank you with nothing further to ask, say goodbye, or otherwise say they are done. Not "
             "for a mere pause or a one-word \"okay\".\n\n"
@@ -3829,7 +4007,9 @@ class RealEstateAgent(Agent):
             # instead of folding it into whichever section precedes it.
             caller_tail += "\n\n# This contact\n" + config["_contact_notes"]
 
-        reply_language = config.get("language") or "hi-IN"
+        # The platform demo opens in English (owner, 18 Oct 2026: callers from
+        # outside India got a Hindi opener); tenants keep Hindi as the default.
+        reply_language = config.get("language") or ("en-IN" if config.get("is_platform_demo") else "hi-IN")
         language_name = LANGUAGE_NAMES.get(reply_language, "Hindi")
         # 2026-10-16 prompt-cuts: ~215 -> ~120 tokens, same rules.
         instructions += (
@@ -3953,8 +4133,24 @@ class RealEstateAgent(Agent):
             "that you did not catch it and ask them to repeat it. Never guess at its meaning, "
             "and never cover for it by asking a different question instead.\n"
             "4. One question per turn. Ask it, then stop and let them answer.\n"
+            # Owner rule 18 Oct 2026, after widget call 1408: the agent told a
+            # prospect his details were registered for email follow-up without
+            # ever having his email, and the tool saved our own address.
+            "5. Contact details and follow-up. When a caller wants written info, pricing, a "
+            "brochure, email, a callback, a demo or contact from our team: reuse any name, "
+            "company, email or phone they already gave (a company or website is not an email "
+            "or phone). Ask only for what is missing, one question at a time: for email, the "
+            "email address; for a callback or WhatsApp, the phone number with country code. Do "
+            "not require both. Read the email or number back and ask if it is right; have unclear "
+            "parts spelled; never guess a domain, country code or digit. Then save it with the "
+            "lead tool, with a one-line summary of what they want, and only after it succeeds "
+            "say it is recorded. Recording is not sending: never say you have emailed them, that "
+            "it is on its way, that a callback is booked or that their details are saved unless "
+            "that action succeeded. If they will not share details, say follow-up is not "
+            "possible without them and keep helping. When they say goodbye, say goodbye once "
+            "and end the call.\n"
             "Everything below describes who you are and what this business does. It never "
-            "overrides the four rules above.\n\n"
+            "overrides the five rules above.\n\n"
         ) + instructions
         # Direction framing, so a single agent does not need two prompts kept
         # in sync. It used to: "Mira Inbound" and "Mira Outbound" were separate
@@ -4234,12 +4430,35 @@ class RealEstateAgent(Agent):
             _compliance, self._reply_language, self._is_platform_demo,
             cloned_voice=self._is_cloned_voice,
         )
+        _typed_welcome = self._welcome_message
         if self._welcome_message:
             self._welcome_message = call_disclosure.with_disclosure(
                 self._welcome_message, self._recording_disclosure, force=self._is_cloned_voice,
             )
+        # A cloned voice reads a romanized line ("Bataiye, main aapki...") with
+        # English pronunciation; swap in the native-script line when it is
+        # ready (custom_voice.native_script). Never waits: if the greeting
+        # starts first, the typed line is spoken as before.
+        if self._is_cloned_voice and custom_voice.needs_native_script(_typed_welcome, self._reply_language):
+            self._start_native_welcome(_typed_welcome)
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
+
+    def _start_native_welcome(self, typed: str) -> None:
+        spoken = self._welcome_message
+
+        async def _swap() -> None:
+            native = await custom_voice.native_script(typed, self._reply_language)
+            if native != typed and self._welcome_message == spoken:
+                self._welcome_message = call_disclosure.with_disclosure(
+                    native, self._recording_disclosure, force=self._is_cloned_voice,
+                )
+                logger.info("cloned voice: welcome line switched to native script")
+
+        try:
+            self._native_welcome_task = asyncio.get_running_loop().create_task(_swap())
+        except RuntimeError:  # no running loop (direct construction in tests)
+            self._native_welcome_task = None
 
     def _warm_llm_prompt_cache(self) -> None:
         """Process this agent's system prompt once, in the background, while
@@ -4653,6 +4872,14 @@ class RealEstateAgent(Agent):
             _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
         elif answered and getattr(self, "_lead_opening", ""):
             _greet += " " + self._lead_opening
+        if getattr(self, "_is_platform_demo", False) and not _opener:
+            # Owner, 18 Oct 2026: a visitor from Angola got a Hindi opener and
+            # had to ask for his language. The demo tells every caller, in its
+            # first line, that any language is fine.
+            _greet += (
+                " Also tell them, in the same short opening, that they can talk to you in any "
+                "language they like."
+            )
         _greet += call_disclosure.instruction(getattr(self, "_recording_disclosure", ""))
         if _opener and self._realtime_wants_tts_greeting():
             self.session.userdata["realtime_greeting_pending"] = True
@@ -4985,11 +5212,25 @@ class RealEstateAgent(Agent):
             self._tts_full_texts.append("".join(_full_text))
 
         _first_audio = None
-        async for frame in Agent.default.tts_node(self, _timed(text), model_settings):
-            if _first_audio is None:
-                _first_audio = (time.monotonic() - _t0) * 1000
-                logger.info("[tts_node] FIRST AUDIO at +%.0fms", _first_audio)
-            yield frame
+        _audio_s = 0.0
+        try:
+            async for frame in Agent.default.tts_node(self, _timed(text), model_settings):
+                if _first_audio is None:
+                    _first_audio = (time.monotonic() - _t0) * 1000
+                    logger.info("[tts_node] FIRST AUDIO at +%.0fms", _first_audio)
+                _audio_s += float(getattr(frame, "duration", 0) or 0)
+                yield frame
+        finally:
+            # Call 1449: Studio / Studio Lite (GeminiInteractionsTTS) emit no
+            # TTS metrics, so "usage" read 0 characters and the voice cost could
+            # not be priced. Counted here for every voice: the text sent to the
+            # TTS and the audio it returned (Gemini TTS bills ~25 tokens/s).
+            try:
+                usage = self.session.userdata["latency_metrics"].setdefault("usage", {})
+                usage["ttsCharsSent"] = usage.get("ttsCharsSent", 0) + len("".join(_full_text))
+                usage["ttsAudioSOut"] = round(usage.get("ttsAudioSOut", 0.0) + _audio_s, 2)
+            except Exception:
+                pass
 
     async def _handoff_if_requested(self, text: str, userdata: dict) -> bool:
         """Put the caller through when they ask, without consulting the model.
@@ -5037,6 +5278,12 @@ class RealEstateAgent(Agent):
                 # A speech-to-speech model has no say() (supports_say=False):
                 # it raised, the warning below swallowed it, and realtime
                 # transfers bridged in silence. Have the model speak the line.
+                # On realtime this check runs beside the model's own reply to
+                # the same turn (_realtime_handoff_task), so stop that first.
+                try:
+                    self.session.interrupt()
+                except Exception:
+                    logger.debug("nothing to interrupt before the transfer line", exc_info=True)
                 await self.session.generate_reply(
                     instructions=f'Say exactly this, and nothing else: "{hold_line}"'
                 )
@@ -5062,6 +5309,8 @@ class RealEstateAgent(Agent):
         text = new_message.text_content
         self._booking_confirmed_this_turn = False
         _userdata = self.session.userdata
+        # Read by the thinking-ack watcher: an ack is only for a committed turn.
+        _userdata["turn_committed_at"] = time.monotonic()
         # A colleague has been dialled into this call (tools._bridge_in_human).
         # The two of them are talking now; an agent that keeps answering would
         # be talking over a real conversation.
@@ -5941,6 +6190,14 @@ class RealEstateAgent(Agent):
                 candidate, self._turn_script_anomaly, len(text or ""),
             )
             candidate = None
+        if (
+            candidate is not None
+            and self._tts_provider == "google-native"
+            and not voice_catalog.chirp3_persona(self._speaking_voice)
+        ):
+            # A Native (locale Standard) voice speaks one language; the reply
+            # language stays locked to it (call 1447, see switch_reply_language).
+            candidate = None
         if candidate is None or candidate == self._reply_language:
             # Ambiguous turn, or already the current language — nothing to
             # confirm. Reset the streak so a one-off stray word elsewhere
@@ -6030,7 +6287,7 @@ class RealEstateAgent(Agent):
                 # Google credentials are configured — see _build_tts's
                 # default branch — and FallbackAdapter has no update_options.
                 try:
-                    self.tts.update_options(target_language_code=candidate)
+                    getattr(self.tts, "_vistrow_primary", self.tts).update_options(target_language_code=candidate)
                 except AttributeError:
                     logger.warning("language-switch update_options failed (fallback-wrapped TTS)", exc_info=True)
             logger.info("switching reply language to %s", candidate)
@@ -7554,6 +7811,7 @@ async def entrypoint(ctx: JobContext) -> None:
             "filter_markdown",
             _make_repeated_opener_transform(agent),
             _make_caller_gender_guard_transform(agent),
+            _make_slash_transform(),
         ],
         turn_handling=TurnHandlingOptions(turn_detection="realtime_llm") if _rt_call else TurnHandlingOptions(
             interruption={
@@ -7913,6 +8171,15 @@ async def entrypoint(ctx: JobContext) -> None:
             # session.say() raises outright on a model with supports_say=False
             # (the mute that cost three test calls before it was understood).
             return
+        _provider = getattr(agent, "_tts_provider", None)
+        if _provider in _GEMINI_PROVIDERS.values() or (
+            _provider == "google-native"
+            and not voice_catalog.chirp3_persona(getattr(agent, "_speaking_voice", "") or "")
+        ):
+            # Call 1449 (21 Oct 2026, Studio): these voices take ~0.8-1.6 s to
+            # start any line, so a 2.0 s ack began at ~3 s, on top of the reply
+            # it was meant to cover, and sounded tacked on after it.
+            return
         _cancel_backchannel()
 
         async def _watch() -> None:
@@ -7927,6 +8194,11 @@ async def entrypoint(ctx: JobContext) -> None:
                     # The opener is itself a say(); acking over it would land
                     # before the caller has said anything at all.
                     or not userdata.get("greeting_played", False)
+                    # Call 1451 (21 Oct 2026): "जी." played during the caller's
+                    # own mid-sentence pause - "thinking" had started before
+                    # their turn was committed (final transcript 2.6 s later).
+                    # Only ack a turn committed after the caller last spoke.
+                    or userdata.get("turn_committed_at", 0) < userdata.get("speech_ended_at", 0)
                 ):
                     return
                 # Never on consecutive turns. Even at a correct threshold a
@@ -8327,6 +8599,9 @@ async def entrypoint(ctx: JobContext) -> None:
     def _on_conversation_item_added(ev) -> None:
         item = ev.item
         role = getattr(item, "role", None)
+        _handoff = _realtime_handoff_task(agent, userdata, item)
+        if _handoff is not None:
+            asyncio.create_task(_handoff)
         if role in {"assistant", "user"}:
             _record_diagnostic(
                 "turn",
@@ -8407,6 +8682,37 @@ async def entrypoint(ctx: JobContext) -> None:
         # record still says what served the turn.
         if not label:
             label = (getattr(metric, "label", "") or "").strip()
+        if metric_type == "realtime_model_metrics":
+            # Token accounting for every generation, cancelled ones included
+            # (they were billed). Until this landed the calls.llm_* columns
+            # stayed NULL for realtime calls, so the ₹8.5/min Google bill
+            # against a ₹1.35 list price could not be traced per call.
+            usage = timings.setdefault("llmUsage", _new_llm_usage())
+            _add_realtime_usage(usage, metric)
+            rt_in = getattr(metric, "input_token_details", None)
+            rt_out = getattr(metric, "output_token_details", None)
+            rt_prompt = int(getattr(metric, "input_tokens", 0) or 0)
+            rt_cached = int(getattr(rt_in, "cached_tokens", 0) or 0)
+            rt_completion = int(getattr(metric, "output_tokens", 0) or 0)
+            logger.info(
+                "[rt-usage] model=%s in=%s (text=%s audio=%s cached=%s) out=%s (text=%s audio=%s) room=%s",
+                model, rt_prompt,
+                getattr(rt_in, "text_tokens", 0), getattr(rt_in, "audio_tokens", 0), rt_cached,
+                rt_completion,
+                getattr(rt_out, "text_tokens", 0), getattr(rt_out, "audio_tokens", 0),
+                ctx.room.name,
+            )
+            _record_diagnostic(
+                "metric", "llm", "AI response started", "info",
+                observedAtOffsetMs=collected_offset_ms,
+                provider=provider,
+                model=model,
+                promptTokens=rt_prompt,
+                cachedTokens=rt_cached,
+                completionTokens=rt_completion,
+                cancelled=bool(getattr(metric, "cancelled", False)),
+            )
+        _add_usage_units(timings, metric_type, metric)
         if metric_type == "eou_metrics":
             samples = (
                 ("endpointing", "eouMs", "Caller turn detected", metric.end_of_utterance_delay),

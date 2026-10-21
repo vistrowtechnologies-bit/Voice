@@ -33,6 +33,10 @@ export interface SeoPage {
   noindex?: boolean
   /** Service schema type, when the default `AI voice <label>` reads wrong. */
   serviceType?: string
+  /** Absolute URLs of images shown in the page content, for the image sitemap. */
+  images?: string[]
+  /** Help video (lib/helpVideos.ts) shown on the page, for VideoObject schema. */
+  helpVideo?: string
 }
 
 export interface OgCardSpec {
@@ -46,7 +50,26 @@ export interface OgCardSpec {
 
 import { BUYER_GUIDES, COMPARE_VENDORS, DEMO_CALLS, LOCAL_REAL_ESTATE_PAGES } from './seoExpansionContent'
 import { HELP_TOPICS } from '../content/helpArticles'
-import { VOICE_BLOG_POSTS } from '../content/voiceBlog'
+import { BLOG_PAGE_COUNT, VOICE_BLOG_POSTS, blogPagePath } from '../content/voiceBlog'
+import { HELP_VIDEOS, helpVideoPoster, helpVideoSrc } from './helpVideos'
+
+// The English launch film on the homepage (components/LaunchFilm.tsx FILMS.en;
+// keep the two in sync). It went live on 21 Oct 2026 (PR #212).
+const LAUNCH_FILM = {
+  name: 'Meet Artha, your AI receptionist',
+  description: 'The Vistrow Voice launch film: meet Artha, the AI voice agent that answers your business calls as an AI receptionist.',
+  file: '/media/launch-film-v5-en.mp4',
+  poster: '/media/launch-film-v5-en-poster.jpg',
+  duration: 'PT2M52S',
+  uploadDate: '2026-10-21',
+}
+
+// Help videos were added to public/media/help/ on 12 Oct 2026.
+const HELP_VIDEO_UPLOAD_DATE = '2026-10-12'
+
+// og cards are JPEG; the competitor compare cards stay PNG until the owner
+// decides on their redesign.
+const ogExtension = (imageName: string) => (imageName.startsWith('compare-') ? 'png' : 'jpg')
 
 const page = (
   path: string,
@@ -61,7 +84,7 @@ const page = (
   path,
   title,
   description,
-  image: `${SEO_ORIGIN}/og/${imageName}.png`,
+  image: `${SEO_ORIGIN}/og/${imageName}.${ogExtension(imageName)}`,
   imageAlt,
   kind,
   label,
@@ -115,15 +138,18 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
 }
 
 export const SEO_PAGES: SeoPage[] = [
-  page(
-    '/',
-    'AI Voice Agent for India in 11 Languages | Vistrow Voice',
-    'An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 11 languages.',
-    'home',
-    'Vistrow Voice multilingual AI voice agent orb: Hindi, English and 9 more Indian languages across phone and web',
-    'home',
-    'Home',
-  ),
+  {
+    ...page(
+      '/',
+      'AI Voice Agent for India in 130+ Languages | Vistrow Voice',
+      'An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 130+ languages.',
+      'home',
+      'Vistrow Voice multilingual AI voice agent orb: 130+ languages including Hindi and English across phone and web',
+      'home',
+      'Home',
+    ),
+    images: [`${SEO_ORIGIN}${LAUNCH_FILM.poster}`],
+  },
   page(
     '/product',
     'AI Voice Agent Platform | Vistrow Voice',
@@ -133,15 +159,18 @@ export const SEO_PAGES: SeoPage[] = [
     'collection',
     'Product',
   ),
-  page(
-    '/product/agents',
-    'AI Voice Agent Builder | Vistrow Voice',
-    'Build a no-code AI voice agent with its own persona, knowledge, voice, language, tools, and handoff rules, then test it before publishing.',
-    'product-agents',
-    'Vistrow Voice no-code AI voice agent builder represented by the real Artha orb',
-    'product',
-    'Voice Agents',
-  ),
+  {
+    ...page(
+      '/product/agents',
+      'AI Voice Agent Builder | Vistrow Voice',
+      'Build a no-code AI voice agent with its own persona, knowledge, voice, language, tools, and handoff rules, then test it before publishing.',
+      'product-agents',
+      'Vistrow Voice no-code AI voice agent builder represented by the real Artha orb',
+      'product',
+      'Voice Agents',
+    ),
+    serviceType: 'AI voice agent builder',
+  },
   page(
     '/product/inbound',
     'Inbound Call Answering with AI | Vistrow Voice',
@@ -243,8 +272,8 @@ export const SEO_PAGES: SeoPage[] = [
   ),
   page(
     '/languages',
-    'AI Voice Agents in Hindi, English + 9 Indian Languages | Vistrow Voice',
-    'AI voice agents that speak Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi and Odia, and switch language mid-call.',
+    'AI Voice Agents in 130+ Languages incl. Hindi | Vistrow Voice',
+    'AI voice agents that speak 130+ languages, including Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi and Odia.',
     'languages',
     'Vistrow Voice multilingual AI orb surrounded by Indian language scripts',
     'collection',
@@ -284,7 +313,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/ai-ivr',
       'AI IVR System and Cloud IVR for India | Vistrow Voice',
-      'An AI IVR system for India: callers say what they need on an IVR call and get an answer, a booking or a transfer. A cloud IVR in 11 languages.',
+      'An AI IVR system for India: callers say what they need on an IVR call and get an answer, a booking or a transfer. A cloud IVR in 130+ languages.',
       'vs-ivr',
       'A press-1 phone menu replaced by a conversational Vistrow Voice AI IVR',
       'product',
@@ -296,7 +325,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/ai-receptionist',
       'AI Receptionist for Indian Businesses | Vistrow Voice',
-      'An AI receptionist that answers your phone and website calls in Hindi, English and 9 more Indian languages, books appointments and transfers to your team.',
+      'An AI receptionist that answers your phone and website calls in 130+ languages, including Hindi and English, books appointments and transfers to your team.',
       'ai-receptionist',
       'Vistrow Voice AI receptionist orb answering a front-desk call',
       'product',
@@ -389,8 +418,8 @@ export const SEO_PAGES: SeoPage[] = [
     ),
   ),
   ...HELP_TOPICS.flatMap((t) =>
-    t.articles.map((a) =>
-      page(
+    t.articles.map((a) => ({
+      ...page(
         `/help/${t.slug}/${a.slug}`,
         `${a.title} | Vistrow Voice Help`,
         `${a.summary} A step-by-step Vistrow Voice guide for ${t.title.toLowerCase()}, for AI voice agents in Indian businesses.`.slice(0, 158),
@@ -399,7 +428,10 @@ export const SEO_PAGES: SeoPage[] = [
         'docs',
         a.title,
       ),
-    ),
+      ...(a.video && HELP_VIDEOS[a.video]
+        ? { helpVideo: a.video, images: [`${SEO_ORIGIN}${helpVideoPoster(a.video)}`] }
+        : {}),
+    })),
   ),
   page(
     '/resources/docs',
@@ -472,11 +504,20 @@ export const SEO_PAGES: SeoPage[] = [
     'Vistrow Voice journal featuring practical guides to voice AI and customer conversations',
     'collection',
     'Blog',
-  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Business owner listening on a phone and taking notes beside a laptop' },
+  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Artha, an AI voice agent with a headset, on a call in a bright office, with chips for listens, answers and books' },
+  ...Array.from({ length: BLOG_PAGE_COUNT - 1 }, (_, index) => index + 2).map((n) => ({ ...page(
+    blogPagePath(n),
+    `Voice AI Guides and Playbooks, Page ${n} | Vistrow Voice`,
+    `Page ${n} of the Vistrow Voice blog: more practical guides to AI voice agents, multilingual calls, IVR, latency and CRM integrations.`,
+    'blog',
+    'Vistrow Voice journal featuring practical guides to voice AI and customer conversations',
+    'collection',
+    `Blog, page ${n}`,
+  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Artha, an AI voice agent with a headset, on a call in a bright office, with chips for listens, answers and books' })),
   ...VOICE_BLOG_POSTS.map((post) => ({ ...page(
     `/resources/blog/${post.slug}`,
-    `${post.title} | Vistrow Voice`,
-    post.excerpt,
+    post.seoTitle ?? `${post.title} | Vistrow Voice`,
+    post.metaDescription ?? post.excerpt,
     'blog',
     `Vistrow Voice guide: ${post.title}`,
     'article',
@@ -510,7 +551,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/voice-bot',
       'AI Voice Bot for Business Calls in India | Vistrow Voice',
-      'What an AI voice bot is, how a voicebot call works, and how Vistrow Voice runs one on phone and website calls in Hindi, English and 9 more Indian languages.',
+      'What an AI voice bot is, how a voicebot call works, and how Vistrow Voice runs one on phone and website calls in 130+ languages, including Hindi and English.',
       'voice-bot',
       'Vistrow Voice AI voice bot for phone and website calls',
       'product',
@@ -522,7 +563,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/ai-telecaller',
       'AI Telecaller for Indian Businesses | Vistrow Voice',
-      'An AI telecaller that answers and calls back leads, qualifies them and runs follow-ups in Hindi, English and 9 more Indian languages, inside your calling rules.',
+      'An AI telecaller that answers and calls back leads, qualifies them and runs follow-ups in 130+ languages, including Hindi and English, inside your calling rules.',
       'ai-telecaller',
       'Vistrow Voice AI telecaller orb handling lead calls and follow-ups',
       'product',
@@ -534,7 +575,7 @@ export const SEO_PAGES: SeoPage[] = [
     ...page(
       '/ai-calling-agent',
       'AI Calling Agent & Automated Calling Software | Vistrow Voice',
-      'An AI calling agent for Indian businesses: automated calling software that answers inbound calls, calls leads back and follows up in 11 languages.',
+      'An AI calling agent for Indian businesses: automated calling software that answers inbound calls, calls leads back and follows up in 130+ languages.',
       'ai-calling-agent',
       'Vistrow Voice AI calling agent handling inbound and outbound business calls',
       'product',
@@ -553,6 +594,20 @@ export function seoForPath(path: string): SeoPage | undefined {
 
 function breadcrumbLabel(path: string): string {
   return SEO_BY_PATH.get(path)?.label ?? path.split('/').filter(Boolean).at(-1)?.replace(/-/g, ' ') ?? 'Page'
+}
+
+function videoObject(video: typeof LAUNCH_FILM): object {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'VideoObject',
+    name: video.name,
+    description: video.description,
+    thumbnailUrl: `${SEO_ORIGIN}${video.poster}`,
+    contentUrl: `${SEO_ORIGIN}${video.file}`,
+    duration: video.duration,
+    uploadDate: video.uploadDate,
+    publisher: { '@id': `${SEO_ORIGIN}/#organization` },
+  }
 }
 
 export function baseStructuredData(entry: SeoPage): object[] {
@@ -606,8 +661,25 @@ export function baseStructuredData(entry: SeoPage): object[] {
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web',
         description: entry.description,
+        image: entry.image,
         publisher: { '@id': `${SEO_ORIGIN}/#organization` },
       },
+      videoObject(LAUNCH_FILM),
+    )
+  }
+
+  if (entry.helpVideo) {
+    const video = HELP_VIDEOS[entry.helpVideo]
+    const [minutes, seconds] = video.length.split(':')
+    schemas.push(
+      videoObject({
+        name: video.title,
+        description: `${video.title}: a short how-to video for the Vistrow Voice dashboard, with captions.`,
+        file: helpVideoSrc(entry.helpVideo),
+        poster: helpVideoPoster(entry.helpVideo),
+        duration: `PT${Number(minutes)}M${Number(seconds)}S`,
+        uploadDate: HELP_VIDEO_UPLOAD_DATE,
+      }),
     )
   }
 
@@ -640,6 +712,7 @@ export function baseStructuredData(entry: SeoPage): object[] {
       name: entry.label,
       description: entry.description,
       url: pageUrl,
+      image: entry.image,
       provider: { '@id': `${SEO_ORIGIN}/#organization` },
       areaServed: 'Worldwide',
       serviceType: entry.serviceType ?? (entry.kind === 'solution' ? `${entry.label} AI voice agent` : `AI voice ${entry.label}`),
@@ -660,6 +733,7 @@ export function baseStructuredData(entry: SeoPage): object[] {
       name: `${entry.label} AI Voice Agent`,
       description: entry.description,
       url: pageUrl,
+      image: entry.image,
       provider: { '@id': `${SEO_ORIGIN}/#organization` },
       areaServed: 'Worldwide',
     })
@@ -691,7 +765,7 @@ export function baseStructuredData(entry: SeoPage): object[] {
 // renders these definitions with the real Vistrow mark and a frame from the
 // real production orb video.
 export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
-  home: { eyebrow: 'MULTILINGUAL VOICE AI', headline: 'Voice AI that speaks your customer\u2019s language.', proof: 'Hindi, English + 9 Indian languages  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg' },
+  home: { eyebrow: 'MULTILINGUAL VOICE AI', headline: 'Voice AI that speaks your customer\u2019s language.', proof: '130+ languages, Hindi to Tamil  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg' },
   product: { eyebrow: 'VISTROW VOICE PLATFORM', headline: 'Everything you need to run voice AI.', proof: 'Build  \u00b7  Call  \u00b7  Learn  \u00b7  Integrate', accent: '#9333ea', hue: '0deg' },
   'product-agents': { eyebrow: 'VOICE AGENTS', headline: 'Build a voice agent in minutes.', proof: 'Persona  \u00b7  Knowledge  \u00b7  Voice  \u00b7  Tools', accent: '#9333ea', hue: '0deg' },
   'product-inbound': { eyebrow: 'INBOUND CALLING', headline: 'Answer customer calls, day or night.', proof: 'Qualify  \u00b7  Answer  \u00b7  Book  \u00b7  Route', accent: '#0e7490', hue: '-91deg' },
@@ -705,7 +779,7 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   'solution-ecommerce': { eyebrow: 'E-COMMERCE & D2C', headline: 'Support that scales with every sale.', proof: 'Orders  \u00b7  Delivery  \u00b7  Returns  \u00b7  Follow-up', accent: '#db2777', hue: '57deg' },
   'solution-finance': { eyebrow: 'FINANCE & COLLECTIONS', headline: 'Collections conversations, handled with care.', proof: 'Respectful reminders  \u00b7  Logged outcomes  \u00b7  Controls', accent: '#047857', hue: '-126deg' },
   'solution-support': { eyebrow: 'SUPPORT & HELPDESK', headline: 'Resolve tier-one issues on the first call.', proof: 'Troubleshoot  \u00b7  Resolve  \u00b7  Escalate with context', accent: '#0e7490', hue: '-91deg' },
-  languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: 'Hindi, English and 9 more Indian languages.', proof: 'Mid-call language switching  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी  ·  ಕನ್ನಡ  ·  తెలుగు  ·  தமிழ்  ·  বাংলা' },
+  languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: '130+ languages, Hindi to Tamil.', proof: 'Mid-call language switching  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी  ·  ಕನ್ನಡ  ·  తెలుగు  ·  தமிழ்  ·  বাংলা' },
   'language-hindi': { eyebrow: 'HINDI AI VOICE AGENT', headline: 'हिन्दी calls, handled naturally.', proof: 'Hindi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी' },
   'language-marathi': { eyebrow: 'MARATHI AI VOICE AGENT', headline: 'मराठी calls, handled naturally.', proof: 'Marathi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'मराठी' },
   'language-tamil': { eyebrow: 'TAMIL AI VOICE AGENT', headline: 'தமிழ் calls, handled naturally.', proof: 'Tamil + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'தமிழ்' },

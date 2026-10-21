@@ -507,11 +507,61 @@ a[class*="border-cyan"]:not([class*=" bg-"]):not([class^="bg-"]) * {
   100% { opacity: 0; transform: translateY(-3px); }
 }
 
+/* Homepage hero demo card, variant="call" (owner, 21 Oct): Artha "calling
+   you". Dark card on the dark theme, a lavender card on the light theme,
+   same purple glow in both. */
+.demo-call-card {
+  background: #140b26;
+  color: #fff;
+  border: 1px solid #3b2a5c;
+  box-shadow: 0 24px 48px -26px rgb(168 85 247 / 0.65);
+  --color-text: #f5f3ff;
+  --color-text-muted: #b9b2d6;
+}
+.demo-call-card::before {
+  content: ""; position: absolute; inset: -30% -30% auto; height: 260px; pointer-events: none;
+  background: radial-gradient(closest-side, rgb(168 85 247 / 0.55), transparent);
+}
+.demo-call-card > * { position: relative; }
+.demo-call-kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: rgb(255 255 255 / 0.65); }
+.demo-call-sub, .demo-call-assure { color: rgb(255 255 255 / 0.72); }
+.demo-call-proof { color: rgb(255 255 255 / 0.85); }
+.demo-call-orb { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 16px 40px -10px rgb(168 85 247 / 0.9); background: #0b0716; }
+.demo-call-ring { position: absolute; inset: 0; border-radius: 9999px; border: 2px solid rgb(168 85 247 / 0.8); animation: demo-call-ring 2.4s ease-out infinite; pointer-events: none; }
+.demo-call-ring-2 { animation-delay: 1.2s; }
+@keyframes demo-call-ring { from { transform: scale(0.85); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+.demo-call-answer { background: #22c55e; color: #052e16; box-shadow: 0 12px 26px -12px #22c55e; transition: transform 0.15s ease, filter 0.15s ease; }
+.demo-call-answer:hover { filter: brightness(1.05); }
+.demo-call-answer:active { transform: scale(0.98); }
+/* A ring pulses out of the Answer button so the card reads as "tap me". */
+.demo-call-tap { position: relative; }
+.demo-call-tap::after { content: ""; position: absolute; inset: -6px; border-radius: 9999px; border: 2px solid rgb(34 197 94 / 0.75); animation: demo-call-tap 1.8s ease-out infinite; pointer-events: none; }
+.demo-call-tap-off::after { display: none; }
+@keyframes demo-call-tap { 0% { transform: scale(0.96); opacity: 0.9; } 100% { transform: scale(1.1); opacity: 0; } }
+:root[data-theme="light"] .demo-call-card {
+  background: linear-gradient(180deg, #efe6ff 0%, #faf7ff 55%, #ffffff 100%);
+  color: var(--color-text);
+  border-color: #e4d8fb;
+  box-shadow: 0 22px 44px -28px rgb(124 58 237 / 0.55);
+  --color-text: #1a1523;
+  --color-text-muted: #5d5776;
+}
+:root[data-theme="light"] .demo-call-card::before { background: radial-gradient(closest-side, rgb(168 85 247 / 0.28), transparent); }
+:root[data-theme="light"] .demo-call-kicker { color: #7c3aed; }
+:root[data-theme="light"] .demo-call-sub, :root[data-theme="light"] .demo-call-assure, :root[data-theme="light"] .demo-call-proof { color: #5d5776; }
+:root[data-theme="light"] .demo-call-ring { border-color: rgb(168 85 247 / 0.55); }
+:root[data-theme="light"] .demo-call-orb { box-shadow: 0 0 0 3px #fff, 0 14px 32px -12px rgb(124 58 237 / 0.7); }
+:root[data-theme="light"] .demo-call-tap::after { border-color: rgb(22 163 74 / 0.6); }
+#vistrow-voice-widget-host { transition: opacity 0.25s ease, visibility 0.25s ease; }
+html.vv-hero-call-visible #vistrow-voice-widget-host { opacity: 0; visibility: hidden; pointer-events: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .independence-ribbon::after,
   .demo-card-spotlight::before,
   .demo-card-spotlight > div:nth-of-type(2),
-  .demo-card-spotlight .demo-start-target {
+  .demo-card-spotlight .demo-start-target,
+  .demo-call-ring,
+  .demo-call-tap::after {
     animation: none;
   }
   .demo-card-spotlight .demo-start-label {
@@ -1182,3 +1232,187 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
   .mh-wave i:nth-child(odd) { height: 10px; }
   .mh-wave i:nth-child(even) { height: 6px; }
 }
+
+/* Buy minutes dialog (TopupModal): entrance, selectable pack cards, an
+   animated check, and a pay button with a light sweep on hover. */
+@keyframes topup-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes topup-enter {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes topup-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  60% { opacity: 1; transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes topup-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes topup-sweep {
+  from { transform: translateX(-120%) skewX(-20deg); }
+  to { transform: translateX(320%) skewX(-20deg); }
+}
+@keyframes topup-ring {
+  from { opacity: 0.55; transform: scale(0.8); }
+  to { opacity: 0; transform: scale(1.7); }
+}
+.topup-backdrop { animation: topup-fade 200ms ease-out both; }
+.topup-panel { animation: topup-enter 320ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+.topup-rise { animation: topup-rise 240ms ease-out both; }
+.topup-pop { animation: topup-pop 360ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.topup-card {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}
+.topup-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
+  box-shadow: 0 14px 30px -20px color-mix(in srgb, var(--color-primary) 80%, transparent);
+}
+.topup-card:active { transform: scale(0.98); }
+.topup-card[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background-image: linear-gradient(155deg, color-mix(in srgb, var(--color-primary) 18%, transparent), transparent 65%);
+  box-shadow:
+    0 0 0 1px var(--color-primary),
+    0 18px 36px -22px color-mix(in srgb, var(--color-primary) 95%, transparent);
+}
+.topup-icon {
+  background-image: linear-gradient(135deg, var(--color-primary), var(--color-cyan));
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--color-primary) 90%, transparent);
+}
+.topup-pay {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  transition: transform 150ms ease, box-shadow 200ms ease, filter 200ms ease;
+}
+.topup-pay:hover:not(:disabled) {
+  filter: brightness(1.07);
+  box-shadow: 0 14px 30px -12px color-mix(in srgb, var(--color-primary) 90%, transparent);
+}
+.topup-pay:active:not(:disabled) { transform: scale(0.98); }
+.topup-pay::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  transform: translateX(-120%) skewX(-20deg);
+  pointer-events: none;
+}
+.topup-pay:hover:not(:disabled)::after { animation: topup-sweep 900ms ease; }
+.topup-ring { animation: topup-ring 1.2s ease-out infinite; }
+.topup-range { accent-color: var(--color-primary); }
+@media (prefers-reduced-motion: reduce) {
+  .topup-backdrop, .topup-panel, .topup-rise, .topup-pop, .topup-ring,
+  .topup-pay:hover:not(:disabled)::after { animation: none; }
+  .topup-card, .topup-card:hover, .topup-card:active, .topup-pay:active:not(:disabled) { transform: none; }
+}
+.topup-stepper button { transition: color 150ms ease, background-color 150ms ease, transform 120ms ease; border-radius: 0.6rem; }
+.topup-stepper button:hover:not(:disabled) { color: var(--color-primary); background-color: color-mix(in srgb, var(--color-primary) 10%, transparent); }
+.topup-stepper button:active:not(:disabled) { transform: scale(0.88); }
+.topup-stepper:focus-within { border-color: var(--color-primary); }
+/* No native spinner arrows: the − / + buttons replace them. */
+.topup-stepper input { -moz-appearance: textfield; appearance: textfield; }
+.topup-stepper input::-webkit-inner-spin-button,
+.topup-stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .topup-stepper button:active:not(:disabled) { transform: none; }
+}
+
+/* Dashboard overview: the Bento layout (owner pick, 17 Oct). Tiles use the
+   theme tokens so they work in light and dark; the hero is always violet. */
+.bento-grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bento-w2 { grid-column: span 2; } }
+@media (min-width: 1280px) { .bento-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .bento-h2 { grid-row: span 2; } }
+.bento-w4 { grid-column: 1 / -1; }
+.bento-tile {
+  border-radius: 1.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 1.25rem;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.03), 0 14px 32px -26px color-mix(in srgb, var(--color-primary) 55%, transparent);
+  transition: transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2), box-shadow 260ms ease, border-color 260ms ease;
+  animation: bento-in 520ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+.bento-tile:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.03), 0 24px 44px -26px color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+.bento-grid > :nth-child(2) { animation-delay: 40ms; }
+.bento-grid > :nth-child(3) { animation-delay: 80ms; }
+.bento-grid > :nth-child(4) { animation-delay: 110ms; }
+.bento-grid > :nth-child(5) { animation-delay: 140ms; }
+.bento-grid > :nth-child(6) { animation-delay: 170ms; }
+.bento-grid > :nth-child(n + 7) { animation-delay: 200ms; }
+@keyframes bento-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+.bento-hero {
+  border-color: transparent;
+  color: #fff;
+  background:
+    radial-gradient(120% 90% at 100% 0%, #c026d3 0%, transparent 55%),
+    linear-gradient(150deg, #4c1d95, #7c3aed 60%, #6d28d9);
+}
+.bento-hero:hover { border-color: transparent; }
+.bento-title { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; }
+.bento-num { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.bento-kpi { color: var(--color-text); font-family: var(--font-sans); }
+.bento-ring { transition: stroke-dasharray 900ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.bento-ring-value { font: 800 20px var(--font-display); fill: var(--color-text); letter-spacing: -0.02em; }
+.bento-ring-label { font: 600 9px var(--font-sans); fill: var(--color-text-muted); }
+.bento-pill {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  border-radius: 999px; padding: 0.7rem 1.05rem;
+  font: 700 13px var(--font-sans);
+  border: 1px solid transparent;
+}
+.bento-pill-light { background: #fff; color: #4c1d95; }
+.bento-pill-glass { background: rgb(255 255 255 / 0.12); border-color: rgb(255 255 255 / 0.3); color: #fff; }
+.bento-pill-dark { background: var(--color-text); color: var(--color-surface); }
+.bento-pill-soft { background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface)); border-color: color-mix(in srgb, var(--color-primary) 18%, var(--color-border)); color: var(--color-text); }
+.bento-pill-soft:hover { background: var(--color-text); color: var(--color-surface); border-color: var(--color-text); }
+.bento-pill-soft:hover .material-symbols-outlined { color: inherit; }
+.bento-row:hover { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
+.bento-funnel-last { background: var(--color-text); color: var(--color-surface); }
+.bento-reveal { animation: bento-reveal 240ms ease-out both; }
+@keyframes bento-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* Agent editor: the dark pill that slides between tabs, and the engine
+   switch thumb. Standard is a calm solid pill; Live gets a moving gradient
+   and a soft glow so the realtime tier reads as different. */
+.vv-slide-pill {
+  position: absolute; top: 0.25rem; bottom: 0.25rem; left: 0;
+  border-radius: 0.75rem; background: var(--color-text);
+  transition: transform 380ms cubic-bezier(0.2, 0.9, 0.3, 1.15), width 380ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+.vv-engine-thumb {
+  position: absolute; top: 0.25rem; bottom: 0.25rem; left: 0.25rem; width: calc(50% - 0.25rem);
+  border-radius: 0.75rem; background: var(--color-text);
+  transition: transform 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2), background 300ms ease, box-shadow 300ms ease;
+}
+.vv-engine-thumb[data-live="true"] {
+  transform: translateX(100%);
+  background: linear-gradient(110deg, #6d28d9, #a855f7 30%, #ec4899 50%, #a855f7 70%, #6d28d9);
+  background-size: 250% 100%;
+  animation: vv-live-flow 3.2s linear infinite, vv-live-glow 2.4s ease-in-out infinite;
+}
+@keyframes vv-live-flow { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+@keyframes vv-live-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(168 85 247 / 0.45), 0 6px 18px -8px rgb(236 72 153 / 0.7); }
+  50% { box-shadow: 0 0 0 5px rgb(168 85 247 / 0), 0 8px 24px -6px rgb(236 72 153 / 0.9); }
+}
+.vv-live-spark { animation: vv-live-spark 1.8s ease-in-out infinite; }
+@keyframes vv-live-spark { 0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; } 50% { transform: scale(1.25) rotate(-12deg); opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) {
+  .bento-tile, .bento-reveal { animation: none; }
+  .bento-tile, .bento-ring { transition: none; }
+  .bento-tile:hover { transform: none; }
+  .vv-slide-pill, .vv-engine-thumb { transition: none; }
+  .vv-engine-thumb[data-live="true"], .vv-live-spark { animation: none; }
+}
+
+/* Sidebar scrolling: no scrollbar at all (owner, 17 Oct). The menu still
+   scrolls with the wheel, trackpad, touch and keyboard focus. */
+.vv-quiet-scroll { scrollbar-width: none; }
+.vv-quiet-scroll::-webkit-scrollbar { display: none; }

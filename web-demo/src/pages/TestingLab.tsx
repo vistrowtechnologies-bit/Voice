@@ -79,27 +79,21 @@ const BUILTIN_SCENARIOS: BuiltinScenario[] = [
   },
   {
     key: 'booking_conflict', name: 'Booking conflict', category: 'Tools', icon: 'event_busy',
-    description: 'The requested appointment is unavailable and the caller resists the first alternative.',
+    description: 'The requested appointment is unavailable and the caller resists the first alternative. Nothing is simulated: this needs the matching tool connected and a real failure.',
     callerBrief: 'Request one exact occupied slot. Reject the first alternative and accept a later valid option.',
     expectedBehaviors: ['Say it is checking availability before the tool runs', 'Never claim the blocked slot is booked', 'Offer at most three alternatives', 'Confirm the final date and time before booking'],
   },
   {
     key: 'tool_failure', name: 'CRM or API failure', category: 'Tools', icon: 'cloud_off',
-    description: 'Tests whether a failed external action is reported honestly instead of presented as successful.',
+    description: 'Tests whether a failed external action is reported honestly instead of presented as successful. Nothing is simulated: this needs the matching tool connected and a real failure.',
     callerBrief: 'Ask the agent to complete an action that uses a connected tool. If it fails, ask whether it definitely went through.',
     expectedBehaviors: ['Never claim success before confirmation', 'Explain the failure without technical jargon', 'Preserve the caller’s details', 'Offer a practical fallback'],
   },
   {
     key: 'transfer_unavailable', name: 'Transfer unavailable', category: 'Escalation', icon: 'phone_disabled',
-    description: 'The caller asks for a person when no live transfer destination is available.',
+    description: 'The caller asks for a person when no live transfer destination is available. Nothing is simulated: this needs the matching tool connected and a real failure.',
     callerBrief: 'Ask twice to speak with a human and explain briefly why the issue is urgent.',
     expectedBehaviors: ['Acknowledge the urgency', 'Do not pretend a transfer happened', 'Offer callback or message capture', 'Confirm the contact detail'],
-  },
-  {
-    key: 'voicemail', name: 'Voicemail', category: 'Outbound', icon: 'voicemail',
-    description: 'Checks that an outbound agent recognizes voicemail and leaves a concise useful message.',
-    callerBrief: 'Use a voicemail test destination or imitate a voicemail greeting without answering the agent’s questions.',
-    expectedBehaviors: ['Do not conduct the normal qualification flow', 'Leave one concise message', 'Include a clear callback reason', 'End without repeated prompts'],
   },
 ]
 
@@ -119,8 +113,11 @@ function resultChecks(call: CallRecord) {
   const repetitionRate = normalized.length ? Math.round((1 - new Set(normalized).size / normalized.length) * 100) : 0
   const empathyPattern = /understand|sorry|frustrat|चिंता|समझ|माफ़|माफी|परेशान|समस्या|कठिन|अडचण|समज|क्षमस्व/i
   const scripts = new Set(agentTurns.flatMap((line) => [/[\u0900-\u097f]/.test(line) ? 'devanagari' : '', /[A-Za-z]/.test(line) ? 'latin' : '']).filter(Boolean))
+  // firstResponseLatencyMs is only filled for website-widget calls; the
+  // call agent stores per-turn timings on every call.
+  const turnMs = (call.latencyMetrics?.callerStopToFirstAudioMs ?? []).filter((ms) => typeof ms === 'number' && ms > 0).sort((a, b) => a - b)
+  const replyMs = turnMs.length ? turnMs[Math.floor(turnMs.length / 2)] : call.firstResponseLatencyMs
   const toolErrors = (call.diagnosticEvents ?? []).filter((event) => event.kind === 'tool' && event.status === 'error').length
-  const interruptionEvents = (call.diagnosticEvents ?? []).filter((event) => /interrupt/i.test(`${event.kind} ${event.label}`)).length
 
   return [
     { label: 'Opening quality', value: first && wordCount(first) <= 45 && countQuestions(first) <= 1 ? 'Clear and concise' : first ? 'Needs review' : 'No opening captured', ok: Boolean(first && wordCount(first) <= 45 && countQuestions(first) <= 1) },
@@ -128,11 +125,11 @@ function resultChecks(call: CallRecord) {
     { label: 'Empathy', value: empathyPattern.test(agentTurns.join(' ')) ? 'Acknowledgement detected' : 'Review for a specific acknowledgement', ok: empathyPattern.test(agentTurns.join(' ')) },
     { label: 'One question at a time', value: agentTurns.some((line) => countQuestions(line) > 1) ? 'Multiple questions detected' : 'No multi-question turns', ok: !agentTurns.some((line) => countQuestions(line) > 1) },
     { label: 'Repeated responses', value: repetitionRate ? `${repetitionRate}% repeated turns` : 'No exact repeats', ok: repetitionRate === 0 },
-    { label: 'Interruption handling', value: interruptionEvents ? `${interruptionEvents} interruption event${interruptionEvents === 1 ? '' : 's'}` : 'Review aligned recording', ok: null },
     { label: 'Language consistency', value: scripts.size > 1 ? 'Mixed-language delivery detected' : 'Single writing system detected', ok: null },
-    { label: 'Tool accuracy', value: toolErrors ? `${toolErrors} failed action${toolErrors === 1 ? '' : 's'}` : 'No failed actions recorded', ok: toolErrors === 0 },
-    { label: 'First response latency', value: call.firstResponseLatencyMs != null ? `${(call.firstResponseLatencyMs / 1000).toFixed(1)}s` : 'Not measured', ok: call.firstResponseLatencyMs == null ? null : call.firstResponseLatencyMs <= 2500 },
-    { label: 'Estimated cost', value: call.creditsUsed != null ? `${call.creditsUsed.toFixed(2)} credits` : 'Calculated after call finalizes', ok: null },
+    // Tools report most failures as a normal reply, so only crashes show up here.
+    { label: 'Crashed actions', value: toolErrors ? `${toolErrors} action${toolErrors === 1 ? '' : 's'} crashed` : 'No crashed actions', ok: toolErrors === 0 },
+    { label: 'Reply speed', value: replyMs != null ? `${(replyMs / 1000).toFixed(1)}s median, caller stops to agent audio` : 'Not measured', ok: replyMs == null ? null : replyMs <= 2500 },
+    { label: 'Estimated cost', value: call.creditsUsed != null ? `${call.creditsUsed.toFixed(2)} plan minutes` : 'Calculated after call finalizes', ok: null },
     { label: 'Hallucination risk', value: 'Review unsupported claims in transcript', ok: null },
     { label: 'Knowledge grounding', value: 'Review answers against attached sources', ok: null },
   ]

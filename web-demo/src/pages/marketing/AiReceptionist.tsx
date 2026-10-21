@@ -160,7 +160,7 @@ export function AiReceptionist() {
     <MarketingLayout>
       <Seo
         title="AI Receptionist for Indian Businesses | Vistrow Voice"
-        description="An AI receptionist that answers your phone and website calls in Hindi, English and 9 more Indian languages, books appointments and transfers to your team."
+        description="An AI receptionist that answers your phone and website calls in 130+ languages, including Hindi and English, books appointments and transfers to your team."
         path="/ai-receptionist"
         jsonLd={FAQ_JSONLD}
       />
@@ -187,7 +187,7 @@ export function AiReceptionist() {
           <ul className="space-y-3 text-sm leading-relaxed text-text-muted">
             {[
               'Answers at any hour your route allows, including nights and holidays',
-              'Hindi, English and 9 more Indian languages, switching when the caller does',
+              '130+ languages, including Hindi, English and 9 more Indian languages, switching when the caller does',
               'Books into the built-in Appointments calendar',
               'Transcript, summary and captured details for every call',
             ].map((item) => (
@@ -389,7 +389,15 @@ export function AiReceptionist() {
               <Link to="/languages/telugu" className="font-semibold text-primary underline-offset-4 hover:underline">
                 a Telugu receptionist for Hyderabad and Andhra Pradesh
               </Link>
-              ; both pages have short sample lines.
+              ; both pages have short sample lines. Serving Hindi and Punjabi speakers in the UK, Canada or the
+              Gulf? Read our guide to{' '}
+              <Link
+                to="/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english"
+                className="font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                a multilingual AI receptionist for Hindi, Punjabi and English callers
+              </Link>
+              .
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">

@@ -1,0 +1,127 @@
+{
+  "n": 2,
+  "publishOn": "2026-10-22",
+  "primaryKeyword": "ai receptionist vs answering service",
+  "audience": "Global",
+  "slug": "ai-receptionist-vs-answering-service-vs-ivr",
+  "title": "AI receptionist vs answering service vs IVR: how to compare them on your own calls",
+  "seoTitle": "AI Receptionist vs Answering Service vs IVR: How to Compare",
+  "metaDescription": "AI receptionist, human answering service or IVR menu? Compare what each does on a real call, where each fails, and how to test them side by side.",
+  "shortAnswer": "An IVR routes callers through a keypad menu, a human answering service takes messages and handles judgment calls, and an AI receptionist holds a conversation that can answer questions, book appointments and hand over to staff. Compare them on your most common call types, after-hours coverage, languages, what gets recorded, and how each handles the calls that go wrong.",
+  "excerpt": "Three ways to answer a business phone, three very different caller experiences. Here is how to compare an AI receptionist, a human answering service and an IVR using the calls you actually receive.",
+  "category": "Voice AI basics",
+  "related": [
+    "when-to-use-voice-ai-instead-of-ivr",
+    "what-is-an-ai-voice-agent",
+    "multilingual-ai-receptionist-hindi-punjabi-english"
+  ],
+  "sections": [
+    {
+      "heading": "What is the difference between an AI receptionist, an answering service and an IVR?",
+      "paragraphs": [
+        "All three answer the phone when your own staff cannot, but they do very different work once the call is connected. An IVR (interactive voice response) plays recorded prompts and acts on the keys a caller presses. A human answering service is a team of people, usually off-site, who pick up in your business name, take messages and follow a script you agree with them. An AI receptionist is a voice agent that listens to what the caller says in their own words and replies out loud, as described on our [AI receptionist overview](/ai-receptionist).",
+        "The useful comparison is not which one sounds most modern. It is which one finishes your most common calls properly. A press-1 menu is cheap to run and predictable, but it only sorts callers. The [AI IVR overview page](/ai-ivr) shows what happens when the menu is replaced by a conversation on the same number. A human answering service brings judgment, but it is limited by staffing and usually ends in a message rather than a booking."
+      ]
+    },
+    {
+      "heading": "What does each option actually do on a call?",
+      "paragraphs": [
+        "Write down what your front desk does today before you compare anything. The US Bureau of Labor Statistics lists answering the phone, taking messages or forwarding calls, and scheduling and confirming appointments among a receptionist’s core duties. Map each option against those jobs, and use the [AI agent vs IVR comparison](/vs-ivr) for the detailed menu-versus-conversation differences."
+      ],
+      "points": [
+        "IVR: greets the caller, offers numbered options, collects digits, plays recorded information and transfers to a queue or voicemail. It cannot understand a request that does not match an option.",
+        "Human answering service: answers in your business name, takes a message, may book from a shared calendar, and passes urgent calls on according to your instructions. Quality depends on who picks up and how well they were briefed.",
+        "AI receptionist: asks how it can help, answers from approved information, asks a follow-up question, books a slot or takes a callback request, and on phone calls can transfer to a colleague. Every call leaves a transcript and summary."
+      ]
+    },
+    {
+      "heading": "How do the three compare on the things callers notice?",
+      "paragraphs": [
+        "Callers judge a business line on a few simple things: how quickly someone answers, whether they are understood, and whether the call ends with something done. Score each option on the criteria below for your own call types, not for an average business.",
+        "Language is the criterion buyers most often skip. If a large share of your callers prefer Hindi, Tamil or Punjabi, an English-only service or a language menu adds friction before the caller has said a word. Our [multilingual voice agent buying guide](/resources/blog/how-to-choose-a-multilingual-voice-agent) explains how to test this properly."
+      ],
+      "points": [
+        "Availability: an IVR and an AI receptionist can answer at any hour the line is open; an answering service depends on its shifts and how many calls arrive at once.",
+        "Understanding: an IVR understands keys and a few words; people understand almost anything; an AI receptionist understands natural speech within the scope and facts you give it.",
+        "Outcome: an IVR routes, an answering service usually takes a message, and an AI receptionist can complete simple tasks such as a booking during the call.",
+        "Consistency: an IVR and an AI agent say the same approved thing every time; human answers vary from person to person.",
+        "Record: an AI receptionist keeps a transcript of every call; with the other two you usually get a message note or a log of key presses."
+      ]
+    },
+    {
+      "heading": "Where does a human answering service still win?",
+      "paragraphs": [
+        "People are better at calls that need judgment, empathy or authority. A caller who is upset about a bill, a request that falls between your policies, or a conversation where tone matters more than facts should reach a person. An AI receptionist should be configured to recognise these calls and hand them over rather than improvise.",
+        "That handover is the part to inspect closely. On Vistrow Voice, a phone call can be transferred: the agent dials the colleague you set and stays on the line until they answer, as the [inbound call answering page](/product/inbound) describes. A call started from the website widget runs in the browser, so the agent takes a callback number instead. Many businesses end up with an AI receptionist for the routine calls and their own staff, or an answering service, for the rest."
+      ]
+    },
+    {
+      "heading": "When is an IVR still the right choice?",
+      "paragraphs": [
+        "Keep a menu when callers already know exactly what they want and can name it in one word, when a caller must enter a long account number by keypad, or when policy requires a fixed script. Some callers also prefer keys to speech, and a keypad route helps them.",
+        "If most of your calls split cleanly into two or three departments, a short menu may be all you need. Problems appear when the tree grows deep or callers keep choosing the wrong option. Our guide on [when to use voice AI instead of IVR](/resources/blog/when-to-use-voice-ai-instead-of-ivr) walks through that decision call reason by call reason."
+      ]
+    },
+    {
+      "heading": "How should you compare the cost of each option?",
+      "paragraphs": [
+        "Price lists are hard to compare because each option charges differently: an IVR by number and usage, an answering service by plan, minutes or calls, and an AI receptionist usually by minutes of conversation. Compare instead on the cost of a useful call, meaning a call that ended with the caller’s need met or a clear next step.",
+        "Count what each option leaves your team to do afterwards. A message that someone must return, a caller who pressed the wrong key and called again, or a lead with no details all cost staff time. Our article on [the cost per useful call](/resources/blog/ai-voice-agent-pricing-india) lists what to include. For current Vistrow Voice plans, see the [Vistrow Voice pricing page](/pricing)."
+      ]
+    },
+    {
+      "heading": "How do you run a fair side-by-side test?",
+      "paragraphs": [
+        "Pick one high-volume call type, such as appointment requests or new enquiries, and write down what a good outcome is before you test. Then put the same scripted calls through each option, played by colleagues who act like real callers: one in a hurry, one who changes their mind, one who speaks a second language, one who asks for a manager.",
+        "Vistrow Voice lets you test an agent in the browser and in a Testing Lab before any real caller reaches it, then route one number to it while the others stay as they are. Read the results from records, not impressions, and time how long callers wait using the [voice AI latency testing guide](/resources/blog/voice-ai-latency-how-to-measure-it)."
+      ],
+      "points": [
+        "Did the caller reach a clear outcome: an answer, a booking, a callback request or a person?",
+        "Did they have to repeat themselves after a handover?",
+        "Was the right information captured and sent to your team?",
+        "Which calls went wrong, and would the fix be a fact, an instruction or a human route?"
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Is an AI receptionist the same as an answering service?",
+      "a": "No. An answering service is a team of people who answer on your behalf. An AI receptionist is software that holds the conversation itself, answers from your approved information and hands over to a person when needed."
+    },
+    {
+      "q": "Can an AI receptionist replace my IVR menu?",
+      "a": "Often, yes. Callers say what they need instead of pressing keys, and the agent answers, books or transfers. Keep a keypad option where callers must enter long numbers or prefer keys."
+    },
+    {
+      "q": "Which option is best for after-hours calls?",
+      "a": "An AI receptionist suits after-hours calls well because it can answer, book a slot or take a callback request at any hour the line allows. Urgent issues still need a human or emergency route you define."
+    },
+    {
+      "q": "Can I use an AI receptionist and a human team together?",
+      "a": "Yes, and most businesses do. Let the agent handle routine calls and transfer phone calls to your staff for complaints, sensitive topics or anything it is not sure about."
+    },
+    {
+      "q": "What should I test before choosing?",
+      "a": "Run the same set of real call types through each option, including difficult callers and a second language, and judge them on outcomes, handovers and what reaches your team afterwards."
+    }
+  ],
+  "imageAlt": "Comparison cover: Artha, the AI receptionist, wearing a headset beside three cards for an IVR menu, an answering service and an AI receptionist",
+  "imagePrompt": "Designed cover (scripts/blog-covers/02-ai-receptionist-vs-answering-service-vs-ivr.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists",
+      "url": "https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm"
+    }
+  ],
+  "contextualLinks": "To go deeper on the options, read [how an AI voice agent works on a call](/resources/blog/what-is-an-ai-voice-agent) or see [how an AI receptionist answers and routes calls](/ai-receptionist).",
+  "inbound": [
+    {
+      "target": "blog:when-to-use-voice-ai-instead-of-ivr",
+      "sentence": "If you are also weighing a human service, our [AI receptionist vs answering service vs IVR comparison](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr) puts all three side by side."
+    },
+    {
+      "target": "page:/ai-receptionist",
+      "sentence": "Still deciding between options? Read our guide to [comparing an AI receptionist with an answering service and an IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr)."
+    }
+  ]
+}
