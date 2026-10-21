@@ -53,11 +53,15 @@ export function WatchHowButton({ slug, compact = false }: { slug: string; compac
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`Watch how: ${video.title}`}
+        aria-label={`Watch the video: ${video.title} (${video.length})`}
         className={`flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary ${compact ? 'h-9 justify-center px-2.5 sm:h-auto sm:px-3.5 sm:py-2' : 'px-3 py-1.5'}`}
       >
         <Icon name="play_arrow" className="text-[16px] text-primary" />
-        <span className={compact ? 'sr-only sm:not-sr-only' : ''}>Watch how</span>
+        {/* Name what the video shows; "Watch how" alone left people asking how to what. */}
+        <span className={compact ? 'sr-only sm:not-sr-only' : ''}>
+          <span className="sm:hidden">How-to video</span>
+          <span className="hidden sm:inline">Video: <span className="text-text">{video.topic}</span></span>
+        </span>
         <span className="hidden text-text-muted sm:inline">· {video.length}</span>
       </button>
       {open && (
