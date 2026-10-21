@@ -3187,7 +3187,8 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                     # handed a voice reading the wrong language.
                     voice_unsupported = True
             elif provider not in (None, "elevenlabs-v3"):
-                agent.tts.update_options(target_language_code=code)
+                # Bharat: Sarvam sits inside a FallbackAdapter (call 1450).
+                getattr(agent.tts, "_vistrow_primary", agent.tts).update_options(target_language_code=code)
             # elevenlabs-v3 (StreamAdapter) has no update_options — same
             # known limitation as the automatic switch path in main.py.
         except Exception:

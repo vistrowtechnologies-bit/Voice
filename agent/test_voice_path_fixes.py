@@ -47,3 +47,26 @@ class SourceGuards(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BharatVoiceFollowsLanguage(unittest.TestCase):
+    """Call 1450: the Bharat (Sarvam) voice sits in a FallbackAdapter with no
+    update_options, so a switch to Marathi never reached it."""
+
+    def test_switch_reaches_the_sarvam_primary(self):
+        seen = {}
+        primary = SimpleNamespace(update_options=lambda **k: seen.update(k))
+        adapter = SimpleNamespace(_vistrow_primary=primary)  # no update_options, like FallbackAdapter
+        agent = SimpleNamespace(
+            _reply_language="hi-IN", _pending_language=None, _pending_language_streak=0,
+            _tts_provider="sarvam", _voice="priya", _speaking_voice="priya", tts=adapter,
+        )
+        items = [SimpleNamespace(role="user", text_content="Okay तुम्ही मराठीमध्ये बोलू शकता.")]
+        session = SimpleNamespace(current_agent=agent, history=SimpleNamespace(items=items), userdata={})
+        out = asyncio.run(tools.switch_reply_language(SimpleNamespace(session=session, userdata={}), "Marathi"))
+        self.assertEqual(seen.get("target_language_code"), "mr-IN")
+        self.assertIn("Marathi", out)
+
+    def test_sarvam_branch_stashes_its_primary(self):
+        src = inspect.getsource(main)
+        self.assertIn("_adapter._vistrow_primary = sarvam_tts", src)

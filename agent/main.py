@@ -3261,7 +3261,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         language=to_google_code(reply_language), credentials_info=_GOOGLE_CREDENTIALS,
         **_rate,
     )
-    return TtsFallbackAdapter([sarvam_tts, google_tts], **_rate), "sarvam"
+    _adapter = TtsFallbackAdapter([sarvam_tts, google_tts], **_rate)
+    # FallbackAdapter has no update_options, so a language switch could never
+    # reach Sarvam: call 1450 switched to Marathi and the Bharat voice kept
+    # Hindi pronunciation ("'FallbackAdapter' object has no attribute
+    # 'update_options'"). The switch paths update this primary directly.
+    _adapter._vistrow_primary = sarvam_tts
+    return _adapter, "sarvam"
 
 
 def _parse_json_config(raw, default):
@@ -6257,7 +6263,7 @@ class RealEstateAgent(Agent):
                 # Google credentials are configured — see _build_tts's
                 # default branch — and FallbackAdapter has no update_options.
                 try:
-                    self.tts.update_options(target_language_code=candidate)
+                    getattr(self.tts, "_vistrow_primary", self.tts).update_options(target_language_code=candidate)
                 except AttributeError:
                     logger.warning("language-switch update_options failed (fallback-wrapped TTS)", exc_info=True)
             logger.info("switching reply language to %s", candidate)
