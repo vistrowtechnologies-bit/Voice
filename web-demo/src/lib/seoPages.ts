@@ -475,8 +475,8 @@ export const SEO_PAGES: SeoPage[] = [
   ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Business owner listening on a phone and taking notes beside a laptop' },
   ...VOICE_BLOG_POSTS.map((post) => ({ ...page(
     `/resources/blog/${post.slug}`,
-    `${post.title} | Vistrow Voice`,
-    post.excerpt,
+    post.seoTitle ?? `${post.title} | Vistrow Voice`,
+    post.metaDescription ?? post.excerpt,
     'blog',
     `Vistrow Voice guide: ${post.title}`,
     'article',

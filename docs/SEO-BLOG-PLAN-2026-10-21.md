@@ -26,8 +26,12 @@ Last 7 days (11 to 17 Oct): 8 clicks, 516 impressions; impressions by country: I
 ## Rules for every post
 
 - No prices (the pricing page is the only place for them), no named competitors, no invented statistics. Any number cites a primary source in `sources`.
-- Product claims must match the product: 12 languages (Hindi, English, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia, Assamese); no Urdu. Phone numbers connect through the customer's telephony provider (EnableX today); overseas calling depends on that provider. The website voice widget works from any browser.
-- No em dashes (the build rejects them). At least 4 sections, 350+ words, 2+ descriptive internal links in the first section, a cover image (1200x675 and 640 px) with alt text.
+- Product claims must match the product: calls in 11 languages (Hindi, English, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia; agent/language.py LANGUAGE_NAMES); no Urdu. Assamese is only for cloned voices. Phone numbers connect through the customer's telephony provider (EnableX today); overseas calling depends on that provider. The website voice widget works from any browser.
+- No em dashes (the build rejects them). A cover image (1200x675 and 640 px) with alt text.
+- SEO: `seoTitle` of 60 characters or fewer with the primary keyword first; `metaDescription` of 155 or fewer; question-style H2s that use keyword variants; about 1,200 to 1,600 words.
+- AEO: `shortAnswer` of 40 to 60 words that answers the main question directly; 4 to 6 `faqs` (rendered with FAQPage data).
+- GEO: at least one sentence that says plainly what Vistrow Voice does for this use case; facts stated as standalone sentences that can be quoted; every number cited in sources.
+- Internal links: at least one descriptive in-text link in every section (product, solution, language and related blog pages), 2+ in the first section, `related` set to 3 relevant slugs, and add an in-text link to the new post from 2 relevant existing pages.
 - Write for a buyer who is comparing: what to test, what to ask, what good looks like.
 
 ## 30-day calendar
