@@ -463,6 +463,7 @@ function FullPageHeader({
   children,
   refreshSignal = 0,
   ownWatchHow = false,
+  lead,
 }: {
   title: string
   subtitle?: string
@@ -470,6 +471,8 @@ function FullPageHeader({
   refreshSignal?: number
   /** The page shows its own Watch how in its toolbar (the Dashboard). */
   ownWatchHow?: boolean
+  /** Shown at the left of the page's action row, e.g. a short note with an InfoTip. */
+  lead?: ReactNode
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
@@ -533,8 +536,9 @@ function FullPageHeader({
   // agent ID, its Watch how video...) sit in a row at the top of the page
   // instead, so the bar never changes shape from page to page (owner, 17 and
   // 19 Oct).
-  const pageActions = (children || newAgent || watchHow) && (
+  const pageActions = (lead || children || newAgent || watchHow) && (
     <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4 sm:px-6">
+      {lead && <div className="mr-auto min-w-0">{lead}</div>}
       {watchHow}
       {children}
       {newAgent}
@@ -591,7 +595,7 @@ function FullPageHeader({
   )
 }
 
-type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number; ownWatchHow?: boolean }
+type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number; ownWatchHow?: boolean; lead?: ReactNode }
 
 /** The page title bar. Inside a Settings tab the tab itself is the title, so only the page's own
  * action buttons and its one-line description are kept. */

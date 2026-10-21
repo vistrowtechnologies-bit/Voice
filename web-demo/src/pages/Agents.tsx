@@ -18,7 +18,7 @@ import {
 } from '../lib/api'
 import type { AgentActivity, AgentConfig, KnowledgeBase, PhoneNumber, LaunchReadiness } from '../lib/types'
 import { isRealtimeModel, modelLabel, voiceLabel } from '../lib/agentOptions'
-import { Tooltip } from '../components/ui/Tooltip'
+import { InfoTip, Tooltip } from '../components/ui/Tooltip'
 import { useClonedVoices } from '../components/ClonedVoiceOptions'
 
 type AgentFilter = 'all' | 'live' | 'needs-setup' | 'paused' | 'draft'
@@ -217,15 +217,21 @@ export function Agents() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Agents" subtitle={`${agents.length} total ${agents.length === 1 ? 'agent' : 'agents'}`} />
+      <PageHeader
+        title="Agents"
+        subtitle={`${agents.length} total ${agents.length === 1 ? 'agent' : 'agents'}`}
+        lead={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted">
+            <span className="hidden sm:inline">Changes go live on the next call</span>
+            <InfoTip label="How agent changes apply" side="bottom">
+              Assign each website to its intended agent from Website Widget. Unassigned web calls use the first active agent.
+              Prompt, voice, model, knowledge, and pause changes apply from the next call without a redeploy.
+            </InfoTip>
+          </p>
+        }
+      />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
-        <div className="rounded-lg border border-border bg-surface px-4 py-3 text-xs text-text-muted">
-          <Icon name="info" className="mr-1.5 align-[-3px] text-[15px] text-cyan" />
-          Assign each website to its intended agent from Website Widget. Unassigned web calls use the first active agent.
-          Prompt, voice, model, knowledge, and pause changes apply from the next call without a redeploy.
-        </div>
-
         {view === 'tiles' && !loading && agents.length > 0 && (
           <section className="bento-tile bento-hero flex flex-wrap items-end justify-between gap-5">
             <div>
