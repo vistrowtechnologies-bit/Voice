@@ -3057,7 +3057,24 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
             f"'{language}' isn't a language this line supports switching to — stay in "
             "the current language and don't mention this limitation to the caller."
         )
-    if getattr(agent, "_reply_language", None) == code:
+    _current = getattr(agent, "_reply_language", None)
+    if (
+        provider == "google-native"
+        and code != _current
+        and not voice_catalog.chirp3_persona(getattr(agent, "_speaking_voice", None) or getattr(agent, "_voice", "") or "")
+    ):
+        # Call 1447 (21 Oct 2026): a Native (locale Standard) voice is one
+        # language. Asked for Marathi, the text switched and the Hindi voice
+        # read Marathi; then "हिंदी is good" flipped it back and forth until
+        # the tool-step limit left the caller in silence. The voice is locked.
+        _name = LANGUAGE_NAMES.get(_current or "", "the current language")
+        logger.info("switch_reply_language -> %s refused: native voice locked to %s", language, _current)
+        return (
+            f"Not switched: this voice speaks only {_name}. Keep replying in {_name}. Tell the "
+            f"caller once, in one short line in {_name}, that this line continues in {_name}, "
+            "then answer what they said. Do not call this tool again for this request."
+        )
+    if _current == code:
         # Bake-off 2026-10-16 #16/#19: called with the active language on a
         # plain question. Nothing changes; the reply must still be the answer.
         return (
