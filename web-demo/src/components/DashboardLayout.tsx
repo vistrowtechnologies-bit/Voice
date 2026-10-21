@@ -20,10 +20,13 @@ import { WatchHowButton } from './HelpVideo'
 import { helpVideoFor } from '../lib/helpVideos'
 import { Icon } from './Icon'
 import { StorageWarning } from './StorageWarning'
+import { MobileTabBar } from './MobileTabBar'
 import vistrowMark from '../assets/vistrow-mark.png'
 import { Tooltip } from './ui/Tooltip'
 
-const SIDEBAR_KEY = 'vistrow.sidebar.collapsed'
+// Pinned open is opt-in: the slim rail is the default (owner, 21 Oct 2026),
+// so this is a new key rather than the old collapsed flag.
+const SIDEBAR_PIN_KEY = 'vistrow.sidebar.pinned'
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 const TOGGLE_SHORTCUT = isMac ? '⌘B' : 'Ctrl+B'
 
@@ -158,7 +161,7 @@ function HeaderAvatarMenu() {
   )
 }
 
-function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
+function AccountMenu({ labelCls = '' }: { labelCls?: string }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const workspace = user?.accountName || BRAND.defaultWorkspace
@@ -183,7 +186,6 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
 
   const go = (to: string) => {
     setOpen(false)
-    onNavigate?.()
     navigate(to)
   }
   const handleLogout = async () => {
@@ -193,7 +195,7 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div ref={rootRef} className="relative border-t border-border pt-3">
+    <div ref={rootRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
@@ -207,11 +209,11 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
             {initials(workspace)}
           </div>
         )}
-        <div className="min-w-0 flex-1">
+        <div className={`min-w-0 flex-1 ${labelCls}`}>
           <p className="truncate text-sm font-semibold">{workspace}</p>
           <p className="truncate text-[11px] text-text-muted">{user?.name || 'Admin'}</p>
         </div>
-        <Icon name={open ? 'expand_more' : 'expand_less'} className="text-[18px] text-text-muted" />
+        <Icon name={open ? 'expand_more' : 'expand_less'} className={`text-[18px] text-text-muted ${labelCls}`} />
       </button>
 
       {open && (
@@ -274,173 +276,88 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onClose?: () => void }) {
+/** Labels and headings in the slim rail: hidden while it is a 76px icon
+ * strip, shown once it widens (hover, keyboard focus, an open account menu,
+ * or pinned open). */
+const RAIL_SHOW =
+  'opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-has-[:focus-visible]/rail:opacity-100 group-has-[[aria-expanded=true]]/rail:opacity-100'
+
+/** The desktop sidebar (owner, 21 Oct 2026): a slim icon rail that widens over
+ * the page on hover, or stays open when pinned. Icons never move, so the rail
+ * reads the same in both states. */
+function SlimSidebar({ pinned, onTogglePin }: { pinned: boolean; onTogglePin?: () => void }) {
   const { user } = useAuth()
   const location = useLocation()
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set())
-  const groupIcons: Record<string, string> = {
-    'Workspace tools': 'settings_suggest',
-    Campaigns: 'campaign',
-  }
   const workspace = user?.accountName || BRAND.defaultWorkspace
-
-  useEffect(() => {
-    const activeGroup = NAV_GROUPS.find((group) => !group.pinned && !group.standalone && group.items.some((item) => location.pathname === item.to || (item.to !== '/dashboard' && location.pathname.startsWith(`${item.to}/`))))
-    if (activeGroup) setExpandedGroups(new Set([activeGroup.title]))
-  }, [location.pathname])
-
-  const toggleGroup = (title: string) => setExpandedGroups((current) => {
-    const next = new Set(current)
-    if (next.has(title)) next.delete(title)
-    else next.add(title)
-    return next
-  })
-
-  return (
-    <>
-      <div className="mb-4 flex min-h-[62px] items-center gap-3 rounded-xl border border-border bg-bg/70 px-2.5 py-2">
-        <img src={vistrowMark} alt="" className="h-9 w-9 shrink-0 rounded-xl shadow-sm" />
-        <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-bold leading-tight tracking-tight">{workspace}</span>
-          <span className="mt-1 flex items-center gap-1 truncate text-[10px] font-medium text-text-muted"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {BRAND.name} workspace</span>
-        </div>
-        {onClose && (
-          <Tooltip content={`Close sidebar (${TOGGLE_SHORTCUT})`}><button
-            onClick={onClose}
-            aria-label="Close sidebar"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-primary"
-          >
-            <Icon name="left_panel_close" className="text-[20px]" />
-          </button></Tooltip>
-        )}
-      </div>
-      <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 vv-quiet-scroll overflow-x-hidden overflow-y-auto pb-3">
-        {NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly).map((group) => group.standalone ? (
-          <div key={group.title} className={group.showHeading ? 'mb-3' : 'mb-3 border-b border-border pb-3'}>
-            {group.showHeading && <p className="mb-1.5 px-3 pt-2 text-[11px] font-bold tracking-[0.12em] text-text-muted">{group.title}</p>}
-            {group.items.map((item) => <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/dashboard'}
-              onClick={onNavigate}
-              data-tour={item.tour}
-              className={() => `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-[15px] transition-colors ${navItemActive(item, location.pathname) ? 'bg-primary/10 font-semibold text-primary shadow-[inset_3px_0_0_var(--color-primary)]' : 'text-text-muted hover:bg-surface-high hover:text-text'}`}
-            >
-              <Icon name={item.icon} className={`shrink-0 text-[21px] ${navItemActive(item, location.pathname) ? 'text-primary' : 'text-text-muted'}`} />
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {navItemActive(item, location.pathname) && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-            </NavLink>)}
-          </div>
-        ) : (
-          <div key={group.title} className="mb-3 rounded-xl">
-            <button type="button" aria-expanded={expandedGroups.has(group.title)} onClick={() => toggleGroup(group.title)} className="group flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-left text-[13px] font-semibold text-text transition-colors hover:bg-surface-high">
-              <Icon name={groupIcons[group.title] || 'apps'} className="shrink-0 text-[21px] text-text-muted transition-colors group-hover:text-primary" />
-              <span className="min-w-0 flex-1 truncate">{group.title}</span>
-              <Icon name={expandedGroups.has(group.title) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'} className="shrink-0 text-[19px] text-text-muted" />
-            </button>
-            {expandedGroups.has(group.title) && <div className="ml-[26px] flex flex-col gap-0.5 border-l border-border pb-1.5 pl-2.5">
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/dashboard'}
-                  onClick={onNavigate}
-                  data-tour={item.tour}
-                  className={({ isActive }) =>
-                    `flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] transition-colors ${
-                      isActive
-                        ? 'bg-primary/10 font-semibold text-primary shadow-[inset_2px_0_0_var(--color-primary)]'
-                        : 'text-text-muted hover:bg-surface-high hover:text-text'
-                    }`
-                  }
-                >
-                  <Icon name={item.icon} className="shrink-0 text-[19px]" />
-                  <span className="min-w-0 truncate">{item.label}</span>
-                </NavLink>
-              ))}
-            </div>}
-          </div>
-        ))}
-      </nav>
-      <StorageWarning />
-      {user?.isPlatformOwner && !user?.impersonating && (
-        <NavLink
-          to="/admin"
-          onClick={onNavigate}
-          className="mb-3 flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20"
-        >
-          <Icon name="shield_person" className="text-[19px]" />
-          <span>Admin panel</span>
-        </NavLink>
-      )}
-      <AccountMenu onNavigate={onNavigate} />
-    </>
-  )
-}
-
-/** The collapsed desktop sidebar: the same destinations as icons, each named
- * by a tooltip, so collapsing saves width without hiding navigation. */
-function SidebarRail({ onExpand }: { onExpand: () => void }) {
-  const { user } = useAuth()
-  const workspace = user?.accountName || BRAND.defaultWorkspace
-  const location = useLocation()
-  const railLink = (active: boolean) =>
-    `flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-      active ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-surface-high hover:text-text'
+  const show = pinned ? '' : RAIL_SHOW
+  const groups = NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly)
+  const itemCls = (active: boolean) =>
+    `flex h-9 w-full min-w-0 shrink-0 items-center gap-3 rounded-xl px-[15px] text-[14.5px] transition-colors ${
+      active ? 'bg-primary/10 font-semibold text-primary' : 'font-medium text-text-muted hover:bg-surface-high hover:text-text'
     }`
 
   return (
     <>
-      <img src={vistrowMark} alt="" className="mx-auto mb-2 h-9 w-9 shrink-0 rounded-xl shadow-sm" />
-      <Tooltip side="right" content={`Open sidebar (${TOGGLE_SHORTCUT})`}><button
-        onClick={onExpand}
-        aria-label="Open sidebar"
-        className="mx-auto mb-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-primary"
+      <div className="mb-3 flex h-11 shrink-0 items-center gap-3 px-[10px]">
+        <img src={vistrowMark} alt="" className="h-8 w-8 shrink-0 rounded-[10px] shadow-sm" />
+        <div className={`min-w-0 flex-1 ${show}`}>
+          <span className="block truncate text-sm font-bold leading-tight tracking-tight">{workspace}</span>
+          <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-medium text-text-muted"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {BRAND.name} workspace</span>
+        </div>
+        {onTogglePin && (
+          <Tooltip side="right" content={`${pinned ? 'Collapse sidebar' : 'Keep sidebar open'} (${TOGGLE_SHORTCUT})`}><button
+            type="button"
+            onClick={onTogglePin}
+            aria-label={pinned ? 'Collapse sidebar' : 'Keep sidebar open'}
+            aria-pressed={pinned}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-transparent text-text-muted hover:bg-surface-high hover:text-primary ${show}`}
+          >
+            <Icon name={pinned ? 'left_panel_close' : 'left_panel_open'} className="text-[20px]" />
+          </button></Tooltip>
+        )}
+      </div>
+      <Link
+        to="/dashboard/agents?new=1"
+        aria-label="New agent"
+        className="mb-2 flex h-9 shrink-0 items-center gap-3 rounded-xl bg-gradient-to-br from-[#7c3aed] to-[#c026d3] px-[15px] text-[14.5px] font-semibold text-white shadow-[0_10px_22px_-12px_#7c3aed] transition-[filter] hover:brightness-110"
       >
-        <Icon name="left_panel_open" className="text-[20px]" />
-      </button></Tooltip>
-      <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 flex-1 flex-col items-center gap-0.5 overflow-y-auto border-t border-border pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly).map((group, index) => (
-          <div key={group.title} className={`flex flex-col items-center gap-0.5 ${index ? 'mt-1.5 border-t border-border pt-1.5' : ''}`}>
-            {group.items.map((item) => (
-              <Tooltip key={item.to} side="right" content={item.label}><NavLink
-                to={item.to}
-                end={item.to === '/dashboard'}
-                aria-label={item.label}
-                data-tour={item.tour}
-                className={railLink(navItemActive(item, location.pathname))}
-              >
-                <Icon name={item.icon} className="text-[19px]" />
-              </NavLink></Tooltip>
-            ))}
+        <Icon name="add" className="shrink-0 text-[21px]" />
+        <span className={`truncate whitespace-nowrap ${show}`}>New agent</span>
+      </Link>
+      <nav aria-label="Main navigation" data-clarity-unmask="true" className="vv-quiet-scroll flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto pb-2">
+        {groups.map((group, index) => (
+          // Groups are split by a thin line; the icons and labels name them.
+          <div key={group.title} className={`flex flex-col gap-0.5 ${index ? 'mt-1.5 border-t border-border pt-1.5' : ''}`}>
+            {group.items.map((item) => {
+              const active = navItemActive(item, location.pathname)
+              return (
+                <NavLink key={item.to} to={item.to} end={item.to === '/dashboard'} aria-label={item.label} data-tour={item.tour} className={itemCls(active)}>
+                  <Icon name={item.icon} className="shrink-0 text-[21px]" />
+                  <span className={`min-w-0 flex-1 truncate whitespace-nowrap ${show}`}>{item.label}</span>
+                </NavLink>
+              )
+            })}
           </div>
         ))}
       </nav>
-      <div className="flex shrink-0 flex-col items-center gap-2 border-t border-border pt-2">
+      <div className={`shrink-0 ${show}`}><StorageWarning /></div>
+      <div className="flex shrink-0 flex-col gap-0.5 border-t border-border pt-2">
         {user?.isPlatformOwner && !user?.impersonating && (
-          <Tooltip side="right" content="Admin panel"><NavLink
-            to="/admin"
-            aria-label="Admin panel"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-destructive/40 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
-          >
-            <Icon name="shield_person" className="text-[19px]" />
-          </NavLink></Tooltip>
+          <NavLink to="/admin" aria-label="Admin panel" className="flex h-9 items-center gap-3 rounded-xl px-[15px] text-[14.5px] font-semibold text-destructive transition-colors hover:bg-destructive/10">
+            <Icon name="shield_person" className="shrink-0 text-[21px]" />
+            <span className={`whitespace-nowrap ${show}`}>Admin panel</span>
+          </NavLink>
         )}
-        <Tooltip side="right" content={workspace}><Link to="/dashboard/settings?tab=profile" aria-label="My profile" className="rounded-full">
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt="" className="h-9 w-9 rounded-full border border-primary/30 object-cover" />
-          ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">{initials(workspace)}</span>
-          )}
-        </Link></Tooltip>
+        <AccountMenu labelCls={show} />
       </div>
     </>
   )
 }
 
-/** Lets a page's header open the phone navigation drawer and tell the layout
- * it is drawing the phone app bar itself (so the layout's plain bar hides). */
-const MobileNavContext = createContext<{ openNav: () => void; setHeaderShown: (shown: boolean) => void } | null>(null)
+/** Lets a page's header tell the layout it is drawing the phone app bar
+ * itself (so the layout's plain bar hides). Navigation on phones is the
+ * bottom tab bar (MobileTabBar). */
+const MobileNavContext = createContext<{ setHeaderShown: (shown: boolean) => void } | null>(null)
 
 function useIsDesktop() {
   const query = '(min-width: 1024px)'
@@ -463,6 +380,8 @@ function FullPageHeader({
   children,
   refreshSignal = 0,
   ownWatchHow = false,
+  lead,
+  hideNewAgent = false,
 }: {
   title: string
   subtitle?: string
@@ -470,12 +389,16 @@ function FullPageHeader({
   refreshSignal?: number
   /** The page shows its own Watch how in its toolbar (the Dashboard). */
   ownWatchHow?: boolean
+  /** Shown at the left of the page's action row, e.g. a short note with an InfoTip. */
+  lead?: ReactNode
+  /** The Agents page shows New Agent in its own team bar instead. */
+  hideNewAgent?: boolean
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
   // Agent creation belongs to the Agents page. Showing it on the overview
   // duplicated Quick actions and displaced dashboard-specific controls.
-  const showNewAgent = pathname === '/dashboard/agents'
+  const showNewAgent = pathname === '/dashboard/agents' && !hideNewAgent
   const videoSlug = helpVideoFor(pathname)
   const watchHow = videoSlug && !ownWatchHow && <WatchHowButton slug={videoSlug} />
 
@@ -533,8 +456,9 @@ function FullPageHeader({
   // agent ID, its Watch how video...) sit in a row at the top of the page
   // instead, so the bar never changes shape from page to page (owner, 17 and
   // 19 Oct).
-  const pageActions = (children || newAgent || watchHow) && (
+  const pageActions = (lead || children || newAgent || watchHow) && (
     <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4 sm:px-6">
+      {lead && <div className="mr-auto min-w-0">{lead}</div>}
       {watchHow}
       {children}
       {newAgent}
@@ -542,19 +466,24 @@ function FullPageHeader({
   )
 
   if (!desktop) {
-    // Phone and tablet: one app bar (menu, title, search, alerts, account)
-    // and a row for the minutes pill.
+    // Phone and tablet: one app bar row (title, minutes, search, alerts,
+    // account). Navigation is the bottom tab bar.
     return (
       <>
         <header className="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur-xl">
           <div className="flex h-14 items-center gap-0.5 px-1.5">
-            <button type="button" aria-label="Open navigation" onClick={() => mobileNav?.openNav()} className={appBarIconBtn}>
-              <Icon name="menu" className="text-[22px]" />
-            </button>
-            <div className="flex min-w-0 flex-1 items-center gap-2 px-1">
-              <img src={vistrowMark} alt="" className="h-7 w-7 shrink-0 rounded-lg" />
-              <h1 className="truncate text-[17px] font-semibold tracking-tight">{title}</h1>
-            </div>
+            {/* No logo here: the title needs the room, and Home is in the tab bar. */}
+            <h1 className="min-w-0 flex-1 truncate pl-2.5 pr-1 text-[17px] font-semibold tracking-tight">{title}</h1>
+            {credits !== null && (
+              <Link
+                to={topupAvailable ? '/dashboard/settings?tab=billing&topup=1' : '/dashboard/settings?tab=billing'}
+                aria-label={topupAvailable ? `${credits} minutes remaining. Buy minutes` : `${credits} minutes remaining. Open plan and billing`}
+                className="mr-0.5 flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-2 py-1 text-xs font-semibold text-text-muted"
+              >
+                <Icon name="toll" className="text-[14px] text-cyan" />
+                {credits}<span className="-ml-0.5 hidden min-[360px]:inline">&nbsp;min</span>
+              </Link>
+            )}
             <button type="button" aria-label="Search and commands" aria-haspopup="dialog" onClick={openCommandMenu} className={appBarIconBtn}>
               <Icon name="search" className="text-[21px]" />
             </button>
@@ -562,9 +491,6 @@ function FullPageHeader({
             <span className="pl-1 pr-1.5">
               <HeaderAvatarMenu />
             </span>
-          </div>
-          <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {creditsPill}
           </div>
         </header>
         {pageActions}
@@ -591,7 +517,7 @@ function FullPageHeader({
   )
 }
 
-type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number; ownWatchHow?: boolean }
+type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number; ownWatchHow?: boolean; lead?: ReactNode; hideNewAgent?: boolean }
 
 /** The page title bar. Inside a Settings tab the tab itself is the title, so only the page's own
  * action buttons and its one-line description are kept. */
@@ -659,23 +585,22 @@ function ImpersonationBanner({ accountName, session }: { accountName: string; se
 
 function FullDashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [headerShown, setHeaderShown] = useState(false)
-  const openNav = useCallback(() => setMobileNavOpen(true), [])
-  const [mobileNav] = useState(() => ({ openNav, setHeaderShown }))
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+  const [mobileNav] = useState(() => ({ setHeaderShown }))
+  const [sidebarPinned, setSidebarPinned] = useState(() => {
     try {
-      return localStorage.getItem(SIDEBAR_KEY) === 'true'
+      return localStorage.getItem(SIDEBAR_PIN_KEY) === 'true'
     } catch {
       return false
     }
   })
 
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((current) => {
+    setSidebarPinned((current) => {
       const next = !current
       try {
-        localStorage.setItem(SIDEBAR_KEY, String(next))
+        localStorage.setItem(SIDEBAR_PIN_KEY, String(next))
       } catch {
         // Private mode / blocked storage: the toggle still works this visit.
       }
@@ -685,7 +610,7 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
 
   // The first-run tour points at sidebar links, so it keeps the sidebar open.
   const tourActive = !!user && user.onboarded && !user.tourCompleted
-  const sidebarOpen = !sidebarCollapsed || tourActive
+  const sidebarOpen = sidebarPinned || tourActive
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -700,15 +625,6 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [toggleSidebar])
-
-  useEffect(() => {
-    if (!mobileNavOpen) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
-  }, [mobileNavOpen])
 
   // Theme is a dashboard-only preference - apply the stored choice on mount
   // and revert to the designed dark look on unmount so the public
@@ -737,37 +653,24 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
           it has no trigger in the layout and renders nothing until opened. */}
       <CommandPalette />
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} session={user.impersonating} />}
+      {/* Slim rail: 76px of icons that widens over the page on hover (a short
+          delay so passing the pointer across it does not flicker it open), or
+          pinned open, when the page moves over to make room. */}
       <aside
         data-dashboard-sidebar
-        className={`fixed left-0 z-30 hidden flex-col overflow-x-hidden border-r border-border bg-surface py-3 transition-[width] duration-200 ease-out motion-reduce:transition-none lg:flex ${
-          sidebarOpen ? 'w-[248px] px-2' : 'w-16 px-1'
+        className={`group/rail fixed left-0 z-30 hidden flex-col overflow-x-hidden border-r border-border bg-surface px-3 py-3 transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none lg:flex ${
+          sidebarOpen
+            ? 'w-[248px]'
+            : 'w-[76px] hover:w-[248px] hover:shadow-[0_24px_60px_-20px_rgb(0_0_0/0.35)] hover:delay-100 has-[:focus-visible]:w-[248px] has-[[aria-expanded=true]]:w-[248px]'
         } ${user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'}`}
       >
-        {sidebarOpen ? <SidebarContent onClose={tourActive ? undefined : toggleSidebar} /> : <SidebarRail onExpand={toggleSidebar} />}
+        <SlimSidebar pinned={sidebarOpen} onTogglePin={tourActive ? undefined : toggleSidebar} />
       </aside>
 
-      {mobileNavOpen && (
-        <div className="fixed inset-0 z-40 flex lg:hidden">
-          <div className="vv-quiet-scroll flex w-64 flex-col overflow-x-hidden overflow-y-auto bg-surface p-4">
-            <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
-          </div>
-          <button
-            aria-label="Close navigation"
-            className="flex-1 bg-black/60"
-            onClick={() => setMobileNavOpen(false)}
-          />
-        </div>
-      )}
+      <MobileTabBar moreOpen={moreOpen} onMoreOpenChange={setMoreOpen} />
 
-      <div className={`min-w-0 transition-[margin] duration-200 ease-out motion-reduce:transition-none ${sidebarOpen ? 'lg:ml-[248px]' : 'lg:ml-16'} ${user?.impersonating ? 'pt-9' : ''}`}>
+      <div className={`min-w-0 transition-[margin] duration-200 ease-out motion-reduce:transition-none ${sidebarOpen ? 'lg:ml-[248px]' : 'lg:ml-[76px]'} ${user?.impersonating ? 'pt-9' : ''}`}>
         {!headerShown && <div className="flex items-center gap-3 border-b border-border px-4 py-3 lg:hidden">
-          <button
-            aria-label="Open navigation"
-            onClick={() => setMobileNavOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-muted transition-colors hover:border-primary hover:text-primary"
-          >
-            <Icon name="menu" />
-          </button>
           <img src={vistrowMark} alt="" className="h-7 w-7 rounded-lg" />
           <span className="font-semibold tracking-tight">{BRAND.name}</span>
         </div>}
@@ -777,7 +680,8 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
             status badge, a stat, a form's action buttons) sits directly
             under it. This padding is sized to clear the widget's launcher
             button plus its own margin at both breakpoints. */}
-        <main className="pb-24 sm:pb-28">
+        {/* Phones also clear the bottom tab bar (MobileTabBar). */}
+        <main className="pb-32 sm:pb-36 lg:pb-28">
           <MobileNavContext.Provider value={mobileNav}>{children}</MobileNavContext.Provider>
         </main>
       </div>

@@ -22,14 +22,16 @@ interface ActiveCallUIProps {
   onLeadUpdate: (partial: Partial<LeadSummary>) => void
   onTranscriptUpdate: (entries: TranscriptEntry[]) => void
   agentLabel?: string
+  /** The agent's own name, for the status line and transcript labels. */
+  agentName?: string
 }
 
-const STATE_STYLES: Record<string, { label: string }> = {
-  listening: { label: 'Listening…' },
-  thinking: { label: 'Thinking…' },
-  speaking: { label: 'Agent is speaking…' },
+const STATE_STYLES: Record<string, { label: string; hint: string }> = {
+  listening: { label: 'Listening', hint: 'Your turn - speak naturally, in any language.' },
+  thinking: { label: 'Thinking…', hint: 'Working out the reply.' },
+  speaking: { label: 'Speaking', hint: 'You can interrupt at any time.' },
 }
-const WAITING_STYLE = { label: 'Waiting for agent to join…' }
+const WAITING_STYLE = { label: 'Waiting for agent to join…', hint: 'This usually takes a few seconds.' }
 // How long to wait before adding a "this is slow" hint under the plain
 // waiting label - a worker restart (crash, redeploy, LiveKit Cloud
 // recycling the node) can take 10-15s to cold-boot and pick up the job, and
@@ -63,8 +65,16 @@ function OrbVideo({ volume, dimmed, speaking }: { volume: number; dimmed?: boole
   }, [speaking])
 
   return (
+    <div className="relative">
+      {/* Halo rings ripple out while the agent talks. */}
+      {speaking && (
+        <>
+          <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-full border-2 border-primary/40 [animation-duration:1.6s]" />
+          <span aria-hidden="true" className="absolute -inset-3 animate-ping rounded-full border border-primary/25 [animation-delay:0.5s] [animation-duration:1.6s]" />
+        </>
+      )}
     <div
-      className="relative h-72 w-72 overflow-hidden rounded-full transition-transform duration-150 ease-out sm:h-[26rem] sm:w-[26rem]"
+      className="relative h-44 w-44 overflow-hidden rounded-full shadow-[0_18px_50px_-12px_rgb(168_85_247/0.7)] ring-4 ring-white/70 transition-transform duration-150 ease-out sm:h-56 sm:w-56"
       style={{
         transform: `scale(${scale})`,
         opacity: dimmed ? 0.45 : 1,
@@ -80,13 +90,14 @@ function OrbVideo({ volume, dimmed, speaking }: { volume: number; dimmed?: boole
         className="h-full w-full scale-150 object-cover"
       />
     </div>
+    </div>
   )
 }
 
 // useParticipantAttribute throws if it's ever called with no participant
 // available (via useEnsureParticipant), so this can only be mounted once an
 // agent participant actually exists - see the conditional render below.
-function AgentOrb({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
+function AgentOrb({ agentParticipant, agentName }: { agentParticipant: RemoteParticipant; agentName: string }) {
   const agentStateRaw = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
   const agentState = (agentStateRaw || 'initializing') as AgentState
   const agentTracks = useTracks([Track.Source.Microphone]).filter(
@@ -96,9 +107,25 @@ function AgentOrb({ agentParticipant }: { agentParticipant: RemoteParticipant })
   const stateStyle = STATE_STYLES[agentState] ?? WAITING_STYLE
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-5">
       <OrbVideo volume={volume} speaking={agentState === 'speaking'} />
-      <p className="text-sm text-text-muted">{stateStyle.label}</p>
+      <CallStatus
+        label={agentState === 'speaking' ? `${agentName} is speaking` : stateStyle.label}
+        hint={stateStyle.hint}
+        live={agentState === 'listening' || agentState === 'speaking'}
+      />
+    </div>
+  )
+}
+
+function CallStatus({ label, hint, live }: { label: string; hint: string; live: boolean }) {
+  return (
+    <div className="text-center" role="status">
+      <p className="flex items-center justify-center gap-2 font-display text-xl font-bold">
+        <span className={`h-2.5 w-2.5 rounded-full ${live ? 'animate-pulse bg-success' : 'bg-text-muted'}`} />
+        {label}
+      </p>
+      <p className="mt-1 text-sm text-text-muted">{hint}</p>
     </div>
   )
 }
@@ -107,6 +134,7 @@ export function ActiveCallUI({
   onLeadUpdate,
   onTranscriptUpdate,
   agentLabel = `${BRAND.defaultAgentName} · ${BRAND.name} Assistant`,
+  agentName = BRAND.defaultAgentName,
 }: ActiveCallUIProps) {
   const room = useRoomContext()
   const connectionState = useConnectionState()
@@ -216,109 +244,139 @@ export function ActiveCallUI({
     }
   })
 
+  const [title, subtitle] = agentLabel.split(' · ')
+  const controlCls = 'flex flex-col items-center gap-1.5 text-xs font-semibold text-text-muted'
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-bg text-text">
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-2 text-sm text-text-muted">
-          <span className="h-2 w-2 rounded-full bg-primary" />
-          {agentLabel}
+      {/* Floating helpers (dashboard help bubble, website widget) would sit
+          over the call controls, so they are hidden while a call is on. */}
+      <style>{'.vv-help-root,#vistrow-voice-widget-host{display:none!important}'}</style>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#7c3aed] to-[#c026d3] font-display text-xs font-extrabold text-white">
+            {agentName.slice(0, 2).toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-display text-sm font-bold">{title}</p>
+            {subtitle && <p className="truncate text-xs text-text-muted">{subtitle}</p>}
+          </div>
         </div>
-        <span className="font-mono text-sm text-text-muted">{formatDuration(elapsedMs)}</span>
-      </div>
+        <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5">
+          <span className={`h-2 w-2 rounded-full ${connectionState === ConnectionState.Connected ? 'animate-pulse bg-success' : 'bg-amber'}`} />
+          <span className="text-xs font-semibold text-text-muted">{connectionState === ConnectionState.Connected ? 'Live' : 'Connecting'}</span>
+          <span className="font-mono text-sm font-bold tabular-nums">{formatDuration(elapsedMs)}</span>
+        </div>
+      </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row">
-        <div className="flex shrink-0 items-center justify-center border-b border-border py-6 sm:w-[42%] sm:border-b-0 sm:border-r sm:py-0">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6 lg:flex-row">
+        {/* Stage: the agent, what it is doing, and the controls. */}
+        {/* With captions off the stage takes the whole width, centred. */}
+        <section className={`bento-tile flex flex-col items-center justify-center gap-6 py-6 lg:py-10 ${showTranscript ? 'shrink-0 lg:w-[44%]' : 'flex-1'}`}>
           {agentParticipant ? (
-            <AgentOrb agentParticipant={agentParticipant} />
+            <AgentOrb agentParticipant={agentParticipant} agentName={agentName} />
           ) : (
-            <div className="flex flex-col items-center gap-2 text-center">
+            <div className="flex flex-col items-center gap-5">
               <OrbVideo volume={0} dimmed />
-              <p className="text-sm text-text-muted">
-                {connectionState === ConnectionState.Connected ? WAITING_STYLE.label : 'Connecting…'}
-              </p>
-              {slowJoin && connectionState === ConnectionState.Connected && (
-                <p className="max-w-[220px] text-xs text-text-muted">
-                  Taking longer than usual - the agent worker may be restarting. You can keep waiting or end the call and try again shortly.
-                </p>
-              )}
+              <CallStatus
+                label={connectionState === ConnectionState.Connected ? WAITING_STYLE.label : 'Connecting…'}
+                hint={
+                  slowJoin && connectionState === ConnectionState.Connected
+                    ? 'Taking longer than usual - the agent worker may be restarting. Keep waiting, or end the call and try again shortly.'
+                    : WAITING_STYLE.hint
+                }
+                live={false}
+              />
             </div>
           )}
-        </div>
-
-        {showTranscript && (
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
-            {transcriptEntries.length === 0 && (
-              <p className="text-center text-sm text-text-muted">
-                Your conversation will appear here as you talk.
-              </p>
-            )}
-            {transcriptEntries.map((entry) => (
-              <div
-                key={entry.id}
-                className={`max-w-[85%] rounded-xl px-4 py-2 text-sm ${
-                  entry.isLocal
-                    ? 'self-end bg-primary text-bg'
-                    : 'self-start border border-border bg-surface text-text'
-                }`}
-              >
-                {entry.text}
-              </div>
-            ))}
-            <div ref={transcriptEndRef} />
+          <div className="flex items-end justify-center gap-8">
+            <button
+              type="button"
+              aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
+              onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
+              className={controlCls + ' bg-transparent'}
+            >
+              <span className={`flex h-12 w-12 items-center justify-center rounded-full border transition-colors ${isMicrophoneEnabled ? 'border-border bg-surface-high text-text hover:border-primary' : 'border-amber/50 bg-amber/15 text-amber'}`}>
+                <Icon name={isMicrophoneEnabled ? 'mic' : 'mic_off'} />
+              </span>
+              {isMicrophoneEnabled ? 'Mute' : 'Unmute'}
+            </button>
+            <button type="button" aria-label="End call" onClick={() => room.disconnect()} className={controlCls + ' bg-transparent'}>
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive text-white shadow-[0_12px_28px_-10px_rgb(239_68_68/0.8)] transition-transform hover:scale-105">
+                <Icon name="call_end" className="text-[28px]" />
+              </span>
+              End call
+            </button>
+            <button
+              type="button"
+              aria-label="Toggle transcript"
+              aria-pressed={showTranscript}
+              onClick={() => setShowTranscript((v) => !v)}
+              className={controlCls + ' bg-transparent'}
+            >
+              <span className={`flex h-12 w-12 items-center justify-center rounded-full border transition-colors ${showTranscript ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-surface-high text-text hover:border-primary'}`}>
+                <Icon name="closed_caption" />
+              </span>
+              Captions
+            </button>
           </div>
+        </section>
+
+        {/* Live transcript, with the type box at its foot. */}
+        {showTranscript && (
+          <section className="bento-tile flex min-h-0 flex-1 flex-col" style={{ padding: 0 }}>
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <p className="bento-title text-[15px]">Live transcript</p>
+              <span className="text-xs text-text-muted">{transcriptEntries.length} {transcriptEntries.length === 1 ? 'line' : 'lines'}</span>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
+              {transcriptEntries.length === 0 && (
+                <div className="m-auto max-w-xs text-center">
+                  <p className="font-semibold">Say hello to start</p>
+                  <p className="mt-1 text-sm text-text-muted">What you and {agentName} say appears here, line by line.</p>
+                </div>
+              )}
+              {transcriptEntries.map((entry) => (
+                <div key={entry.id} className={`flex max-w-[85%] flex-col gap-1 ${entry.isLocal ? 'self-end items-end' : 'self-start items-start'}`}>
+                  <span className="px-1 text-[11px] font-semibold text-text-muted">
+                    {entry.isLocal ? 'You' : agentName}
+                  </span>
+                  <div
+                    className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                      entry.isLocal ? 'rounded-tr-md bg-primary text-bg' : 'rounded-tl-md border border-border bg-surface-high text-text'
+                    }`}
+                  >
+                    {entry.text}
+                  </div>
+                </div>
+              ))}
+              <div ref={transcriptEndRef} />
+            </div>
+            <div className="flex shrink-0 items-center gap-2 border-t border-border px-4 py-3">
+              <input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSendText()
+                  }
+                }}
+                placeholder={`Or type a message to ${agentName}…`}
+                className="flex-1 rounded-full border border-border bg-surface px-4 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+              />
+              <button
+                type="button"
+                aria-label="Send message"
+                onClick={handleSendText}
+                disabled={!textInput.trim()}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-bg disabled:opacity-40"
+              >
+                <Icon name="send" className="text-[18px]" />
+              </button>
+            </div>
+          </section>
         )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2 border-t border-border bg-surface px-4 py-3 sm:px-6">
-        <input
-          type="text"
-          value={textInput}
-          onChange={(e) => setTextInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              handleSendText()
-            }
-          }}
-          placeholder="Or type here instead…"
-          className="flex-1 rounded-full border border-border bg-surface-high px-4 py-2 text-sm outline-none focus:border-primary"
-        />
-        <button
-          aria-label="Send message"
-          onClick={handleSendText}
-          disabled={!textInput.trim()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-bg disabled:opacity-40"
-        >
-          <Icon name="send" className="text-[18px]" />
-        </button>
-      </div>
-
-      <div className="flex shrink-0 items-center justify-center gap-6 border-t border-border bg-surface px-4 py-4 sm:px-6">
-        <button
-          aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
-          onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface-high text-text-muted transition-colors hover:text-text"
-        >
-          <Icon name={isMicrophoneEnabled ? 'mic' : 'mic_off'} />
-        </button>
-        <button
-          aria-label="End call"
-          onClick={() => room.disconnect()}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive text-white transition-opacity hover:opacity-90"
-        >
-          <Icon name="call_end" className="text-[24px]" />
-        </button>
-        <button
-          aria-label="Toggle transcript"
-          onClick={() => setShowTranscript((v) => !v)}
-          className={`flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${
-            showTranscript
-              ? 'border-primary text-primary'
-              : 'border-border bg-surface-high text-text-muted hover:text-text'
-          }`}
-        >
-          <Icon name="closed_caption" />
-        </button>
       </div>
     </div>
   )

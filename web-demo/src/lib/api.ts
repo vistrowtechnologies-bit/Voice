@@ -309,10 +309,17 @@ export const fetchActiveCalls = () => get<ActiveCallInfo[]>('/active-calls')
 // ------------------------------------------------------------- dashboard
 
 export const fetchDashboardSummary = () => get<DashboardSummary>('/dashboard/summary')
-export const fetchUsageTrends = (days = 14) => get<UsageTrends>(`/dashboard/usage-trends?days=${days}`)
-export const fetchPeriodComparison = (days = 14) => get<DashboardPeriodComparison>(`/dashboard/period-comparison?days=${days}`)
+/** A dashboard date range: inclusive local days. ``days`` is sent too, so a
+ * server without start/end support still answers with a same-length window. */
+export interface DashboardRangeQuery { start: string; end: string; days: number }
+function rangeParams(r: DashboardRangeQuery): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata'
+  return new URLSearchParams({ days: String(r.days), start: r.start, end: r.end, tz }).toString()
+}
+export const fetchUsageTrends = (r: DashboardRangeQuery) => get<UsageTrends>(`/dashboard/usage-trends?${rangeParams(r)}`)
+export const fetchPeriodComparison = (r: DashboardRangeQuery) => get<DashboardPeriodComparison>(`/dashboard/period-comparison?${rangeParams(r)}`)
 export const fetchAnalytics = () => get<Analytics>('/dashboard/analytics')
-export const fetchSpeedToLead = (days = 14) => get<SpeedToLead>(`/dashboard/speed-to-lead?days=${days}`)
+export const fetchSpeedToLead = (r: DashboardRangeQuery) => get<SpeedToLead>(`/dashboard/speed-to-lead?${rangeParams(r)}`)
 export const fetchMissedMoney = () => get<MissedMoneyQueue>('/dashboard/missed-money')
 export const fetchInsights = (days = 30) => get<GrowthInsights>(`/dashboard/insights?days=${days}`)
 export const fetchLaunchReadiness = () => get<LaunchReadiness>('/dashboard/launch-readiness')
