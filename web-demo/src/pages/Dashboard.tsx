@@ -420,7 +420,7 @@ export function Dashboard() {
             )}
 
             <div className="bento-grid">
-              <section className="bento-tile bento-hero bento-w2 bento-h2 flex min-h-[300px] flex-col justify-between gap-6">
+              <section className="bento-tile bento-hero bento-w2 bento-h2 flex flex-col justify-between gap-4 sm:min-h-[300px] sm:gap-6">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">{todayLabel}</span>
@@ -430,15 +430,16 @@ export function Dashboard() {
                       </span>
                     )}
                   </div>
-                  <h2 className="bento-title mt-4 break-words text-[28px] leading-tight sm:text-4xl">{greeting()}, {user?.accountName ?? 'there'}</h2>
-                  <p className="mt-3 max-w-md text-[15px] leading-relaxed text-white/80">
+                  <h2 className="bento-title mt-3 break-words text-[22px] leading-tight sm:mt-4 sm:text-4xl">{greeting()}, {user?.accountName ?? 'there'}</h2>
+                  {/* Phones skip this line: the big number below says the same. */}
+                  <p className="mt-3 hidden max-w-md text-[15px] leading-relaxed text-white/80 sm:block">
                     Your agents have handled {totalCalls.toLocaleString('en-IN')} calls so far, and {successPct}% of them qualified as leads.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <p className="bento-num text-6xl leading-none sm:text-7xl">{totalCalls.toLocaleString('en-IN')}</p>
-                    <p className="mt-2 text-sm font-bold text-white/75">calls handled</p>
+                    <p className="bento-num text-5xl leading-none sm:text-7xl">{totalCalls.toLocaleString('en-IN')}</p>
+                    <p className="mt-1 text-sm font-bold text-white/75 sm:mt-2">calls handled</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Link to="/dashboard/agents" className="bento-pill bento-pill-light">Test an agent →</Link>
@@ -447,12 +448,10 @@ export function Dashboard() {
                 </div>
               </section>
 
-              <section className="bento-tile bento-h2 flex flex-col items-center justify-between gap-4 text-center">
-                <div className="self-stretch text-left">
-                  <h3 className="bento-title text-[15px]">Minutes</h3>
-                  <p className="mt-0.5 text-xs text-text-muted">{lowCredits ? 'Running low' : 'Your balance'}</p>
-                </div>
-                <svg width="168" height="168" viewBox="0 0 120 120" role="img" aria-label={`${minutesLeftLabel} minutes left`}>
+              {/* Phones: a small ring beside the text. From sm up the wrapper
+                  dissolves (sm:contents) and the tile stacks as before. */}
+              <section className="bento-tile bento-h2 col-span-2 flex items-center gap-4 sm:col-span-1 sm:flex-col sm:justify-between sm:text-center">
+                <svg viewBox="0 0 120 120" role="img" aria-label={`${minutesLeftLabel} minutes left`} className="h-[92px] w-[92px] shrink-0 sm:order-2 sm:h-[168px] sm:w-[168px]">
                   <circle cx="60" cy="60" r="48" fill="none" stroke="var(--color-surface-high)" strokeWidth="12" />
                   <circle
                     cx="60" cy="60" r="48" fill="none"
@@ -471,10 +470,16 @@ export function Dashboard() {
                   <text x="60" y="58" textAnchor="middle" className="bento-ring-value">{minutesLeftLabel}</text>
                   <text x="60" y="76" textAnchor="middle" className="bento-ring-label">min left</text>
                 </svg>
-                <p className="text-[13px] text-text-muted">
-                  {comparison ? `${comparison.current.minutes.toLocaleString('en-IN')} min used in the last ${rangeDays} days` : 'Usage loads with your calls'}
-                </p>
-                <Link to="/dashboard/settings?tab=billing&topup=1" className="bento-pill bento-pill-dark self-stretch justify-center">Top up minutes</Link>
+                <div className="flex min-w-0 flex-1 flex-col items-start gap-2 sm:contents">
+                  <div className="text-left sm:order-1 sm:self-stretch">
+                    <h3 className="bento-title text-[15px]">Minutes</h3>
+                    <p className="mt-0.5 text-xs text-text-muted">{lowCredits ? 'Running low' : 'Your balance'}</p>
+                  </div>
+                  <p className="text-xs text-text-muted sm:order-3 sm:text-[13px]">
+                    {comparison ? `${comparison.current.minutes.toLocaleString('en-IN')} min used in the last ${rangeDays} days` : 'Usage loads with your calls'}
+                  </p>
+                  <Link to="/dashboard/settings?tab=billing&topup=1" className="bento-pill bento-pill-dark justify-center sm:order-4 sm:self-stretch">Top up minutes</Link>
+                </div>
               </section>
 
               {kpiTiles.map((kpi) => (
@@ -494,7 +499,7 @@ export function Dashboard() {
                     )}
                   </span>
                   <span className="flex flex-col gap-2">
-                    <span className="bento-num mt-2 text-[34px] leading-none">{kpi.value.toLocaleString('en-IN')}</span>
+                    <span className="bento-num mt-1 text-[26px] leading-none sm:mt-2 sm:text-[34px]">{kpi.value.toLocaleString('en-IN')}</span>
                     <span className="text-[13px] font-bold text-text-muted">{kpi.label}</span>
                   </span>
                   {openKpi === kpi.key && (

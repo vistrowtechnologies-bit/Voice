@@ -1273,8 +1273,12 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
 
 /* Dashboard overview: the Bento layout (owner pick, 17 Oct). Tiles use the
    theme tokens so they work in light and dark; the hero is always violet. */
-.bento-grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 640px) { .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bento-w2 { grid-column: span 2; } }
+/* Phones get two columns too, so the four stat tiles pair up instead of each
+   filling a screen-wide row; wide tiles span both. */
+.bento-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bento-w2 { grid-column: span 2; }
+@media (max-width: 639.98px) { .bento-kpi { padding: 0.875rem 1rem; } }
+@media (min-width: 640px) { .bento-grid { gap: 1rem; } }
 @media (min-width: 1280px) { .bento-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .bento-h2 { grid-row: span 2; } }
 .bento-w4 { grid-column: 1 / -1; }
 .bento-tile {
