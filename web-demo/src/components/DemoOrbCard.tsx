@@ -432,12 +432,15 @@ export function DemoOrbCard({
     }
   }, [variant])
 
+  // Grow-only: a shorter phase (the rating prompt) must not shrink the card
+  // either. A resize starts over, since text wrap changes the natural height.
   useLayoutEffect(() => {
     if (!isIdleLike) return
-    const measure = () => setCardMinHeight(cardRef.current?.offsetHeight)
+    const measure = () => setCardMinHeight((current) => Math.max(current ?? 0, cardRef.current?.offsetHeight ?? 0) || undefined)
+    const reset = () => { setCardMinHeight(undefined); requestAnimationFrame(measure) }
     measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    window.addEventListener('resize', reset)
+    return () => window.removeEventListener('resize', reset)
   }, [isIdleLike, exhausted, phase])
 
   return (
@@ -445,7 +448,9 @@ export function DemoOrbCard({
       id="live-demo"
       // Live transcript can hold what the visitor said (name, number) — keep it out of Clarity recordings.
       data-clarity-mask="true"
-      className={`demo-card-shell relative mx-auto w-full max-w-[420px] scroll-mt-20 lg:mx-0 lg:ml-auto ${spotlight ? 'demo-card-spotlight' : ''}`}
+      // Homepage hero: on desktop the card fills the hero's full height (the
+      // text column beside it) and keeps it in every phase (owner, 21 Oct).
+      className={`demo-card-shell relative mx-auto w-full max-w-[420px] scroll-mt-20 lg:mx-0 lg:ml-auto ${variant === 'call' ? 'lg:flex lg:h-full lg:flex-col' : ''} ${spotlight ? 'demo-card-spotlight' : ''}`}
       style={accentHue ? ({ '--demo-accent-hue': accentHue } as React.CSSProperties) : undefined}
     >
       {/* inset-x-0, not -inset-10: a negative horizontal inset made this box
@@ -453,13 +458,15 @@ export function DemoOrbCard({
           screens and gave the whole page a horizontal scrollbar. The blur
           still paints well outside the box, so the glow looks identical -
           it just no longer contributes that width to layout. */}
-      <div className="demo-glow pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />
+      {/* Not on the homepage call card: there it read as a solid oval
+          sticking out above and below the card (owner, 21 Oct). */}
+      {variant !== 'call' && <div className="demo-glow pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />}
       <div
         ref={cardRef}
         style={cardMinHeight ? { minHeight: cardMinHeight } : undefined}
         className={
           variant === 'call'
-            ? 'demo-call-card relative flex w-full flex-col items-center overflow-hidden rounded-[28px] p-6 text-center sm:p-8'
+            ? 'demo-call-card relative flex w-full flex-col items-center justify-center overflow-hidden rounded-[28px] p-6 text-center sm:p-8 lg:flex-1'
             : 'relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10'
         }
       >
