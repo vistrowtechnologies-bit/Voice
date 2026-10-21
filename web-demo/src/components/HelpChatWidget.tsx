@@ -143,24 +143,49 @@ function replyNavigation(content: string, currentPath: string) {
  * separate from the voice agent product. Answers are grounded in
  * server/help_content.py, plus live account data via server/help_tools.py,
  * via POST /help/chat. */
-/** How far up the launcher must sit to clear a page's sticky action bar
+/** Where the launcher sits when a page has a sticky action bar
  * (`.vv-action-bar`: Save changes, Create agent), or null when no bar is on
  * screen. The bar sits wherever the page's content ends, not always at the
  * screen edge, so it is measured rather than a fixed offset: on 19 Oct the
  * launcher and its "Hi! Need help?" bubble covered Save changes and a click
- * there opened the chat instead of saving. Skipped while the chat is open. */
-function useActionBarClearance(active: boolean): number | null {
-  const [clearance, setClearance] = useState<number | null>(null)
+ * there opened the chat instead of saving. Skipped while the chat is open.
+ *
+ * From sm up the launcher docks into the bar's right end, centred on it, and
+ * the bar gets extra right padding so its buttons move clear (owner, 21 Oct:
+ * lifted above the bar it sat on the cards). Phones keep it above the bar. */
+const LAUNCHER = 64 // sm:h-16
+const LAUNCHER_RIGHT = 24 // sm:right-6
+function useActionBarClearance(active: boolean): { bottom: number; docked: boolean } | null {
+  const [clearance, setClearance] = useState<{ bottom: number; docked: boolean } | null>(null)
   useEffect(() => {
-    if (!active) { setClearance(null); return }
     let frame = 0
+    let padded: HTMLElement | null = null
+    const unpad = () => {
+      if (padded) padded.style.paddingRight = padded.dataset.vvPad ?? ''
+      padded = null
+    }
+    if (!active) { setClearance(null); return }
     const measure = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
-        const bar = document.querySelector('.vv-action-bar')
+        const bar = document.querySelector<HTMLElement>('.vv-action-bar')
         const rect = bar?.getBoundingClientRect()
-        const visible = rect && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight
-        setClearance(visible ? Math.round(window.innerHeight - rect.top + 12) : null)
+        const visible = bar && rect && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight
+        if (!visible) { unpad(); setClearance(null); return }
+        const launcherLeft = window.innerWidth - LAUNCHER_RIGHT - LAUNCHER
+        const overlap = rect.right - launcherLeft
+        if (window.innerWidth >= 640 && rect.height >= LAUNCHER - 8 && overlap > 0) {
+          if (padded !== bar) {
+            unpad()
+            bar.dataset.vvPad = bar.style.paddingRight
+            padded = bar
+          }
+          bar.style.paddingRight = `${overlap + 16}px`
+          setClearance({ bottom: Math.round(window.innerHeight - rect.bottom + (rect.height - LAUNCHER) / 2), docked: true })
+        } else {
+          unpad()
+          setClearance({ bottom: Math.round(window.innerHeight - rect.top + 12), docked: false })
+        }
       })
     }
     measure()
@@ -173,6 +198,7 @@ function useActionBarClearance(active: boolean): number | null {
       observer.disconnect()
       window.removeEventListener('scroll', measure, { capture: true })
       window.removeEventListener('resize', measure)
+      unpad()
     }
   }, [active])
   return clearance
@@ -377,7 +403,7 @@ export function HelpChatWidget() {
     // App.tsx) covered and blurred the help launcher. Help has to stay
     // reachable from on top of a dialog - that is often exactly when someone
     // needs it.
-    <div className="vv-help-root fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6" style={barClearance ? { bottom: barClearance } : undefined}>
+    <div className="vv-help-root fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6" style={barClearance ? { bottom: barClearance.bottom } : undefined}>
       {open && (
         <div
           className={`vv-help-panel help-chat-panel-in help-panel-size flex w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ${
@@ -688,7 +714,7 @@ export function HelpChatWidget() {
       )}
 
       <div className="vv-help-launcher relative">
-        {!open && showHint && (
+        {!open && showHint && !barClearance?.docked && (
           <button
             type="button"
             onClick={() => {
