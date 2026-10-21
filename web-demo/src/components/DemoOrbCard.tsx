@@ -458,7 +458,9 @@ export function DemoOrbCard({
           screens and gave the whole page a horizontal scrollbar. The blur
           still paints well outside the box, so the glow looks identical -
           it just no longer contributes that width to layout. */}
-      <div className="demo-glow pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />
+      {/* Not on the homepage call card: there it read as a solid oval
+          sticking out above and below the card (owner, 21 Oct). */}
+      {variant !== 'call' && <div className="demo-glow pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />}
       <div
         ref={cardRef}
         style={cardMinHeight ? { minHeight: cardMinHeight } : undefined}
