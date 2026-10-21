@@ -58,14 +58,26 @@ addToMap('DAILY_CONTEXTUAL_LINKS', `${sq(q.slug)}: ${sq(q.contextualLinks)},`)
 write(DAILY, daily)
 
 // 2. Inbound links.
+const SENTENCE_MAPS: [string, string][] = [
+  [DAILY, 'DAILY_CONTEXTUAL_LINKS'],
+  ['src/content/voiceBlog.ts', 'CONTEXTUAL_LINK_PARAGRAPHS'],
+  ['src/content/ivrBlogPosts.ts', 'IVR_CONTEXTUAL_LINKS'],
+]
+// Only inside the contextual-link maps: the same slug key also appears in the
+// image-alt and sources maps, which must never receive a link sentence.
 const appendToSentenceMap = (slug: string, sentence: string) => {
-  for (const path of [DAILY, 'src/content/voiceBlog.ts', 'src/content/ivrBlogPosts.ts']) {
+  for (const [path, mapName] of SENTENCE_MAPS) {
     const text = read(path)
+    const start = text.indexOf(`const ${mapName}`)
+    if (start < 0) continue
+    const end = text.indexOf('\n}\n', start)
+    const block = text.slice(start, end)
     const re = new RegExp(`^(\\s*'${slug}': )'((?:[^'\\\\]|\\\\.)*)',$`, 'm')
-    const m = re.exec(text)
+    const m = re.exec(block)
     if (!m) continue
-    write(path, text.replace(re, `${m[1]}'${m[2]} ${sq(sentence).slice(1, -1)}',`))
-    return path
+    const updated = block.replace(re, () => `${m[1]}'${m[2]} ${sq(sentence).slice(1, -1)}',`)
+    write(path, text.slice(0, start) + updated + text.slice(end))
+    return `${path} ${mapName}`
   }
   throw new Error(`no contextual sentence found for blog:${slug}`)
 }
