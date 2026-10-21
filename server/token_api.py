@@ -3864,14 +3864,24 @@ def dashboard_summary(user: dict = Depends(current_user)) -> dict:
     return calls_db.summary(user["account_id"])
 
 
+# The Overview's date filter: ``days`` is the rolling window; ``start``/``end``
+# (YYYY-MM-DD, inclusive, local days in ``tz``) pick an exact range instead.
 @app.get("/dashboard/usage-trends")
-def dashboard_usage_trends(days: int = 14, user: dict = Depends(current_user)) -> dict:
-    return calls_db.usage_trends(user["account_id"], days=days)
+def dashboard_usage_trends(days: int = 14, start: str | None = None, end: str | None = None, tz: str = "Asia/Kolkata",
+                           user: dict = Depends(current_user)) -> dict:
+    try:
+        return calls_db.usage_trends(user["account_id"], days=days, start=start, end=end, tz=tz)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/dashboard/period-comparison")
-def dashboard_period_comparison(days: int = 14, user: dict = Depends(current_user)) -> dict:
-    return calls_db.period_comparison(user["account_id"], days=days)
+def dashboard_period_comparison(days: int = 14, start: str | None = None, end: str | None = None, tz: str = "Asia/Kolkata",
+                                user: dict = Depends(current_user)) -> dict:
+    try:
+        return calls_db.period_comparison(user["account_id"], days=days, start=start, end=end, tz=tz)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 # Breakdowns only the Analytics tab shows (Growth and Scale). The Overview's
@@ -3888,8 +3898,12 @@ def dashboard_analytics(user: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/dashboard/speed-to-lead")
-def dashboard_speed_to_lead(days: int = 14, user: dict = Depends(current_user)) -> dict:
-    return calls_db.speed_to_lead(user["account_id"], days=days)
+def dashboard_speed_to_lead(days: int = 14, start: str | None = None, end: str | None = None, tz: str = "Asia/Kolkata",
+                            user: dict = Depends(current_user)) -> dict:
+    try:
+        return calls_db.speed_to_lead(user["account_id"], days=days, start=start, end=end, tz=tz)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/dashboard/insights")

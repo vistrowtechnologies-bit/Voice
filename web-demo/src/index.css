@@ -1388,6 +1388,8 @@ html.vv-sheet-open .vv-help-root { display: none !important; }
 @keyframes vv-sheet-fade { from { opacity: 0; } to { opacity: 1; } }
 .vv-sheet-up { animation: vv-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
 .vv-sheet-fade { animation: vv-sheet-fade 0.2s ease-out; }
+/* The date filter is a bottom sheet on phones and a plain popover from sm up. */
+@media (min-width: 640px) { .vv-sheet-up.vv-range-pop { animation: none; } }
 @media (prefers-reduced-motion: reduce) {
   .vv-sheet-up, .vv-sheet-fade { animation: none; }
 }

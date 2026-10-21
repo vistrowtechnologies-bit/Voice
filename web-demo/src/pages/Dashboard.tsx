@@ -1,10 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import '../lib/chart-setup'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { WatchHowButton } from '../components/HelpVideo'
+import { DateRangeFilter, formatRange, presetRange, rangeDays, rangeLabel, rangePhrase, type DateRange } from '../components/DateRangeFilter'
 import { helpVideoFor } from '../lib/helpVideos'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
@@ -113,11 +114,17 @@ function formatSeconds(seconds: number): string {
 // Attention items shown before "Show all", so the tile stays the height of its neighbours.
 const ATTENTION_PREVIEW = 4
 
-const RANGE_OPTIONS = [
-  { label: 'Week', days: 7 },
-  { label: '14 days', days: 14 },
-  { label: '30 days', days: 30 },
-]
+// The date filter remembers a preset by name (so "Last 14 days" keeps
+// rolling) and a custom range by its dates.
+const RANGE_KEY = 'vv.dashboard.range'
+function loadRange(): DateRange {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RANGE_KEY) || 'null') as DateRange | null
+    if (saved?.preset === 'custom' && /^\d{4}-\d{2}-\d{2}$/.test(saved.start) && /^\d{4}-\d{2}-\d{2}$/.test(saved.end)) return saved
+    if (saved?.preset && saved.preset !== 'custom') return presetRange(saved.preset)
+  } catch { /* blocked storage: the default below */ }
+  return presetRange('last14')
+}
 
 const DASHBOARD_CARDS = [
   { key: 'speed_to_lead', label: 'Speed to lead' },
@@ -165,7 +172,10 @@ export function Dashboard() {
   const [intel, setIntel] = useState<IntelligenceSummary | null>(null)
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
-  const [rangeDays, setRangeDays] = useState(14)
+  const [range, setRange] = useState<DateRange>(loadRange)
+  // True while the three range-driven requests for the current range are out.
+  const [rangeLoading, setRangeLoading] = useState(true)
+  const rangeRequest = useRef(0)
   const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(false)
   const [checklistDismissed, setChecklistDismissed] = useState<boolean | null>(null)
   const [dismissingChecklist, setDismissingChecklist] = useState(false)
@@ -236,10 +246,22 @@ export function Dashboard() {
   }, [analyticsAllowed])
 
   useEffect(() => {
-    fetchUsageTrends(rangeDays).then(setTrends).catch(() => setTrends(null))
-    fetchSpeedToLead(rangeDays).then(setSpeed).catch(() => setSpeed(null))
-    fetchPeriodComparison(rangeDays).then(setComparison).catch(() => setComparison(null))
-  }, [rangeDays])
+    try { localStorage.setItem(RANGE_KEY, JSON.stringify(range)) } catch { /* not remembered this visit */ }
+    // Only the latest range may land: a slow answer for an older range is dropped.
+    const id = ++rangeRequest.current
+    const query = { start: range.start, end: range.end, days: rangeDays(range) }
+    const keep = <T,>(set: (value: T | null) => void) => (value: T | null) => { if (id === rangeRequest.current) set(value) }
+    setRangeLoading(true)
+    Promise.all([
+      fetchUsageTrends(query).then(keep(setTrends)).catch(() => keep(setTrends)(null)),
+      fetchSpeedToLead(query).then(keep(setSpeed)).catch(() => keep(setSpeed)(null)),
+      fetchPeriodComparison(query).then(keep(setComparison)).catch(() => keep(setComparison)(null)),
+    ]).finally(() => { if (id === rangeRequest.current) setRangeLoading(false) })
+  }, [range])
+  const rangeSpan = rangeDays(range)
+  const previousRange = comparison?.previousStart && comparison.previousEnd
+    ? formatRange(comparison.previousStart, comparison.previousEnd)
+    : `the ${rangeSpan} ${rangeSpan === 1 ? 'day' : 'days'} before`
 
   useEffect(() => {
     let cancelled = false
@@ -345,20 +367,8 @@ export function Dashboard() {
                 has, Watch how and Customize sit at the end (icons only on
                 phones, labels for screen readers). */}
             <div className="flex items-center gap-2 sm:gap-3">
-              <div role="group" aria-label="Performance period" className="flex min-w-0 flex-1 gap-1 rounded-full bg-surface p-1 ring-1 ring-border sm:flex-none">
-                {RANGE_OPTIONS.map((range) => (
-                  <button
-                    key={range.days}
-                    type="button"
-                    onClick={() => setRangeDays(range.days)}
-                    aria-pressed={rangeDays === range.days}
-                    className={`flex-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-bold sm:flex-none sm:px-3.5 ${rangeDays === range.days ? 'bg-primary text-white' : 'text-text-muted hover:text-text'}`}
-                  >
-                    {range.label}
-                  </button>
-                ))}
-              </div>
-              <span className="hidden text-xs text-text-muted md:inline">Compared with the {rangeDays} days before</span>
+              <DateRangeFilter value={range} onChange={setRange} loading={rangeLoading} />
+              <span className="hidden text-xs text-text-muted md:inline">Compared with {previousRange}</span>
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 {dashboardVideo && <WatchHowButton slug={dashboardVideo} compact />}
                 <div className="relative">
@@ -476,7 +486,7 @@ export function Dashboard() {
                     <p className="mt-0.5 text-xs text-text-muted">{lowCredits ? 'Running low' : 'Your balance'}</p>
                   </div>
                   <p className="text-xs text-text-muted sm:order-3 sm:text-[13px]">
-                    {comparison ? `${comparison.current.minutes.toLocaleString('en-IN')} min used in the last ${rangeDays} days` : 'Usage loads with your calls'}
+                    {comparison ? `${comparison.current.minutes.toLocaleString('en-IN')} min used ${rangePhrase(range)}` : 'Usage loads with your calls'}
                   </p>
                   <Link to="/dashboard/settings?tab=billing&topup=1" className="bento-pill bento-pill-dark justify-center sm:order-4 sm:self-stretch">Top up minutes</Link>
                 </div>
@@ -499,23 +509,27 @@ export function Dashboard() {
                     )}
                   </span>
                   <span className="flex flex-col gap-2">
-                    <span className="bento-num mt-1 text-[26px] leading-none sm:mt-2 sm:text-[34px]">{kpi.value.toLocaleString('en-IN')}</span>
+                    {rangeLoading ? (
+                      <span aria-hidden="true" className="mt-1 block h-[26px] w-16 animate-pulse rounded-lg bg-surface-high sm:mt-2 sm:h-[34px] sm:w-20" />
+                    ) : (
+                      <span className="bento-num mt-1 text-[26px] leading-none sm:mt-2 sm:text-[34px]">{kpi.value.toLocaleString('en-IN')}</span>
+                    )}
                     <span className="text-[13px] font-bold text-text-muted">{kpi.label}</span>
                   </span>
                   {openKpi === kpi.key && (
                     <span className="bento-reveal mt-1 border-t border-dashed border-border pt-2 text-xs text-text-muted">
-                      Previous {rangeDays} days: <b className="text-text">{kpi.previous.toLocaleString('en-IN')}</b>
+                      Compared with {previousRange}: <b className="text-text">{kpi.previous.toLocaleString('en-IN')}</b>
                     </span>
                   )}
                 </button>
               ))}
 
               {isVisible('speed_to_lead') && (
-                <section className="bento-tile bento-w2 flex flex-col">
+                <section aria-busy={rangeLoading} className={`bento-tile bento-w2 flex flex-col transition-opacity ${rangeLoading ? 'opacity-60' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="bento-title text-[15px]">Speed to lead</h3>
-                      <p className="mt-0.5 text-xs text-text-muted">How fast new leads get their first call · last {rangeDays} days</p>
+                      <p className="mt-0.5 text-xs text-text-muted">How fast new leads get their first call · {rangeLabel(range)}</p>
                     </div>
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan/12 text-cyan"><Icon name="bolt" className="text-[19px]" /></span>
                   </div>
@@ -712,7 +726,7 @@ export function Dashboard() {
                     <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan" />Qualified</span>
                   </span>
                 </div>
-                <div className="mt-4 h-[200px]">
+                <div aria-busy={rangeLoading} className={`mt-4 h-[200px] transition-opacity ${rangeLoading ? 'opacity-40' : ''}`}>
                   {trends && trends.labels.length > 0 ? (
                     <Line
                       data={{

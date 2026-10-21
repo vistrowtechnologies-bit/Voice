@@ -3840,21 +3840,62 @@ def feedback_summary(account_id: int) -> dict:
         conn.close()
 
 
-def usage_trends(account_id: int, days: int = 14) -> dict:
+# A call's calendar day in the viewer's time zone. started_at is UTC text in
+# two shapes; both cast cleanly to timestamp (see calls_for_local_date).
+_CALL_LOCAL_DAY = "((started_at::timestamp AT TIME ZONE 'UTC') AT TIME ZONE ?)::date"
+
+
+def _dashboard_window(start: str | None, end: str | None, tz: str) -> tuple[datetime.date, datetime.date] | None:
+    """A custom dashboard date range (the Overview's date filter): both ends
+    inclusive, as local calendar days in ``tz``. None when no range was given,
+    so callers keep their rolling "last N days" behaviour."""
+    if not start and not end:
+        return None
+    try:
+        first = datetime.date.fromisoformat(start or end or "")
+        last = datetime.date.fromisoformat(end or start or "")
+        ZoneInfo(tz)
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        raise ValueError("Use YYYY-MM-DD dates and an IANA timezone") from exc
+    if last < first:
+        raise ValueError("The end date is before the start date")
+    if (last - first).days > 365:
+        raise ValueError("Pick a range of one year or less")
+    return first, last
+
+
+def usage_trends(account_id: int, days: int = 14, start: str | None = None, end: str | None = None,
+                 tz: str = "Asia/Kolkata") -> dict:
+    window = _dashboard_window(start, end, tz)
     conn = _connect()
     try:
-        rows = conn.execute(
-            f"""
-            SELECT started_at::date::text AS day,
-                   COUNT(*) AS total,
-                   SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
-                   COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
-            FROM calls
-            WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date
-            GROUP BY day ORDER BY day
-            """,
-            (account_id, str(days - 1)),
-        ).fetchall()
+        if window:
+            rows = conn.execute(
+                f"""
+                SELECT {_CALL_LOCAL_DAY}::text AS day,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
+                       COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
+                FROM calls
+                WHERE account_id = ? AND COALESCE(test_run_id, '') = ''
+                  AND {_CALL_LOCAL_DAY} BETWEEN ?::date AND ?::date
+                GROUP BY day ORDER BY day
+                """,
+                (tz, account_id, tz, window[0].isoformat(), window[1].isoformat()),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                f"""
+                SELECT started_at::date::text AS day,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
+                       COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
+                FROM calls
+                WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date
+                GROUP BY day ORDER BY day
+                """,
+                (account_id, str(days - 1)),
+            ).fetchall()
         return {
             "labels": [r["day"] for r in rows],
             "calls": [r["total"] for r in rows],
@@ -3865,10 +3906,16 @@ def usage_trends(account_id: int, days: int = 14) -> dict:
         conn.close()
 
 
-def period_comparison(account_id: int, days: int = 14) -> dict:
+def period_comparison(account_id: int, days: int = 14, start: str | None = None, end: str | None = None,
+                      tz: str = "Asia/Kolkata") -> dict:
     """Compare the selected rolling period with the equally sized period
     immediately before it. One query keeps every dashboard KPI on the same
-    date boundary and avoids misleading comparisons assembled client-side."""
+    date boundary and avoids misleading comparisons assembled client-side.
+    With start/end it compares that exact range (local days in ``tz``) with
+    the same number of days just before it."""
+    window = _dashboard_window(start, end, tz)
+    if window:
+        return _range_comparison(account_id, window[0], window[1], tz)
     days = max(1, min(int(days), 90))
     conn = _connect()
     try:
@@ -3923,6 +3970,72 @@ def period_comparison(account_id: int, days: int = 14) -> dict:
         }
     finally:
         conn.close()
+
+
+def _comparison_snapshot(row, prefix: str) -> dict:
+    calls = row[f"{prefix}_calls"] or 0
+    qualified = row[f"{prefix}_qualified"] or 0
+    booked = row[f"{prefix}_booked"] or 0
+    return {
+        "calls": calls,
+        "qualified": qualified,
+        "booked": booked,
+        "minutes": round((row[f"{prefix}_seconds"] or 0) / 60, 1),
+        "qualificationRate": round(qualified * 100 / calls, 1) if calls else 0,
+        "bookingRate": round(booked * 100 / calls, 1) if calls else 0,
+    }
+
+
+def _range_comparison(account_id: int, first: datetime.date, last: datetime.date, tz: str) -> dict:
+    """period_comparison() for an exact date range: the range against the same
+    number of days immediately before it, counted in local days."""
+    span = (last - first).days + 1
+    prev_last = first - datetime.timedelta(days=1)
+    prev_first = first - datetime.timedelta(days=span)
+    cur = "d BETWEEN ?::date AND ?::date"
+    prev = "d BETWEEN ?::date AND ?::date"
+    conn = _connect()
+    try:
+        row = conn.execute(
+            f"""
+            SELECT
+              COUNT(*) FILTER (WHERE {cur}) current_calls,
+              COUNT(*) FILTER (WHERE {cur} AND {lead_quality.QUALIFIED_SQL}) current_qualified,
+              COUNT(*) FILTER (WHERE {cur} AND site_visit_json IS NOT NULL) current_booked,
+              COALESCE(SUM(duration_seconds) FILTER (WHERE {cur}), 0) current_seconds,
+              COUNT(*) FILTER (WHERE {prev}) previous_calls,
+              COUNT(*) FILTER (WHERE {prev} AND {lead_quality.QUALIFIED_SQL}) previous_qualified,
+              COUNT(*) FILTER (WHERE {prev} AND site_visit_json IS NOT NULL) previous_booked,
+              COALESCE(SUM(duration_seconds) FILTER (WHERE {prev}), 0) previous_seconds
+            FROM (SELECT calls.*, {_CALL_LOCAL_DAY} AS d FROM calls
+                  WHERE account_id = ? AND COALESCE(test_run_id, '') = '') c
+            """,
+            (
+                *(first.isoformat(), last.isoformat()) * 4,
+                *(prev_first.isoformat(), prev_last.isoformat()) * 4,
+                tz, account_id,
+            ),
+        ).fetchone()
+    finally:
+        conn.close()
+    current, previous = _comparison_snapshot(row, "current"), _comparison_snapshot(row, "previous")
+
+    def change(key: str) -> float | None:
+        before = previous[key]
+        if before == 0:
+            return None if current[key] == 0 else 100.0
+        return round((current[key] - before) * 100 / before, 1)
+
+    return {
+        "days": span,
+        "start": first.isoformat(),
+        "end": last.isoformat(),
+        "previousStart": prev_first.isoformat(),
+        "previousEnd": prev_last.isoformat(),
+        "current": current,
+        "previous": previous,
+        "change": {key: change(key) for key in ("calls", "qualified", "booked", "minutes")},
+    }
 
 
 def agent_activity(account_id: int) -> list[dict]:
@@ -4169,17 +4282,26 @@ def _lead_channel_label(fields: dict, source: str = "") -> str:
     return _SOURCE_LABELS.get(str(source or "").casefold(), "New lead")
 
 
-def speed_to_lead(account_id: int, days: int = 14) -> dict:
+def speed_to_lead(account_id: int, days: int = 14, start: str | None = None, end: str | None = None,
+                  tz: str = "Asia/Kolkata") -> dict:
     """How fast new leads got their first call: seconds from the lead
     reaching us to the first dial. The first dial is first_attempt_at; rows
     older than that column fall back to the call the contact produced, or to
     last_attempt_at when there was only one attempt. A lead that was never
     queued or never dialled counts as received but not called."""
-    days = max(1, min(int(days or 14), 90))
+    window = _dashboard_window(start, end, tz)
+    if window:
+        days = (window[1] - window[0]).days + 1
+        when = "AND ((e.created_at::timestamp AT TIME ZONE 'UTC') AT TIME ZONE ?)::date BETWEEN ?::date AND ?::date"
+        params: tuple = (account_id, tz, window[0].isoformat(), window[1].isoformat())
+    else:
+        days = max(1, min(int(days or 14), 90))
+        when = "AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - (? || ' days')::interval"
+        params = (account_id, days)
     conn = _connect()
     try:
         rows = conn.execute(
-            """
+            f"""
             SELECT EXTRACT(EPOCH FROM (
                        COALESCE(cc.first_attempt_at::timestamp, ca.started_at::timestamp,
                                 CASE WHEN cc.attempts = 1 THEN cc.last_attempt_at::timestamp END)
@@ -4188,9 +4310,9 @@ def speed_to_lead(account_id: int, days: int = 14) -> dict:
             LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
             LEFT JOIN calls ca ON ca.id = cc.call_id AND ca.account_id = e.account_id
             WHERE e.account_id = ?
-              AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - (? || ' days')::interval
+              {when}
             """,
-            (account_id, days),
+            params,
         ).fetchall()
     finally:
         conn.close()
