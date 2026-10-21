@@ -125,8 +125,8 @@ for (const ib of q.inbound) {
 
 // 3. Calendar status.
 const plan = read(PLAN)
-const row = new RegExp(`^(\\| ${q.n} \\|.*\\| )(\\|)$`, 'm')
-if (row.test(plan)) write(PLAN, plan.replace(row, `$1Published ${date} $2`))
+const row = new RegExp(`^(\\| ${q.n} \\|.*\\|) +(\\|)$`, 'm')
+if (row.test(plan)) write(PLAN, plan.replace(row, `$1 Published ${date} $2`))
 
 console.log(`${dryRun ? '[dry run] ' : ''}publish ${file} as ${q.slug} (${date})`)
 console.log(`inbound: ${applied.join(', ')}`)
