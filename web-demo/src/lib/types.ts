@@ -342,6 +342,11 @@ export interface FollowUpPolicy {
   nurtureDays: number
   /** 'HH:MM' account time of the nurture call (server and agent: PR #246). */
   nurtureTime: string
+  /** Nurture sequence: days after the first interested call (server and
+   * agent: claude/nurture-sequences). Strictly increasing, 1..60, max 5. */
+  nurtureSteps: number[]
+  /** When a step's retries run out with no answer, move on to the next step. */
+  nurtureAdvanceOnNoAnswer: boolean
   /** Wait before the first automatic call to a new lead: 0, 30, 60, 120,
    * 300 or 600 seconds. A "Call now" request is never delayed. */
   firstCallDelaySeconds: number
@@ -368,6 +373,8 @@ export const FOLLOW_UP_DEFAULTS: FollowUpPolicy = {
   nurtureEnabled: true,
   nurtureDays: 3,
   nurtureTime: '11:00',
+  nurtureSteps: [2, 5, 10],
+  nurtureAdvanceOnNoAnswer: true,
   firstCallDelaySeconds: 0,
 }
 
