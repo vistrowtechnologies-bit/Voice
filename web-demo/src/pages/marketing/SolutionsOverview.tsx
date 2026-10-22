@@ -5,6 +5,17 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { SOLUTIONS } from '../../lib/marketingContent'
+import { pageFigures } from '../../lib/pageFigures'
+import {
+  FigureCard,
+  Reveal,
+  SectionHead,
+  Shot,
+  SplitHero,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
 
 // Every entry links to the industry page plus one closely related page. Claims
 // mirror the solution pages in lib/marketingContent.ts; no prices here.
@@ -74,7 +85,12 @@ const FAQ_JSONLD = {
   })),
 }
 
+const CARD_SIZES = '(min-width: 1024px) 400px, (min-width: 640px) 50vw, calc(100vw - 40px)'
+
 export function SolutionsOverview() {
+  const { heroCtaRef, endRef } = useStickyRefs()
+  const platformVisual = pageFigures('/solutions', 'One platform underneath')[0]
+
   return (
     <MarketingLayout>
       <Seo
@@ -83,104 +99,153 @@ export function SolutionsOverview() {
         path="/solutions"
         jsonLd={FAQ_JSONLD}
       />
-      <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
-        <SectionEyebrow>Solutions</SectionEyebrow>
-        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.05] tracking-tight min-[400px]:text-5xl">
-          Voice AI for your industry.
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          One platform, tuned to how your business actually takes calls - from real-estate
-          enquiries to collections reminders.
-        </p>
-      </section>
+      <SplitHero
+        eyebrow="Solutions"
+        title="Voice AI for your industry."
+        subhead={
+          <>
+            One platform, tuned to how your business actually takes calls - from real-estate enquiries to collections
+            reminders.
+          </>
+        }
+        visual={pageFigures('/solutions', 'showcase-hero')[0]}
+        chips={[
+          { label: 'Artha · Live', live: true },
+          { label: 'One agent per job', icon: 'support_agent' },
+        ]}
+        placement="solutions_hero"
+        ctaRef={heroCtaRef}
+      />
 
-      <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
+      {/* Industry cards, each led by the scene its page opens with. The first
+          card spans two columns so the rows fill exactly (2+1, then 3). */}
+      <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-14">
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Five cards: the first spans two columns so the rows fill exactly (2+1, then 3). */}
-          {SOLUTIONS.map((s, i) => (
-            <Link
-              key={s.to}
-              to={s.to}
-              className={`group flex flex-col justify-between rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-primary ${i === 0 ? 'sm:col-span-2' : ''}`}
-            >
-              <div>
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-high text-cyan">
-                  <Icon name={s.icon ?? 'circle'} className="text-[24px]" />
-                </span>
-                <h3 className="mt-5 font-display text-xl font-semibold">{s.label}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-muted">{s.desc}</p>
-              </div>
-              <span className="mt-5 flex items-center gap-1 text-sm font-semibold text-primary">
-                Explore
-                <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
-              </span>
-            </Link>
-          ))}
+          {SOLUTIONS.map((s, i) => {
+            const scene = pageFigures(s.to, 'showcase-hero')[0]
+            const lead = i === 0
+            return (
+              <Reveal key={s.to} delayMs={(i % 3) * 60} className={`h-full ${lead ? 'sm:col-span-2' : ''}`}>
+                <Link
+                  to={s.to}
+                  className={`vv-lift group flex h-full flex-col overflow-hidden rounded-3xl border ${
+                    lead ? 'border-primary/40 bg-gradient-to-br from-primary/[0.12] via-surface to-surface lg:grid lg:grid-cols-2' : 'border-border bg-surface'
+                  }`}
+                >
+                  {scene && (
+                    <div className={`overflow-hidden bg-[#f4f1fb] ${lead ? 'lg:order-2 lg:h-full' : ''}`}>
+                      <Shot
+                        figure={scene}
+                        sizes={lead ? '(min-width: 1024px) 420px, (min-width: 640px) 90vw, calc(100vw - 40px)' : CARD_SIZES}
+                        className={`aspect-[16/10] object-cover transition-transform duration-500 group-hover:scale-[1.03] ${lead ? 'lg:h-full lg:aspect-auto' : ''}`}
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-1 flex-col justify-between p-7">
+                    <div>
+                      <span
+                        className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+                          lead ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
+                        }`}
+                      >
+                        <Icon name={s.icon ?? 'circle'} className="text-[24px]" />
+                      </span>
+                      <h3 className={`mt-5 font-display font-semibold ${lead ? 'text-2xl' : 'text-xl'}`}>{s.label}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-text-muted">{s.desc}</p>
+                    </div>
+                    <span className="mt-5 flex items-center gap-1 text-sm font-semibold text-primary">
+                      Explore
+                      <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
+                    </span>
+                  </div>
+                </Link>
+              </Reveal>
+            )
+          })}
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
-        <SectionEyebrow>Where teams start</SectionEyebrow>
-        <h2 className="mt-3 max-w-2xl font-display text-2xl font-bold sm:text-3xl">
-          The first call to hand to an agent, by industry
-        </h2>
-        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-text-muted">
-          A good first agent handles one frequent, repeatable kind of call with a clear next step. These are the
-          starting points we see most often. Each industry page goes deeper, with sample conversations and a demo
-          agent you can call in the browser.
-        </p>
-        <div className="mt-8 grid gap-5 md:grid-cols-2">
-          {STARTING_POINTS.map((item) => (
-            <div key={item.to} className="rounded-2xl border border-border bg-surface p-6">
-              <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">{item.label}</p>
-              <h3 className="mt-2 font-display text-lg font-semibold">
-                <Link to={item.to} className="hover:text-primary">{item.first}</Link>
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-              <p className="mt-3 text-sm text-text-muted">
-                See also{' '}
-                <Link to={item.related.to} className="font-semibold text-primary hover:underline">{item.related.label}</Link>.
-              </p>
-            </div>
+        <Reveal>
+          <SectionHead
+            eyebrow="Where teams start"
+            title="The first call to hand to an agent, by industry"
+            intro="A good first agent handles one frequent, repeatable kind of call with a clear next step. These are the starting points we see most often. Each industry page goes deeper, with sample conversations and a demo agent you can call in the browser."
+            className="max-w-3xl"
+          />
+        </Reveal>
+        <ol className="mt-10 grid gap-4 md:grid-cols-2">
+          {STARTING_POINTS.map((item, i) => (
+            <li key={item.to} className={i === STARTING_POINTS.length - 1 ? 'md:col-span-2' : ''}>
+              <Reveal delayMs={(i % 2) * 70} className="h-full">
+                <div className="vv-lift flex h-full gap-5 rounded-3xl border border-border bg-surface p-6">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-magenta font-display text-lg font-bold text-white shadow-[0_10px_24px_-10px_rgba(168,85,247,0.9)]">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">{item.label}</p>
+                    <h3 className="mt-2 font-display text-lg font-semibold">
+                      <Link to={item.to} className="hover:text-primary">{item.first}</Link>
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+                    <p className="mt-3 text-sm text-text-muted">
+                      See also{' '}
+                      <Link to={item.related.to} className="font-semibold text-primary hover:underline">{item.related.label}</Link>.
+                    </p>
+                  </div>
+                </div>
+              </Reveal>
+            </li>
           ))}
-        </div>
+        </ol>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-        <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
-          <SectionEyebrow>Shared across every industry</SectionEyebrow>
-          <h2 className="mt-3 font-display text-2xl font-bold">One platform underneath</h2>
-          <div className="mt-6 grid gap-6 text-sm leading-relaxed text-text-muted md:grid-cols-3">
-            <p>
-              Every solution runs on the same{' '}
-              <Link to="/product/agents" className="font-semibold text-primary hover:underline">voice agent builder</Link>:
-              a persona, instructions, a voice and a default language, tested in the browser before it takes a real call.
-              Agents speak{' '}
-              <Link to="/languages" className="font-semibold text-primary hover:underline">130+ languages, including Hindi and English</Link>{' '}
-              and follow a caller who switches mid-call.
-            </p>
-            <p>
-              Calls reach the agent on your phone number through{' '}
-              <Link to="/product/inbound" className="font-semibold text-primary hover:underline">inbound routing</Link>, from
-              a{' '}
-              <Link to="/product/widget" className="font-semibold text-primary hover:underline">button on your website</Link>, or
-              as follow-up calls the agent places itself, always inside your calling window and Do-Not-Call list.
-            </p>
-            <p>
-              Every call is saved with a transcript and summary, and the lead details go to{' '}
-              <Link to="/integrations" className="font-semibold text-primary hover:underline">Zoho CRM, ArthaLeads, Slack, Google Sheets or a webhook</Link>.
-              If you are not sure which industry fits, the{' '}
-              <Link to="/best-ai-voice-calling-software-india" className="font-semibold text-primary hover:underline">buyer guide to AI voice calling software</Link>{' '}
-              lists what to test first.
-            </p>
-          </div>
+      <TrustBand placement="solutions_trust_band" />
+
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+        <div className={`grid items-center gap-10 lg:gap-14 ${platformVisual ? 'lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]' : ''}`}>
+          <Reveal>
+            <SectionEyebrow>Shared across every industry</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">One platform underneath</h2>
+            <div className="mt-6 grid gap-5 text-sm leading-relaxed text-text-muted">
+              <p className="border-t border-border pt-5">
+                Every solution runs on the same{' '}
+                <Link to="/product/agents" className="font-semibold text-primary hover:underline">voice agent builder</Link>:
+                a persona, instructions, a voice and a default language, tested in the browser before it takes a real call.
+                Agents speak{' '}
+                <Link to="/languages" className="font-semibold text-primary hover:underline">130+ languages, including Hindi and English</Link>{' '}
+                and follow a caller who switches mid-call.
+              </p>
+              <p className="border-t border-border pt-5">
+                Calls reach the agent on your phone number through{' '}
+                <Link to="/product/inbound" className="font-semibold text-primary hover:underline">inbound routing</Link>, from
+                a{' '}
+                <Link to="/product/widget" className="font-semibold text-primary hover:underline">button on your website</Link>, or
+                as follow-up calls the agent places itself, always inside your calling window and Do-Not-Call list.
+              </p>
+              <p className="border-t border-border pt-5">
+                Every call is saved with a transcript and summary, and the lead details go to{' '}
+                <Link to="/integrations" className="font-semibold text-primary hover:underline">Zoho CRM, ArthaLeads, Slack, Google Sheets or a webhook</Link>.
+                If you are not sure which industry fits, the{' '}
+                <Link to="/best-ai-voice-calling-software-india" className="font-semibold text-primary hover:underline">buyer guide to AI voice calling software</Link>{' '}
+                lists what to test first.
+              </p>
+            </div>
+          </Reveal>
+          {platformVisual && (
+            <Reveal delayMs={80}>
+              <FigureCard figure={platformVisual} sizes="(min-width: 1280px) 660px, (min-width: 1024px) 52vw, calc(100vw - 40px)" />
+            </Reveal>
+          )}
         </div>
       </section>
 
       {/* FAQ */}
       <FaqSection items={FAQ} />
 
+      <div ref={endRef} />
       <CTABand />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

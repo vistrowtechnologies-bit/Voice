@@ -6,7 +6,7 @@
 // Files live in public/media/pages/: `<name>.webp` (full width) and
 // `<name>-800.webp`. Images approved by the owner on 21 Oct 2026.
 
-import { COMPARE_VENDORS } from './seoExpansionContent'
+import { COMPARE_VENDORS, LOCAL_REAL_ESTATE_PAGES } from './seoExpansionContent'
 
 export interface PageFigureData {
   src: string
@@ -87,8 +87,59 @@ const CROP_CALLS_LIST = (after: string) =>
     480,
   )
 
-const DEMO_HEADING = 'Don’t watch a generic demo. Test the work.'
-const OUTCOME_HEADING = 'How the conversation becomes an outcome.'
+const LAPTOP_OUTBOUND = (after: string) =>
+  dashboardView(
+    'dashboard-outbound-campaigns-laptop',
+    'Outbound Campaigns in the Vistrow Voice dashboard on a laptop: EMI reminder campaigns with contacts dialled, connected and blocked by Do-Not-Call or calling window, and progress per campaign',
+    'Each campaign shows contacts dialled, connected and blocked, with progress as it runs.',
+    after,
+  )
+const CROP_CAMPAIGN_PROGRESS = (after: string) =>
+  dashboardView(
+    'dashboard-crop-outbound-campaign-progress',
+    'Outbound campaign progress in the Vistrow Voice dashboard: a Do-Not-Call and calling-window notice, totals, and per-campaign counts for connected, pending, no answer, voicemail and blocked',
+    'Per-campaign progress: connected, calling, pending, no answer, voicemail, failed and blocked.',
+    after,
+    1200,
+    458,
+  )
+const LAPTOP_AGENTS = (after: string) =>
+  dashboardView(
+    'dashboard-voice-agents-laptop',
+    'Agents page in the Vistrow Voice dashboard on a laptop: three voice agents including Artha Front Desk, each live with a readiness score and a Test agent button',
+    'Your agents in one place, each with a readiness score and a one-tap test.',
+    after,
+  )
+const CROP_AGENT_CARDS = (after: string) =>
+  dashboardView(
+    'dashboard-crop-agent-cards-readiness',
+    'Three agent cards in the Vistrow Voice dashboard: a clinic front desk, a property enquiries agent and an EMI reminders agent, each with its voice, language and readiness score',
+    'One agent per job: a front desk, a property enquiry agent and a reminder agent, side by side.',
+    after,
+    1200,
+    526,
+  )
+const LAPTOP_OVERVIEW = (after: string) =>
+  dashboardView(
+    'dashboard-overview-laptop',
+    'Vistrow Voice dashboard overview on a laptop: calls handled, minutes left, qualified leads, appointments and recent calls',
+    'The dashboard overview: calls handled, qualified leads, appointments and recent calls.',
+    after,
+  )
+
+// The /solutions/* template (SolutionDetail.tsx) reads the same placement
+// keys as the product template, plus 'showcase-outcome' (the visual beside
+// the "After the call" record). Scene images carry their own call overlays,
+// so they sit in the hero without floating chips.
+const RE_SCENE: PageFigureData = {
+  src: '/media/pages/real-estate-ai-calling-agent-site-visit-booking.webp',
+  alt: 'A property buyer on a call with Artha, the AI calling agent, with the qualified enquiry saved: 2 BHK in Wakad, budget confirmed and a Saturday site visit',
+  caption: 'Artha qualifies a property enquiry and books the site visit while the buyer is on the call.',
+  width: 1600,
+  height: 1000,
+  after: 'showcase-hero',
+  eager: true,
+}
 
 const COMPARE_FIGURES: PageFigureData[] = [
   {
@@ -262,16 +313,14 @@ export const PAGE_FIGURES: Record<string, PageFigureData[]> = {
     CROP_CALLS_LIST('Teams that already know where leads should land.'),
     LAPTOP_CALL_DETAIL('showcase-dashboard'),
   ],
+  '/solutions': [LAPTOP_AGENTS('showcase-hero'), LAPTOP_OVERVIEW('One platform underneath')],
   '/solutions/real-estate': [
-    {
-      src: '/media/pages/real-estate-ai-calling-agent-site-visit-booking.webp',
-      alt: 'A property buyer on a call with Artha, the AI calling agent, with the qualified enquiry saved: 2 BHK in Wakad, budget confirmed and a Saturday site visit',
-      caption: 'Artha qualifies a property enquiry and books the site visit while the buyer is on the call.',
-      width: 1600,
-      height: 1000,
-      after: DEMO_HEADING,
-    },
+    RE_SCENE,
+    CROP_AGENT_CARDS('showcase-feature'),
+    LAPTOP_CALLS('showcase-dashboard'),
   ],
+  // The local market pages reuse the real-estate scene in their hero.
+  ...Object.fromEntries(LOCAL_REAL_ESTATE_PAGES.map((page) => [`/solutions/real-estate/${page.slug}`, [RE_SCENE]])),
   '/solutions/healthcare': [
     {
       src: '/media/pages/clinic-ai-receptionist-patient-call.webp',
@@ -279,16 +328,19 @@ export const PAGE_FIGURES: Record<string, PageFigureData[]> = {
       caption: 'Artha answers the clinic line in the caller’s language and offers a free slot inside your hours.',
       width: 1600,
       height: 1000,
-      after: DEMO_HEADING,
+      after: 'showcase-hero',
+      eager: true,
     },
+    CROP_TRANSCRIPT('showcase-feature'),
     {
       src: '/media/pages/clinic-call-summary-record.webp',
       alt: 'Clinic call summary record with reason, routing, urgency and an appointment requested outcome, handled by Artha',
       caption: 'Each clinic call is saved with its reason, routing, urgency and outcome, plus the transcript and summary.',
       width: 1600,
       height: 1000,
-      after: OUTCOME_HEADING,
+      after: 'showcase-outcome',
     },
+    LAPTOP_CALL_DETAIL('showcase-dashboard'),
   ],
   '/solutions/ecommerce': [
     {
@@ -297,18 +349,26 @@ export const PAGE_FIGURES: Record<string, PageFigureData[]> = {
       caption: 'Artha takes a damaged-delivery call and collects the order number before anything else.',
       width: 1600,
       height: 1000,
-      after: DEMO_HEADING,
+      after: 'showcase-hero',
+      eager: true,
     },
+    CROP_CALLS_LIST('showcase-feature'),
     {
       src: '/media/pages/ecommerce-order-support-outcome.webp',
       alt: 'Order-support outcome card with order ID, damage issue, the replacement the customer wants and a human review request',
       caption: 'The order, the issue and what the customer wants are saved, and the case goes to your team for review.',
       width: 1600,
       height: 1000,
-      after: OUTCOME_HEADING,
+      after: 'showcase-outcome',
     },
+    LAPTOP_CALLS('showcase-dashboard'),
   ],
-  '/solutions/finance': [{ ...PRE_DIAL_CHECKS, after: 'Rules that decide who gets called, and when.' }],
+  '/solutions/finance': [
+    LAPTOP_OUTBOUND('showcase-hero'),
+    CROP_CAMPAIGN_PROGRESS('showcase-feature'),
+    { ...PRE_DIAL_CHECKS, after: 'Rules that decide who gets called, and when.' },
+    LAPTOP_CALLS('showcase-dashboard'),
+  ],
   '/solutions/support': [
     {
       src: '/media/pages/helpdesk-ai-support-call.webp',
@@ -316,16 +376,19 @@ export const PAGE_FIGURES: Record<string, PageFigureData[]> = {
       caption: 'Artha works through a support issue one step at a time, starting with the simple checks.',
       width: 1600,
       height: 1000,
-      after: DEMO_HEADING,
+      after: 'showcase-hero',
+      eager: true,
     },
+    CROP_CALLS_LIST('showcase-feature'),
     {
       src: '/media/pages/support-ticket-escalation-context.webp',
       alt: 'Support ticket context saved by Artha: the issue, steps already tried, caller sentiment and an escalation to account support',
       caption: 'When Artha escalates, the ticket carries what the caller already tried, so nobody asks twice.',
       width: 1600,
       height: 1000,
-      after: OUTCOME_HEADING,
+      after: 'showcase-outcome',
     },
+    LAPTOP_CALL_DETAIL('showcase-dashboard'),
   ],
   '/pricing': [
     {

@@ -4,17 +4,65 @@ import { Icon } from '../../components/Icon'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
+import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { ScriptMarquee } from '../../components/BharatBits'
 import { HERO_STATS, SOLUTIONS } from '../../lib/marketingContent'
 import { LOCAL_REAL_ESTATE_PAGES } from '../../lib/seoExpansionContent'
+import { pageFigures } from '../../lib/pageFigures'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
-import { PageFigures } from '../../components/PageFigure'
+import {
+  Bento,
+  CALLOUTS_BY_VIEW,
+  DashboardCallouts,
+  FeatureCards,
+  FeatureRows,
+  HeroFacts,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  Timeline,
+  TrustBand,
+  useStickyRefs,
+  type HeroChip,
+} from '../../components/showcase'
 
-// One template renders all five industry pages, keyed by the :slug route param.
+// Hero chips for pages whose hero is a dashboard view. Scene images already
+// carry their own call overlays, so they get none.
+const HERO_CHIPS: Record<string, [HeroChip, HeroChip]> = {
+  '/solutions/finance': [
+    { label: 'Campaign running', live: true },
+    { label: 'Do-Not-Call checked first', icon: 'block' },
+  ],
+}
+
+/** "भारत के लिए / Built for BHARAT", the mark every industry hero carries. */
+function BharatMark() {
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em]">
+      <span className="font-sans text-sm normal-case tracking-normal text-text-muted">भारत के लिए</span>
+      <span className="text-border">/</span>
+      <span aria-label="Built for Bharat">
+        <span className="text-text-muted">Built for </span>
+        <span className="text-[#ff9933]">BH</span><span className="bharat-middle-letter">AR</span><span className="text-[#138808]">AT</span>
+      </span>
+    </p>
+  )
+}
+
+// One template renders all five industry pages, keyed by the :slug route
+// param, composed from the showcase kit (components/showcase/) so it matches
+// the /product/* pages: split hero with the industry scene, a try-a-call
+// studio with the live demo beside the sample line, the pains as a bento with
+// a dashboard view, the violet trust band, the workflow as a timeline, guide
+// sections beside their visuals, the after-call record beside its outcome
+// card, a dashboard tour, objections, then FAQ and the CTA band.
 export function SolutionDetail() {
   const { slug } = useParams()
   const [activeScenario, setActiveScenario] = useState(0)
+  const { heroCtaRef, endRef } = useStickyRefs()
   const solution = SOLUTIONS.find((s) => s.to === `/solutions/${slug}`)
 
   useEffect(() => {
@@ -23,8 +71,12 @@ export function SolutionDetail() {
 
   if (!solution) return <Navigate to="/solutions" replace />
 
+  const route = solution.to
   const scenario = solution.scenarios[activeScenario]
   const scrollToDemo = () => document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const outcomeVisual = pageFigures(route, 'showcase-outcome')[0]
+  const dashboardView = pageFigures(route, 'showcase-dashboard')[0]
+  const dashboardCallouts = dashboardView ? CALLOUTS_BY_VIEW[dashboardView.src] : undefined
 
   // Answer-engine-friendly (AEO/GEO): FAQPage structured data lets Google,
   // Bing, and LLM-based answer engines quote these Q&As directly instead of
@@ -39,9 +91,45 @@ export function SolutionDetail() {
     })),
   }
 
+  const resultRecord = (
+    <div className="rounded-3xl border border-border bg-surface p-6 sm:p-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <SectionEyebrow>After the call</SectionEyebrow>
+          <h2 className="mt-3 font-display text-2xl font-bold sm:text-3xl">{solution.resultTitle}</h2>
+        </div>
+        <span className="shrink-0 rounded-full border border-cyan/30 bg-cyan/10 px-3 py-1 text-xs font-bold text-cyan">Example record</span>
+      </div>
+      <div className="mt-7 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface-high">
+        {solution.resultFields.map((field) => (
+          <div key={field.label} className="grid gap-1 px-5 py-4 sm:grid-cols-[150px_1fr] sm:items-center">
+            <span className="text-xs font-bold uppercase tracking-wide text-text-muted">{field.label}</span>
+            <span className="text-sm font-semibold text-text sm:text-right">{field.value}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-xs leading-relaxed text-text-muted">Example only. Your agent captures the fields and outcomes configured for your workflow.</p>
+    </div>
+  )
+
+  const teamReceives = (
+    <div className="rounded-3xl border border-border bg-gradient-to-br from-surface to-surface-high p-6 sm:p-8">
+      <SectionEyebrow>What your team receives</SectionEyebrow>
+      <h2 className="mt-3 font-display text-2xl font-bold sm:text-3xl">No manual call reconstruction.</h2>
+      <ul className={`mt-6 grid gap-3 sm:grid-cols-2 ${outcomeVisual ? '' : 'lg:grid-cols-1'}`}>
+        {solution.features.map((feat) => (
+          <li key={feat} className="flex items-center gap-3 rounded-xl border border-border bg-surface/70 px-4 py-3 text-sm font-medium text-text">
+            <Icon name="check_circle" className="shrink-0 text-[20px] text-cyan" />
+            {feat}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+
   return (
     <MarketingLayout>
-      <Seo title={`${solution.headline} - Vistrow Voice`} description={solution.subhead} path={solution.to} jsonLd={faqJsonLd} />
+      <Seo title={`${solution.headline} - Vistrow Voice`} description={solution.subhead} path={route} jsonLd={faqJsonLd} />
       <button
         type="button"
         onClick={scrollToDemo}
@@ -53,80 +141,46 @@ export function SolutionDetail() {
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
 
-      {/* The industry hero mirrors the homepage's strongest visual system:
-          Bharat identity, living language proof, two-column live demo and a
-          compact proof strip. The business role and orb tint remain unique
-          to the selected industry. */}
-      <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
-        <div>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em]">
-            <span className="font-sans text-sm normal-case tracking-normal text-text-muted">भारत के लिए</span>
-            <span className="text-border">/</span>
-            <span aria-label="Built for Bharat">
-              <span className="text-text-muted">Built for </span>
-              <span className="text-[#ff9933]">BH</span><span className="bharat-middle-letter">AR</span><span className="text-[#138808]">AT</span>
-            </span>
-          </p>
-          <p className="mt-5 text-xs font-bold uppercase tracking-widest text-cyan">Solutions · {solution.label}</p>
-          <h1 className="mt-4 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
-            {solution.headline}
-          </h1>
-          <p className="mt-5 max-w-lg text-base leading-7 text-text-muted sm:mt-6 sm:text-lg sm:leading-relaxed">{solution.subhead}</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <TalkToArthaButton />
-            <Link
-              to="/contact"
-              className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
-            >
-              Book a demo
-            </Link>
-          </div>
-          <div className="mt-10 grid grid-cols-3 gap-4 border-t border-border pt-6 sm:gap-8">
-            {HERO_STATS.map((stat) => (
-              <div key={stat.label}>
-                <p className="font-display text-2xl font-bold text-text">{stat.value}</p>
-                <p className="text-[10px] uppercase tracking-wider text-text-muted sm:text-xs">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="w-full">
-          {solution.demoSlug ? (
-          <div className="flex flex-col gap-3">
-            <DemoOrbCard
-              demoSlug={solution.demoSlug}
-              badgeLabel={solution.demoBadge}
-              accentHue={solution.demoAccentHue}
-            />
-            <p className="mx-auto max-w-[420px] text-center text-xs text-text-muted lg:mx-0 lg:ml-auto">
-              You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span>, a
-              demo business we made up, answered live by Artha. {solution.demoPrompt}
-            </p>
-          </div>
-          ) : undefined}
-        </div>
-      </section>
+      <SplitHero
+        kicker={<BharatMark />}
+        eyebrow={`Solutions · ${solution.label}`}
+        title={solution.headline}
+        subhead={solution.subhead}
+        visual={pageFigures(route, 'showcase-hero')[0]}
+        chips={HERO_CHIPS[route]}
+        placement="solution_hero"
+        trust={<HeroFacts facts={HERO_STATS} />}
+        ctaRef={heroCtaRef}
+      />
 
       <ScriptMarquee />
 
       {slug === 'real-estate' && (
         <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-          <div className="mb-7 max-w-2xl">
-            <SectionEyebrow>Regional real-estate workflows</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Explore calls in your market and language.</h2>
-            <p className="mt-3 text-text-muted">See examples tailored to local buyer conversations, from enquiry qualification to site-visit follow-up.</p>
-          </div>
+          <Reveal className="mb-7">
+            <SectionHead
+              eyebrow="Regional real-estate workflows"
+              title="Explore calls in your market and language."
+              intro="See examples tailored to local buyer conversations, from enquiry qualification to site-visit follow-up."
+            />
+          </Reveal>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {LOCAL_REAL_ESTATE_PAGES.map((market, i) => (
               <Link
                 key={market.slug}
                 to={`/solutions/real-estate/${market.slug}`}
-                className={`group flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary ${i === 0 ? 'sm:col-span-2' : ''}`}
+                className={`vv-lift group flex items-center justify-between gap-3 rounded-3xl border p-5 ${
+                  i === 0 ? 'border-primary/40 bg-gradient-to-br from-primary/[0.14] via-surface to-surface sm:col-span-2' : 'border-border bg-surface'
+                }`}
               >
-                <span>
-                  <span className="block font-semibold text-text">{market.language} real estate calls</span>
-                  <span className="mt-1 block text-sm text-text-muted">{market.city}</span>
+                <span className="flex items-center gap-4">
+                  <span lang={market.langCode} className="flex h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-primary/12 px-2 font-display text-sm font-bold text-primary">
+                    {market.native}
+                  </span>
+                  <span>
+                    <span className="block font-semibold text-text">{market.language} real estate calls</span>
+                    <span className="mt-1 block text-sm text-text-muted">{market.city}</span>
+                  </span>
                 </span>
                 <Icon name="arrow_forward" className="shrink-0 text-primary transition-transform group-hover:translate-x-1" />
               </Link>
@@ -148,264 +202,202 @@ export function SolutionDetail() {
 
       {/* A useful demo needs a job, not just an orb. Each choice represents a
           real call this industry's agent is configured to handle and gives
-          the visitor a natural opening line to try. */}
+          the visitor a natural opening line to try; the live demo sits right
+          beside it, so "Start this call" is one short scroll away. */}
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-16">
-        <div className="mx-auto max-w-3xl text-center">
-          <SectionEyebrow>Choose a real call</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            Don’t watch a generic demo. Test the work.
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-text-muted">
-            Pick a situation your team handles today, then say the sample line or use your own words. Artha stays in role as {solution.demoBusiness}.
-          </p>
-        </div>
+        <Reveal>
+          <SectionHead
+            center
+            eyebrow="Choose a real call"
+            title="Don’t watch a generic demo. Test the work."
+            intro={`Pick a situation your team handles today, then say the sample line or use your own words. Artha stays in role as ${solution.demoBusiness}.`}
+          />
+        </Reveal>
 
-        <div className="mt-8 flex snap-x gap-3 overflow-x-auto pb-2 lg:justify-center" role="tablist" aria-label={`${solution.label} call scenarios`}>
-          {solution.scenarios.map((item, index) => (
-            <button
-              key={item.label}
-              type="button"
-              role="tab"
-              aria-selected={activeScenario === index}
-              onClick={() => setActiveScenario(index)}
-              className={`min-w-max snap-start rounded-full border px-5 py-2.5 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-                activeScenario === index
-                  ? 'border-primary bg-primary text-white shadow-lg shadow-primary/20'
-                  : 'border-border bg-surface text-text hover:border-primary/60'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-5 grid overflow-hidden rounded-3xl border border-border bg-surface shadow-sm lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="border-b border-border bg-surface-high p-6 sm:p-8 lg:border-b-0 lg:border-r">
-            <span className="text-xs font-bold uppercase tracking-widest text-cyan">Say this to Artha</span>
-            <blockquote className="mt-4 font-display text-2xl font-semibold leading-snug text-text sm:text-3xl">
-              {scenario.callerLine}
-            </blockquote>
-            <button
-              type="button"
-              onClick={scrollToDemo}
-              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-5 py-2.5 text-sm font-bold text-white transition-transform hover:-translate-y-0.5"
-            >
-              <Icon name="mic" className="text-[18px]" />
-              Start this call
-            </button>
-          </div>
-          <div className="grid gap-0 sm:grid-cols-2">
-            <div className="p-6 sm:p-8">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Icon name="psychology" className="text-[22px]" />
-              </span>
-              <h3 className="mt-4 font-display text-lg font-semibold">What Artha does</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{scenario.agentAction}</p>
-            </div>
-            <div className="border-t border-border p-6 sm:border-l sm:border-t-0 sm:p-8">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan/10 text-cyan">
-                <Icon name="task_alt" className="text-[22px]" />
-              </span>
-              <h3 className="mt-4 font-display text-lg font-semibold">Useful outcome</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{scenario.outcome}</p>
-            </div>
-          </div>
-        </div>
-        <PageFigures route={solution.to} after="Don’t watch a generic demo. Test the work." />
-      </section>
-
-      {/* Page-specific depth (finance, real estate): what the agent does,
-          the controls that exist, and a written sample. Other industries
-          render exactly as before. */}
-      {solution.guideSections?.map((section) => (
-        <section key={section.title} className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-          <div className="mb-8 max-w-2xl">
-            <SectionEyebrow>{section.eyebrow}</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">{section.title}</h2>
-            {section.intro && <p className="mt-3 text-text-muted">{section.intro}</p>}
-          </div>
-          <div className={`grid gap-5 sm:grid-cols-2 ${section.items.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-            {section.items.map((item) => (
-              <div key={item.title} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Icon name={item.icon} className="text-[22px]" />
-                </span>
-                <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-                {item.to && item.link && (
-                  <Link
-                    to={item.to}
-                    className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline"
-                  >
-                    {item.link}
-                    <Icon name="arrow_forward" className="text-[16px]" />
-                  </Link>
-                )}
-              </div>
-            ))}
-          </div>
-          {section.note && (
-            <p className="mt-5 flex gap-3 rounded-2xl border border-cyan/30 bg-cyan/[0.06] p-5 text-sm leading-relaxed text-text">
-              <Icon name="info" className="mt-0.5 shrink-0 text-[18px] text-cyan" />
-              <span>{section.note}</span>
-            </p>
-          )}
-          <PageFigures route={solution.to} after={section.title} />
-        </section>
-      ))}
-
-      {solution.sampleExchange && (
-        <section className="mx-auto max-w-4xl px-5 py-12 md:px-8">
-          <figure className="rounded-3xl border border-border bg-surface p-6 sm:p-8">
-            <SectionEyebrow>Example conversation</SectionEyebrow>
-            <figcaption className="mt-3">
-              <h2 className="font-display text-2xl font-bold tracking-tight">
-                {solution.sampleExchange.context}, in {solution.sampleExchange.langLabel}.
-              </h2>
-              <p className="mt-2 text-sm text-text-muted">
-                A short written sample to show the style of call, with an English gloss under each line. It is not a
-                recording of a customer call.
-              </p>
-            </figcaption>
-            <ol className="mt-6 space-y-4">
-              {solution.sampleExchange.turns.map((turn, i) => (
-                <li
-                  key={i}
-                  className={`rounded-2xl border p-4 ${turn.speaker === 'Agent' ? 'border-primary/25 bg-primary/[0.06]' : 'border-border bg-surface-high/60'}`}
+        <div className={`mt-10 grid items-start gap-8 ${solution.demoSlug ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-10' : ''}`}>
+          <div className="min-w-0">
+            <div className="flex snap-x gap-3 overflow-x-auto pb-2" role="tablist" aria-label={`${solution.label} call scenarios`}>
+              {solution.scenarios.map((item, index) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeScenario === index}
+                  onClick={() => setActiveScenario(index)}
+                  className={`min-w-max snap-start rounded-full border px-5 py-2.5 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                    activeScenario === index
+                      ? 'border-primary bg-primary text-white shadow-lg shadow-primary/20'
+                      : 'border-border bg-surface text-text hover:border-primary/60'
+                  }`}
                 >
-                  <p className="text-xs font-bold uppercase tracking-widest text-text-muted">
-                    {turn.speaker === 'Agent' ? 'AI agent' : 'Caller'}
-                  </p>
-                  <p lang={solution.sampleExchange!.langCode} className="mt-1.5 text-base leading-relaxed text-text">{turn.native}</p>
-                  <p className="mt-1 text-sm italic leading-relaxed text-text-muted">{turn.gloss}</p>
-                </li>
+                  {item.label}
+                </button>
               ))}
-            </ol>
-            <p className="mt-5 flex gap-2 text-sm leading-relaxed text-text-muted">
-              <Icon name="task_alt" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
-              <span>{solution.sampleExchange.outcome}</span>
-            </p>
-          </figure>
-        </section>
-      )}
-
-      {/* Pain → outcome */}
-      <section className="border-y border-border bg-surface-high/50">
-        <div className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-16">
-        <div className="mb-10 text-center">
-          <SectionEyebrow>Why teams switch</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Where the current workflow breaks.</h2>
-        </div>
-        <div className="vv-rail -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:snap-none md:overflow-visible md:px-0 md:pb-0 md:grid md:grid-cols-3 md:gap-5">
-          {solution.pains.map((p) => (
-            <div key={p.title} className="w-[82%] shrink-0 snap-start md:w-auto md:shrink rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-                <Icon name={p.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{p.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{p.body}</p>
             </div>
-          ))}
-        </div>
+
+            <div className="mt-5 overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_30px_60px_-44px_rgba(76,29,149,0.55)]">
+              <div className="relative overflow-hidden border-b border-border bg-gradient-to-br from-primary/[0.10] via-surface-high to-surface-high p-6 sm:p-8">
+                <span className="text-xs font-bold uppercase tracking-widest text-cyan">Say this to Artha</span>
+                <blockquote className="mt-4 font-display text-2xl font-semibold leading-snug text-text sm:text-3xl">
+                  {scenario.callerLine}
+                </blockquote>
+                <button
+                  type="button"
+                  onClick={scrollToDemo}
+                  className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-5 py-2.5 text-sm font-bold text-white shadow-[0_14px_36px_-14px_rgba(147,51,234,0.8)] transition-transform hover:-translate-y-0.5"
+                >
+                  <Icon name="mic" className="text-[18px]" />
+                  Start this call
+                </button>
+              </div>
+              <div className="grid sm:grid-cols-2">
+                <div className="p-6 sm:p-8">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Icon name="psychology" className="text-[22px]" />
+                  </span>
+                  <h3 className="mt-4 font-display text-lg font-semibold">What Artha does</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-text-muted">{scenario.agentAction}</p>
+                </div>
+                <div className="border-t border-border p-6 sm:border-l sm:border-t-0 sm:p-8">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan/10 text-cyan">
+                    <Icon name="task_alt" className="text-[22px]" />
+                  </span>
+                  <h3 className="mt-4 font-display text-lg font-semibold">Useful outcome</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-text-muted">{scenario.outcome}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {solution.demoSlug && (
+            <div className="flex flex-col gap-3 lg:sticky lg:top-28">
+              <DemoOrbCard demoSlug={solution.demoSlug} badgeLabel={solution.demoBadge} accentHue={solution.demoAccentHue} />
+              <p className="mx-auto max-w-[420px] text-center text-xs text-text-muted">
+                You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span>, a
+                demo business we made up, answered live by Artha. {solution.demoPrompt}
+              </p>
+            </div>
+          )}
         </div>
       </section>
+
+      {/* Pain → outcome, as a bento beside a real dashboard view. */}
+      <Bento
+        visual={pageFigures(route, 'showcase-feature')[0]}
+        items={solution.pains}
+        head={<SectionHead eyebrow="Why teams switch" title="Where the current workflow breaks." />}
+      />
+
+      <TrustBand placement="solution_trust_band" />
 
       {/* Operational workflow: these steps are deliberately different for
           every industry, so the page explains the job rather than repeating
           a shared feature grid with a changed heading. */}
-      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-20">
-        <div className="max-w-2xl">
-          <SectionEyebrow>During every call</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">How the conversation becomes an outcome.</h2>
-        </div>
-        <div className="relative mt-10 vv-rail -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:snap-none md:overflow-visible md:px-0 md:pb-0 md:grid md:grid-cols-2 lg:grid-cols-4">
-          {solution.workflow.map((step, index) => (
-            <article key={step.title} className="w-[82%] shrink-0 snap-start md:w-auto md:shrink relative rounded-2xl border border-border bg-surface p-6">
-              <div className="flex items-center justify-between">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Icon name={step.icon} className="text-[22px]" />
-                </span>
-                <span className="font-display text-3xl font-bold text-border">0{index + 1}</span>
-              </div>
-              <h3 className="mt-5 font-display text-lg font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </article>
-          ))}
-        </div>
-        <PageFigures route={solution.to} after="How the conversation becomes an outcome." />
-      </section>
+      <Timeline eyebrow="During every call" title="How the conversation becomes an outcome." steps={solution.workflow} />
+
+      {/* Page-specific depth: what the agent does, the controls that exist,
+          and a written sample. Visuals sit beside the section they show. */}
+      {solution.guideSections?.map((section, i) => (
+        <FeatureRows
+          key={section.title}
+          eyebrow={section.eyebrow}
+          title={section.title}
+          intro={section.intro}
+          items={section.items}
+          note={section.note}
+          figures={pageFigures(route, section.title)}
+          flip={i % 2 === 1}
+        />
+      ))}
+
+      {solution.sampleExchange && (
+        <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-16">
+          <Reveal>
+            <figure className="grid gap-8 rounded-3xl border border-border bg-surface p-6 sm:p-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-12 lg:p-10">
+              <figcaption>
+                <SectionEyebrow>Example conversation</SectionEyebrow>
+                <h2 className="mt-3 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                  {solution.sampleExchange.context}, in {solution.sampleExchange.langLabel}.
+                </h2>
+                <p className="mt-3 text-sm text-text-muted">
+                  A short written sample to show the style of call, with an English gloss under each line. It is not a
+                  recording of a customer call.
+                </p>
+                <p className="mt-5 flex gap-2 text-sm leading-relaxed text-text-muted">
+                  <Icon name="task_alt" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
+                  <span>{solution.sampleExchange.outcome}</span>
+                </p>
+              </figcaption>
+              <ol className="space-y-4">
+                {solution.sampleExchange.turns.map((turn, i) => (
+                  <li
+                    key={i}
+                    className={`rounded-2xl border p-4 ${turn.speaker === 'Agent' ? 'border-primary/25 bg-primary/[0.06] sm:ml-8' : 'border-border bg-surface-high/60 sm:mr-8'}`}
+                  >
+                    <p className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                      {turn.speaker === 'Agent' ? 'AI agent' : 'Caller'}
+                    </p>
+                    <p lang={solution.sampleExchange!.langCode} className="mt-1.5 text-base leading-relaxed text-text">{turn.native}</p>
+                    <p className="mt-1 text-sm italic leading-relaxed text-text-muted">{turn.gloss}</p>
+                  </li>
+                ))}
+              </ol>
+            </figure>
+          </Reveal>
+        </section>
+      )}
 
       {/* Show the operational artifact customers actually buy: a useful,
-          structured result that can move into another system. */}
-      <section className="mx-auto grid max-w-7xl gap-6 px-5 py-12 md:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:py-16">
-        <div className="rounded-3xl border border-border bg-surface p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <SectionEyebrow>After the call</SectionEyebrow>
-              <h2 className="mt-3 font-display text-2xl font-bold sm:text-3xl">{solution.resultTitle}</h2>
+          structured result that can move into another system, beside the
+          outcome card that illustrates it. */}
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-16">
+        {outcomeVisual ? (
+          <SplitRow figure={outcomeVisual} className="">
+            <div className="grid gap-6">
+              <Reveal>{resultRecord}</Reveal>
+              <Reveal delayMs={80}>{teamReceives}</Reveal>
             </div>
-            <span className="rounded-full border border-cyan/30 bg-cyan/10 px-3 py-1 text-xs font-bold text-cyan">Example record</span>
+          </SplitRow>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+            <Reveal className="h-full [&>div]:h-full">{resultRecord}</Reveal>
+            <Reveal delayMs={80} className="h-full [&>div]:h-full">{teamReceives}</Reveal>
           </div>
-          <div className="mt-7 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface-high">
-            {solution.resultFields.map((field) => (
-              <div key={field.label} className="grid gap-1 px-5 py-4 sm:grid-cols-[150px_1fr] sm:items-center">
-                <span className="text-xs font-bold uppercase tracking-wide text-text-muted">{field.label}</span>
-                <span className="text-sm font-semibold text-text sm:text-right">{field.value}</span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-xs leading-relaxed text-text-muted">Example only. Your agent captures the fields and outcomes configured for your workflow.</p>
-        </div>
-
-        <div className="rounded-3xl border border-border bg-gradient-to-br from-surface to-surface-high p-6 sm:p-8">
-          <SectionEyebrow>What your team receives</SectionEyebrow>
-          <h2 className="mt-3 font-display text-2xl font-bold sm:text-3xl">No manual call reconstruction.</h2>
-          <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            {solution.features.map((feat) => (
-              <li key={feat} className="flex items-center gap-3 rounded-xl border border-border bg-surface/70 px-4 py-3 text-sm font-medium text-text">
-                <Icon name="check_circle" className="text-[20px] text-cyan" />
-                {feat}
-              </li>
-            ))}
-          </ul>
-        </div>
+        )}
       </section>
+
+      {dashboardView && dashboardCallouts && <DashboardCallouts view={dashboardView} callouts={dashboardCallouts} />}
 
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-20">
-        <div className="mb-9 max-w-2xl">
-          <SectionEyebrow>Connected workflow</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">The call should update the tools your team already uses.</h2>
-        </div>
-        <div className="vv-rail -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:snap-none md:overflow-visible md:px-0 md:pb-0 md:grid md:grid-cols-3 md:gap-5">
-          {solution.integrations.map((item) => (
-            <article key={item.title} className="w-[82%] shrink-0 snap-start md:w-auto md:shrink group rounded-2xl border border-border bg-surface p-7 transition-all hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan transition-colors group-hover:bg-primary/10 group-hover:text-primary">
-                <Icon name={item.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-            </article>
-          ))}
-        </div>
+        <Reveal>
+          <SectionHead eyebrow="Connected workflow" title="The call should update the tools your team already uses." className="mb-10" />
+        </Reveal>
+        <FeatureCards items={solution.integrations} />
       </section>
 
-      <section className="border-y border-border bg-surface-high/50">
-        <div className="mx-auto grid max-w-7xl gap-8 px-5 py-14 md:px-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-start lg:py-16">
-          <div>
+      <section className="px-5 md:px-8">
+        <div className="mx-auto grid max-w-7xl gap-8 rounded-[2rem] border border-border bg-surface-high/50 px-6 py-12 sm:px-10 lg:grid-cols-[0.7fr_1.3fr] lg:items-start lg:px-14 lg:py-14">
+          <Reveal>
             <SectionEyebrow>Boundaries matter</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What Artha must never improvise.</h2>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance">What Artha must never improvise.</h2>
             <p className="mt-4 text-sm leading-relaxed text-text-muted">Useful automation is grounded, auditable and honest about when a person needs to take over.</p>
-          </div>
+          </Reveal>
           <div className="grid gap-3">
-            {solution.guardrails.map((rule) => (
-              <div key={rule} className="flex gap-4 rounded-2xl border border-border bg-surface p-5">
-                <Icon name="shield" className="mt-0.5 text-[22px] text-cyan" />
-                <p className="text-sm leading-relaxed text-text">{rule}</p>
-              </div>
+            {solution.guardrails.map((rule, i) => (
+              <Reveal key={rule} delayMs={i * 70}>
+                <div className="flex gap-4 rounded-2xl border border-border bg-surface p-5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan/10 text-cyan">
+                    <Icon name="shield" className="text-[20px]" />
+                  </span>
+                  <p className="self-center text-sm leading-relaxed text-text">{rule}</p>
+                </div>
+              </Reveal>
             ))}
           </div>
         </div>
       </section>
+
+      <ObjectionCards route={route} placement="solution_objections" />
 
       {/* FAQ */}
       {/* key: the accordion state lives in FaqSection now, and navigating
@@ -413,7 +405,9 @@ export function SolutionDetail() {
           list opens at the top the way it did before. */}
       <FaqSection key={slug} items={solution.faqs} />
 
+      <div ref={endRef} />
       <CTABand title={`Ready to try Artha for ${solution.label}?`} />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }
