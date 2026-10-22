@@ -36,7 +36,10 @@ for _k in ("LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"):
     os.environ.setdefault(_k, "x")
 os.environ.setdefault("SARVAM_API_KEY", "test-key-not-used-offline")
 os.environ.setdefault("OPENAI_API_KEY", "test-key-not-used-offline")
-if not os.environ.get("DATABASE_URL", "").startswith("postgresql://localhost"):
+# Run directly, never let main's load_dotenv() reach the production DB. Only
+# then: test_llm_token_diet imports this module, and rewriting DATABASE_URL
+# for the whole pytest process broke later real-DB tests (PR #250).
+if __name__ == "__main__" and not os.environ.get("DATABASE_URL", "").startswith("postgresql://localhost"):
     os.environ["DATABASE_URL"] = "postgresql://localhost:1/placeholder"
 
 import main  # noqa: E402
