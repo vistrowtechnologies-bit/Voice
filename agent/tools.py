@@ -2638,6 +2638,45 @@ def _looks_like_a_phone_number(digits: str) -> bool:
     return 10 <= len(digits) <= 15
 
 
+
+# Call 1464 (22 Oct 2026): a website agency's agent stored a website enquiry
+# as property_type "Commercial", configuration "10-12 pages". Agents whose
+# business is not property get this one instead: same tool name and storage,
+# no property fields in the schema the model reads.
+@function_tool(name="log_lead")
+async def log_lead_general(
+    context: RunContext,
+    name: str = "",
+    phone: str = "",
+    budget: str = "",
+    location: str = "",
+    timeline: str = "",
+    need: str = "",
+) -> str:
+    """Record what you have learned about this caller so far.
+
+    Call this once the caller has told you what they want, with every field
+    you have so far. You do NOT need their name, you do NOT need a phone
+    number, and you do NOT need the full picture. Each call adds a pause
+    before your reply, so do not call it after every single detail: call it
+    again only for a name, a phone number or a changed detail, and always
+    before a booking or end_call. Everything you omit is left exactly as it
+    was.
+
+    Args:
+        name: Caller's name, once they give it.
+        phone: Caller's phone number. On an inbound call this is already
+            known from caller ID — do not ask for it.
+        budget: Budget as they expressed it. Keep an approximation approximate.
+        location: A place the caller named.
+        timeline: When they want it, e.g. "next month".
+        need: What this caller wants from this business, in their own words.
+    """
+    return await log_lead(
+        context, name=name, phone=phone, budget=budget, location=location,
+        timeline=timeline, need=need,
+    )
+
 @function_tool
 async def capture_platform_lead(
     context: RunContext,

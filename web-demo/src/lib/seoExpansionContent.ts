@@ -867,7 +867,7 @@ export const DEMO_CALLS: DemoCall[] = [
     whyItMatters:
       'Inbound calls come at any hour, including when your sales team is away from the phone. An agent that answers, asks the basics and records them means a call at night is waiting as a qualified enquiry in the morning rather than a missed number.',
     configure: [
-      { title: 'An inbound number', body: 'Connect an EnableX number under Phone Numbers, choose the agent that answers it, and use Test call to check it. Set hours, days and limits under Inbound.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
+      { title: 'An inbound number', body: 'Connect your business number under Phone Numbers, choose the agent that answers it, and use Test call to check it. Set hours, days and limits under Inbound.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
       { title: 'Project knowledge', body: 'Add project facts to the knowledge base, so questions about location are answered from approved information.' },
       { title: 'Strict mode', body: 'Keep the agent to your approved answers so it does not invent price or inventory.' },
       { title: 'Kannada voice', body: 'Choose a voice and default language, then test mixed Kannada and English calls on your own agent before going live.' },
