@@ -142,7 +142,7 @@ export const PRODUCT_DETAIL: Record<
     ],
     faqs: [
       { q: 'Do I need to write code to build an agent?', a: 'No - the builder is entirely no-code. Set the persona, prompt, voice, and language, then publish.' },
-      { q: 'Which voices can my agent use?', a: 'A curated set of Sarvam and ElevenLabs voices across Indian languages and English, previewable before you publish.' },
+      { q: 'Which voices can my agent use?', a: 'A curated set of natural voices across Indian languages and English, previewable before you publish.' },
       { q: 'Can I test the agent before it goes live?', a: 'Yes - talk to any agent in the browser instantly, with the exact prompt and voice it will use on real calls. The Testing Lab also runs scenarios such as an angry caller, a silent caller or a booking conflict and shows checks like opening quality and tool accuracy.' },
       { q: 'What happens when I change the prompt?', a: 'Changes apply from the next call; there is nothing to redeploy. You can save a scenario as a custom regression test in the Testing Lab and re-run it after each prompt change.' },
       { q: 'Can the agent hand a call to a person?', a: 'Yes, on phone calls. Set a transfer number on the agent and it can dial that person into the call on request. Web calls cannot be transferred to a phone.' },
@@ -165,7 +165,7 @@ export const PRODUCT_DETAIL: Record<
         eyebrow: 'How it works',
         title: 'What happens on an inbound call to your number.',
         items: [
-          { icon: 'dialpad', title: '1. Connect a number', body: 'Provision the number with your telephony provider (EnableX today), connect it under Phone Numbers in full international format, and run a test call.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
+          { icon: 'dialpad', title: '1. Connect a number', body: 'Provision the number with your telephony provider, connect it under Phone Numbers in full international format, and run a test call.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
           { icon: 'route', title: '2. Route it to an agent', body: 'On the Inbound page, pick the number and the agent and create the route. It is live immediately.', to: '/help/inbound/route-inbound-calls', link: 'Route incoming calls' },
           { icon: 'record_voice_over', title: '3. The agent takes the call', body: 'It opens with the welcome line you wrote for inbound calls, answers from your knowledge base, follows the caller if they change language, and can book an appointment or take a callback request.' },
           { icon: 'receipt_long', title: '4. You get the record', body: 'Each call has a transcript, the lead fields captured, CRM delivery status and, if recording is on, the audio. Earlier calls from the same number sit alongside.', to: '/help/calls/find-a-call', link: 'Find a call or transcript' },
@@ -197,7 +197,7 @@ export const PRODUCT_DETAIL: Record<
       },
     ],
     faqs: [
-      { q: 'Do I need a new phone number?', a: 'Not necessarily. Numbers are connected through your telephony provider (EnableX today) and then routed to an agent on the Inbound page. The connect-a-number guide in the help centre lists the steps.' },
+      { q: 'Do I need a new phone number?', a: 'Not necessarily. Numbers are connected through your telephony provider and then routed to an agent on the Inbound page. The connect-a-number guide in the help centre lists the steps.' },
       { q: 'What happens if the agent can’t help a caller?', a: 'On phone calls it can transfer to a person if you have set a transfer number, or take a callback request - never a dead end or hold music.' },
       { q: 'Is every call recorded and transcribed?', a: 'Every call gets a transcript. Audio recording is a setting you can turn on or off under Compliance, along with spoken consent and how long data is kept.' },
       { q: 'Can I limit when the agent answers?', a: 'Yes. Set a call window, active days and a maximum number of concurrent calls per number. Calls outside those rules are not answered by the agent.' },

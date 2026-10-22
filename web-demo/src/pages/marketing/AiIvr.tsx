@@ -97,7 +97,7 @@ const FAQ = [
   },
   {
     q: 'Can I keep my existing phone number?',
-    a: 'Usually, yes. Phone calls run over SIP through EnableX, an Indian telecom provider. An existing number from a compatible provider can be connected once we confirm the connection setup, or you can use a new number. The website call widget needs no number at all.',
+    a: 'Usually, yes. Phone calls run over SIP through your telecom provider. An existing number from a compatible provider can be connected once we confirm the connection setup, or you can use a new number. The website call widget needs no number at all.',
   },
   {
     q: 'Which languages can callers use?',
@@ -117,7 +117,7 @@ const FAQ = [
   },
   {
     q: 'Is Vistrow Voice a cloud IVR?',
-    a: 'It is a cloud-hosted platform, so there is no hardware to install and everything is managed from the browser dashboard. Instead of a keypad menu it puts a conversational AI agent on the number. Phone calls connect over SIP through EnableX, and the same agent can also answer on your website.',
+    a: 'It is a cloud-hosted platform, so there is no hardware to install and everything is managed from the browser dashboard. Instead of a keypad menu it puts a conversational AI agent on the number. Phone calls connect over SIP through your telecom provider, and the same agent can also answer on your website.',
   },
 ]
 
@@ -265,7 +265,7 @@ export function AiIvr() {
             </span>
             <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Keep your existing number.</h2>
             <p className="mt-3 text-sm leading-relaxed text-text-muted">
-              Phone calls connect over SIP through EnableX, an Indian telecom provider. An existing number from a
+              Phone calls connect over SIP through your telecom provider. An existing number from a
               compatible provider can be connected once we confirm the connection setup, or you can use a new one.
               Each number is routed to an agent with its own hours, active days and concurrent-call limit, so you can
               start with one line and move the rest later.
