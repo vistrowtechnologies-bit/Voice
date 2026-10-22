@@ -181,15 +181,7 @@ export function Home() {
             calling agent answers, qualifies, and books customers across phone and web in Hindi, English and 9 more
             Indian languages, with natural Hinglish and mid-sentence language switching.
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Link
-              to="/contact"
-              onClick={() => trackMarketingCta('book_demo', 'home_hero')}
-              className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
-            >
-              Book a demo
-            </Link>
-          </div>
+          {/* No "Book a demo" here: the header already has it (owner, 21 Oct). */}
           <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
             {HERO_STATS.map((stat) => (
               <div key={stat.label} className="rounded-2xl border border-border bg-surface px-2 py-3 text-center">

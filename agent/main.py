@@ -1745,6 +1745,15 @@ _SWAP_OPENERS = {"deva": ["अच्छा", "जी", "ओके", "हम्�
 _BACKCHANNEL_WORDS = {line.rstrip(".… ") for lines in _BACKCHANNEL_LINES.values() for line in lines}
 
 
+_PURE_FILLER_OPENERS = {"हम्म", "hmm"}
+
+
+def _is_native_standard_voice(agent) -> bool:
+    return getattr(agent, "_tts_provider", None) == "google-native" and not voice_catalog.chirp3_persona(
+        getattr(agent, "_speaking_voice", "") or ""
+    )
+
+
 def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
     # Call 982: the "हाँ..." latency filler reset the opener memory, so "देखिए" ran twice.
     if head.strip().rstrip(".… ") in _BACKCHANNEL_WORDS:
@@ -1754,6 +1763,11 @@ def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
         agent._last_opener = ""
         return head
     word = match.group("word").lower()
+    if word in _PURE_FILLER_OPENERS and _is_native_standard_voice(agent):
+        # Call 1452 (21 Oct 2026): a Native (locale Standard) voice reads the
+        # LLM's "हम्म," as a flat, odd syllable. Dropped for these voices.
+        rest = head[match.end():].lstrip(" ,।.—-")
+        return match.group("lead") + rest
     if word != getattr(agent, "_last_opener", ""):
         agent._last_opener = word
         return head
@@ -3261,7 +3275,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         language=to_google_code(reply_language), credentials_info=_GOOGLE_CREDENTIALS,
         **_rate,
     )
-    return TtsFallbackAdapter([sarvam_tts, google_tts], **_rate), "sarvam"
+    _adapter = TtsFallbackAdapter([sarvam_tts, google_tts], **_rate)
+    # FallbackAdapter has no update_options, so a language switch could never
+    # reach Sarvam: call 1450 switched to Marathi and the Bharat voice kept
+    # Hindi pronunciation ("'FallbackAdapter' object has no attribute
+    # 'update_options'"). The switch paths update this primary directly.
+    _adapter._vistrow_primary = sarvam_tts
+    return _adapter, "sarvam"
 
 
 def _parse_json_config(raw, default):
@@ -3371,10 +3391,12 @@ def _add_usage_units(timings: dict, metric_type: str, metric) -> None:
     stream received. Cancelled synthesis is counted too: the text was sent,
     so it is billed. Saved into latency_metrics_json as "usage".
     """
-    usage = timings.setdefault("usage", {
-        "ttsChars": 0, "ttsAudioS": 0.0, "ttsInputTokens": 0, "ttsOutputTokens": 0,
-        "ttsRequests": 0, "sttAudioS": 0.0,
-    })
+    usage = timings.setdefault("usage", {})
+    for key, zero in (
+        ("ttsChars", 0), ("ttsAudioS", 0.0), ("ttsInputTokens", 0), ("ttsOutputTokens", 0),
+        ("ttsRequests", 0), ("sttAudioS", 0.0),
+    ):
+        usage.setdefault(key, zero)  # tts_node may have created "usage" first
     if metric_type == "tts_metrics":
         usage["ttsChars"] += int(getattr(metric, "characters_count", 0) or 0)
         usage["ttsAudioS"] = round(usage["ttsAudioS"] + float(getattr(metric, "audio_duration", 0) or 0), 2)
@@ -3896,17 +3918,18 @@ class RealEstateAgent(Agent):
             "Use the tool that fits what this call is about:\n"
             "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
             "any detail at all — what they need, a timeline, a budget (any language or unit: \"50 "
-            "hazaar\", \"एक करोड़\"), a location, a name. Pass only "
+            "hazaar\", \"एक करोड़\"), a name. Pass only "
             "what you just learned; omitted fields keep their value. You do NOT need their name or "
             "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
             "your very next tool call, before you reply and before any booking or end_call; many "
-            "one-field calls are exactly right. Two localities: call it twice (locations accumulate). "
-            # Call 1439 (21 Oct 2026): a website enquiry on a digital-marketing
-            # agent was asked "business ke liye ya investment ke liye?" and for a
-            # locality - property wording here and in log_lead, from when every
-            # tenant sold property. Property tenants' own prompts ask these.
-            "Ask only questions that fit THIS business: locality, property type, BHK, investment "
-            "or self-use are for a business that sells property, never for any other.\n"
+            "one-field calls are exactly right. "
+            # Call 1458 (21 Oct 2026, Sarvam 105B): naming the property questions
+            # here, even to forbid them, primed the model to ask "business ya
+            # investment?" and "kis city ya area mein?" on a website enquiry
+            # (calls 1439/1458). Property tenants' own prompts ask those, so
+            # nothing property-specific is named in the platform rules at all.
+            "Ask only about what THIS business offers, as its own prompt and knowledge base describe "
+            "it.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "
@@ -5190,11 +5213,25 @@ class RealEstateAgent(Agent):
             self._tts_full_texts.append("".join(_full_text))
 
         _first_audio = None
-        async for frame in Agent.default.tts_node(self, _timed(text), model_settings):
-            if _first_audio is None:
-                _first_audio = (time.monotonic() - _t0) * 1000
-                logger.info("[tts_node] FIRST AUDIO at +%.0fms", _first_audio)
-            yield frame
+        _audio_s = 0.0
+        try:
+            async for frame in Agent.default.tts_node(self, _timed(text), model_settings):
+                if _first_audio is None:
+                    _first_audio = (time.monotonic() - _t0) * 1000
+                    logger.info("[tts_node] FIRST AUDIO at +%.0fms", _first_audio)
+                _audio_s += float(getattr(frame, "duration", 0) or 0)
+                yield frame
+        finally:
+            # Call 1449: Studio / Studio Lite (GeminiInteractionsTTS) emit no
+            # TTS metrics, so "usage" read 0 characters and the voice cost could
+            # not be priced. Counted here for every voice: the text sent to the
+            # TTS and the audio it returned (Gemini TTS bills ~25 tokens/s).
+            try:
+                usage = self.session.userdata["latency_metrics"].setdefault("usage", {})
+                usage["ttsCharsSent"] = usage.get("ttsCharsSent", 0) + len("".join(_full_text))
+                usage["ttsAudioSOut"] = round(usage.get("ttsAudioSOut", 0.0) + _audio_s, 2)
+            except Exception:
+                pass
 
     async def _handoff_if_requested(self, text: str, userdata: dict) -> bool:
         """Put the caller through when they ask, without consulting the model.
@@ -5273,6 +5310,8 @@ class RealEstateAgent(Agent):
         text = new_message.text_content
         self._booking_confirmed_this_turn = False
         _userdata = self.session.userdata
+        # Read by the thinking-ack watcher: an ack is only for a committed turn.
+        _userdata["turn_committed_at"] = time.monotonic()
         # A colleague has been dialled into this call (tools._bridge_in_human).
         # The two of them are talking now; an agent that keeps answering would
         # be talking over a real conversation.
@@ -6152,6 +6191,14 @@ class RealEstateAgent(Agent):
                 candidate, self._turn_script_anomaly, len(text or ""),
             )
             candidate = None
+        if (
+            candidate is not None
+            and self._tts_provider == "google-native"
+            and not voice_catalog.chirp3_persona(self._speaking_voice)
+        ):
+            # A Native (locale Standard) voice speaks one language; the reply
+            # language stays locked to it (call 1447, see switch_reply_language).
+            candidate = None
         if candidate is None or candidate == self._reply_language:
             # Ambiguous turn, or already the current language — nothing to
             # confirm. Reset the streak so a one-off stray word elsewhere
@@ -6241,7 +6288,7 @@ class RealEstateAgent(Agent):
                 # Google credentials are configured — see _build_tts's
                 # default branch — and FallbackAdapter has no update_options.
                 try:
-                    self.tts.update_options(target_language_code=candidate)
+                    getattr(self.tts, "_vistrow_primary", self.tts).update_options(target_language_code=candidate)
                 except AttributeError:
                     logger.warning("language-switch update_options failed (fallback-wrapped TTS)", exc_info=True)
             logger.info("switching reply language to %s", candidate)
@@ -8125,6 +8172,15 @@ async def entrypoint(ctx: JobContext) -> None:
             # session.say() raises outright on a model with supports_say=False
             # (the mute that cost three test calls before it was understood).
             return
+        _provider = getattr(agent, "_tts_provider", None)
+        if _provider in _GEMINI_PROVIDERS.values() or (
+            _provider == "google-native"
+            and not voice_catalog.chirp3_persona(getattr(agent, "_speaking_voice", "") or "")
+        ):
+            # Call 1449 (21 Oct 2026, Studio): these voices take ~0.8-1.6 s to
+            # start any line, so a 2.0 s ack began at ~3 s, on top of the reply
+            # it was meant to cover, and sounded tacked on after it.
+            return
         _cancel_backchannel()
 
         async def _watch() -> None:
@@ -8139,6 +8195,11 @@ async def entrypoint(ctx: JobContext) -> None:
                     # The opener is itself a say(); acking over it would land
                     # before the caller has said anything at all.
                     or not userdata.get("greeting_played", False)
+                    # Call 1451 (21 Oct 2026): "जी." played during the caller's
+                    # own mid-sentence pause - "thinking" had started before
+                    # their turn was committed (final transcript 2.6 s later).
+                    # Only ack a turn committed after the caller last spoke.
+                    or userdata.get("turn_committed_at", 0) < userdata.get("speech_ended_at", 0)
                 ):
                     return
                 # Never on consecutive turns. Even at a correct threshold a

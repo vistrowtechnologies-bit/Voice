@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 import { LANGUAGES } from '../../lib/marketingContent'
 
 // Landing page for the "voice AI platform" query cluster. It describes the
@@ -207,6 +208,7 @@ export function VoiceAiPlatform() {
             </div>
           ))}
         </div>
+        <PageFigures route="/voice-ai-platform" after="Nine parts, one workspace." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">

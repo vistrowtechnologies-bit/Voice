@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 import { LANGUAGES } from '../../lib/marketingContent'
 
 // Landing page for "AI telecaller" / "AI calling agent". Claims are limited to
@@ -174,6 +175,7 @@ export function AiTelecaller() {
           For the same agent on every kind of business call, see the{' '}
           <Link to="/ai-calling-agent" className={linkClass}>AI calling agent</Link> page.
         </p>
+        <PageFigures route="/ai-telecaller" after="Inbound, follow-ups and callbacks." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
@@ -303,6 +305,7 @@ export function AiTelecaller() {
           <Link to="/help/compliance/calling-rules" className={linkClass}>calling window and Do-Not-Call</Link> and{' '}
           <Link to="/help/compliance/consent-recording-retention" className={linkClass}>consent, recording and retention</Link>.
         </p>
+        <PageFigures route="/ai-telecaller" after="Checks that run before every outbound dial." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">

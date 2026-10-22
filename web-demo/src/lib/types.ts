@@ -265,6 +265,11 @@ export interface MissedMoneyQueue {
 
 export interface DashboardPeriodComparison {
   days: number
+  /** Present when an exact range was asked for: the range and the one compared with it. */
+  start?: string
+  end?: string
+  previousStart?: string
+  previousEnd?: string
   current: DashboardPeriodSnapshot
   previous: DashboardPeriodSnapshot
   change: Record<'calls' | 'qualified' | 'booked' | 'minutes', number | null>

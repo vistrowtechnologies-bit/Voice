@@ -8,15 +8,16 @@ import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL
 import type { NavGroup } from '../lib/marketingContent'
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
-import vistrowMark from '../assets/vistrow-mark.png'
 import { Tooltip } from './ui/Tooltip'
 import { SeoRelatedLinks } from './SeoRelatedLinks'
 import { PageGuides } from './PageGuides'
 
 // The official logo mark - used everywhere the brand appears (marketing
-// site, dashboard, auth pages) for one consistent visual identity.
+// site, dashboard, auth pages) for one consistent visual identity. Marketing
+// pages preload it on every page, so they use a 96px WebP copy of
+// src/assets/vistrow-mark.png (about 2 KB instead of 76 KB).
 function OrbMark() {
-  return <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
+  return <img src="/media/vistrow-mark-96.webp" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
 }
 
 // Matches the official lockup: "Vistrow" bold, "Voice" regular.
@@ -489,6 +490,22 @@ function MobileNav({ onClose }: { onClose: () => void }) {
               </NavLink>
             </li>
           ))}
+          {/* The ten above are the Indian scripts; the rest of the 130+ are on
+              /languages (owner, 21 Oct). Two columns wide, it fills the last
+              row at both 2 and 3 columns. */}
+          <li className="col-span-2">
+            <NavLink
+              to="/languages"
+              onClick={onClose}
+              className="flex h-full items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 hover:border-primary"
+            >
+              <span className="flex flex-col">
+                <span className="text-sm font-semibold text-primary">120+ more</span>
+                <span className="text-xs text-text-muted">English and other languages</span>
+              </span>
+              <Icon name="arrow_forward" className="text-[18px] text-primary" />
+            </NavLink>
+          </li>
         </ul>
         <div className="mt-8 flex flex-col gap-3">
           <NavLink

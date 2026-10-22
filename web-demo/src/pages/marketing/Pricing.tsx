@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 import { trackMarketingCta } from '../../lib/analytics'
 import { PLANS, SHARED_PLAN_FEATURES, planHighlights } from '../../lib/plans'
 
@@ -135,6 +136,7 @@ export function Pricing() {
             </p>
           </div>
         </div>
+        <PageFigures route="/pricing" after="Work out what you need" />
       </section>
 
       {/* FAQ */}

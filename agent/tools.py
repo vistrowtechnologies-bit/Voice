@@ -570,6 +570,36 @@ TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 _TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
 
+# Second, different line for a lookup still running after the first filler
+# (call 1459, 21 Oct 2026: a 5.8 s check with no filler left for the caller,
+# since the first one is said once per call). Also once per call.
+_STILL_CHECKING_LINES = {
+    "hi-IN": {"female": "बस देख रही हूँ...", "male": "बस देख रहा हूँ..."},
+    "mr-IN": {"female": "बघते आहे, एक क्षण...", "male": "बघतोय, एक क्षण..."},
+    "en-IN": {"default": "Still checking, just a moment..."},
+}
+_STILL_CHECKING_AFTER_S = 3.0
+
+
+def _still_checking_line(context: RunContext) -> str:
+    agent = context.session.current_agent
+    options = _STILL_CHECKING_LINES.get(getattr(agent, "_reply_language", "en-IN")) or _STILL_CHECKING_LINES["en-IN"]
+    return options.get(getattr(agent, "_voice_gender", "female")) or options.get("default") or _STILL_CHECKING_LINES["en-IN"]["default"]
+
+
+async def _await_with_still_checking(context: RunContext, task: "asyncio.Task"):
+    """Await a slow lookup; past _STILL_CHECKING_AFTER_S, say one different
+    holding line (once per call) so the caller never sits in silence."""
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), timeout=_STILL_CHECKING_AFTER_S)
+    except asyncio.TimeoutError:
+        agent = context.session.current_agent
+        if not getattr(agent, "_is_realtime", False) and not getattr(agent, "_said_still_checking", False):
+            agent._said_still_checking = True
+            context.session.say(_still_checking_line(context), allow_interruptions=False)
+        return await task
+
+
 def _calendar_check_filler(context: RunContext) -> str:
     """Natural, language-matched bridge spoken before a calendar lookup."""
     agent = context.session.current_agent
@@ -594,7 +624,11 @@ async def _post_webhook(context: RunContext, payload: dict) -> None:
     """
     userdata = context.userdata or {}
     urls = []
-    for url in (db.get_webhook_url(userdata.get("account_id")), userdata.get("agent_webhook_url")):
+    # to_thread: a synchronous DB read here held the agent's event loop for
+    # ~0.9 s on every lead save (calls 1447-1448, "event loop blocked ... psycopg"),
+    # stalling the very reply the caller was waiting for.
+    account_url = await asyncio.to_thread(db.get_webhook_url, userdata.get("account_id"))
+    for url in (account_url, userdata.get("agent_webhook_url")):
         # The account's webhook (Integrations page) and this agent's own
         # (Agents → Webhook); the same URL in both gets one delivery, not two.
         if url and url.startswith(("https://", "http://")) and url not in urls:
@@ -1862,7 +1896,7 @@ async def check_calendar_availability(
             _agent._said_calendar_filler = True
             filler = context.session.say(_calendar_check_filler(context), allow_interruptions=False)
             await filler.wait_for_playout()
-        slots = await slots_task
+        slots = await _await_with_still_checking(context, slots_task)
     except BaseException:
         if not slots_task.done():
             slots_task.cancel()
@@ -2240,6 +2274,18 @@ async def book_appointment(
     # Same plausibility rule log_lead uses (_looks_like_a_phone_number). The
     # old ">= 8 digits" check let a mis-heard 9-digit number ("982134567",
     # booking test calls 1296 and 1298, 2026-10-14) onto a real booking.
+    _own = context.session.current_agent
+    _caller_digits = re.sub(r"\D", "", str((context.userdata or {}).get("visitor_phone") or ""))
+    if phone_digits and len(phone_digits) >= 10 and phone_digits[-10:] != _caller_digits[-10:] and phone_digits[-10:] in re.sub(
+        r"\D", "", str(getattr(_own, "instructions", "") or "")
+    ):
+        # Call 1459 (21 Oct 2026): a website caller with no number on file was
+        # booked under the business's OWN contact number, copied from the
+        # prompt (+91 90670 97779).
+        return (
+            "BOOKING REJECTED — that number is this business's own contact number, not the "
+            "caller's. Ask the caller for their own phone number and do not say booked yet."
+        )
     if not _looks_like_a_phone_number(phone_digits):
         return (
             "BOOKING REJECTED — the callback phone number looks incomplete or mis-heard. Ask the caller "
@@ -2402,16 +2448,15 @@ async def log_lead(
     """Record what you have learned about this caller so far.
 
     Call this the MOMENT the caller gives you any detail — what they want, a
-    budget, a locality, a timeline. You do NOT need their name, you do NOT
+    budget, a timeline. You do NOT need their name, you do NOT
     need a phone number, and you do NOT need the full picture. Pass only the
     fields you actually just learned; everything you omit is left exactly as
     it was. Calling it eight times across a call with one field each is
     correct and expected.
 
-    `need` works for every business; budget, location, property_type and
-    configuration are property-specific. Put the need in `need`, in the
-    caller's own words, and use the property fields only when they genuinely
-    apply — never wait for a budget before recording what they want.
+    `need` works for every business: put what they want there, in the
+    caller's own words. Fill the other fields only with what they said -
+    never wait for a budget before recording what they want.
 
     Args:
         name: Caller's name, once they give it.
@@ -2419,13 +2464,14 @@ async def log_lead(
             known from caller ID — do not ask for it.
         budget: Budget as they expressed it, e.g. "around 1 crore". Keep an
             approximation approximate.
-        location: One preferred locality. Call again with the second one if
-            they name more than one — they accumulate, they do not replace.
+        location: A place the caller named. Call again for a second one -
+            they accumulate, they do not replace.
         timeline: When they want it, e.g. "next month".
-        property_type: Property businesses only: apartment, plot, villa, etc.
-        configuration: Property businesses only: e.g. "2 BHK", "2000 sqft plot".
-        purpose: Property businesses only: "investment" or "self-use", ONLY
-            if they actually said it. Never ask it for any other business.
+        property_type: Only if this business sells property: the type they named.
+        configuration: Only if this business sells property: the size or
+            layout they named.
+        purpose: Only if this business sells property: why they are buying,
+            as they said it.
         need: What this caller actually wants, in their own words, for ANY
             business — "root canal, in pain, wants tomorrow", "dinner for 20
             next Friday", "field-service software for 12 technicians", "car
@@ -3053,7 +3099,24 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
             f"'{language}' isn't a language this line supports switching to — stay in "
             "the current language and don't mention this limitation to the caller."
         )
-    if getattr(agent, "_reply_language", None) == code:
+    _current = getattr(agent, "_reply_language", None)
+    if (
+        provider == "google-native"
+        and code != _current
+        and not voice_catalog.chirp3_persona(getattr(agent, "_speaking_voice", None) or getattr(agent, "_voice", "") or "")
+    ):
+        # Call 1447 (21 Oct 2026): a Native (locale Standard) voice is one
+        # language. Asked for Marathi, the text switched and the Hindi voice
+        # read Marathi; then "हिंदी is good" flipped it back and forth until
+        # the tool-step limit left the caller in silence. The voice is locked.
+        _name = LANGUAGE_NAMES.get(_current or "", "the current language")
+        logger.info("switch_reply_language -> %s refused: native voice locked to %s", language, _current)
+        return (
+            f"Not switched: this voice speaks only {_name}. Keep replying in {_name}. Tell the "
+            f"caller once, in one short line in {_name}, that this line continues in {_name}, "
+            "then answer what they said. Do not call this tool again for this request."
+        )
+    if _current == code:
         # Bake-off 2026-10-16 #16/#19: called with the active language on a
         # plain question. Nothing changes; the reply must still be the answer.
         return (
@@ -3183,7 +3246,8 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                     # handed a voice reading the wrong language.
                     voice_unsupported = True
             elif provider not in (None, "elevenlabs-v3"):
-                agent.tts.update_options(target_language_code=code)
+                # Bharat: Sarvam sits inside a FallbackAdapter (call 1450).
+                getattr(agent.tts, "_vistrow_primary", agent.tts).update_options(target_language_code=code)
             # elevenlabs-v3 (StreamAdapter) has no update_options — same
             # known limitation as the automatic switch path in main.py.
         except Exception:

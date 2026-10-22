@@ -5,34 +5,12 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
 import { LANGUAGES } from '../../lib/marketingContent'
+import { PageFigures } from '../../components/PageFigure'
 
 // Commercial landing page for the "AI IVR" query cluster. /vs-ivr stays the
 // comparison page; this one explains the product as an IVR replacement.
 // Every capability below is one the dashboard actually has (see the help
 // articles for transfer, routes, compliance and credits) - keep it that way.
-
-const FLOW = [
-  {
-    icon: 'record_voice_over',
-    title: 'The caller says what they need',
-    body: 'No menu to sit through. The agent greets the caller and they answer in their own words - “I want to book for Saturday”, “where is my order”, “do you have a 2BHK under 80 lakh”.',
-  },
-  {
-    icon: 'translate',
-    title: 'It understands the request in their language',
-    body: 'The agent works out the intent in Hindi, English or another supported Indian language, and follows the caller if they switch languages mid-sentence.',
-  },
-  {
-    icon: 'call_split',
-    title: 'It answers, books or transfers',
-    body: 'It answers from your approved knowledge base, books a slot inside your business hours, takes a message, or dials a colleague into the call when a person is needed.',
-  },
-  {
-    icon: 'task_alt',
-    title: 'Your team gets the record',
-    body: 'Every call is saved with the recording, transcript, summary and the fields you asked for, and can be sent on to your CRM, Google Sheets, Slack or a webhook.',
-  },
-]
 
 const MENU_VS_AI: { dimension: string; menu: string; ai: string }[] = [
   { dimension: 'How the caller chooses', menu: 'Listens to options, presses a key', ai: 'Says what they want in a sentence' },
@@ -198,6 +176,7 @@ export function AiIvr() {
             ))}
           </ul>
         </div>
+        <PageFigures route="/ai-ivr" after="A phone line that listens, not a menu that lists." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
@@ -230,20 +209,7 @@ export function AiIvr() {
           <SectionEyebrow>How a call flows</SectionEyebrow>
           <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">From “hello” to a booked slot, without a menu.</h2>
         </div>
-        <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {FLOW.map((step, i) => (
-            <li key={step.title} className="rounded-2xl border border-border bg-surface p-7">
-              <div className="flex items-center justify-between">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                  <Icon name={step.icon} className="text-[22px]" />
-                </span>
-                <span className="font-display text-3xl font-bold text-border">{`0${i + 1}`}</span>
-              </div>
-              <h3 className="mt-5 font-display text-lg font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </li>
-          ))}
-        </ol>
+        <PageFigures route="/ai-ivr" after="From “hello” to a booked slot, without a menu." className="" />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
@@ -304,6 +270,7 @@ export function AiIvr() {
               Each number is routed to an agent with its own hours, active days and concurrent-call limit, so you can
               start with one line and move the rest later.
             </p>
+            <PageFigures route="/ai-ivr" after="Keep your existing number." className="mt-5" />
             <p className="mt-3 text-sm leading-relaxed text-text-muted">
               Callers on your website can talk to the same agent through the{' '}
               <Link to="/product/widget" className="font-semibold text-primary underline-offset-4 hover:underline">

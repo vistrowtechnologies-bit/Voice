@@ -6,17 +6,19 @@ export interface HelpVideo {
   title: string
   /** Shown on the button, e.g. "1:36". */
   length: string
+  /** What the video teaches, short enough for the page's button. */
+  topic: string
 }
 
 export const HELP_VIDEOS: Record<string, HelpVideo> = {
-  'get-started': { title: 'Get started with Vistrow Voice', length: '1:44' },
-  'build-with-ai': { title: 'Build an AI voice agent from one prompt', length: '1:36' },
-  'create-and-edit-agent': { title: 'Create and edit an agent', length: '1:49' },
-  'testing-lab': { title: 'Test your agent in the Testing Lab', length: '1:34' },
-  'knowledge-base': { title: 'Give your agent your business facts', length: '1:43' },
-  'connect-a-number': { title: 'Connect a phone number to your agent', length: '1:35' },
-  'website-widget': { title: 'Add the voice widget to your website', length: '1:27' },
-  copilot: { title: 'Ask Artha Copilot to do it for you', length: '1:24' },
+  'get-started': { title: 'Get started with Vistrow Voice', length: '1:44', topic: 'Getting started' },
+  'build-with-ai': { title: 'Build an AI voice agent from one prompt', length: '1:36', topic: 'Build an agent with AI' },
+  'create-and-edit-agent': { title: 'Create and edit an agent', length: '1:49', topic: 'Create an agent' },
+  'testing-lab': { title: 'Test your agent in the Testing Lab', length: '1:34', topic: 'Test your agent' },
+  'knowledge-base': { title: 'Give your agent your business facts', length: '1:43', topic: 'Add your business facts' },
+  'connect-a-number': { title: 'Connect a phone number to your agent', length: '1:35', topic: 'Connect a number' },
+  'website-widget': { title: 'Add the voice widget to your website', length: '1:27', topic: 'Add the website widget' },
+  copilot: { title: 'Ask Artha Copilot to do it for you', length: '1:24', topic: 'Use Artha Copilot' },
 }
 
 export const helpVideoSrc = (slug: string) => `/media/help/${slug}.mp4`

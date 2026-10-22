@@ -27,3 +27,16 @@ class UsageUnits(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TtsNodeCountsFirst(unittest.TestCase):
+    """Call 1449: tts_node may create "usage" (ttsCharsSent/ttsAudioSOut)
+    before any provider metric arrives; the metric totals must still work."""
+
+    def test_metric_after_tts_node_entry(self):
+        import main
+        from types import SimpleNamespace
+        timings = {"usage": {"ttsCharsSent": 120, "ttsAudioSOut": 7.5}}
+        main._add_usage_units(timings, "tts_metrics", SimpleNamespace(characters_count=40, audio_duration=2.0))
+        u = timings["usage"]
+        self.assertEqual((u["ttsChars"], u["ttsRequests"], u["ttsCharsSent"]), (40, 1, 120))

@@ -6,6 +6,8 @@ import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { ScriptMarquee } from '../../components/BharatBits'
 import { VoiceSamplePlayer } from '../../components/VoiceSamplePlayer'
+import { PageFigures } from '../../components/PageFigure'
+import { pageFigures } from '../../lib/pageFigures'
 import arthaAvatar from '../../assets/artha-avatar.webp'
 import { trackMarketingCta } from '../../lib/analytics'
 import { INDIAN_LANGUAGE_VOICES, LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
@@ -166,6 +168,11 @@ export function LanguageDetail() {
 
       {/* ---------- Who it's for: tinted band, no cards ---------- */}
       <div className="bg-surface-high/40">
+        {pageFigures(`/languages/${lang.slug}`, `Built for teams that take calls in ${lang.name}.`).length > 0 && (
+          <section className="mx-auto max-w-7xl px-5 pt-16 md:px-8 lg:pt-20">
+            <PageFigures route={`/languages/${lang.slug}`} after={`Built for teams that take calls in ${lang.name}.`} className="" />
+          </section>
+        )}
         <section className="mx-auto grid max-w-7xl gap-10 px-5 py-16 md:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:py-20">
           <div>
             <SectionEyebrow>Who it&rsquo;s for</SectionEyebrow>

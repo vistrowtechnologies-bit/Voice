@@ -5,6 +5,8 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { PageHero, CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { PRODUCT_DETAIL, WORKS_WITH } from '../../lib/marketingContent'
+import { PageFigures } from '../../components/PageFigure'
+import { pageFigures } from '../../lib/pageFigures'
 
 // One template renders all six product pages, keyed by the :slug route param.
 export function ProductDetail() {
@@ -32,6 +34,11 @@ export function ProductDetail() {
       {/* Live demo widget is homepage-only now - see PageHero's heroless-of-
           children branch for how this renders without it. */}
       <PageHero eyebrow={page.eyebrow} title={page.headline} subhead={page.subhead} />
+      {pageFigures(route, 'hero').length > 0 && (
+        <section className="mx-auto max-w-7xl px-5 md:px-8">
+          <PageFigures route={route} after="hero" className="" />
+        </section>
+      )}
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
         <div className="grid gap-5 sm:grid-cols-2">
@@ -80,6 +87,7 @@ export function ProductDetail() {
               <span>{section.note}</span>
             </p>
           )}
+          <PageFigures route={route} after={section.title} />
         </section>
       ))}
 

@@ -1,5 +1,6 @@
 import { DAILY_CONTEXTUAL_LINKS, DAILY_IMAGE_ALTS, DAILY_POSTS, DAILY_SOURCES } from './dailyBlogPosts'
 import { IVR_CONTEXTUAL_LINKS, IVR_IMAGE_ALTS, IVR_POSTS } from './ivrBlogPosts'
+import { OLDER_POST_UPGRADES } from './olderPostUpgrades'
 
 export interface VoiceBlogSection {
   heading: string
@@ -262,7 +263,7 @@ const NEW_POSTS: typeof ORIGINAL_POSTS = [
   {
     slug: 'ai-voice-agents-for-real-estate-leads', title: 'AI voice agents for real estate leads: qualify without interrogating',
     excerpt: 'A practical call flow for property enquiries: answer the first question, confirm the requirement, and leave the sales team a clear next action.',
-    category: 'Voice AI basics', publishedAt: '2026-10-07', readTime: '', sections: [
+    category: 'Industries', publishedAt: '2026-10-07', readTime: '', sections: [
       { heading: 'Answer the question that brought the lead in', paragraphs: ['“What is the price?” is a reasonable first question. Do not respond with five qualification questions. Give the approved price range if you have one, explain what changes the final price, and distinguish a starting figure from a confirmed quote. If you cannot verify current pricing, say the sales team needs to confirm it.', 'For plots, size and use matter. A request for ten thousand square feet should not be saved as an interest in a standard apartment. Ask whether the buyer wants self-use, investment, or both; then follow the answer rather than marching through a generic BHK script.'] },
       { heading: 'Use a short qualification sequence', paragraphs: ['Collect only what helps the next conversation: property type, preferred location, approximate budget, intended use, and timeline. Some details may already be supplied by the enquiry. Confirm those briefly instead of asking the caller to repeat the form.', 'If the caller asks a new project question, answer it before returning to qualification. A useful agent holds the thread of the conversation. It should not keep asking for budget when the caller is trying to find out whether the requested plot size exists.'], points: ['Requirement: “What size are you considering?”', 'Purpose: “Is this for your own use or an investment?”', 'Budget: ask for a range; allow “not decided yet.”', 'Timing: distinguish exploring from a near-term purchase.', 'Next action: offer a visit or callback only when appropriate.'] },
       { heading: 'A visit request is not a confirmed visit', paragraphs: ['If the agent does not have a working calendar integration, describe the next step as a request. “I will pass your preferred Saturday slot to the team” is more honest than “Your visit is booked.” Confirm the date and contact number, and make it clear who will follow up.', 'Do not invent scarcity, discounts, approval status, or guaranteed returns to make the conversation sound persuasive. Give the agent a current, approved project fact sheet and instructions to defer uncertain claims. The cost of a confident wrong answer is borne by your sales team.'] },
@@ -274,7 +275,7 @@ const NEW_POSTS: typeof ORIGINAL_POSTS = [
     excerpt: 'Per-minute prices tell only part of the story. Compare telephony, speech, model usage, failed calls, recordings, and the work your team still needs to do.',
     category: 'Voice AI basics', publishedAt: '2026-10-07', readTime: '', sections: [
       { heading: 'Ask what a quoted minute actually includes', paragraphs: ['Two per-minute quotes are not comparable until you know the billing boundaries. Does the price include the phone connection, speech recognition, speech synthesis, language-model usage, storage, and platform fees? Are unanswered calls or setup time billed? Ask for a worked invoice example based on your expected traffic.', 'Check minimum commitments, concurrency limits, rounding, currency, taxes, and support separately. A low headline rate may still be a good deal, but it should not be compared with an all-in rate as if both cover the same service.'] },
-      { heading: 'Use a simple cost worksheet', paragraphs: ['Estimate attempted calls, connected calls, average connected duration, and monthly fixed fees. Add the usage charges included in the contract and any provider charges billed separately. Keep retry traffic and testing traffic visible rather than hiding them inside an optimistic average.', 'For illustration only: if 1,000 connected calls average three minutes, that is 3,000 connected minutes before retries or other charges. At a hypothetical all-in rate of ₹4 per minute, the usage component is ₹12,000. This is arithmetic, not a Vistrow quote or a market price. Replace the assumptions with an actual proposal.'], points: ['Connected minutes × applicable usage rate.', 'Phone numbers, platform minimums, and other fixed fees.', 'Additional storage, model, or integration charges if excluded.', 'Retries, testing, and unsuccessful attempts where billable.', 'Staff review and follow-up time.'] },
+      { heading: 'Use a simple cost worksheet', paragraphs: ['Estimate attempted calls, connected calls, average connected duration, and monthly fixed fees. Add the usage charges included in the contract and any provider charges billed separately. Keep retry traffic and testing traffic visible rather than hiding them inside an optimistic average.', 'For illustration only: if 1,000 connected calls average three minutes, that is 3,000 connected minutes before retries or other charges. Multiply those minutes by the all-in per-minute rate in the proposal you are comparing to get the usage component. Replace the assumptions with your own call volumes.'], points: ['Connected minutes × applicable usage rate.', 'Phone numbers, platform minimums, and other fixed fees.', 'Additional storage, model, or integration charges if excluded.', 'Retries, testing, and unsuccessful attempts where billable.', 'Staff review and follow-up time.'] },
       { heading: 'Cheap turns can produce expensive conversations', paragraphs: ['A cheaper model that needs repeated clarification may lengthen calls or collect the wrong details. A more expensive voice can still be worthwhile if callers understand it better, but that should be tested rather than assumed. Compare task completion and field accuracy alongside minutes and cost.', 'Define “useful” before calculating cost per outcome. For a callback flow, it might mean a valid contact, a clear reason, and an agreed next action. Do not label every connected call a success. Divide total operating cost by verified useful outcomes, and report the underlying sample size.'] },
       { heading: 'Run a limited pilot before committing volume', paragraphs: ['Use one campaign or inbound call reason. Track actual duration, abandoned calls, human escalations, and correction work. Ask the vendor to explain discrepancies between your records and the invoice.', 'Provider rates change, so use current written pricing and keep its date with the worksheet. Once the pilot shows reliable outcomes, project a conservative monthly range rather than a single best-case saving.'] },
     ],
@@ -302,21 +303,19 @@ const NEW_POSTS: typeof ORIGINAL_POSTS = [
 ]
 
 const IMAGE_ALTS: Record<string, string> = {
-  'what-is-an-ai-voice-agent': 'Business owner listening on a phone and taking notes beside a laptop',
-  'how-to-choose-a-multilingual-voice-agent': 'Two colleagues testing a spoken conversation with a phone and headphones',
-  'voice-ai-latency-how-to-measure-it': 'Engineer comparing audio waveforms with handwritten call timing notes',
-  'website-voice-widget-for-lead-generation': 'Visitor viewing a property website with a voice conversation control on a laptop',
-  'connecting-voice-calls-to-your-crm': 'Coordinator reviewing a customer pipeline while wearing a headset',
-  'when-to-use-voice-ai-instead-of-ivr': 'Customer using a mobile phone beside a desk telephone',
-  'ai-voice-agents-for-real-estate-leads': 'Property advisor taking a call beside an architectural housing model',
-  'ai-voice-agent-pricing-india': 'Calculator, budget notebook, and phone on a desk for a call cost comparison',
-  'write-ai-voice-agent-prompts': 'Operations manager drafting conversation instructions beside a laptop',
-  'ai-call-recordings-and-transcripts': 'Laptop showing illustrative audio and transcript panels beside headphones and a padlock',
+  'what-is-an-ai-voice-agent': 'Artha, an AI voice agent with a headset, on a call in a bright office, with chips for listens, answers and books',
+  'how-to-choose-a-multilingual-voice-agent': 'Greetings in Hindi, Tamil, Kannada and Bengali scripts beside a smiling shop owner on a phone call',
+  'voice-ai-latency-how-to-measure-it': 'Question about the pause after a caller stops speaking, a waveform with a timed gap, and a man waiting on a phone',
+  'website-voice-widget-for-lead-generation': 'Laptop showing a website voice widget with Artha talking, a Lead captured card, and a visitor speaking on a sofa',
+  'connecting-voice-calls-to-your-crm': 'Before and after: a stressed caller with sticky notes, then Artha with a CRM record showing summary, next step, recording',
+  'when-to-use-voice-ai-instead-of-ivr': 'Business owner deciding between two cards, an IVR keypad menu and a highlighted AI voice agent, on a purple background',
+  'ai-voice-agents-for-real-estate-leads': 'Couple on a property enquiry call while a phone shows Artha and a site visit request card',
+  'ai-voice-agent-pricing-india': 'Purple card asking what one useful call really costs, listing cost items, with a business owner thinking',
+  'write-ai-voice-agent-prompts': 'Woman writing a script at a warm desk beside a prompt card with goal, tone and handoff lines',
+  'ai-call-recordings-and-transcripts': 'Checklist card for recorded calls: recording, transcript, summary, CRM link and playback, beside a woman with headphones',
 }
 
 const SOURCES: Record<string, VoiceBlogPost['sources']> = {
-  'what-is-an-ai-voice-agent': [{ title: 'LiveKit: voice agent architecture', url: 'https://docs.livekit.io/agents/' }],
-  'voice-ai-latency-how-to-measure-it': [{ title: 'LiveKit: turn detection and interruptions', url: 'https://docs.livekit.io/agents/logic/turns/' }],
   'website-voice-widget-for-lead-generation': [{ title: 'MDN: microphone permissions and secure contexts', url: 'https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia' }],
 }
 
@@ -328,7 +327,7 @@ const CONTEXTUAL_LINK_PARAGRAPHS: Record<string, string> = {
   'voice-ai-latency-how-to-measure-it': 'A language switch can change recognition and synthesis time, so use the [multilingual voice agent evaluation checklist](/resources/blog/how-to-choose-a-multilingual-voice-agent) for mixed-language calls. For visitors speaking from a browser, the [website voice widget guide](/resources/blog/website-voice-widget-for-lead-generation) covers permission and connection steps that a phone-only test misses.',
   'website-voice-widget-for-lead-generation': 'Before placing the microphone on a high-intent page, review what the [website call widget](/product/widget) can offer visitors. The conversation becomes useful to a sales team only when it has a reliable next step; our [CRM handoff guide](/resources/blog/connecting-voice-calls-to-your-crm) covers what that record should contain.',
   'connecting-voice-calls-to-your-crm': 'If the transcript appears but the audio does not, trace the [recording and transcript delivery steps](/resources/blog/ai-call-recordings-and-transcripts) before retrying the lead. The [integrations overview](/product/integrations) explains where the CRM connection sits in the product.',
-  'when-to-use-voice-ai-instead-of-ivr': 'For a broader explanation of the conversational option, read [what an AI voice agent does](/resources/blog/what-is-an-ai-voice-agent). The [voice AI versus traditional IVR page](/vs-ivr) is a useful companion when mapping your existing phone menu to a new call flow.',
+  'when-to-use-voice-ai-instead-of-ivr': 'For a broader explanation of the conversational option, read [what an AI voice agent does](/resources/blog/what-is-an-ai-voice-agent). The [voice AI versus traditional IVR page](/vs-ivr) is a useful companion when mapping your existing phone menu to a new call flow. If you are also weighing a human service, our [AI receptionist vs answering service vs IVR comparison](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr) puts all three side by side.',
   'ai-voice-agents-for-real-estate-leads': 'A property script should be based on the actual buyer journey, which our [real estate voice AI overview](/solutions/real-estate) describes. After the call, follow the [CRM handoff checklist](/resources/blog/connecting-voice-calls-to-your-crm) so the requirement reaches the person arranging the visit.',
   'ai-voice-agent-pricing-india': 'Once you have a cost per useful call, compare it with the current [Vistrow Voice pricing page](/pricing) using the same traffic assumptions. The [latency measurement guide](/resources/blog/voice-ai-latency-how-to-measure-it) helps you check whether a lower-cost configuration still gives callers a responsive experience.',
   'write-ai-voice-agent-prompts': 'The prompt works best when it has reliable facts to draw from; the [knowledge base overview](/product/knowledge-base) describes that source of approved answers. If you are designing your first flow, begin with the [practical guide to AI voice agents](/resources/blog/what-is-an-ai-voice-agent) before writing provider-specific speaking instructions.',
@@ -342,11 +341,13 @@ Object.assign(CONTEXTUAL_LINK_PARAGRAPHS, DAILY_CONTEXTUAL_LINKS)
 Object.assign(SOURCES, DAILY_SOURCES)
 
 export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS, ...IVR_POSTS, ...DAILY_POSTS].map((post) => {
-  const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? [])].map((section, index) => index === 0
+  const upgrade = OLDER_POST_UPGRADES[post.slug]
+  const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? []), ...(upgrade?.extraSections ?? [])].map((section, index) => index === 0
     ? { ...section, paragraphs: [...section.paragraphs, CONTEXTUAL_LINK_PARAGRAPHS[post.slug]] }
     : section)
   const words = sections.flatMap(section => [section.heading, ...section.paragraphs, ...(section.points ?? [])]).join(' ').replace(/\[([^\]]+)\]\(\/[^)]+\)/g, '$1').trim().split(/\s+/).length
-  return { ...post, sections, readTime: `${Math.max(1, Math.ceil(words / 200))} min read`, updatedAt: post.publishedAt > '2026-10-07' ? post.publishedAt : '2026-10-07', image: `/blog/${post.slug}.jpg`, imageAlt: IMAGE_ALTS[post.slug], sources: SOURCES[post.slug] ?? [] }
+  const seo = upgrade ? { seoTitle: upgrade.seoTitle, metaDescription: upgrade.metaDescription, shortAnswer: upgrade.shortAnswer, faqs: upgrade.faqs } : {}
+  return { ...post, ...seo, sections, readTime: `${Math.max(1, Math.ceil(words / 200))} min read`, updatedAt: upgrade?.updatedAt ?? (post.publishedAt > '2026-10-07' ? post.publishedAt : '2026-10-07'), image: `/blog/${post.slug}.jpg`, imageAlt: IMAGE_ALTS[post.slug], sources: [...(SOURCES[post.slug] ?? []), ...(upgrade?.sources ?? [])] }
 })
 
 /** Blog index: newest first; post 0 is the featured post on page 1, the rest are listed 12 per page. */

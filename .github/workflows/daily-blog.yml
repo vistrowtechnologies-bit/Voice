@@ -1,0 +1,135 @@
+# Publishes the day's queued blog post (web-demo/content-queue/blog/) every
+# morning, so the daily blog does not depend on anyone's laptop being on.
+# It runs the same web gates as CI, then pushes straight to main. Vercel
+# deploys the push, the IndexNow workflow submits the changed pages after the
+# deploy, and Railway skips it (web-demo is outside railway.json watchPatterns).
+# Nothing queued for today means nothing happens.
+name: Daily blog
+
+on:
+  schedule:
+    # GitHub delays or drops scheduled runs at busy times (22 Oct 2026: the
+    # 08:00 run never started), so a second run retries later. It is safe:
+    # once the day's post is out, nothing is queued and the run ends.
+    - cron: '17 2 * * *' # 07:47 IST
+    - cron: '47 4 * * *' # 10:17 IST retry
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Publish date (YYYY-MM-DD, default today in India)'
+        required: false
+      dry_run:
+        description: 'Run every gate but do not push'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: daily-blog
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web-demo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web-demo/package-lock.json
+      - run: npm ci
+
+      - name: Publish the queued post
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DATE="${{ inputs.date }}"
+          [ -n "$DATE" ] || DATE=$(TZ=Asia/Kolkata date +%F)
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          # The laptop task may be publishing the same post through a PR.
+          if [ -n "$(gh pr list --state open --search "Blog $DATE in:title" --json number --jq '.[].number')" ]; then
+            echo "::notice::An open PR is already publishing the post for $DATE"
+            echo "queued=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npx tsx scripts/check-blog-queue.mts
+          set +e
+          npx tsx scripts/publish-queued-post.mts --date "$DATE" | tee /tmp/publish.log
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" = 2 ]; then
+            echo "::notice::Nothing queued for $DATE"
+            echo "queued=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "$code" = 0 ] || exit "$code"
+          slug=$(sed -n 's/^publish .* as \(.*\) (.*$/\1/p' /tmp/publish.log)
+          [ -n "$slug" ] || { echo "::error::could not read the slug"; exit 1; }
+          echo "queued=true" >> "$GITHUB_OUTPUT"
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+
+      - name: Gates (build, blog SEO, SEO tests)
+        if: steps.publish.outputs.queued == 'true'
+        run: |
+          npm run build
+          npx tsx scripts/check-blog-seo.ts
+          npm run test:seo
+
+      - name: Only web files changed
+        if: steps.publish.outputs.queued == 'true'
+        run: |
+          git add -A ..
+          bad=$(git diff --cached --name-only | grep -Ev '^(web-demo/|docs/)' || true)
+          if [ -n "$bad" ]; then echo "::error::unexpected changes: $bad"; exit 1; fi
+          git diff --cached --stat
+
+      - name: Push to main
+        if: steps.publish.outputs.queued == 'true' && !inputs.dry_run
+        env:
+          SLUG: ${{ steps.publish.outputs.slug }}
+          DATE: ${{ steps.publish.outputs.date }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Blog $DATE: publish $SLUG from the queue"
+          for attempt in 1 2 3; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && break
+            [ "$attempt" = 3 ] && exit 1
+            sleep 20
+          done
+          echo "pushed $(git rev-parse --short HEAD)"
+
+      - name: Check the post is live
+        if: steps.publish.outputs.queued == 'true' && !inputs.dry_run
+        env:
+          SLUG: ${{ steps.publish.outputs.slug }}
+        run: |
+          url="https://www.vistrowvoice.com/resources/blog/$SLUG"
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+            [ "$code" = 200 ] && { echo "live: $url"; exit 0; }
+            sleep 30
+          done
+          echo "::error::$url still returns $code after 20 minutes"
+          exit 1
+
+      - name: Note it on the agent bridge issue
+        if: steps.publish.outputs.queued == 'true' && !inputs.dry_run
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLUG: ${{ steps.publish.outputs.slug }}
+        run: |
+          gh issue comment 2 --body "[DEPLOYED] daily blog workflow · main $(git rev-parse --short HEAD) · https://www.vistrowvoice.com/resources/blog/$SLUG live · run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
