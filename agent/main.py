@@ -132,6 +132,7 @@ from tools import (
     drain_background_fanout,
     end_call,
     log_lead,
+    log_lead_general,
     do_not_call,
     record_consent,
     send_brochure,
@@ -3461,6 +3462,15 @@ def _add_realtime_usage(usage: dict, metric) -> None:
         usage[key] = usage.get(key, 0) + max(0, int(getattr(obj, attr, 0) or 0))
 
 
+# Every property tenant's prompt names one of these, and no other agent's does
+# (checked 22 Oct 2026 against all agents: 7 Prophunt agents, 0 others).
+_PROPERTY_PROMPT = re.compile(r"\b(RERA|BHK|site visits?|possession)\b", re.IGNORECASE)
+
+
+def _sells_property(config: dict) -> bool:
+    return bool(_PROPERTY_PROMPT.search(config.get("system_prompt") or ""))
+
+
 def _build_tools(config: dict) -> list:
     """The agent's live tool set. Core lead-capture + KB tools are always on
     (they're how the call does its job); enabled_functions only gates the
@@ -3510,10 +3520,16 @@ def _build_tools(config: dict) -> list:
             # lost — nothing recorded it, so the next campaign rang them
             # again. An opt-out an operator can switch off is not an opt-out.
             do_not_call,
-            log_lead,
-            # Records a brochure request for the sales team (nothing is sent
-            # from the call). On for every tenant agent, like log_lead.
-            send_brochure,
+            # Call 1464 (22 Oct 2026): a website enquiry got "brochure या
+            # callback?", a WhatsApp promise from send_brochure's reply, and
+            # property_type "Commercial". The brochure tool (records a request
+            # for the team, sends nothing) and the property fields are for
+            # property businesses only.
+            *(
+                [log_lead, send_brochure]
+                if _sells_property(config)
+                else [log_lead_general]
+            ),
             # No capture_platform_lead: it records a lead for Vistrow Voice
             # itself, so only the platform demos above can use it. Sending it
             # to tenants cost ~900 chars of schema on every LLM request
@@ -3806,7 +3822,7 @@ class RealEstateAgent(Agent):
             caller_tail += (
                 f"\n\n# Caller context\nThis call arrived from {visitor_phone} (caller ID), so you "
                 "already have the caller's phone number — never ask for it. If you need their name "
-                "for the brochure/callback/site-visit, ask for that only."
+                "for a callback or booking, ask for that only."
             )
         # Optional structured inventory/service/catalog data assigned to this
         # agent. Only a compact index enters the prompt; full details are
