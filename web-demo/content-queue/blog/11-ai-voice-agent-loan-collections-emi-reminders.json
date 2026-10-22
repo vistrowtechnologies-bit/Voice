@@ -1,0 +1,129 @@
+{
+  "n": 11,
+  "publishOn": "2026-10-31",
+  "primaryKeyword": "ai voice agent loan collections",
+  "audience": "India",
+  "slug": "ai-voice-agent-loan-collections-emi-reminders",
+  "title": "AI voice agents for loan collections and EMI reminders",
+  "seoTitle": "AI Voice Agent for Loan Collections and EMI Reminders",
+  "metaDescription": "How an AI voice agent for loan collections runs polite EMI reminder calls, records promised dates, respects calling hours and hands hard cases to people.",
+  "shortAnswer": "An AI voice agent for loan collections calls borrowers before or after an EMI due date, reminds them politely in their own language, records what they say, such as paid, a promised date or a dispute, and passes hardship and disputes to your team. It calls only inside your calling window and never asks for PINs, OTPs or card numbers.",
+  "excerpt": "Reminder calls are repetitive, sensitive and closely regulated. Here is what an AI voice agent can take over in EMI reminders and early collections, what must stay with people, and the rules to set before the first dial.",
+  "category": "Industries",
+  "related": [
+    "ivr-in-banking-and-finance",
+    "ai-call-recordings-and-transcripts",
+    "hindi-ai-voice-agent"
+  ],
+  "sections": [
+    {
+      "heading": "What can an AI voice agent do in loan collections?",
+      "paragraphs": [
+        "Most collection calls are reminders: a borrower with an EMI due this week, or one that slipped a few days ago. These calls follow a pattern, happen in large numbers and are easy to word badly when a team is under pressure. An AI voice agent handles them the same way every time, and every call can be reviewed afterwards.",
+        "The [AI voice agent for loan collections and EMI reminders](/solutions/finance) page shows the full flow, including a written sample call. Reminders run as [outbound calling campaigns](/product/outbound) from your number, with the agent you choose and the borrower list you upload."
+      ],
+      "points": [
+        "Upcoming EMI reminders a few days before the due date.",
+        "Early follow-ups for a missed EMI.",
+        "Promise-to-pay capture: a date and, if given, an amount.",
+        "Callback requests for borrowers who want to speak to a person."
+      ]
+    },
+    {
+      "heading": "What does a respectful EMI reminder call sound like?",
+      "paragraphs": [
+        "It is short, calm and specific. The agent confirms it is speaking to the right person, says who is calling and why, states the due date and amount from your records, and asks a simple question: has it been paid, or when will it be? It accepts the answer without argument and closes politely.",
+        "Write the script so the agent never threatens, shames, exaggerates consequences or creates false urgency. If the borrower says they are struggling, the agent responds without judgment, notes it and offers a callback from your team. Our guide to [writing AI voice agent prompts](/resources/blog/write-ai-voice-agent-prompts) explains how to set those limits in plain words.",
+        "Personal details need the same care. The fields you import with each contact, such as name, due date, amount and loan reference, are passed into the call so the reminder uses them. Confirm you are speaking to the borrower before mentioning any of them, because a family member or colleague may answer the phone."
+      ]
+    },
+    {
+      "heading": "When are AI collection calls allowed to go out?",
+      "paragraphs": [
+        "The Reserve Bank of India has told regulated entities that they and their agents must not harass or intimidate borrowers, and lists calling a borrower before 8:00 am or after 7:00 pm for recovery of overdue loans among the practices to avoid. Which rules apply to your loans is for your compliance team to confirm.",
+        "Vistrow Voice lets you set the calling hours, active days and timezone, and blocks every dial outside them. The default window is 9 am to 9 pm, Monday to Saturday, so a collections team would end it at 7 pm. The [calling window and Do-Not-Call guide](/help/compliance/calling-rules) shows the settings.",
+        "Pace matters as much as timing. Each campaign sets how many times to retry, how long to wait between attempts and separate rules for busy lines, voicemail and very short calls. Keep attempts modest: a borrower who did not answer twice in one morning should not get a third call that afternoon."
+      ],
+      "points": [
+        "Calling window: set the hours and days, and keep it enforced.",
+        "Do-Not-Call: every dial is checked first, and blocked contacts are counted, not called.",
+        "Consent basis: each campaign records why its contacts may be called."
+      ]
+    },
+    {
+      "heading": "How does the agent record a promise to pay?",
+      "paragraphs": [
+        "Add [post-call data extraction fields](/help/agents/agent-functions-and-transfer) such as paid, promised payment date, promised amount, dispute and wrong number. Each value is pulled from the transcript, so your team gets a list of who promised what, and when, without listening to every call.",
+        "Set a rule that no promise is recorded unless the borrower clearly states the date or amount. A vague \"next week\" should stay vague in the record. The fields, the summary and the transcript can then be posted to your loan or CRM system by webhook, or sent to Zoho CRM, ArthaLeads, Google Sheets or Slack."
+      ]
+    },
+    {
+      "heading": "Which calls should always go to a person?",
+      "paragraphs": [
+        "Anything that needs judgment or authority. Disputes about the amount, hardship, a request to restructure, complaints, bereavement and any borrower who asks for a person should reach your team. On phone calls the agent can transfer: it dials your colleague into the call and stays on until they answer. If nobody picks up, it takes a callback request with the borrower's preferred time.",
+        "Security matters as much as tone. The agent must never ask for or accept a PIN, OTP, card number, CVV, password or net-banking login, and it does not take payments on the call. If a borrower wants to pay, it explains the payment options you approved. Our guide to [IVR in banking and finance](/resources/blog/ivr-in-banking-and-finance) covers which steps must stay inside your own secure systems."
+      ],
+      "points": [
+        "Disputes about the amount or the account.",
+        "Hardship, illness, job loss or bereavement.",
+        "Requests to restructure or settle.",
+        "Complaints and anyone who asks for a person."
+      ]
+    },
+    {
+      "heading": "Can EMI reminders run in Hindi and regional languages?",
+      "paragraphs": [
+        "Yes. Each campaign uses an agent with a default language, and the agent switches if the borrower answers in a different one. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia).",
+        "Most reminder calls start in Hindi, where words like EMI, due date and payment usually stay in English. The [Hindi AI voice calling agent page](/languages/hindi) has a written sample of an upcoming-EMI reminder, and our guide to [natural Hindi on a voice agent call](/resources/blog/hindi-ai-voice-agent) explains the tone to aim for."
+      ]
+    },
+    {
+      "heading": "How should a lender pilot AI reminder calls?",
+      "paragraphs": [
+        "Start with upcoming-EMI reminders for a small, low-risk segment, before moving to missed payments. Agree the script with your collections and compliance teams, set the calling window, switch on recording if you need an audit trail, and decide how long transcripts and recordings are kept. Decide in advance who on your team owns callbacks, so a borrower who asked for a person hears from one the same day.",
+        "Read the first transcripts daily. Check that each call stayed polite, recorded promises only when they were clear, and sent every dispute or hardship case to a person. The guide to [AI call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) shows what to review, and the [Vistrow Voice pricing page](/pricing) lists the plans that include outbound campaigns."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI voice agent make EMI reminder calls?",
+      "a": "Yes. Reminders run as outbound campaigns from your number, with the borrower's name, due date and amount from your list, inside the calling window you set."
+    },
+    {
+      "q": "Does it follow RBI calling-hour guidance?",
+      "a": "RBI guidance lists recovery calls before 8 am or after 7 pm among practices to avoid. You can set the calling window to end at 7 pm, and dials outside it are blocked."
+    },
+    {
+      "q": "Can it record a promise-to-pay date?",
+      "a": "Yes, with a post-call field such as promised payment date. The value is pulled from each transcript, and only when the borrower states it clearly."
+    },
+    {
+      "q": "Will the agent ask for card numbers or OTPs?",
+      "a": "No. It never asks for or accepts PINs, OTPs, card numbers, CVVs or passwords, and it does not take payments on the call."
+    },
+    {
+      "q": "What if a borrower asks not to be called again?",
+      "a": "The agent adds the number to your Do-Not-Call list itself, and every later dial is checked against that list before it goes out."
+    }
+  ],
+  "imageAlt": "Quote card reading Thanks for the reminder, I'll pay by the 20th, with chips for due-date reminder, promise to pay and talk to a person, a round photo of a calm woman taking the call at home and a badge for Artha, the AI voice agent",
+  "imagePrompt": "Designed cover (scripts/blog-covers/11-ai-voice-agent-loan-collections-emi-reminders.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Reserve Bank of India: Outsourcing of Financial Services, Responsibilities of regulated entities employing Recovery Agents (RBI/2022-23/108, 12 August 2022)",
+      "url": "https://www.rbi.org.in/scripts/NotificationUser.aspx?Id=12378&Mode=0"
+    }
+  ],
+  "contextualLinks": "To set up reminder calls, see the [AI voice agent for EMI reminders and collections](/solutions/finance) and the [outbound calling campaigns](/product/outbound) that run them.",
+  "inbound": [
+    {
+      "target": "blog:ivr-in-banking-and-finance",
+      "sentence": "For reminder and early-collections calls handled by voice AI, read our guide to [AI voice agents for loan collections and EMI reminders](/resources/blog/ai-voice-agent-loan-collections-emi-reminders)."
+    },
+    {
+      "target": "page:/solutions/finance",
+      "sentence": "For the calling rules, scripts and handoffs to set before the first dial, read our guide to [AI voice agents for EMI reminders](/resources/blog/ai-voice-agent-loan-collections-emi-reminders)."
+    }
+  ]
+}

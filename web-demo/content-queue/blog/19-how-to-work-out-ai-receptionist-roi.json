@@ -1,0 +1,133 @@
+{
+  "n": 19,
+  "publishOn": "2026-11-08",
+  "primaryKeyword": "ai receptionist roi",
+  "audience": "Global",
+  "slug": "how-to-work-out-ai-receptionist-roi",
+  "title": "How to work out the return on an AI receptionist",
+  "seoTitle": "AI Receptionist ROI: How to Work It Out With Your Numbers",
+  "metaDescription": "A simple method for AI receptionist ROI: count missed calls, value an answered call, add staff time saved and subtract the full cost. No guesses.",
+  "shortAnswer": "To work out AI receptionist ROI, measure how many calls you miss today, estimate what share of those callers would have become customers and what each is worth, add the staff time the receptionist frees up, then subtract its full cost. Use a month of your own call data, not a vendor’s average.",
+  "excerpt": "Vendor calculators start from their own assumptions. This method starts from your call log, so the answer is one you can defend to a partner or a finance team.",
+  "category": "Voice AI basics",
+  "related": [
+    "what-is-an-ai-receptionist",
+    "ai-receptionist-vs-answering-service-vs-ivr",
+    "ai-voice-agent-platform-buyers-checklist"
+  ],
+  "sections": [
+    {
+      "heading": "What does AI receptionist ROI actually measure?",
+      "paragraphs": [
+        "Return on investment compares what an AI receptionist adds to your business with what it costs you, over the same period. For a receptionist, the value usually comes from three places: calls that used to go unanswered and now turn into customers, staff hours freed from routine calls, and fewer no-shows or follow-up calls because details were captured properly. If you are still deciding what the role covers, read [what an AI receptionist is and what it should handle](/resources/blog/what-is-an-ai-receptionist) first.",
+        "Keep the calculation honest by using only your own figures. Most published ROI numbers come from vendors and assume call volumes, conversion rates and order values that may look nothing like yours. The method below needs a phone log, a calendar and an hour with whoever knows your sales numbers. It works the same for an [AI receptionist on your business line](/ai-receptionist) whether you run a clinic, an agency or a shop."
+      ]
+    },
+    {
+      "heading": "How many calls are you missing today?",
+      "paragraphs": [
+        "Start with the number that drives everything else. Export a month of call records from your phone system or telephony provider and count unanswered calls, calls that rang out after hours and calls that reached voicemail. If you have no export, ask whoever answers the phone to tally missed and returned calls for two normal weeks. The [inbound call answering overview](/product/inbound) shows how an agent picks up the calls your team cannot."
+      ],
+      "points": [
+        "Split missed calls by time: office hours, lunch, evenings and weekends. After-hours calls are often the easiest win.",
+        "Remove repeat attempts from the same number on the same day, so one caller is not counted three times.",
+        "Note how many missed callers were called back, and how long that took. A callback two days later rarely recovers the enquiry."
+      ]
+    },
+    {
+      "heading": "What is one answered call worth to your business?",
+      "paragraphs": [
+        "Not every call is a sale. Look at a sample of answered calls and sort them into new enquiries, existing customers and everything else (suppliers, wrong numbers, sales calls). Only new enquiries usually carry new revenue. Then take your own conversion rate from enquiry to customer and your average first order or booking value from your accounts.",
+        "Multiply the three together: missed new-enquiry calls, times the share that would normally become customers, times the average value. That is the revenue at risk from missed calls each month. Use the conservative end of every figure. An agent that records the caller’s name and need on every call, and [sends each lead to your CRM or spreadsheet](/product/integrations), lets you check this number against reality after launch."
+      ]
+    },
+    {
+      "heading": "How much staff time does it free up?",
+      "paragraphs": [
+        "The second source of value is time. Count the routine calls your team answers each week: opening hours, directions, prices you publish anyway, booking changes, “did you get my form?”. Estimate the average length of each, including the minutes it takes to get back to the task that was interrupted. Multiply by the hourly cost of the person answering.",
+        "Be careful here. Time saved only becomes money if the person uses it for work that earns or saves something else, or if you avoid a hire you would otherwise make. Many owners count it as capacity rather than savings, which is fair. Routine questions are the calls an agent handles best when it answers from [approved answers in your knowledge base](/product/knowledge-base), so they are also the safest to hand over first."
+      ]
+    },
+    {
+      "heading": "Which costs belong in the calculation?",
+      "paragraphs": [
+        "Include every cost, not just the subscription. Vistrow Voice bills conversation minutes in credits, and the current plans are on the [Vistrow Voice pricing page](/pricing). Your telephony provider charges separately for numbers and carrier minutes. Then add the hours your team spends setting up, testing and reviewing calls, especially in the first month."
+      ],
+      "points": [
+        "Usage: expected call minutes, based on your call count and average call length, not a vendor estimate.",
+        "Telephony: number rental and carrier charges from your own provider.",
+        "Setup and review time: writing the agent’s facts, testing it, and reading transcripts each week.",
+        "Handover cost: calls the agent passes to a person still take staff time, so do not count them as fully saved."
+      ]
+    },
+    {
+      "heading": "How do you put the numbers together?",
+      "paragraphs": [
+        "Add recovered revenue and the value of staff time, then subtract the full monthly cost. That is the monthly return. Divide setup cost by the monthly return to get a payback period in months. If the answer only works with optimistic inputs, the case is weak; if it works with cautious ones, it is strong.",
+        "Write the inputs down in one place with their source: “missed calls, from March export”, “conversion, from last quarter’s CRM report”. That makes the calculation easy to repeat and easy for someone else to challenge. The [AI receptionist comparison with answering services and IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr) helps if you want to run the same method against the alternatives."
+      ]
+    },
+    {
+      "heading": "What does the worksheet look like, line by line?",
+      "paragraphs": [
+        "Here is the whole method as a worksheet you can copy into a spreadsheet. Fill each line from your own records, and keep the source next to it. Our [guide to call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) explains how the same records help after launch."
+      ],
+      "points": [
+        "Line A: missed calls from new enquiries each month, after removing repeats and non-customers.",
+        "Line B: the share of new enquiries that normally become customers, from your CRM or sales book.",
+        "Line C: the average value of a first order or booking, from your accounts.",
+        "Line D: recovered value, which is A times B times C. Use gross profit instead of sales value if you want a profit figure.",
+        "Line E: hours of routine calls handled each month, times the hourly cost of the person who answered them.",
+        "Line F: full monthly cost, covering usage, telephony and review time. Monthly return is D plus E minus F."
+      ]
+    },
+    {
+      "heading": "How do you check the return after launch?",
+      "paragraphs": [
+        "A projection is only a starting point. Run a pilot on one line or one call type for a few weeks and measure the same inputs again: calls answered that would have been missed, enquiries captured, bookings made and calls passed to staff. Vistrow Voice can answer those calls, book appointments into your calendar, take callback requests and keep a transcript of every call, so the evidence sits in [your call history and recordings](/help/calls/find-a-call).",
+        "Read a sample of transcripts every week. They show whether captured enquiries were real, whether bookings held, and which questions the agent could not answer. Fix those gaps, then recalculate. Our [checklist for evaluating an AI voice agent platform](/resources/blog/ai-voice-agent-platform-buyers-checklist) lists what to test during the pilot."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "What is a good ROI for an AI receptionist?",
+      "a": "There is no reliable universal figure. Work out your own from missed calls, conversion rate, average order value, staff time and full cost, using cautious inputs."
+    },
+    {
+      "q": "Where do I find my missed call numbers?",
+      "a": "Your phone system or telephony provider’s call records usually show unanswered calls. If not, tally missed calls by hand for two normal weeks."
+    },
+    {
+      "q": "Should I count staff time saved as money?",
+      "a": "Only if the time goes to work that earns or saves money, or replaces a hire. Otherwise treat it as extra capacity."
+    },
+    {
+      "q": "How long should a pilot run before I judge ROI?",
+      "a": "Long enough to cover your normal weekly pattern, including evenings and weekends. A few weeks on one line is a common starting point."
+    },
+    {
+      "q": "Does Vistrow Voice publish prices?",
+      "a": "Plans and credits are explained on the [Vistrow Voice pricing page](/pricing). Telephony charges come from your own provider."
+    }
+  ],
+  "imageAlt": "Quote card asking what one answered call is worth, with a business owner and a card listing missed calls answered, staff time saved and cost",
+  "imagePrompt": "Designed cover (scripts/blog-covers/19-how-to-work-out-ai-receptionist-roi.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists (duties of the role being compared)",
+      "url": "https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm"
+    }
+  ],
+  "contextualLinks": "Before you calculate, read [what an AI receptionist should handle](/resources/blog/what-is-an-ai-receptionist), then compare plans on the [Vistrow Voice pricing page](/pricing).",
+  "inbound": [
+    {
+      "target": "blog:what-is-an-ai-receptionist",
+      "sentence": "Once you know what it should handle, use our [method for working out AI receptionist ROI](/resources/blog/how-to-work-out-ai-receptionist-roi) with your own call data."
+    },
+    {
+      "target": "page:/pricing",
+      "sentence": "Not sure it pays off? Our guide to [working out the return on an AI receptionist](/resources/blog/how-to-work-out-ai-receptionist-roi) walks through the numbers."
+    }
+  ]
+}

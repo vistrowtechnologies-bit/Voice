@@ -1,0 +1,127 @@
+{
+  "n": 29,
+  "publishOn": "2026-11-18",
+  "primaryKeyword": "bengali ai voice agent",
+  "audience": "India",
+  "slug": "bengali-ai-voice-agent",
+  "title": "Bengali AI voice agent: calls in Bengali that feel local",
+  "seoTitle": "Bengali AI Voice Agent for Kolkata and West Bengal",
+  "metaDescription": "What a Bengali AI voice agent can handle for businesses in West Bengal, how it copes with Banglish, and the checks to run before customers hear it.",
+  "shortAnswer": "A Bengali AI voice agent answers and places calls in Bengali, follows callers who mix in English or switch to Hindi, and answers from your approved information. It suits order and delivery calls, clinic bookings, property enquiries and reminders across West Bengal. Write the greeting in polite Bengali, connect your data, and test with real callers first.",
+  "excerpt": "Customers in Kolkata and across West Bengal often prefer to explain a problem in Bengali. Here is what a Bengali AI voice agent should handle, where it needs care, and how to test it before launch.",
+  "category": "Languages & speech",
+  "related": [
+    "how-to-choose-a-multilingual-voice-agent",
+    "gujarati-ai-voice-agent",
+    "ai-receptionist-for-clinics"
+  ],
+  "sections": [
+    {
+      "heading": "What is a Bengali AI voice agent?",
+      "paragraphs": [
+        "A Bengali AI voice agent holds a spoken conversation in Bengali on a phone line or a website. It listens, understands the request, answers from information you have approved, and books, records or hands over the call. It is not a recorded Bengali IVR menu. Our [Bengali AI calling agent page](/languages/bengali) shows a sample call and the use cases it suits.",
+        "Bengali is one of India's largest languages: the 2011 Census of India counted about 9.7 crore people (97 million) whose mother tongue is Bengali. Vistrow Voice answers those callers in Bengali from the first ring, works as an [AI receptionist that answers every call](/ai-receptionist), and logs a recording, transcript and summary of each conversation for your team."
+      ]
+    },
+    {
+      "heading": "Which Bengali calls suit an AI agent?",
+      "paragraphs": [
+        "Start with calls that repeat and have clear answers. For online sellers, that means where-is-my-order, return and cash-on-delivery confirmation calls, which the [e-commerce support calls page](/solutions/ecommerce) covers. For clinics and diagnostic centres in Kolkata, it means slot requests, timings and visit instructions; our guide to an [AI receptionist for clinics](/resources/blog/ai-receptionist-for-clinics) explains the safety rules for those.",
+        "Property developers and brokers around Kolkata can use the agent to answer project questions and book site visits, and coaching institutes can use it for admissions enquiries and fee reminders. Leave complaints, disputes and anything sensitive with your team."
+      ],
+      "points": [
+        "Order status, returns and delivery confirmation.",
+        "Clinic, lab and service bookings.",
+        "Property enquiries and site visits.",
+        "Reminders for payments, renewals and appointments."
+      ]
+    },
+    {
+      "heading": "How does it handle Banglish and Hindi?",
+      "paragraphs": [
+        "Kolkata callers mix English into Bengali all the time: \"order\", \"delivery\", \"appointment\", \"EMI\" and most numbers. Hindi also appears, especially with callers who grew up elsewhere. The agent understands those words inside a Bengali sentence, keeps replying in Bengali, and switches fully to English or Hindi if the caller does. The comparison of an [AI voice agent and a phone menu](/vs-ivr) shows why that matters: nobody has to press a key to pick a language.",
+        "Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia). Businesses that also serve Odisha can add an [Odia calling agent](/languages/odia) on the same platform."
+      ]
+    },
+    {
+      "heading": "What should you get right in Bengali?",
+      "paragraphs": [
+        "Register matters. \"আপনি\" is the polite default for a business call, and a greeting that opens with \"নমস্কার\" in that register sounds right to most callers. Write the welcome message and key lines in Bengali rather than translating a Hindi or English script, and have a native speaker read them aloud. Our guide to [writing an AI voice agent prompt](/resources/blog/write-ai-voice-agent-prompts) shows how to keep those lines short.",
+        "Our Bengali page is written for calls in India, mainly West Bengal. If many of your callers speak a particular regional variety, test with those callers first and add local place names, product names and terms to the knowledge base so the agent recognises them."
+      ]
+    },
+    {
+      "heading": "Can a Bengali agent look up orders and bookings?",
+      "paragraphs": [
+        "It can, when your order or booking system is connected. Order-status calls are only useful if the agent can read real data, so connect your system through a webhook or integration before launch; the [CRM and webhook integrations](/product/integrations) page lists what is available. Without that connection, the agent answers from your approved information and takes the details for your team.",
+        "Store policies, timings and fees in the [Vistrow Voice knowledge base](/product/knowledge-base) and switch on strict mode, so the agent quotes approved answers and says it will check with the team when something is not covered. Test with real order numbers and with numbers that do not exist, to see how it behaves.",
+        "Returning customers notice when they have to repeat themselves. Turn on memory and the agent recognises a caller by phone number and greets them with a short summary of earlier calls, as the [webhook, CRM routing and memory guide](/help/agents/agent-webhook-crm-memory) explains. Each agent can also send its lead, appointment and callback events to its own webhook, so a Bengali support line and a Hindi sales line can feed different systems."
+      ]
+    },
+    {
+      "heading": "How should you test a Bengali voice agent before launch?",
+      "paragraphs": [
+        "Run 20 to 30 test calls on the call type you plan to launch, with callers who speak the way your customers do. The [Testing Lab guide](/help/testing-lab/run-a-test) shows how to run scenarios such as an impatient caller, language switching and a noisy background in the browser before any real customer hears the agent.",
+        "Read every transcript. Check that names, addresses, dates and numbers were captured correctly, and that every question outside your approved answers was handed over or turned into a callback."
+      ],
+      "points": [
+        "A caller who speaks Banglish and one who switches to Hindi.",
+        "An older caller who speaks slowly, and one on a noisy line.",
+        "Addresses, pin codes and phone numbers read back correctly.",
+        "A complaint, to check it goes to a person."
+      ]
+    },
+    {
+      "heading": "Can it make outbound calls and work on your website?",
+      "paragraphs": [
+        "Yes. An outbound campaign can call your contacts in Bengali for reminders, confirmations and follow-ups, as the [outbound calling campaigns page](/product/outbound) shows. In India, outbound calling must respect DND preferences and permitted calling windows; every dial is checked against your Do-Not-Call list and calling window first, as the [calling window and Do-Not-Call guide](/help/compliance/calling-rules) explains.",
+        "Busy seasons such as Durga Puja can bring a spike in order, delivery and booking calls, so prepare the knowledge base for those questions in advance. The [website voice widget](/product/widget) lets visitors speak Bengali to the agent from any browser. Our [Gujarati AI voice agent guide](/resources/blog/gujarati-ai-voice-agent) covers the same steps for another language, and the [Vistrow Voice pricing page](/pricing) lists plans."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI voice agent speak natural Bengali?",
+      "a": "Yes, for everyday business calls. Write the greeting in polite Bengali, keep lines short, and test with callers from the region you serve."
+    },
+    {
+      "q": "Does it understand Bengali mixed with English words?",
+      "a": "Yes. It understands English words such as order, delivery and appointment inside a Bengali sentence and keeps replying in Bengali unless the caller switches language."
+    },
+    {
+      "q": "Can it tell customers where their order is?",
+      "a": "Yes, if your order system is connected through a webhook or integration. Without that, it answers from your approved information and takes the details for your team."
+    },
+    {
+      "q": "Can a Bengali agent transfer a call to my staff?",
+      "a": "Yes, on phone calls. If you set a transfer number, the agent dials your colleague into the call and stays on until they answer. On the website widget it takes a callback number instead."
+    },
+    {
+      "q": "Is this only for Kolkata?",
+      "a": "No. It works for callers across West Bengal and wherever your Bengali-speaking customers are, but test with callers from each area you serve because speech varies."
+    },
+    {
+      "q": "Can I run Bengali and Hindi lines from one account?",
+      "a": "Yes. You can set up separate agents with their own default language, greeting and knowledge base, and route each phone number or website page to the right one."
+    }
+  ],
+  "imageAlt": "Large Bengali greeting নমস্কার beside a smiling woman in a red and white saree on her phone, with cards for enquiries, reminders and Artha answering in Bengali",
+  "imagePrompt": "Designed cover (scripts/blog-covers/29-bengali-ai-voice-agent.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Census of India 2011, Table C-16: Population by mother tongue, India",
+      "url": "https://censusindia.gov.in/nada/index.php/catalog/10191"
+    }
+  ],
+  "contextualLinks": "To plan a Bengali line, start with the [Bengali AI calling agent overview](/languages/bengali) and see how an [AI receptionist answers and routes calls](/ai-receptionist).",
+  "inbound": [
+    {
+      "target": "language:bengali",
+      "sentence": "For a buyer's view of greetings, testing and data connections, read our guide to choosing a [Bengali AI voice agent](/resources/blog/bengali-ai-voice-agent)."
+    },
+    {
+      "target": "blog:gujarati-ai-voice-agent",
+      "sentence": "If your customers are in West Bengal, our [Bengali AI voice agent guide](/resources/blog/bengali-ai-voice-agent) covers the same checks for Bengali calls."
+    }
+  ]
+}

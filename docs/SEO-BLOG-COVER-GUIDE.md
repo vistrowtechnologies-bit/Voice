@@ -18,10 +18,26 @@ The first five covers used one skeleton (dark shade on the left, pill, headline,
 | **3. Before / after split** | Left half greyscale photo of the old way (frustrated caller, keypad menu) with a dark caption card; right half full-colour Artha on purple with a white speech bubble; arrow badge in the middle; headline across the top | Contrast story | Replacing IVR, missed calls, speed to lead, migrations | `04-...html` |
 | **4. Checklist board** | Light lavender background with a faint grid, big headline left, a tilted white checklist card right, the person in a round framed photo | Light, graphic | Checklists, how-tos, compliance | `05-...html` |
 | **5. Phone mock-up** | Warm full-bleed scene photo, a smartphone screen showing Artha on a call and an outcome card ("Appointment booked"), headline bottom-left over a bottom gradient | Product in action | Industry posts, bookings, reminders | `06-...html` |
-| **6. Language greeting** (to build) | The greeting in its own script, very large, over a local scene photo; small Artha badge | Local, cultural | Language posts | |
-| **7. Quote / stat card** (to build) | One short, sourced fact or customer-style question in very large type on a solid colour, with a small photo | Typographic | Data-led and myth-busting posts | |
+| **6. Language greeting** | The greeting in its own script, very large, over a local scene photo; small Artha badge | Local, cultural | Language posts | `examples/layout-6-language-greeting.html` |
+| **7. Quote / stat card** | One short, sourced fact or customer-style question in very large type on a solid colour, with a small photo | Typographic | Data-led and myth-busting posts | `examples/layout-7-quote-card.html` |
 
 Each cover HTML carries its own CSS (fonts from `web-demo/public/fonts`). `cover.css` holds the shared studio and scene pieces.
+
+
+## Layout plan, posts 2 to 30
+
+| # | Layout | | # | Layout | | # | Layout |
+|---|---|---|---|---|---|---|---|
+| 2 | 1 Studio | | 12 | 2 Light editorial | | 22 | 2 Light editorial |
+| 3 | 2 Light editorial | | 13 | 1 Studio | | 23 | 3 Before/after |
+| 4 | 3 Before/after | | 14 | 5 Phone mock-up | | 24 | 4 Checklist board |
+| 5 | 4 Checklist board | | 15 | 2 Light editorial | | 25 | 6 Language greeting |
+| 6 | 5 Phone mock-up | | 16 | 1 Studio | | 26 | 5 Phone mock-up |
+| 7 | 6 Language greeting | | 17 | 5 Phone mock-up | | 27 | 2 Light editorial |
+| 8 | 4 Checklist board | | 18 | 3 Before/after | | 28 | 6 Language greeting |
+| 9 | 5 Phone mock-up | | 19 | 7 Quote card | | 29 | 1 Studio |
+| 10 | 3 Before/after | | 20 | 6 Language greeting | | 30 | 3 Before/after |
+| 11 | 7 Quote card | | 21 | 4 Checklist board | | | |
 
 ## Rules
 

@@ -1,0 +1,117 @@
+{
+  "n": 16,
+  "publishOn": "2026-11-05",
+  "primaryKeyword": "ai voice agent vs chatbot vs ivr",
+  "audience": "Global",
+  "slug": "ai-voice-agent-vs-chatbot-vs-ivr",
+  "title": "AI voice agent vs chatbot vs IVR: the real differences",
+  "seoTitle": "AI Voice Agent vs Chatbot vs IVR: The Real Differences",
+  "metaDescription": "AI voice agent vs chatbot vs IVR: how each one works, what callers and visitors experience, and which to use for each kind of customer conversation.",
+  "shortAnswer": "An IVR is a phone menu that routes callers by keypress or a few spoken words. A chatbot is a text conversation on a website or app. An AI voice agent holds a spoken conversation on the phone or website, understands free speech, answers from approved information and completes tasks such as bookings. Many businesses use more than one.",
+  "excerpt": "IVRs, chatbots and AI voice agents are often lumped together, but they solve different problems. Here is what each one really does, where each fits, and how to choose.",
+  "category": "Voice AI basics",
+  "related": [
+    "when-to-use-voice-ai-instead-of-ivr",
+    "what-is-an-ai-voice-agent",
+    "ai-ivr-replacing-phone-menus-with-conversation"
+  ],
+  "sections": [
+    {
+      "heading": "What is the difference between an AI voice agent, a chatbot and an IVR?",
+      "paragraphs": [
+        "The short version: an IVR routes, a chatbot types and an AI voice agent talks. An IVR (interactive voice response) plays a menu and sends the caller to a queue based on the key they press. A chatbot answers typed messages in a window on a website or app. An AI voice agent listens to natural speech, replies out loud, answers from approved information and can complete a task before the call ends.",
+        "They overlap at the edges. A modern IVR may accept a few spoken words, and some chatbots can take an action through an integration. The difference is the channel and how much of the job each one can finish. Our page on [AI voice agents compared with a traditional IVR](/vs-ivr) goes deeper on the phone side, and the guide to [what an AI voice agent is](/resources/blog/what-is-an-ai-voice-agent) covers the basics."
+      ]
+    },
+    {
+      "heading": "How does each one work?",
+      "paragraphs": [
+        "Each tool follows a different pattern under the hood, and that pattern decides what the customer experiences. Keypad menus rely on the standard push-button tones that phones have sent for decades, which is why an IVR is reliable but rigid."
+      ],
+      "points": [
+        "IVR: a fixed tree of recorded prompts. The caller presses a key or says a short word, and the system moves down one branch.",
+        "Chatbot: the visitor types, the bot replies in text. Good chatbots understand natural language and answer from a knowledge base.",
+        "AI voice agent: the caller speaks freely, the agent understands the request, answers in speech and can book, record or transfer. See the [AI IVR page on replacing menus with conversation](/ai-ivr)."
+      ]
+    },
+    {
+      "heading": "What does the customer actually experience?",
+      "paragraphs": [
+        "With an IVR, the caller listens to options, guesses which one fits and waits. If their need is not on the menu, they press 0 or hang up. With a chatbot, the visitor types and reads, which suits a quiet office and exact details such as an order reference, but is slow on a phone screen and hard for people who are not comfortable writing.",
+        "With an AI voice agent, the caller simply says what they need, in their own words and often in their own language. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows a caller who switches mid-call. The [supported languages page](/languages) lists each Indian language.",
+        "The after-call experience differs too. An IVR usually leaves only a routing log. A chatbot leaves a text transcript. A voice agent can leave a recording, a transcript, a summary and structured fields such as the caller's name, need and preferred callback time, which your team can act on without listening to the call."
+      ]
+    },
+    {
+      "heading": "When is an IVR still the right choice?",
+      "paragraphs": [
+        "An IVR is predictable and cheap to run when callers only need routing to a few departments in one or two languages. If nothing needs to be understood or answered, a short menu does the job and adds little risk. Some secure steps, such as entering a PIN by keypad, are also better left to systems built for them.",
+        "If callers regularly describe problems the menu cannot capture, or abandon the menu, a conversation does better. Our guide on [when to use voice AI instead of an IVR](/resources/blog/when-to-use-voice-ai-instead-of-ivr) lists the signs, and [replacing phone menus with an AI IVR](/resources/blog/ai-ivr-replacing-phone-menus-with-conversation) shows how to switch safely."
+      ]
+    },
+    {
+      "heading": "When is a chatbot the better fit?",
+      "paragraphs": [
+        "Text wins when the visitor is in a meeting, on a train, or needs to copy an exact code, link or address. It also suits questions people would rather not say out loud. If your customers are mostly at a desk on your website, a chatbot may answer most of their questions well.",
+        "You do not have to choose one or the other on a website. The [Vistrow Voice website widget](/product/widget) can run as a voice call that visitors can also type into, let them choose between voice and chat, or run as text chat only, with the same agent and knowledge behind each mode."
+      ]
+    },
+    {
+      "heading": "When should you use an AI voice agent?",
+      "paragraphs": [
+        "Use a voice agent when the customer wants to talk, the request needs understanding, and the call should end with something done: an appointment booked, an enquiry qualified, a callback scheduled or a question answered from your approved facts. Phone calls are the obvious place, but a voice button on a website also helps visitors who would rather speak than type.",
+        "Vistrow Voice lets one agent answer inbound calls, place outbound campaign calls and talk to website visitors, with a recording, transcript and summary saved for every conversation. The [no-code AI voice agent builder](/product/agents) shows how an agent is set up, tested and connected to a phone number or website.",
+        "Speed matters more on voice than in chat. A two-second pause in a chat window is normal; on a call it feels like the line has dropped. When you test a voice agent, listen for how quickly it replies, how it handles being interrupted and whether it recovers when it mishears."
+      ]
+    },
+    {
+      "heading": "How do you choose between them?",
+      "paragraphs": [
+        "List the five reasons customers contact you most, and note the channel each arrives on. For each one, ask three questions: does it need understanding or only routing, does it end with a task or just information, and does the customer prefer to talk or type. Routing-only phone calls suit an IVR, typed website questions suit chat, and spoken requests that end in a task suit a voice agent.",
+        "Most businesses end up with a mix: a voice agent on the main phone line, a voice-and-chat widget on the website, and perhaps a short keypad step kept for one secure process. That is fine, as long as each channel gives the same approved answers and hands over to the same team.",
+        "Then test before you commit. Run the same set of realistic requests through each option and compare what the customer heard and what your team received afterwards. The [AI receptionist compared with an answering service and IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr) offers a fair side-by-side test you can reuse, and the [Vistrow Voice pricing page](/pricing) shows plans when you are ready."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Is an AI voice agent just a chatbot with a voice?",
+      "a": "Not quite. It shares the language understanding, but it must handle live speech, interruptions, accents and phone audio in real time, and it usually completes tasks on the call."
+    },
+    {
+      "q": "Is an AI IVR the same as an AI voice agent?",
+      "a": "Mostly. An AI IVR is an AI voice agent placed where a phone menu used to be, so the caller says what they need instead of pressing keys."
+    },
+    {
+      "q": "Can one tool cover both phone and website?",
+      "a": "Yes. A Vistrow Voice agent can answer phone calls and run a website widget in voice, chat or both."
+    },
+    {
+      "q": "Can an AI voice agent hand a call to a person?",
+      "a": "Yes, on phone calls it can transfer to a number you set or take a callback request. Website conversations end with a callback request instead."
+    },
+    {
+      "q": "Which is cheapest to run?",
+      "a": "A basic IVR is usually cheapest per call, but compare the cost per resolved request, including abandoned calls and staff time."
+    }
+  ],
+  "imageAlt": "Comparison cover: a business owner holding a phone beside three cards for IVR, chatbot and AI voice agent, with the voice agent highlighted",
+  "imagePrompt": "Designed cover (scripts/blog-covers/16-ai-voice-agent-vs-chatbot-vs-ivr.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "ITU-T Recommendation Q.23: Technical features of push-button telephone sets",
+      "url": "https://www.itu.int/rec/T-REC-Q.23"
+    }
+  ],
+  "contextualLinks": "To go deeper, compare an [AI voice agent with a traditional IVR](/vs-ivr) or see how the [website voice and chat widget](/product/widget) works.",
+  "inbound": [
+    {
+      "target": "blog:what-is-an-ai-voice-agent",
+      "sentence": "If you are weighing channels, read [AI voice agent vs chatbot vs IVR: the real differences](/resources/blog/ai-voice-agent-vs-chatbot-vs-ivr)."
+    },
+    {
+      "target": "page:/vs-ivr",
+      "sentence": "Chatbots are a third option; see our comparison of an [AI voice agent vs chatbot vs IVR](/resources/blog/ai-voice-agent-vs-chatbot-vs-ivr)."
+    }
+  ]
+}

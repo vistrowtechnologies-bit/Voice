@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Layout 7 example: quote or stat card</title><style>@font-face{font-family:Sora;src:url(../../../public/fonts/sora-latin.woff2) format('woff2');font-weight:100 900}
+@font-face{font-family:Manrope;src:url(../../../public/fonts/manrope-latin.woff2) format('woff2');font-weight:200 800}
+*{box-sizing:border-box;margin:0;padding:0} html,body{width:1200px;height:675px;overflow:hidden} body{font-family:Manrope,sans-serif;position:relative}
+body{background:#9333ea;background:linear-gradient(135deg,#7e22ce 0%,#9333ea 50%,#c026d3 100%)}
+.ring{position:absolute;right:-120px;top:-120px;width:520px;height:520px;border-radius:50%;border:2px solid rgba(255,255,255,.18)}
+.ring2{position:absolute;right:-40px;top:-40px;width:360px;height:360px;border-radius:50%;border:2px solid rgba(255,255,255,.14)}
+.brand{position:absolute;top:42px;left:60px;display:flex;align-items:center;gap:10px;font-family:Sora;font-weight:700;font-size:19px;color:#fff} .brand img{width:32px;height:32px;border-radius:8px}
+.q{position:absolute;left:60px;top:120px;width:760px;font-family:Sora;font-weight:800;font-size:72px;line-height:1.02;letter-spacing:-.04em;color:#fff}
+.q em{font-style:normal;color:#fde68a}
+.meta{position:absolute;left:60px;bottom:56px;display:flex;align-items:center;gap:16px;color:#f5f3ff}
+.meta .pill{font-family:Sora;font-weight:700;font-size:13px;letter-spacing:.16em;background:rgba(255,255,255,.18);padding:7px 13px;border-radius:999px}
+.meta span{font-size:21px;font-weight:600}
+.face{position:absolute;right:70px;bottom:60px;width:280px;height:280px;border-radius:50%;background:url(../people/caller-man-phone.jpg) center 20%/cover;border:8px solid rgba(255,255,255,.9);box-shadow:0 30px 60px rgba(46,16,101,.35)}
+</style></head><body><div class="ring"></div><div class="ring2"></div><div class="brand"><img src="../../../src/assets/vistrow-mark.png" alt=""> Vistrow Voice</div><div class="q">"Is the EMI <em>due this week?</em> I can pay on Friday."</div><div class="face"></div><div class="meta"><span class="pill">INDUSTRY</span><span>AI voice agents for EMI reminders</span></div></body></html>
