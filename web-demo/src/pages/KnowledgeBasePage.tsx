@@ -25,7 +25,7 @@ import {
 } from '../lib/api'
 import { extractTextFromFile } from '../lib/fileExtract'
 import type { KbQaPair, KnowledgeBase, ProjectListing, QaDraft } from '../lib/types'
-import { Tooltip } from '../components/ui/Tooltip'
+import { InfoTip, Tooltip } from '../components/ui/Tooltip'
 
 // Must match agent/db.py get_kb_content's max_chars - everything past this
 // is silently trimmed from the agent's prompt, so the budget bar warns the
@@ -373,18 +373,24 @@ export function KnowledgeBasePage() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Knowledge Base" subtitle={`${kbs.length} knowledge ${kbs.length === 1 ? 'base' : 'bases'}`} />
+      <PageHeader
+        title="Knowledge Base"
+        subtitle={`${kbs.length} knowledge ${kbs.length === 1 ? 'base' : 'bases'}`}
+        lead={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted">
+            <span className="hidden sm:inline">How the knowledge base works</span>
+            <InfoTip label="How the knowledge base works" side="bottom">
+              Upload a brochure or price sheet, hit <span className="font-semibold text-primary">✦ Auto-extract Q&A</span>,
+              review the answers, and edit any price inline whenever it changes. With{' '}
+              <span className="font-semibold text-success">Strict mode</span> on, the agent quotes these
+              approved answers instead of improvising facts. Attach a knowledge base to an agent from the
+              Agents page.
+            </InfoTip>
+          </p>
+        }
+      />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
-        <div className="rounded-lg border border-border bg-surface px-4 py-3 text-xs text-text-muted">
-          <Icon name="info" className="mr-1.5 align-[-3px] text-[15px] text-cyan" />
-          Upload a brochure or price sheet, hit <span className="font-semibold text-primary">✦ Auto-extract Q&A</span>,
-          review the answers, and edit any price inline whenever it changes. With{' '}
-          <span className="font-semibold text-success">Strict mode</span> on, the agent quotes these
-          approved answers instead of improvising facts. Attach a knowledge base to an agent from the
-          Agents page.
-        </div>
-
         {/* Live catalog — separate from the KB on purpose. KB text is
             stuffed into every system prompt under an 8k cap; catalog items reach
             the agent as a short index plus an on-demand lookup instead, so

@@ -1008,9 +1008,27 @@ def _hhmm_to_minutes(t: str) -> int:
     return int(h) * 60 + int(m)
 
 
+# 60 s, like get_account_country: a booking read this once for the past-time
+# check and again for the slots, each a round-trip over the DB proxy (call
+# 1459: booking took 4.7 s). An edit on the dashboard applies within a minute.
+_AVAILABILITY_CACHE_TTL_S = 60.0
+_availability_cache: dict[int, tuple[float, dict]] = {}
+
+
 def get_availability_config(account_id: int | None) -> dict:
     if account_id is None:
         return dict(_AVAILABILITY_DEFAULTS)
+    hit = _availability_cache.get(account_id)
+    if hit and time.monotonic() - hit[0] < _AVAILABILITY_CACHE_TTL_S:
+        return dict(hit[1])
+    cfg = _read_availability_config(account_id)
+    if cfg is None:
+        return dict(_AVAILABILITY_DEFAULTS)
+    _availability_cache[account_id] = (time.monotonic(), cfg)
+    return dict(cfg)
+
+
+def _read_availability_config(account_id: int) -> dict | None:
     conn = dbconn.connect()
     try:
         row = conn.execute(
@@ -1024,17 +1042,22 @@ def get_availability_config(account_id: int | None) -> dict:
                 cfg.update({k: v for k, v in stored.items() if k in _AVAILABILITY_DEFAULTS})
         return cfg
     except psycopg.Error:
-        return dict(_AVAILABILITY_DEFAULTS)
+        return None  # not cached: the next call retries the real setting
     finally:
         conn.close()
 
 
-def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, duration_minutes: int) -> bool:
-    rows = conn.execute(
+def _confirmed_appointments(conn, account_id: int, appt_date: str) -> list:
+    return conn.execute(
         "SELECT start_time, duration_minutes FROM appointments "
         "WHERE account_id = ? AND appt_date = ? AND status = 'confirmed'",
         (account_id, appt_date),
     ).fetchall()
+
+
+def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, duration_minutes: int, rows=None) -> bool:
+    if rows is None:
+        rows = _confirmed_appointments(conn, account_id, appt_date)
     new_start = _hhmm_to_minutes(start_time)
     new_end = new_start + duration_minutes
     for r in rows:
@@ -1094,10 +1117,13 @@ def check_appointment_availability(account_id: int | None, date: str, duration_m
         is_today = date == now.date().isoformat()
         now_minutes = now.hour * 60 + now.minute
         slots: list[str] = []
+        # One query for the day, not one per slot: call 1459 (21 Oct 2026)
+        # spent 6.0 s here on ~16 round-trips over the database proxy.
+        booked = _confirmed_appointments(conn, account_id, date)
         cursor = open_m
         while cursor + duration_minutes <= close_m:
             hhmm = f"{cursor // 60:02d}:{cursor % 60:02d}"
-            if not (is_today and cursor <= now_minutes) and not _appt_slot_conflict(conn, account_id, date, hhmm, duration_minutes):
+            if not (is_today and cursor <= now_minutes) and not _appt_slot_conflict(conn, account_id, date, hhmm, duration_minutes, rows=booked):
                 slots.append(hhmm)
             cursor += slot_minutes
         return slots
@@ -1125,6 +1151,9 @@ def book_native_appointment(
     # booking for a time that has already passed in the account's timezone.
     if _appointment_in_past(account_id, date, time):
         return {"ok": False, "error": "that time has already passed"}
+    # Before the transaction, not inside it: one fewer round-trip while the
+    # advisory lock is held.
+    stored_phone = account_phone(account_id, phone) or phone
     conn = dbconn.connect()
     try:
         with conn:
@@ -1135,7 +1164,7 @@ def book_native_appointment(
                 "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, contact_phone, "
                 "contact_email, purpose, appt_date, start_time, duration_minutes, status, source) "
                 "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, ?, 'confirmed', 'agent')",
-                (account_id, agent_id, name, account_phone(account_id, phone) or phone, purpose, date, time,
+                (account_id, agent_id, name, stored_phone, purpose, date, time,
                  duration_minutes),
             )
             return {"ok": True}

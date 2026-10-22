@@ -68,3 +68,55 @@ class BookingRejectsImplausiblePhones(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BookingRejectsTheBusinessOwnNumber(unittest.TestCase):
+    """Call 1459: a website caller was booked under +91 90670 97779, the
+    business's own number from the prompt."""
+
+    def _ctx(self, visitor_phone=""):
+        ctx = MagicMock()
+        ctx.session.current_agent = SimpleNamespace(instructions="Contact +91 90670 97779, hello@vistrow.com.")
+        ctx.userdata = {"visitor_phone": visitor_phone}
+        return ctx
+
+    def test_business_number_is_rejected(self):
+        out = asyncio.run(tools.book_appointment._func(self._ctx(), "2026-10-22", "14:00", "Abhishek", "+919067097779", "growth audit"))
+        self.assertIn("business's own contact number", out)
+
+    def test_callers_own_number_is_not_rejected_by_this_rule(self):
+        out = asyncio.run(tools.book_appointment._func(self._ctx("+919067097779"), "2026-10-22", "14:00", "Abhishek", "+919067097779", "growth audit"))
+        self.assertNotIn("business's own contact number", out)
+
+
+class StillCheckingLine(unittest.TestCase):
+    def test_slow_lookup_gets_one_different_line(self):
+        said = []
+        agent = SimpleNamespace(_reply_language="hi-IN", _voice_gender="female", _is_realtime=False)
+        ctx = MagicMock()
+        ctx.session = SimpleNamespace(current_agent=agent, say=lambda text, **k: said.append(text))
+
+        async def go():
+            async def slow():
+                await asyncio.sleep(0.05)
+                return ["10:00"]
+            with unittest.mock.patch.object(tools, "_STILL_CHECKING_AFTER_S", 0.01):
+                first = await tools._await_with_still_checking(ctx, asyncio.ensure_future(slow()))
+                second = await tools._await_with_still_checking(ctx, asyncio.ensure_future(slow()))
+            return first, second
+        first, second = asyncio.run(go())
+        self.assertEqual((first, second), (["10:00"], ["10:00"]))
+        self.assertEqual(said, ["बस देख रही हूँ..."])  # once per call
+
+    def test_fast_lookup_says_nothing(self):
+        said = []
+        agent = SimpleNamespace(_reply_language="hi-IN", _voice_gender="female", _is_realtime=False)
+        ctx = MagicMock()
+        ctx.session = SimpleNamespace(current_agent=agent, say=lambda text, **k: said.append(text))
+
+        async def go():
+            async def fast():
+                return []
+            return await tools._await_with_still_checking(ctx, asyncio.ensure_future(fast()))
+        self.assertEqual(asyncio.run(go()), [])
+        self.assertEqual(said, [])
