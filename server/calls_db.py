@@ -3292,6 +3292,24 @@ def list_calls(
             )
             for r in rows
         ]
+        # Follow-up calls the AI placed (owner, 22 Oct): one lookup for the
+        # whole page, so the list can tag them.
+        try:
+            ids = [r["id"] for r in rows]
+            kinds = {}
+            if ids:
+                for f in conn.execute(
+                    "SELECT call_id, custom_fields FROM campaign_contacts "
+                    "WHERE account_id = ? AND call_id = ANY(?) AND custom_fields LIKE ?",
+                    (account_id, ids, _FOLLOW_UP_MARK),
+                ).fetchall():
+                    kinds[f["call_id"]] = str(_load_json_field(f["custom_fields"], {}).get("follow_up_kind") or "")
+            for r, c in zip(rows, calls):
+                kind = kinds.get(r["id"])
+                c["followUpKind"] = kind
+                c["followUpLabel"] = _FOLLOW_UP_LABELS.get(kind or "", "Follow-up call") if kind is not None else None
+        except Exception:
+            logger.warning("list_calls: follow-up tags failed", exc_info=True)
         if search:
             s = search.lower()
             # Phone match is digits-only and bidirectional-substring, not a

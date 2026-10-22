@@ -143,6 +143,29 @@ class FollowUpsPage(unittest.TestCase):
             if got is None:
                 break
 
+    def test_calls_list_tags_follow_up_calls(self):
+        conn = calls_db._connect()
+        try:
+            with conn:
+                agent_id = conn.execute("SELECT MIN(id) id FROM agents WHERE account_id = ?", (self.a,)).fetchone()["id"]
+                call_id = conn.execute(
+                    "INSERT INTO calls (account_id, room_name, visitor_identity, started_at, ended_at, duration_seconds, "
+                    "transcript_json, call_type, agent_id, direction) VALUES (?, ?, 'v', ?, ?, 74, '[]', 'phone', ?, 'outbound') RETURNING id",
+                    (self.a, f"fu-call-{os.urandom(3).hex()}", _utc(-5), _utc(-4), agent_id),
+                ).fetchone()["id"]
+                plain = conn.execute(
+                    "INSERT INTO calls (account_id, room_name, visitor_identity, started_at, ended_at, duration_seconds, "
+                    "transcript_json, call_type, agent_id) VALUES (?, ?, 'v', ?, ?, 30, '[]', 'phone', ?) RETURNING id",
+                    (self.a, f"fu-plain-{os.urandom(3).hex()}", _utc(-6), _utc(-5), agent_id),
+                ).fetchone()["id"]
+                conn.execute("UPDATE campaign_contacts SET call_id = ? WHERE id = ?", (call_id, self.gone))
+        finally:
+            conn.close()
+        calls = {str(c["id"]): c for c in calls_db.list_calls(self.a)}
+        self.assertEqual(calls[str(call_id)]["followUpKind"], "nurture")
+        self.assertEqual(calls[str(call_id)]["followUpLabel"], "Follow-up on their interest")
+        self.assertIsNone(calls[str(plain)]["followUpKind"])
+
     def test_bell_items(self):
         items = [i for i in calls_db.notifications(self.a) if i.get("kind") == "follow_up"]
         titles = [i["title"] for i in items]

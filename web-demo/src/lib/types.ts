@@ -66,6 +66,9 @@ export interface CallRecord {
   // Typed widget chat: no audio exists, so there is never a recording.
   isTextChat?: boolean
   direction: 'inbound' | 'outbound' | null
+  /** Set when this call was a follow-up the AI scheduled and placed (GET /calls). */
+  followUpKind?: string | null
+  followUpLabel?: string | null
   website: string
   agent: string
   callDate: string
