@@ -105,7 +105,8 @@ class FollowUpPolicy(unittest.TestCase):
             self.assertEqual(retry_rules.follow_up_policy(empty), {
                 "maxAttempts": 3, "busyMinutes": 10, "switchedOffMinutes": 120, "noAnswerMinutes": 30,
                 "voicemailMinutes": 120, "callbackEnabled": True, "visitReminderEnabled": True,
-                "visitReminderTime": "11:00", "nurtureEnabled": True, "nurtureDays": 3, "nurtureTime": "11:00",
+                "visitReminderTime": "11:00", "nurtureEnabled": True, "nurtureDays": 2, "nurtureTime": "11:00",
+                "nurtureSteps": [2, 5, 10], "nurtureAdvanceOnNoAnswer": True,
                 "firstCallDelaySeconds": 0,
             }, empty)
 
@@ -124,7 +125,9 @@ class FollowUpPolicy(unittest.TestCase):
         self.assertTrue(policy["visitReminderEnabled"])  # a non-bool keeps the default
         self.assertEqual(policy["visitReminderTime"], "09:05")
         self.assertFalse(policy["nurtureEnabled"])
-        self.assertEqual(policy["nurtureDays"], retry_rules.FOLLOW_UP_MAX_NURTURE_DAYS)
+        # nurtureDays is step 1 of the sequence now (owner, 22 Oct); a stored
+        # value from before sequences is not read.
+        self.assertEqual(policy["nurtureDays"], 2)
 
     def test_bad_reminder_time_falls_back(self):
         for bad in ("25:00", "11:60", "eleven", "", None, "11"):

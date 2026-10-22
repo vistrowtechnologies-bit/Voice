@@ -7982,6 +7982,7 @@ def record_campaign_dial_result(
     'calling', so a background reconciler can never overwrite an outcome the
     agent already recorded for the same call."""
     guard = " AND status = 'calling'" if only_if_calling else ""
+    advance = False
     conn = _connect()
     try:
         with conn:
@@ -8029,6 +8030,7 @@ def record_campaign_dial_result(
                     "WHERE id = ?" + guard,
                     (outcome, outcome.replace("_", " "), contact_id),
                 )
+                advance = True
             else:  # no_answer / failed / voicemail, retry
                 next_at = (
                     datetime.datetime.now(datetime.timezone.utc)
@@ -8039,6 +8041,90 @@ def record_campaign_dial_result(
                     "WHERE id = ?" + guard,
                     (outcome, outcome.replace("_", " "), next_at, contact_id),
                 )
+    finally:
+        conn.close()
+    if advance:
+        _advance_nurture_after_no_answer(contact_id)
+
+
+def _advance_nurture_after_no_answer(contact_id: int) -> None:
+    """Move a nurture follow-up whose retries just ran out with no answer to
+    the next step of its sequence (owner, 22 Oct 2026), instead of ending it.
+
+    Called after record_campaign_dial_result's final write has committed, in
+    its own transaction, so a failure here can never lose that write; never
+    raises. Acts only on exactly that state (a "Follow-up calls" row, kind
+    nurture, status no_answer/voicemail/failed, no next attempt), and the
+    update is conditional on it, so a changed row (cancelled, re-claimed) is
+    left alone. Re-checks DNC and a booking first. MUST mirror agent/db.py's
+    _advance_nurture_after_no_answer."""
+    try:
+        conn = _connect()
+    except Exception:
+        logger.exception("could not advance nurture follow-up %s", contact_id)
+        return
+    try:
+        with conn:
+            row = conn.execute(
+                "SELECT cc.status, cc.outcome, cc.next_attempt_at, cc.custom_fields, cc.account_id, cc.phone, "
+                "cc.phone_norm, cc.created_at, cc.campaign_id, c.name AS campaign_name, a.follow_up_policy "
+                "FROM campaign_contacts cc JOIN campaigns c ON c.id = cc.campaign_id "
+                "LEFT JOIN agents a ON a.id = c.agent_id WHERE cc.id = ?",
+                (contact_id,),
+            ).fetchone()
+            if row is None or row["campaign_name"] != retry_rules.FOLLOW_UP_CAMPAIGN_NAME:
+                return
+            if row["status"] not in ("no_answer", "voicemail", "failed") or row["next_attempt_at"]:
+                return
+            fields = _load_json_field(row["custom_fields"], {})
+            if not isinstance(fields, dict) or fields.get("follow_up_kind") != "nurture":
+                return
+            policy = retry_rules.follow_up_policy(row["follow_up_policy"])
+            if not policy["nurtureAdvanceOnNoAnswer"]:
+                return
+            account_id = row["account_id"]
+            norm = row["phone_norm"] or _normalize_phone(row["phone"] or "", account_id)
+            if norm and conn.execute(
+                "SELECT 1 FROM dnc_list WHERE account_id = ? AND phone_norm = ?", (account_id, norm)
+            ).fetchone():
+                return
+            if norm:
+                for appt in conn.execute(
+                    "SELECT contact_phone FROM appointments WHERE account_id = ? "
+                    "AND status IN ('confirmed', 'rescheduled', 'completed') AND COALESCE(contact_phone, '') <> '' "
+                    "AND created_at::timestamp >= ?::timestamp",
+                    (account_id, row["created_at"]),
+                ).fetchall():
+                    if _normalize_phone(appt["contact_phone"], account_id) == norm:
+                        return
+            compliance = get_compliance(account_id)
+            try:
+                tz = ZoneInfo(compliance.get("timezone") or "Asia/Kolkata")
+            except (ZoneInfoNotFoundError, ValueError, TypeError):
+                tz = ZoneInfo("Asia/Kolkata")
+            step = retry_rules.next_nurture_step(
+                fields, policy, datetime.datetime.now(tz), compliance.get("active_days")
+            )
+            if step is None:
+                return
+            due = step["at"].astimezone(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            said = (row["outcome"] or "no answer").replace("_", " ")
+            moved = conn.execute(
+                "UPDATE campaign_contacts SET status = 'pending', attempts = 0, next_attempt_at = ?, custom_fields = ?, "
+                "outcome = ? WHERE id = ? AND status = ? AND next_attempt_at IS NULL RETURNING id",
+                (due, json.dumps({**fields, **step["fields"]}, ensure_ascii=False),
+                 f"{said} · moved to step {step['fields']['follow_up_step']}", contact_id, row["status"]),
+            ).fetchone()
+            if moved is None:
+                return
+            conn.execute(
+                "UPDATE campaigns SET status = 'running' WHERE id = ? AND status = 'completed'",
+                (row["campaign_id"],),
+            )
+            logger.info("nurture follow-up %s: no answer, moved to step %s at %s UTC",
+                        contact_id, step["fields"]["follow_up_step"], due)
+    except Exception:
+        logger.exception("could not advance nurture follow-up %s", contact_id)
     finally:
         conn.close()
 

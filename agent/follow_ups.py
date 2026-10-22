@@ -9,7 +9,11 @@ Owner decisions (2026-10-15), switched per agent in the dashboard's
     24 h ahead -> a confirm-or-reschedule call the day before at the
     reminder time; sooner than that -> 2 h before the visit.
   - nurture: the call ended interested (post-call interest_level) with no
-    visit booked and no callback asked -> one call N days later at 11:00.
+    visit booked and no callback asked -> a sequence of calls on the
+    agent's nurtureSteps days (default 2, 5, 10; owner, 22 Oct 2026) after
+    that call, at nurtureTime, moved off non-calling days. Each nurture call
+    that does not end "not interested" earns the next step; the last step,
+    "not interested" or an opt-out ends it.
 
 One follow-up per call, in that order of precedence. Times are in the
 account's timezone (`now` carries it). The moment is only when the contact
@@ -20,6 +24,8 @@ list stops any dial anyway). main.py's _schedule_follow_up turns the plan
 into a campaign contact (db.schedule_follow_up_call).
 """
 import datetime
+
+import retry_rules
 
 KINDS = ("callback", "visit_reminder", "nurture")
 # Time of day for a callback the caller gave only a date for, and the
@@ -89,15 +95,26 @@ def interested(extracted: dict) -> bool:
     return any(word == interest or interest.startswith(word) for word in _INTERESTED)
 
 
-def plan(policy: dict, lead_data: dict, extracted: dict, now: datetime.datetime, previous_kind: str = "") -> dict | None:
-    """{"kind", "at" (aware, now's timezone), "summary"} or None.
+def not_interested(extracted: dict) -> bool:
+    """The call ended with them saying no (post-call interest_level)."""
+    interest = str((extracted or {}).get("interest_level") or "").strip().casefold()
+    return bool(interest) and any(word == interest or word in interest for word in _NOT_INTERESTED)
+
+
+def plan(policy: dict, lead_data: dict, extracted: dict, now: datetime.datetime, previous_kind: str = "",
+         previous_fields: dict | None = None, active_days=None) -> dict | None:
+    """{"kind", "at" (aware, now's timezone), "summary", "fields"} or None.
 
     policy is retry_rules.follow_up_policy(...) — complete and validated.
-    previous_kind is the follow_up_kind of the call that just ended, if it
-    was itself a scheduled follow-up: a nurture call that again ends merely
-    "interested" does not earn another nurture call, or an undecided lead
-    would be rung every N days for ever. A callback they asked for, or a
-    visit they booked, is always honoured."""
+    previous_kind / previous_fields are the follow_up_kind and custom_fields
+    of the call that just ended, if it was itself a scheduled follow-up.
+    "fields" are extra custom_fields for the new row (a nurture step's
+    follow_up_step and nurture_origin). active_days is compliance's calling
+    days, so a nurture step never lands on a day the dialer cannot ring.
+    A nurture call earns the next step unless it ended "not interested" and
+    the sequence ends at its last step, so an undecided lead is never rung
+    for ever. A callback they asked for, or a visit they booked, is always
+    honoured."""
     if lead_data.get("opted_out"):
         return None
     callback = lead_data.get("callback") or {}
@@ -115,7 +132,20 @@ def plan(policy: dict, lead_data: dict, extracted: dict, now: datetime.datetime,
             return None
         when = _visit_reminder_at(visit, policy, now)
         return {"kind": "visit_reminder", "at": when, "summary": summary} if when else None
-    if policy["nurtureEnabled"] and previous_kind != "nurture" and interested(extracted):
-        day = now.date() + datetime.timedelta(days=policy["nurtureDays"])
-        return {"kind": "nurture", "at": _on_day(day, policy.get("nurtureTime") or NURTURE_TIME, now), "summary": summary}
+    if not policy["nurtureEnabled"]:
+        return None
+    if previous_kind == "nurture":
+        if not_interested(extracted):
+            return None
+        step = retry_rules.next_nurture_step(previous_fields or {}, policy, now, active_days)
+        if step is None:
+            return None
+        return {"kind": "nurture", "at": step["at"], "summary": summary, "fields": step["fields"]}
+    if interested(extracted):
+        origin = now.date()
+        at = retry_rules.nurture_step_at(policy, origin, 1, now, active_days)
+        if at is None:
+            return None
+        return {"kind": "nurture", "at": at, "summary": summary,
+                "fields": {"follow_up_step": 1, "nurture_origin": origin.isoformat()}}
     return None
