@@ -54,6 +54,29 @@ text.
   intelligence, CRM delivery state and retry, call facts, extracted lead
   fields, and local notes. Other calls lists earlier calls from the same
   phone number. There is no Diagnostics tab in the customer dashboard.
+  Calls the AI made as a follow-up carry a "Follow-up" tag.
+- **Follow-ups** — calls the AI will make back to people, scheduled after
+  a call by each agent's follow-up rules (Agents → agent → After the call →
+  Follow-ups): a call back the caller asked for, a reminder before a booked
+  site visit, or a nurture check-in after an interested call with nothing
+  booked. Tabs: Upcoming, Done, Cancelled. An upcoming one can be called
+  now, rescheduled or cancelled. "Schedule follow-up" (also "Schedule a
+  follow-up call" on a lead's page) adds one by hand: name, phone, the agent
+  who calls, the time (future, within 90 days), type "Call them back" or
+  "Check in on their interest", and an optional note for the AI. A person
+  with a follow-up already waiting gets that one moved, not a second call.
+  A nurture call is skipped if the person called in or booked first.
+  Nurture is a sequence: by default calls on day 2, 5 and 10 after the
+  interested call, at the agent's "Call time" (11:00 by default); edit it
+  under "Call on these days after the conversation" (up to 5 steps, day
+  1-60). A day outside the calling days (Sunday by default, set on
+  Compliance) moves to the next calling day. It stops when they say no,
+  opt out, book or call in. "If they don't answer, try the next step" (on
+  by default) moves an unanswered step on to the next day.
+  Do-Not-Call numbers are refused; the agent needs a phone number to call
+  from; calls respect the Compliance calling window. On the Growth plan the
+  Copilot can also schedule, reschedule, cancel or call one now for the
+  user (members and above), each only after they press Confirm.
 - **Contacts** — a global contact list automatically updated from qualified
   calls as well as manual/CSV imports. Search, import, export, add, delete,
   or call contacts; view status, tags, source, and last-called time. Table
@@ -224,6 +247,10 @@ FAQS: list[dict] = [
     {
         "question": "Can I resize the Calls or Contacts table columns?",
         "answer": "Yes. Drag a divider at the right edge of any column heading. Widths are saved in that browser; use the column reset button to restore defaults. Contacts keeps Tags compact initially but you can widen it.",
+    },
+    {
+        "question": "How do I see or change the calls the AI will make back to people?",
+        "answer": "Open Follow-ups in the sidebar. Upcoming lists the call backs, visit reminders and nurture check-ins your agents scheduled; use Call now, Reschedule or Cancel on any of them, or Schedule follow-up to add one yourself. The rules for when an agent schedules them are under Agents → the agent → After the call → Follow-ups.",
     },
     {
         "question": "Where do I manage appointment availability?",

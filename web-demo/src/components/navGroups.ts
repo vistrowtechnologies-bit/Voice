@@ -78,6 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
     showHeading: true,
     items: [
       { to: '/dashboard/calls', label: 'Calls', icon: 'history' },
+      { to: '/dashboard/follow-ups', label: 'Follow-ups', icon: 'event_repeat' },
       { to: '/dashboard/usage', label: 'Usage', icon: 'monitoring' },
       { to: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
       { to: '/dashboard/appointments', label: 'Appointments', icon: 'event' },

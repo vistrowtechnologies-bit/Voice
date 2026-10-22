@@ -257,6 +257,18 @@ def _handle_failed_dial(contact_id: int, campaign_id: int, error: str) -> bool:
     return True
 
 
+def _is_nurture_follow_up(contact: dict) -> bool:
+    """A scheduled nurture follow-up (custom_fields.follow_up_kind)."""
+    raw = contact.get("custom_fields")
+    if not isinstance(raw, str) or "nurture" not in raw:
+        return False
+    try:
+        fields = json.loads(raw)
+    except ValueError:
+        return False
+    return isinstance(fields, dict) and fields.get("follow_up_kind") == "nurture"
+
+
 def _dial_one(campaign: dict) -> None:
     account_id = campaign["account_id"]
     cid = campaign["id"]
@@ -334,6 +346,20 @@ def _dial_one(campaign: dict) -> None:
         contact = calls_db.claim_next_campaign_contact(cid)
         if contact is None:
             break
+        # A nurture follow-up to someone who has since called us or booked is
+        # not rung (owner, 22 Oct 2026). Decided from the contact's own fields
+        # first, so only nurture rows touch the database here; if the check
+        # itself fails, the call goes out as it always did.
+        if _is_nurture_follow_up(contact):
+            try:
+                reason = calls_db.follow_up_skip_reason(contact)
+            except Exception:
+                logger.warning("follow-up skip check failed for contact %s; dialling", contact["id"], exc_info=True)
+                reason = None
+            if reason:
+                calls_db.skip_claimed_follow_up(contact["id"], reason)
+                logger.info("campaign %s: follow-up contact %s not dialled (%s)", cid, contact["id"], reason)
+                continue
         _pace_dial(_campaign_gap_seconds(campaign))
         # claim_next_campaign_contact returns the row as it was BEFORE the
         # attempt counter was incremented, so contact["attempts"] is how many
