@@ -66,6 +66,13 @@ text.
   "Check in on their interest", and an optional note for the AI. A person
   with a follow-up already waiting gets that one moved, not a second call.
   A nurture call is skipped if the person called in or booked first.
+  Nurture is a sequence: by default calls on day 2, 5 and 10 after the
+  interested call, at the agent's "Call time" (11:00 by default); edit it
+  under "Call on these days after the conversation" (up to 5 steps, day
+  1-60). A day outside the calling days (Sunday by default, set on
+  Compliance) moves to the next calling day. It stops when they say no,
+  opt out, book or call in. "If they don't answer, try the next step" (on
+  by default) moves an unanswered step on to the next day.
   Do-Not-Call numbers are refused; the agent needs a phone number to call
   from; calls respect the Compliance calling window.
 - **Contacts** — a global contact list automatically updated from qualified
