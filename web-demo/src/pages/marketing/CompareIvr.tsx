@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 
 // Deliberately compares against the incumbent *category* - a phone menu or
 // a human call desk - not against named competitors. That's both the
@@ -228,6 +229,7 @@ export function CompareIvr() {
           <SectionEyebrow>Side by side</SectionEyebrow>
           <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Menu IVR vs AI voice agent vs chatbot vs receptionist.</h2>
         </div>
+        <PageFigures route="/vs-ivr" after="Menu IVR vs AI voice agent vs chatbot vs receptionist." className="mb-8" />
         <div className="overflow-x-auto rounded-2xl border border-border">
           <table className="w-full min-w-[860px] border-collapse text-left text-sm">
             <thead>

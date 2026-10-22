@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 import { PRODUCT_PAGES, HOW_IT_WORKS } from '../../lib/marketingContent'
 import { COMPARE_VENDORS } from '../../lib/seoExpansionContent'
 
@@ -144,6 +145,7 @@ export function ProductOverview() {
             </li>
           ))}
         </ol>
+        <PageFigures route="/product" after="What happens from first ring to your CRM." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">

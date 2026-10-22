@@ -4,6 +4,7 @@ import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
 import { Seo } from '../../components/Seo'
+import { PageFigures } from '../../components/PageFigure'
 import { COMPARE_VENDORS } from '../../lib/seoExpansionContent'
 import { NotFound } from './NotFound'
 
@@ -158,6 +159,7 @@ export function CompareVendor() {
             ))}
           </div>
         </div>
+        <PageFigures route={`/compare/${vendor.slug}`} after="Run the same real-call test before choosing." />
       </section>
 
       {vendor.steps && (

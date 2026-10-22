@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 import { LANGUAGES } from '../../lib/marketingContent'
 
 // Landing page for the "AI receptionist" query cluster. Every capability here
@@ -250,6 +251,8 @@ export function AiReceptionist() {
           ))}
         </ol>
 
+        <PageFigures route="/ai-receptionist" after="Four calls, one receptionist." className="mt-8" />
+
         <figure className="mt-8 rounded-3xl border border-border bg-surface p-6 sm:p-8">
           <figcaption>
             <h3 className="font-display text-xl font-bold tracking-tight">Sample conversation: the 11:30 booking, in Hinglish.</h3>
@@ -335,6 +338,7 @@ export function AiReceptionist() {
               </Link>
               .
             </p>
+            <PageFigures route="/ai-receptionist" after="Appointments, booked on the call." className="mt-6" />
           </div>
           <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">

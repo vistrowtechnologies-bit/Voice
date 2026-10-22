@@ -52,6 +52,7 @@ import { BUYER_GUIDES, COMPARE_VENDORS, DEMO_CALLS, LOCAL_REAL_ESTATE_PAGES } fr
 import { HELP_TOPICS } from '../content/helpArticles'
 import { BLOG_PAGE_COUNT, VOICE_BLOG_POSTS, blogPagePath } from '../content/voiceBlog'
 import { HELP_VIDEOS, helpVideoPoster, helpVideoSrc } from './helpVideos'
+import { PAGE_FIGURES } from './pageFigures'
 
 // The English launch film on the homepage (components/LaunchFilm.tsx FILMS.en;
 // keep the two in sync). It went live on 21 Oct 2026 (PR #212).
@@ -137,7 +138,7 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
   },
 }
 
-export const SEO_PAGES: SeoPage[] = [
+const SEO_PAGE_LIST: SeoPage[] = [
   {
     ...page(
       '/',
@@ -584,6 +585,14 @@ export const SEO_PAGES: SeoPage[] = [
     serviceType: 'AI calling agent',
   },
 ]
+
+// In-content figures (lib/pageFigures.ts) join each route's image sitemap list.
+export const SEO_PAGES: SeoPage[] = SEO_PAGE_LIST.map((entry) => {
+  const figures = PAGE_FIGURES[entry.path]
+  if (!figures?.length) return entry
+  const images = [...(entry.images ?? []), ...figures.map((figure) => `${SEO_ORIGIN}${figure.src}`)]
+  return { ...entry, images: [...new Set(images)] }
+})
 
 export const SEO_BY_PATH = new Map(SEO_PAGES.map((entry) => [entry.path, entry]))
 
