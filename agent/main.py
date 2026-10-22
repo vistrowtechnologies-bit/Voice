@@ -3971,8 +3971,10 @@ class RealEstateAgent(Agent):
             # Call 1463 (22 Oct 2026, GPT-5.4 mini): a website enquiry from a
             # real-estate caller got "कोई खास city?" and "leads या listings?",
             # i.e. the caller was qualified as a buyer in THEIR industry.
-            "it. When the caller names their own industry, keep asking about what they need from "
-            "this business, not about their customers, stock or market.\n"
+            # Call 1466: "keep asking" read as "ask more" (type of website x2,
+            # pages x2) - the rule is about the topic, not the number.
+            "it. When the caller names their own industry, your questions stay on what they need "
+            "from this business, not on their customers, stock or market.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "
@@ -4172,7 +4174,9 @@ class RealEstateAgent(Agent):
             "(or send_brochure noted it for the team — then say only what it tells you to).\n"
             "2. Never ask again for anything listed under what you already know. If the caller "
             "says they already told you, they are right — acknowledge once, briefly, and move "
-            "on to something you genuinely do not know.\n"
+            "on to something you genuinely do not know. If they question or brush off one of "
+            "your questions (\"ये किस type का question है?\", \"ठीक है भाई\"), never ask it again; "
+            "move on.\n"
             "3. If a message is garbled or makes no sense in context, say in one short line "
             "that you did not catch it and ask them to repeat it. Never guess at its meaning, "
             "and never cover for it by asking a different question instead.\n"
