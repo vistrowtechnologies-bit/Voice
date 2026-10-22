@@ -1859,16 +1859,26 @@ function FollowUpEditor({
           checked={value.nurtureEnabled}
           onChange={(v) => patch({ nurtureEnabled: v })}
           label="Nurture call for interested leads"
-          hint="One follow-up call at 11:00 when a call ended interested with no visit booked and no call-back asked for."
+          hint="One follow-up call, at the time below, when a call ended interested with no visit booked and no call-back asked for."
         />
         {value.nurtureEnabled && (
-          <div className="sm:w-40">
-            <NumberField
-              label="Days after the call"
-              value={value.nurtureDays}
-              onChange={(n) => patch({ nurtureDays: bounded(n, 1, FOLLOW_UP_MAX_NURTURE_DAYS) })}
-              inputCls={inputCls}
-            />
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="sm:w-40">
+              <NumberField
+                label="Days after the call"
+                value={value.nurtureDays}
+                onChange={(n) => patch({ nurtureDays: bounded(n, 1, FOLLOW_UP_MAX_NURTURE_DAYS) })}
+                inputCls={inputCls}
+              />
+            </div>
+            <Field label="Call time">
+              <input
+                type="time"
+                value={value.nurtureTime ?? FOLLOW_UP_DEFAULTS.nurtureTime}
+                onChange={(e) => patch({ nurtureTime: e.target.value || FOLLOW_UP_DEFAULTS.nurtureTime })}
+                className={`${inputCls} sm:w-40`}
+              />
+            </Field>
           </div>
         )}
       </div>

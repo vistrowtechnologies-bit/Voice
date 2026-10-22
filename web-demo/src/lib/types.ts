@@ -340,6 +340,8 @@ export interface FollowUpPolicy {
   visitReminderTime: string
   nurtureEnabled: boolean
   nurtureDays: number
+  /** 'HH:MM' account time of the nurture call (server and agent: PR #246). */
+  nurtureTime: string
   /** Wait before the first automatic call to a new lead: 0, 30, 60, 120,
    * 300 or 600 seconds. A "Call now" request is never delayed. */
   firstCallDelaySeconds: number
@@ -365,6 +367,7 @@ export const FOLLOW_UP_DEFAULTS: FollowUpPolicy = {
   visitReminderTime: '11:00',
   nurtureEnabled: true,
   nurtureDays: 3,
+  nurtureTime: '11:00',
   firstCallDelaySeconds: 0,
 }
 
