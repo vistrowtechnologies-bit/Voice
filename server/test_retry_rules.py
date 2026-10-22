@@ -105,7 +105,7 @@ class FollowUpPolicy(unittest.TestCase):
             self.assertEqual(retry_rules.follow_up_policy(empty), {
                 "maxAttempts": 3, "busyMinutes": 10, "switchedOffMinutes": 120, "noAnswerMinutes": 30,
                 "voicemailMinutes": 120, "callbackEnabled": True, "visitReminderEnabled": True,
-                "visitReminderTime": "11:00", "nurtureEnabled": True, "nurtureDays": 3,
+                "visitReminderTime": "11:00", "nurtureEnabled": True, "nurtureDays": 3, "nurtureTime": "11:00",
                 "firstCallDelaySeconds": 0,
             }, empty)
 
@@ -129,6 +129,11 @@ class FollowUpPolicy(unittest.TestCase):
     def test_bad_reminder_time_falls_back(self):
         for bad in ("25:00", "11:60", "eleven", "", None, "11"):
             self.assertEqual(retry_rules.follow_up_policy({"visitReminderTime": bad})["visitReminderTime"], "11:00", bad)
+
+    def test_nurture_time_is_read_and_bad_values_fall_back(self):
+        self.assertEqual(retry_rules.follow_up_policy({"nurtureTime": "16:30"})["nurtureTime"], "16:30")
+        for bad in ("25:00", "eleven", "", None):
+            self.assertEqual(retry_rules.follow_up_policy({"nurtureTime": bad})["nurtureTime"], "11:00", bad)
 
     def test_each_outcome_waits_its_own_gap_under_one_budget(self):
         policy = retry_rules.follow_up_retry_policy({"maxAttempts": 2, "busyMinutes": 7})

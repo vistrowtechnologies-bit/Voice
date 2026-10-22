@@ -132,6 +132,7 @@ FOLLOW_UP_DEFAULTS = {
     "visitReminderTime": "11:00",
     "nurtureEnabled": True,
     "nurtureDays": 3,
+    "nurtureTime": "11:00",
     # How long a brand-new lead waits before its first automatic call.
     # 0 = as soon as it arrives. A "Call now" request is never delayed.
     "firstCallDelaySeconds": 0,
@@ -178,6 +179,7 @@ def follow_up_policy(raw) -> dict:
         if isinstance(stored.get(key), bool):
             out[key] = stored[key]
     out["visitReminderTime"] = _hhmm(stored.get("visitReminderTime"), out["visitReminderTime"])
+    out["nurtureTime"] = _hhmm(stored.get("nurtureTime"), out["nurtureTime"])
     delay = stored.get("firstCallDelaySeconds")
     if isinstance(delay, int) and not isinstance(delay, bool) and delay in FIRST_CALL_DELAY_CHOICES:
         out["firstCallDelaySeconds"] = delay
