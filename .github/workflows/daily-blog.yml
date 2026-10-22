@@ -8,7 +8,11 @@ name: Daily blog
 
 on:
   schedule:
-    - cron: '30 2 * * *' # 08:00 IST
+    # GitHub delays or drops scheduled runs at busy times (22 Oct 2026: the
+    # 08:00 run never started), so a second run retries later. It is safe:
+    # once the day's post is out, nothing is queued and the run ends.
+    - cron: '17 2 * * *' # 07:47 IST
+    - cron: '47 4 * * *' # 10:17 IST retry
   workflow_dispatch:
     inputs:
       date:
@@ -22,6 +26,7 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: read
 
 concurrency:
   group: daily-blog
@@ -47,10 +52,18 @@ jobs:
 
       - name: Publish the queued post
         id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           DATE="${{ inputs.date }}"
           [ -n "$DATE" ] || DATE=$(TZ=Asia/Kolkata date +%F)
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          # The laptop task may be publishing the same post through a PR.
+          if [ -n "$(gh pr list --state open --search "Blog $DATE in:title" --json number --jq '.[].number')" ]; then
+            echo "::notice::An open PR is already publishing the post for $DATE"
+            echo "queued=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           npx tsx scripts/check-blog-queue.mts
           set +e
           npx tsx scripts/publish-queued-post.mts --date "$DATE" | tee /tmp/publish.log
