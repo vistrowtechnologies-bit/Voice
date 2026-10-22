@@ -15,6 +15,7 @@ export const ICON3D_NAMES: ReadonlySet<string> = new Set([
   'science', 'send', 'shield', 'shopping_bag', 'smart_toy', 'speed', 'stethoscope', 'support', 'support_agent',
   'swap_calls', 'sync', 'sync_alt', 'table_chart', 'task_alt', 'timer', 'translate', 'tune', 'update', 'upload_file',
   'verified', 'verified_user', 'volunteer_activism', 'webhook', 'widgets', 'work', 'workspace_premium',
+  'dark_mode', 'help', 'link', 'mic', 'numbers', 'search', 'swap_horiz', 'visibility_off',
 ])
 
 /**
