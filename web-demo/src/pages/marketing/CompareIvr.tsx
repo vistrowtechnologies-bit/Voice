@@ -3,8 +3,19 @@ import { Icon } from '../../components/Icon'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
-import { PageFigures } from '../../components/PageFigure'
+import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
+import {
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { LinkCards, StepRail, TableCard } from './premium-w3/kit'
+import { W3_FOUR_WAYS, W3_HANDOFF } from './premium-w3/visuals'
 
 // Deliberately compares against the incumbent *category* - a phone menu or
 // a human call desk - not against named competitors. That's both the
@@ -166,7 +177,41 @@ const FAQ_JSONLD = {
   })),
 }
 
+const WHEN_ICONS = ['dialpad', 'support_agent', 'chat', 'person']
+
+const READING = [
+  { to: '/resources/blog/when-to-use-voice-ai-instead-of-ivr', title: 'AI voice agent or IVR: how to choose the call experience', body: 'Which calls still suit a keypad menu, and how to test a conversational path against it.' },
+  { to: '/resources/blog/what-is-ivr-interactive-voice-response', title: 'What IVR is and how it works', body: 'Menus, keypad tones and call flows explained from the start.' },
+  { to: '/resources/blog/ivr-in-banking-and-finance', title: 'IVR in banking and finance', body: 'What should stay on a verified keypad flow and what a voice agent can take.' },
+  { to: '/resources/blog/how-to-choose-an-ivr-service-provider-india', title: 'How to choose an IVR service provider in India', body: 'Questions about channels, languages, numbers and pricing to ask before you sign.' },
+  { to: '/help/inbound/route-inbound-calls', title: 'Routing inbound calls to an agent', body: 'Set hours, active days and a call limit for the line you pilot on.' },
+  { to: '/ai-receptionist', title: 'AI receptionist for phone and website calls', body: 'The front-desk version of the same idea, with bookings and transfers.' },
+]
+
+const PERSON_WINS = [
+  {
+    icon: 'support_agent',
+    title: 'Emotionally difficult calls',
+    body: 'Complaints, bad news, or a distressed caller deserve a person. Artha is configured to hand these off quickly rather than push through a script.',
+  },
+  {
+    icon: 'workspace_premium',
+    title: 'High-value negotiation',
+    body: 'Closing a large deal is a human job. Artha qualifies and books the meeting; your team takes it from there with the full transcript in hand.',
+  },
+  {
+    icon: 'help',
+    title: 'Genuinely novel problems',
+    body: 'If the answer isn’t in your knowledge base, we’d rather the agent say so and escalate than invent something confident and wrong.',
+  },
+]
+
+// Composed from the showcase kit: split hero with the four-way comparison,
+// the AI IVR link, the terms as a bento, the table, which-fits cards, the
+// violet trust band, the switch as a timeline, where a person still wins
+// beside the handoff visual, further reading, objections, FAQ.
 export function CompareIvr() {
+  const { heroCtaRef, endRef } = useStickyRefs()
 
   return (
     <MarketingLayout>
@@ -177,24 +222,19 @@ export function CompareIvr() {
         jsonLd={FAQ_JSONLD}
       />
 
-      <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-20">
-        <SectionEyebrow>Comparison</SectionEyebrow>
-        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl">
-          AI voice agent vs traditional IVR, chatbot and receptionist.
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Nobody has ever enjoyed pressing 1 for sales. Most businesses answer calls with a phone menu, a small
-          team, or both. Here is IVR vs AI voice agent in plain terms: how the agent actually differs, including where it doesn’t win.
-        </p>
-        <div className="mt-8 flex justify-center">
-          <TalkToArthaButton />
-        </div>
-      </section>
+      <SplitHero
+        eyebrow="Comparison"
+        title="AI voice agent vs traditional IVR, chatbot and receptionist."
+        subhead="Nobody has ever enjoyed pressing 1 for sales. Most businesses answer calls with a phone menu, a small team, or both. Here is IVR vs AI voice agent in plain terms: how the agent actually differs, including where it doesn’t win."
+        visual={W3_FOUR_WAYS}
+        placement="vs_ivr_hero"
+        ctaRef={heroCtaRef}
+      />
 
       <section className="mx-auto max-w-7xl px-5 pb-10 md:px-8">
         <Link
           to="/ai-ivr"
-          className="group flex flex-col gap-2 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/[0.10] to-surface p-6 transition-colors hover:border-primary sm:flex-row sm:items-center sm:justify-between"
+          className="vv-lift group flex flex-col gap-2 rounded-3xl border border-primary/25 bg-gradient-to-r from-primary/[0.10] to-surface p-6 transition-colors hover:border-primary sm:flex-row sm:items-center sm:justify-between"
         >
           <span>
             <span className="block font-display text-lg font-semibold text-text">Looking for an AI IVR?</span>
@@ -209,29 +249,32 @@ export function CompareIvr() {
         </Link>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>The terms</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">IVR, IVA, conversational AI, voice agent: what each one means.</h2>
-        </div>
-        <dl className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {TERMS.map((item) => (
-            <div key={item.term} className="rounded-2xl border border-border bg-surface p-6">
-              <dt className="font-display text-base font-semibold">{item.term}</dt>
-              <dd className="mt-2 text-sm leading-relaxed text-text-muted">{item.definition}</dd>
-            </div>
-          ))}
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
+        <Reveal className="mb-10">
+          <SectionHead eyebrow="The terms" title="IVR, IVA, conversational AI, voice agent: what each one means." />
+        </Reveal>
+        {/* A bento: the agent definition (what this page is about) is the violet tile. */}
+        <dl className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+          {TERMS.map((item, i) => {
+            const lead = item.term === 'AI voice agent'
+            return (
+              <Reveal key={item.term} delayMs={(i % 3) * 60} className={`h-full ${i < 3 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+                <div className={lead ? 'bento-hero h-full rounded-3xl p-7' : 'vv-lift h-full rounded-3xl border border-border bg-surface p-6'}>
+                  <dt className={`font-display text-base font-semibold ${lead ? 'text-lg text-white' : ''}`}>{item.term}</dt>
+                  <dd className={`mt-2 text-sm leading-relaxed ${lead ? 'text-white/85' : 'text-text-muted'}`}>{item.definition}</dd>
+                </div>
+              </Reveal>
+            )
+          })}
         </dl>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-10 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Side by side</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Menu IVR vs AI voice agent vs chatbot vs receptionist.</h2>
-        </div>
-        <PageFigures route="/vs-ivr" after="Menu IVR vs AI voice agent vs chatbot vs receptionist." className="mb-8" />
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
+        <Reveal className="mb-10">
+          <SectionHead eyebrow="Side by side" title="Menu IVR vs AI voice agent vs chatbot vs receptionist." />
+        </Reveal>
+        <TableCard minWidth="min-w-[860px]">
+          {/* Column order kept from the original page. */}
             <thead>
               <tr className="bg-surface-high">
                 <th scope="col" className="px-5 py-4 font-display text-sm font-semibold">
@@ -240,7 +283,7 @@ export function CompareIvr() {
                 <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-text-muted">
                   Traditional IVR
                 </th>
-                <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-primary">
+                <th scope="col" className="bg-primary/[0.08] px-5 py-4 font-display text-sm font-semibold text-primary">
                   AI voice agent / AI IVR (Vistrow Voice)
                 </th>
                 <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-text-muted">
@@ -253,140 +296,110 @@ export function CompareIvr() {
             </thead>
             <tbody>
               {ROWS.map((row) => (
-                <tr key={row.dimension} className="border-t border-border bg-surface">
-                  <th scope="row" className="px-5 py-4 font-semibold text-text">{row.dimension}</th>
-                  <td className="px-5 py-4 text-text-muted">{row.ivr}</td>
-                  <td className="px-5 py-4">
+                <tr key={row.dimension} className="border-t border-border">
+                  <th scope="row" className="px-5 py-4 align-top font-semibold text-text">{row.dimension}</th>
+                  <td className="px-5 py-4 align-top text-text-muted">{row.ivr}</td>
+                  <td className="bg-primary/[0.04] px-5 py-4 align-top">
                     <span className="flex items-start gap-2 text-text">
                       <Icon name="check_circle" className="mt-0.5 flex-shrink-0 text-[16px] text-cyan" />
                       {row.agent}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-text-muted">{row.chatbot}</td>
-                  <td className="px-5 py-4 text-text-muted">{row.human}</td>
+                  <td className="px-5 py-4 align-top text-text-muted">{row.chatbot}</td>
+                  <td className="px-5 py-4 align-top text-text-muted">{row.human}</td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </TableCard>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Which is better</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">It depends on the calls you get.</h2>
-        </div>
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
+        <Reveal className="mb-10">
+          <SectionHead eyebrow="Which is better" title="It depends on the calls you get." />
+        </Reveal>
         <div className="grid gap-4 sm:grid-cols-2">
-          {WHEN_BETTER.map((item) => (
-            <div key={item.title} className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-base font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-            </div>
+          {WHEN_BETTER.map((item, i) => (
+            <Reveal key={item.title} delayMs={(i % 2) * 70} className="h-full">
+              <div
+                className={`vv-lift flex h-full gap-5 rounded-3xl border p-6 ${
+                  i === 1 ? 'border-primary/40 bg-gradient-to-br from-primary/[0.14] via-surface to-surface' : 'border-border bg-surface'
+                }`}
+              >
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                    i === 1 ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
+                  }`}
+                >
+                  <Icon name={WHEN_ICONS[i % WHEN_ICONS.length]} className="text-[22px]" />
+                </span>
+                <div>
+                  <h3 className="font-display text-lg font-semibold">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+                </div>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-        <div className="rounded-3xl border border-border bg-surface p-7 sm:p-9">
-          <SectionEyebrow>How to replace an IVR with AI</SectionEyebrow>
-          <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Move one line at a time.</h2>
-          <ol className="mt-6 space-y-3">
-            {REPLACE_STEPS.map((step, i) => (
-              <li key={step} className="flex gap-3 text-sm leading-relaxed text-text-muted">
-                <span className="font-display text-base font-bold text-primary">{i + 1}</span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ol>
+      <TrustBand placement="vs_ivr_trust_band" />
+
+      <StepRail
+        eyebrow="How to replace an IVR with AI"
+        title="Move one line at a time."
+        steps={REPLACE_STEPS.map((step) => ({ body: step, icon: 'task_alt' }))}
+        footer={
           <Link
             to="/ai-ivr"
-            className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
+            className="mt-10 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
           >
             The full AI IVR setup, with languages and pricing
             <Icon name="arrow_forward" className="text-[16px]" />
           </Link>
-        </div>
-      </section>
+        }
+      />
 
       {/* Where a human still wins - credibility comes from admitting this */}
-      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-        <div className="rounded-3xl border border-amber/40 bg-amber/[0.06] p-8 sm:p-10">
-          <SectionEyebrow>Where a person still wins</SectionEyebrow>
-          <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">
-            An AI agent isn’t the right answer for every call.
-          </h2>
-          <div className="mt-6 grid gap-6 md:grid-cols-3">
-            <div>
-              <h3 className="font-display text-base font-semibold">Emotionally difficult calls</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                Complaints, bad news, or a distressed caller deserve a person. Artha is configured to
-                hand these off quickly rather than push through a script.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-display text-base font-semibold">High-value negotiation</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                Closing a large deal is a human job. Artha qualifies and books the meeting; your team
-                takes it from there with the full transcript in hand.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-display text-base font-semibold">Genuinely novel problems</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                If the answer isn’t in your knowledge base, we’d rather the agent say so and escalate
-                than invent something confident and wrong.
-              </p>
-            </div>
-          </div>
-        </div>
+      <section className="mx-auto max-w-7xl px-5 md:px-8">
+        <SplitRow figure={W3_HANDOFF}>
+          <Reveal>
+            <SectionEyebrow>Where a person still wins</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance">
+              An AI agent isn’t the right answer for every call.
+            </h2>
+          </Reveal>
+          <ul className="mt-8 grid gap-3">
+            {PERSON_WINS.map((item, i) => (
+              <li key={item.title}>
+                <Reveal delayMs={i * 70} className="flex gap-4 rounded-2xl border border-amber/40 bg-amber/[0.06] p-5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber/15 text-amber">
+                    <Icon name={item.icon} className="text-[20px]" />
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-semibold">{item.title}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-text-muted">{item.body}</p>
+                  </div>
+                </Reveal>
+              </li>
+            ))}
+          </ul>
+        </SplitRow>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-        <SectionEyebrow>Further reading</SectionEyebrow>
-        <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Guides for planning the switch</h2>
-        <ul className="mt-5 grid gap-3 text-sm leading-relaxed text-text-muted md:grid-cols-2">
-          <li>
-            <Link to="/resources/blog/when-to-use-voice-ai-instead-of-ivr" className="font-semibold text-primary hover:underline">
-              AI voice agent or IVR: how to choose the call experience
-            </Link>{' '}
-            - which calls still suit a keypad menu, and how to test a conversational path against it.
-          </li>
-          <li>
-            <Link to="/resources/blog/what-is-ivr-interactive-voice-response" className="font-semibold text-primary hover:underline">
-              What IVR is and how it works
-            </Link>{' '}
-            - menus, keypad tones and call flows explained from the start.
-          </li>
-          <li>
-            <Link to="/resources/blog/ivr-in-banking-and-finance" className="font-semibold text-primary hover:underline">
-              IVR in banking and finance
-            </Link>{' '}
-            - what should stay on a verified keypad flow and what a voice agent can take.
-          </li>
-          <li>
-            <Link to="/resources/blog/how-to-choose-an-ivr-service-provider-india" className="font-semibold text-primary hover:underline">
-              How to choose an IVR service provider in India
-            </Link>{' '}
-            - questions about channels, languages, numbers and pricing to ask before you sign.
-          </li>
-          <li>
-            <Link to="/help/inbound/route-inbound-calls" className="font-semibold text-primary hover:underline">
-              Routing inbound calls to an agent
-            </Link>{' '}
-            - set hours, active days and a call limit for the line you pilot on.
-          </li>
-          <li>
-            <Link to="/ai-receptionist" className="font-semibold text-primary hover:underline">
-              AI receptionist for phone and website calls
-            </Link>{' '}
-            - the front-desk version of the same idea, with bookings and transfers.
-          </li>
-        </ul>
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
+        <Reveal className="mb-10">
+          <SectionHead eyebrow="Further reading" title="Guides for planning the switch" />
+        </Reveal>
+        <LinkCards items={READING} />
       </section>
+
+      <ObjectionCards route="/vs-ivr" placement="vs_ivr_objections" />
 
       <FaqSection items={FAQ} />
 
+      <div ref={endRef} />
       <CTABand />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

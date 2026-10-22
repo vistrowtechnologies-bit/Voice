@@ -3,9 +3,23 @@ import { Icon } from '../../components/Icon'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
-import { PageFigures } from '../../components/PageFigure'
-import { LANGUAGES } from '../../lib/marketingContent'
+import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
+import { HERO_STATS, LANGUAGES } from '../../lib/marketingContent'
+import {
+  BookDemoLink,
+  FeatureCards,
+  HeroFacts,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { ActionBand, BadgeTimeline, CheckPanel, LINK_CLASS as linkClass, MediaCard, SampleCall, Section } from './premium-w2/W2Kit'
+import { W2_VISUALS } from './premium-w2/visuals'
 
 // Landing page for the "AI receptionist" query cluster. Every capability here
 // is checked against the product: transfer is phone-only (agent/tools.py
@@ -13,6 +27,11 @@ import { LANGUAGES } from '../../lib/marketingContent'
 // calendar, routes with a blank call window answer at any time, and the
 // integrations are Zoho CRM, ArthaLeads, Slack, Google Sheets and webhook.
 // No WhatsApp or Facebook claims, no prices: link to /pricing instead.
+// Layout: the premium kit (components/showcase/) plus the wave 2 pieces in
+// ./premium-w2/.
+
+const ROUTE = '/ai-receptionist'
+const V = W2_VISUALS[ROUTE]
 
 const CHANNELS = [
   {
@@ -21,6 +40,7 @@ const CHANNELS = [
     body: 'Connect a business number and route it to the agent. It picks up with your welcome line, answers from your knowledge base, books a slot or takes a message, and can transfer the call to a colleague when a person is needed.',
     to: '/product/inbound',
     link: 'Inbound call answering',
+    figure: V.phone,
   },
   {
     icon: 'widgets',
@@ -28,6 +48,7 @@ const CHANNELS = [
     body: 'Add the call button to your site and visitors talk to the same agent in their browser, with no number to dial. Each site keeps its own call history, including the page a conversation started from.',
     to: '/product/widget',
     link: 'Website call widget',
+    figure: V.website,
   },
 ]
 
@@ -154,9 +175,8 @@ const FAQ_JSONLD = {
   })),
 }
 
-const linkClass = 'font-semibold text-primary underline-offset-4 hover:underline'
-
 export function AiReceptionist() {
+  const { heroCtaRef, endRef } = useStickyRefs()
   return (
     <MarketingLayout>
       <Seo
@@ -166,250 +186,207 @@ export function AiReceptionist() {
         jsonLd={FAQ_JSONLD}
       />
 
-      <PageHero
+      <SplitHero
         eyebrow="AI receptionist"
         title="AI receptionist for Indian businesses."
         subhead="A voice agent that answers every call on your number and your website, books appointments into your calendar, and hands the caller to your team when a person is needed, in the language they speak."
+        visual={V.hero}
+        placement="ai_receptionist_hero"
+        trust={<HeroFacts facts={HERO_STATS} />}
+        ctaRef={heroCtaRef}
       />
 
-      <section className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <div className="grid gap-6 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.10] via-surface to-surface p-7 sm:p-9 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center">
-          <div>
-            <SectionEyebrow>What is an AI receptionist?</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">The front desk, on every call.</h2>
-            <p className="mt-4 leading-relaxed text-text-muted">
+      <Section className="py-12 lg:py-14">
+        <SplitRow
+          className=""
+          aside={
+            <CheckPanel
+              tone="violet"
+              items={[
+                'Answers at any hour your route allows, including nights and holidays',
+                '130+ languages, including Hindi, English and 9 more Indian languages, switching when the caller does',
+                'Books into the built-in Appointments calendar',
+                'Transcript, summary and captured details for every call',
+              ]}
+            />
+          }
+        >
+          <Reveal>
+            <SectionHead eyebrow="What is an AI receptionist?" title="The front desk, on every call." />
+            <p className="mt-5 leading-relaxed text-text-muted">
               An AI receptionist answers your business calls the way a good front-desk person does. It greets the caller,
               works out what they need, answers from the information you have approved, books an appointment, takes a
               message, or connects them to the right colleague. Unlike a recorded{' '}
               <Link to="/ai-ivr" className={linkClass}>press-1 phone menu</Link>, the caller simply talks. Unlike a
               voicemail box, every call ends with a next step and a written record.
             </p>
-          </div>
-          <ul className="space-y-3 text-sm leading-relaxed text-text-muted">
-            {[
-              'Answers at any hour your route allows, including nights and holidays',
-              '130+ languages, including Hindi, English and 9 more Indian languages, switching when the caller does',
-              'Books into the built-in Appointments calendar',
-              'Transcript, summary and captured details for every call',
-            ].map((item) => (
-              <li key={item} className="flex gap-2">
-                <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-primary" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+          </Reveal>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Where it answers</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">One agent for the phone and the website.</h2>
-          <p className="mt-3 text-text-muted">
-            Build the receptionist once, with its voice, greeting, knowledge and rules, then use it on your phone line,
-            your website, or both.
-          </p>
-        </div>
+      <Section>
+        <Reveal>
+          <SectionHead
+            eyebrow="Where it answers"
+            title="One agent for the phone and the website."
+            intro="Build the receptionist once, with its voice, greeting, knowledge and rules, then use it on your phone line, your website, or both."
+            className="mb-10"
+          />
+        </Reveal>
         <div className="grid gap-5 lg:grid-cols-2">
-          {CHANNELS.map((item) => (
-            <div key={item.title} className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={item.icon} className="text-[22px]" />
+          {CHANNELS.map((item, i) => (
+            <Reveal key={item.title} delayMs={i * 80} className="h-full">
+              <MediaCard figure={item.figure} icon={item.icon} title={item.title} body={item.body} to={item.to} link={item.link} />
+            </Reveal>
+          ))}
+        </div>
+      </Section>
+
+      <Section>
+        <Reveal>
+          <SectionHead
+            eyebrow="A day at the front desk"
+            title="Four calls, one receptionist."
+            intro="A sample day at a dental clinic, written to show how the agent handles different kinds of call. The clinic, times and caller are illustrative, not a customer account."
+            className="mb-12"
+          />
+        </Reveal>
+        <BadgeTimeline steps={DAY.map((step) => ({ icon: step.icon, badge: step.time, title: step.title, body: step.body }))} />
+
+        <SplitRow figure={V.day} className="pt-14">
+          <Reveal>
+            <SampleCall
+              title="Sample conversation: the 11:30 booking, in Hinglish."
+              intro="A short written sample to show the style of call. It is not a recording of a customer call."
+              badge="Written sample"
+              turns={SAMPLE.map((turn) => ({ agent: turn.speaker === 'Agent', label: turn.speaker, text: turn.line }))}
+              outcomeIcon="event_available"
+              outcome="Outcome: the booking appears in Appointments with the caller’s name and number, and the call is saved with its transcript and summary."
+            />
+          </Reveal>
+        </SplitRow>
+      </Section>
+
+      <TrustBand placement="ai_receptionist_trust_band" />
+
+      <Section>
+        <SplitRow figure={V.handover} className="">
+          <Reveal>
+            <SectionHead eyebrow="Know its limits" title="What it handles, and when it hands over." />
+          </Reveal>
+          <div className="mt-8 grid gap-4">
+            <Reveal>
+              <CheckPanel title="Handles on its own" items={HANDLES} />
+            </Reveal>
+            <Reveal delayMs={80}>
+              <CheckPanel title="Hands to a person" items={HANDS_OVER} icon="swap_calls" tone="cyan">
+                <p className="mt-4 text-sm text-text-muted">
+                  Setup details are in the{' '}
+                  <Link to="/help/agents/agent-functions-and-transfer" className={linkClass}>
+                    functions and transfer guide
+                  </Link>
+                  .
+                </p>
+              </CheckPanel>
+            </Reveal>
+          </div>
+        </SplitRow>
+      </Section>
+
+      <Section>
+        <SplitRow figure={V.calendar} flip className="">
+          <div className="grid gap-10">
+            <Reveal>
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
+                <Icon name="calendar_month" className="text-[22px]" />
               </span>
-              <h3 className="mt-5 font-display text-xl font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-              <Link to={item.to} className={`mt-4 inline-flex items-center gap-1 text-sm ${linkClass}`}>
-                {item.link}
-                <Icon name="arrow_forward" className="text-[16px]" />
-              </Link>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>A day at the front desk</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Four calls, one receptionist.</h2>
-          <p className="mt-3 text-text-muted">
-            A sample day at a dental clinic, written to show how the agent handles different kinds of call. The clinic,
-            times and caller are illustrative, not a customer account.
-          </p>
-        </div>
-        <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {DAY.map((step) => (
-            <li key={step.time} className="rounded-2xl border border-border bg-surface p-7">
-              <div className="flex items-center justify-between">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                  <Icon name={step.icon} className="text-[22px]" />
+              <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Appointments, booked on the call.</h2>
+              <p className="mt-3 leading-relaxed text-text-muted">
+                The agent books into the Appointments calendar built into your dashboard. Set business hours for each day,
+                a slot length between 15 and 60 minutes, your timezone and any blackout dates under Settings, and it offers
+                only free slots inside them. It confirms a booking to the caller only after the booking has saved.
+              </p>
+              <p className="mt-3 text-sm text-text-muted">
+                More in{' '}
+                <Link to="/help/appointments/manage-appointments" className={linkClass}>
+                  bookings and availability
+                </Link>
+                .
+              </p>
+            </Reveal>
+            <Reveal delayMs={80}>
+              <div className="rounded-3xl border border-border bg-surface p-6 sm:p-7">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                  <Icon name="dark_mode" className="text-[22px]" />
                 </span>
-                <span className="font-display text-sm font-bold text-text-muted">{step.time}</span>
+                <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">After-hours answering.</h2>
+                <p className="mt-3 text-sm leading-relaxed text-text-muted">
+                  Each phone number is routed to an agent with its own timezone, call window, active days and concurrent-call
+                  limit. Leave the call window blank and the receptionist answers at any time, so late-evening and Sunday
+                  callers get an answer and a booked slot or callback request instead of a ringing phone.
+                </p>
+                <p className="mt-3 text-sm text-text-muted">
+                  See{' '}
+                  <Link to="/help/inbound/route-inbound-calls" className={linkClass}>
+                    route incoming calls to an agent
+                  </Link>
+                  .
+                </p>
               </div>
-              <h3 className="mt-5 font-display text-lg font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </li>
-          ))}
-        </ol>
-
-        <PageFigures route="/ai-receptionist" after="Four calls, one receptionist." className="mt-8" />
-
-        <figure className="mt-8 rounded-3xl border border-border bg-surface p-6 sm:p-8">
-          <figcaption>
-            <h3 className="font-display text-xl font-bold tracking-tight">Sample conversation: the 11:30 booking, in Hinglish.</h3>
-            <p className="mt-2 text-sm text-text-muted">
-              A short written sample to show the style of call. It is not a recording of a customer call.
-            </p>
-          </figcaption>
-          <ol className="mt-5 space-y-3">
-            {SAMPLE.map((turn, i) => (
-              <li
-                key={i}
-                className={`rounded-2xl border p-4 text-sm ${turn.speaker === 'Agent' ? 'border-primary/25 bg-primary/[0.06]' : 'border-border bg-surface-high/60'}`}
-              >
-                <span className="text-xs font-bold uppercase tracking-widest text-text-muted">{turn.speaker}</span>
-                <p className="mt-1 text-text">{turn.line}</p>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-4 flex items-start gap-2 text-sm text-text-muted">
-            <Icon name="event_available" className="mt-0.5 shrink-0 text-[16px] text-primary" />
-            <span>
-              Outcome: the booking appears in Appointments with the caller’s name and number, and the call is saved with
-              its transcript and summary.
-            </span>
-          </p>
-        </figure>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Know its limits</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What it handles, and when it hands over.</h2>
-        </div>
-        <div className="grid gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <h3 className="font-display text-xl font-semibold">Handles on its own</h3>
-            <ul className="mt-4 space-y-3 text-sm leading-relaxed text-text-muted">
-              {HANDLES.map((item) => (
-                <li key={item} className="flex gap-2">
-                  <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-primary" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
+            </Reveal>
           </div>
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <h3 className="font-display text-xl font-semibold">Hands to a person</h3>
-            <ul className="mt-4 space-y-3 text-sm leading-relaxed text-text-muted">
-              {HANDS_OVER.map((item) => (
-                <li key={item} className="flex gap-2">
-                  <Icon name="swap_calls" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 text-sm text-text-muted">
-              Setup details are in the{' '}
-              <Link to="/help/agents/agent-functions-and-transfer" className={linkClass}>
-                functions and transfer guide
-              </Link>
-              .
-            </p>
-          </div>
-        </div>
-      </section>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-              <Icon name="calendar_month" className="text-[22px]" />
-            </span>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Appointments, booked on the call.</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
-              The agent books into the Appointments calendar built into your dashboard. Set business hours for each day,
-              a slot length between 15 and 60 minutes, your timezone and any blackout dates under Settings, and it offers
-              only free slots inside them. It confirms a booking to the caller only after the booking has saved.
-            </p>
-            <p className="mt-3 text-sm text-text-muted">
-              More in{' '}
-              <Link to="/help/appointments/manage-appointments" className={linkClass}>
-                bookings and availability
-              </Link>
-              .
-            </p>
-            <PageFigures route="/ai-receptionist" after="Appointments, booked on the call." className="mt-6" />
-          </div>
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-              <Icon name="dark_mode" className="text-[22px]" />
-            </span>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">After-hours answering.</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
-              Each phone number is routed to an agent with its own timezone, call window, active days and concurrent-call
-              limit. Leave the call window blank and the receptionist answers at any time, so late-evening and Sunday
-              callers get an answer and a booked slot or callback request instead of a ringing phone.
-            </p>
-            <p className="mt-3 text-sm text-text-muted">
-              See{' '}
-              <Link to="/help/inbound/route-inbound-calls" className={linkClass}>
-                route incoming calls to an agent
-              </Link>
-              .
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-              <Icon name="translate" className="text-[22px]" />
-            </span>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Speaks the caller’s language.</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+      <Section>
+        <SplitRow figure={V.languages} className="">
+          <Reveal>
+            <SectionEyebrow>Languages</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Speaks the caller’s language.</h2>
+            <p className="mt-3 leading-relaxed text-text-muted">
               The receptionist opens in the language you choose and follows the caller if they switch, so nobody has to
               press a key to change language. It speaks English and these Indian languages:
             </p>
-            <ul className="mt-4 flex flex-wrap gap-2">
+            <ul className="mt-5 flex flex-wrap gap-2">
               {LANGUAGES.map((lang) => (
                 <li key={lang.slug}>
                   <Link
                     to={`/languages/${lang.slug}`}
-                    className="inline-block rounded-full border border-border px-3.5 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+                    className="inline-block rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
                   >
                     {lang.name} <span lang={lang.code}>{lang.native}</span>
                   </Link>
                 </li>
               ))}
             </ul>
-            <p className="mt-4 text-sm leading-relaxed text-text-muted">
+            <p className="mt-5 text-sm leading-relaxed text-text-muted">
               For callers in the south, see{' '}
-              <Link to="/languages/kannada" className="font-semibold text-primary underline-offset-4 hover:underline">
+              <Link to="/languages/kannada" className={linkClass}>
                 a Kannada receptionist for Bengaluru and Karnataka
               </Link>{' '}
               or{' '}
-              <Link to="/languages/telugu" className="font-semibold text-primary underline-offset-4 hover:underline">
+              <Link to="/languages/telugu" className={linkClass}>
                 a Telugu receptionist for Hyderabad and Andhra Pradesh
               </Link>
               ; both pages have short sample lines. Serving Hindi and Punjabi speakers in the UK, Canada or the
               Gulf? Read our guide to{' '}
-              <Link
-                to="/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english"
-                className="font-semibold text-primary underline-offset-4 hover:underline"
-              >
+              <Link to="/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english" className={linkClass}>
                 a multilingual AI receptionist for Hindi, Punjabi and English callers
               </Link>
               .
             </p>
-          </div>
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
+          </Reveal>
+        </SplitRow>
+      </Section>
+
+      <Section>
+        <SplitRow figure={V.record} className="">
+          <Reveal>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
               <Icon name="receipt_long" className="text-[22px]" />
             </span>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Every call leaves a record.</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Every call leaves a record.</h2>
+            <p className="mt-3 leading-relaxed text-text-muted">
               Each conversation is saved in Calls history with the full transcript, a summary, the fields you asked the
               agent to capture and, if recording is on, the audio. Leads can go to Zoho CRM, ArthaLeads, Slack, Google
               Sheets or any webhook as the call ends. You can require spoken consent at the start of a call and set how many
@@ -422,67 +399,51 @@ export function AiReceptionist() {
               </Link>
               .
             </p>
-          </div>
-        </div>
-      </section>
+          </Reveal>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Who uses one</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Front desks where a missed call is a missed customer.</h2>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          {INDUSTRIES.map((item) => (
-            <div key={item.title} className="rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={item.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-              <Link to={item.to} className={`mt-4 inline-flex items-center gap-1 text-sm ${linkClass}`}>
-                {item.link}
-                <Icon name="arrow_forward" className="text-[16px]" />
-              </Link>
-            </div>
-          ))}
-        </div>
-      </section>
+      <Section>
+        <Reveal>
+          <SectionHead eyebrow="Who uses one" title="Front desks where a missed call is a missed customer." className="mb-10" />
+        </Reveal>
+        <FeatureCards items={INDUSTRIES} />
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="flex flex-col gap-4 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/[0.08] to-surface p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-          <div>
-            <SectionEyebrow>Get started</SectionEyebrow>
-            <h2 className="mt-2 font-display text-xl font-bold tracking-tight">Build your receptionist, test it, then connect the number.</h2>
-            <p className="mt-1 max-w-2xl text-sm text-text-muted">
-              Write the greeting, add your FAQs and timings to the knowledge base, and run test calls in the browser
-              before any caller reaches it. Calls are billed by the minute of conversation; plans are on the{' '}
-              <Link to="/pricing" className={linkClass}>pricing page</Link>.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-3">
+      <ActionBand
+        eyebrow="Get started"
+        title="Build your receptionist, test it, then connect the number."
+        body={
+          <>
+            Write the greeting, add your FAQs and timings to the knowledge base, and run test calls in the browser
+            before any caller reaches it. Calls are billed by the minute of conversation; plans are on the{' '}
+            <Link to="/pricing" className={linkClass}>pricing page</Link>.
+          </>
+        }
+        actions={
+          <>
             <Link
               to="/signup"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-white hover:opacity-90"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white shadow-[0_14px_36px_-14px_rgba(147,51,234,0.8)] transition-transform hover:-translate-y-0.5"
             >
               Create your account
               <Icon name="arrow_forward" className="text-[16px]" />
             </Link>
-            <Link
-              to="/contact"
-              className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
-            >
-              Book a demo
-            </Link>
-          </div>
-        </div>
-      </section>
+            <BookDemoLink placement="ai_receptionist_get_started" />
+          </>
+        }
+      />
+
+      <ObjectionCards route={ROUTE} placement="ai_receptionist_objections" />
 
       <FaqSection items={FAQ} title="AI receptionist questions, answered." />
 
+      <div ref={endRef} />
       <CTABand
         title="Hear the receptionist before you build one."
         subtitle="Talk to Artha live in your browser, or book a walkthrough using your own front-desk calls."
       />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

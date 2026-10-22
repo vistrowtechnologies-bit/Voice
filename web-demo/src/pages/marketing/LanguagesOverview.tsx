@@ -4,10 +4,46 @@ import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
-import { Reveal } from '../../components/Reveal'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
-import { PageFigures } from '../../components/PageFigure'
+import { ScriptMarquee } from '../../components/BharatBits'
+import { pageFigures } from '../../lib/pageFigures'
 import { DEMO_GLOBAL_LOCALES, LANGUAGES } from '../../lib/marketingContent'
+import {
+  FeatureList,
+  ObjectionCards,
+  Reveal,
+  RiskReducers,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { W4_AGENT_LANGUAGE, W4_MIXED_TRANSCRIPT } from './premiumW4Visuals'
+
+const HERO_TITLE = 'Your customer shouldn’t have to switch languages to be understood.'
+const SETUP_HEADING = 'One agent, one default language, and it follows the caller.'
+const HARD_HEADING = 'Translation isn’t the same as speaking the language.'
+const SETUP_ICONS = ['language', 'swap_horiz', 'record_voice_over', 'numbers', 'receipt_long', 'devices']
+
+const WHY_HARD = [
+  {
+    icon: 'sync_alt',
+    title: 'Mid-sentence switching',
+    body: 'Real callers mix languages inside a single sentence. Artha follows the switch instead of forcing the caller to pick one and stay there.',
+  },
+  {
+    icon: 'record_voice_over',
+    title: 'Grammatical gender',
+    body: 'In Hindi, Marathi, Gujarati, and Punjabi, verbs agree with the speaker’s gender. Artha stays consistent with its own voice from the first line of the call to the last.',
+  },
+  {
+    icon: 'badge',
+    title: 'Numbers and names',
+    body: 'Amounts, dates, and Indian names are the first thing a generic voice model gets wrong. They’re the details that decide whether a call sounds local or imported.',
+  },
+]
 
 // Owner decision 21 Oct 2026: the site claims "more than 130 languages" (the
 // Studio voices' list, voice_catalog.GEMINI_38_FLASH_TTS_TOTAL_LANGUAGES) and
@@ -40,8 +76,16 @@ const LANGUAGE_SETUP = [
   },
 ]
 
+const inlineLink = 'font-semibold text-primary underline-offset-4 hover:underline'
 
+// Premium layout (showcase kit): split hero with the languages map, the
+// try-a-language studio, the language cards, how language works beside the
+// agent page, the violet trust band, why it is hard beside a mixed-language
+// transcript, objections, then the CTA band.
 export function LanguagesOverview() {
+  const { heroCtaRef, endRef } = useStickyRefs()
+  const heroVisual = pageFigures('/languages', HERO_TITLE)[0]
+
   return (
     <MarketingLayout>
       <Seo
@@ -50,49 +94,59 @@ export function LanguagesOverview() {
         path="/languages"
       />
 
-      <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-20">
-        <SectionEyebrow>Languages</SectionEyebrow>
-        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl">
-          Your customer shouldn’t have to switch languages to be understood.
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Artha speaks more than 130 languages, including 10 Indian languages and English, and switches mid-call
-          when the caller does - including the everyday mixed speech most people actually use on the phone, on
-          phone calls and website calls.
-        </p>
-        <p className="mx-auto mt-4 max-w-xl text-sm text-text-muted">
-          Each Indian language has its own page with a sample conversation and regional notes, for example{' '}
-          <Link to="/languages/kannada" className="font-semibold text-primary hover:underline">
-            Kannada for Bengaluru and Karnataka
-          </Link>{' '}
-          and{' '}
-          <Link to="/languages/telugu" className="font-semibold text-primary hover:underline">
-            Telugu for Hyderabad, Telangana and Andhra Pradesh
-          </Link>
-          .
-        </p>
-      </section>
+      <SplitHero
+        eyebrow="Languages"
+        title={HERO_TITLE}
+        subhead="Artha speaks more than 130 languages, including 10 Indian languages and English, and switches mid-call when the caller does - including the everyday mixed speech most people actually use on the phone, on phone calls and website calls."
+        visual={heroVisual}
+        placement="languages_hero"
+        ctaRef={heroCtaRef}
+        trust={
+          <>
+            <RiskReducers className="mt-5" />
+            <p className="mt-5 max-w-xl border-t border-border pt-5 text-sm text-text-muted">
+              Each Indian language has its own page with a sample conversation and regional notes, for example{' '}
+              <Link to="/languages/kannada" className={inlineLink}>
+                Kannada for Bengaluru and Karnataka
+              </Link>{' '}
+              and{' '}
+              <Link to="/languages/telugu" className={inlineLink}>
+                Telugu for Hyderabad, Telangana and Andhra Pradesh
+              </Link>
+              .
+            </p>
+          </>
+        }
+      />
 
-      <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
-        <PageFigures route="/languages" after="Your customer shouldn’t have to switch languages to be understood." className="" />
-      </section>
+      <ScriptMarquee />
 
       <TryALanguage />
 
-      <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
+      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8 lg:pb-16">
+        <Reveal>
+          <SectionHead
+            eyebrow="Indian languages"
+            title="Ten Indian languages, each with its own page."
+            intro="Open a language to read a sample call in its own script and hear the agent switch with the caller."
+            className="mb-10"
+          />
+        </Reveal>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {LANGUAGES.map((lang, i) => (
             <Reveal key={lang.slug} delayMs={(i % 3) * 70} className="h-full">
               <Link
                 to={`/languages/${lang.slug}`}
-                className="group flex h-full flex-col rounded-2xl border border-border bg-surface p-6 transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-[0_12px_40px_-16px_rgba(168,85,247,0.45)]"
+                className={`vv-lift group flex h-full flex-col rounded-3xl border p-6 ${
+                  i === 0 ? 'border-primary/40 bg-gradient-to-br from-primary/[0.14] via-surface to-surface' : 'border-border bg-surface'
+                }`}
               >
-                <p className="font-display text-3xl font-bold leading-none text-primary">
+                <p lang={lang.code} className="font-display text-3xl font-bold leading-none text-primary">
                   {lang.native}
                 </p>
                 {/* The greeting is the point of the product - show it, don't
                     just name the language. */}
-                <p className="mt-2 text-sm text-text-muted">{lang.greeting}</p>
+                <p lang={lang.code} className="mt-2 text-sm text-text-muted">{lang.greeting}</p>
                 <h2 className="mt-4 flex items-center gap-1 font-display text-lg font-semibold">
                   {lang.name}
                   <Icon
@@ -108,81 +162,62 @@ export function LanguagesOverview() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
-        <SectionEyebrow>How language works on an agent</SectionEyebrow>
-        <h2 className="mt-4 max-w-2xl font-display text-2xl font-bold sm:text-3xl">
-          One agent, one default language, and it follows the caller.
-        </h2>
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          {LANGUAGE_SETUP.map((item) => (
-            <div key={item.title} className="rounded-2xl border border-border bg-surface p-6">
-              <h3 className="font-display text-base font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-8 max-w-3xl text-sm leading-relaxed text-text-muted">
-          Where to go next: the{' '}
-          <Link to="/product/agents" className="font-semibold text-primary hover:underline">
-            voice agent builder
-          </Link>{' '}
-          is where the default language and voice are set; the{' '}
-          <Link to="/help/voices/choose-voices" className="font-semibold text-primary hover:underline">
-            guide to choosing voices
-          </Link>{' '}
-          explains the voice tiers; and the sample transcripts show real flows, such as a{' '}
-          <Link to="/demo-calls/marathi-site-visit-booking" className="font-semibold text-primary hover:underline">
-            Marathi site-visit booking
-          </Link>{' '}
-          and a{' '}
-          <Link to="/demo-calls/telugu-website-widget-call" className="font-semibold text-primary hover:underline">
-            Telugu website widget call
-          </Link>
-          . If you are replacing a keypad menu, the{' '}
-          <Link to="/ai-ivr" className="font-semibold text-primary hover:underline">
-            AI IVR page
-          </Link>{' '}
-          covers how a multilingual agent answers your existing number.
-        </p>
-        <p className="mt-4 max-w-3xl text-xs leading-relaxed text-text-muted">
-          The live demo above can also open in some languages outside this list. Those run on voices we are
-          still testing and are not available on customer agents yet.
-        </p>
+      <div className="bg-surface-high/40">
+        <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+          <SplitRow figure={W4_AGENT_LANGUAGE(SETUP_HEADING)} className="">
+            <Reveal>
+              <SectionHead eyebrow="How language works on an agent" title={SETUP_HEADING} />
+            </Reveal>
+            <FeatureList items={LANGUAGE_SETUP.map((item, i) => ({ ...item, icon: SETUP_ICONS[i] }))} />
+          </SplitRow>
+          <p className="mt-8 max-w-3xl text-sm leading-relaxed text-text-muted">
+            Where to go next: the{' '}
+            <Link to="/product/agents" className={inlineLink}>
+              voice agent builder
+            </Link>{' '}
+            is where the default language and voice are set; the{' '}
+            <Link to="/help/voices/choose-voices" className={inlineLink}>
+              guide to choosing voices
+            </Link>{' '}
+            explains the voice tiers; and the sample transcripts show real flows, such as a{' '}
+            <Link to="/demo-calls/marathi-site-visit-booking" className={inlineLink}>
+              Marathi site-visit booking
+            </Link>{' '}
+            and a{' '}
+            <Link to="/demo-calls/telugu-website-widget-call" className={inlineLink}>
+              Telugu website widget call
+            </Link>
+            . If you are replacing a keypad menu, the{' '}
+            <Link to="/ai-ivr" className={inlineLink}>
+              AI IVR page
+            </Link>{' '}
+            covers how a multilingual agent answers your existing number.
+          </p>
+          <p className="mt-4 max-w-3xl text-xs leading-relaxed text-text-muted">
+            The live demo above can also open in some languages outside this list. Those run on voices we are
+            still testing and are not available on customer agents yet.
+          </p>
+        </section>
+      </div>
+
+      <div className="py-14 lg:py-16">
+        <TrustBand placement="languages_trust_band" />
+      </div>
+
+      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8 lg:pb-16">
+        <SplitRow figure={W4_MIXED_TRANSCRIPT(HARD_HEADING)} flip className="">
+          <Reveal>
+            <SectionHead eyebrow="Why this is hard" title={HARD_HEADING} />
+          </Reveal>
+          <FeatureList items={WHY_HARD} />
+        </SplitRow>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
-        <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
-          <SectionEyebrow>Why this is hard</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">
-            Translation isn’t the same as speaking the language.
-          </h2>
-          <div className="mt-8 grid gap-7 md:grid-cols-3">
-            <div>
-              <h3 className="font-display text-base font-semibold">Mid-sentence switching</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                Real callers mix languages inside a single sentence. Artha follows the switch instead of
-                forcing the caller to pick one and stay there.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-display text-base font-semibold">Grammatical gender</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                In Hindi, Marathi, Gujarati, and Punjabi, verbs agree with the speaker’s gender. Artha
-                stays consistent with its own voice from the first line of the call to the last.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-display text-base font-semibold">Numbers and names</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                Amounts, dates, and Indian names are the first thing a generic voice model gets wrong.
-                They’re the details that decide whether a call sounds local or imported.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <ObjectionCards route="/languages" placement="languages_objections" />
 
+      <div ref={endRef} />
       <CTABand />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }
@@ -213,11 +248,12 @@ function TryALanguage() {
     nativeOptions.find((o) => o.code === code) ?? globalOptions.find((o) => o.code === code)
 
   return (
-    <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
-      <div className="grid items-center gap-8 rounded-3xl border border-border bg-surface p-6 sm:p-10 lg:grid-cols-2 lg:gap-12">
-        <div>
+    <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+      <div className="relative grid items-center gap-8 overflow-hidden rounded-[2rem] border border-border bg-gradient-to-br from-primary/[0.10] via-surface to-surface p-6 shadow-[0_30px_60px_-44px_rgba(76,29,149,0.55)] sm:p-10 lg:grid-cols-2 lg:gap-12">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/20 blur-[100px]" />
+        <div className="relative">
           <SectionEyebrow>Try it</SectionEyebrow>
-          <h2 className="mt-4 font-display text-2xl font-bold sm:text-3xl">
+          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-4xl">
             Pick a language. Then actually talk to it.
           </h2>
           <p className="mt-3 text-text-muted">
@@ -256,13 +292,16 @@ function TryALanguage() {
           <p className="mt-3 text-xs text-text-muted">
             Hindi, English and the 9 other Indian languages are the most tested; the other languages in this demo are newer.
           </p>
-          <p className="mt-5 max-w-sm rounded-xl border border-border bg-bg px-4 py-3 text-sm leading-relaxed text-text-muted">
-            Selected: <span className="font-semibold text-text">{selected?.label ?? 'Hindi'}</span>. Ask Artha
-            anything, or switch language halfway and watch her keep up.
+          <p className="mt-5 flex max-w-sm gap-2 rounded-xl border border-border bg-bg px-4 py-3 text-sm leading-relaxed text-text-muted">
+            <Icon name="translate" className="mt-0.5 shrink-0 text-[18px] text-primary" />
+            <span>
+              Selected: <span className="font-semibold text-text">{selected?.label ?? 'Hindi'}</span>. Ask Artha
+              anything, or switch language halfway and watch her keep up.
+            </span>
           </p>
         </div>
 
-        <div className="lg:pl-4">
+        <div className="relative lg:pl-4">
           <DemoOrbCard
             language={code}
             badgeLabel={selected ? `${selected.label} demo` : 'Live demo'}
