@@ -31,7 +31,7 @@ const MODULES = [
   {
     icon: 'dialpad',
     title: 'Phone numbers',
-    body: 'Connect a number over SIP through EnableX, route it to an agent, and set its hours, active days and how many calls it takes at once.',
+    body: 'Connect a number over SIP through your telecom provider, route it to an agent, and set its hours, active days and how many calls it takes at once.',
     to: '/product/inbound',
     link: 'Inbound calling',
   },
