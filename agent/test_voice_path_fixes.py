@@ -84,12 +84,14 @@ class NativeVoiceDropsHmm(unittest.TestCase):
     def _agent(self, voice, provider):
         return SimpleNamespace(_tts_provider=provider, _speaking_voice=voice, _last_opener="")
 
-    def test_native_voice_drops_leading_hmm(self):
-        a = self._agent("google:hi-IN-Standard-A", "google-native")
-        self.assertEqual(main._vary_opener(a, "हम्म, पुढच्या महिन्यात"), "पुढच्या महिन्यात")
+    def test_native_and_hd_voices_drop_leading_hmm(self):
+        for voice in ("google:hi-IN-Standard-A", "google:chirp3:Callirrhoe"):
+            with self.subTest(voice=voice):
+                a = self._agent(voice, "google-native")
+                self.assertEqual(main._vary_opener(a, "हम्म, पुढच्या महिन्यात"), "पुढच्या महिन्यात")
 
     def test_other_voices_keep_it(self):
-        for voice, provider in (("google:chirp3:Callirrhoe", "google-native"), ("priya", "sarvam")):
+        for voice, provider in (("priya", "sarvam"),):
             with self.subTest(voice=voice):
                 a = self._agent(voice, provider)
                 self.assertTrue(main._vary_opener(a, "हम्म, ठीक है").startswith("हम्म"))

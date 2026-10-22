@@ -1756,10 +1756,9 @@ _BACKCHANNEL_WORDS = {line.rstrip(".… ") for lines in _BACKCHANNEL_LINES.value
 _PURE_FILLER_OPENERS = {"हम्म", "hmm"}
 
 
-def _is_native_standard_voice(agent) -> bool:
-    return getattr(agent, "_tts_provider", None) == "google-native" and not voice_catalog.chirp3_persona(
-        getattr(agent, "_speaking_voice", "") or ""
-    )
+def _is_google_native_voice(agent) -> bool:
+    # Native Standard and HD (Chirp 3) voices alike.
+    return getattr(agent, "_tts_provider", None) == "google-native"
 
 
 def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
@@ -1771,9 +1770,10 @@ def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
         agent._last_opener = ""
         return head
     word = match.group("word").lower()
-    if word in _PURE_FILLER_OPENERS and _is_native_standard_voice(agent):
+    if word in _PURE_FILLER_OPENERS and _is_google_native_voice(agent):
         # Call 1452 (21 Oct 2026): a Native (locale Standard) voice reads the
-        # LLM's "हम्म," as a flat, odd syllable. Dropped for these voices.
+        # LLM's "हम्म," as a flat, odd syllable. Call 1463 (22 Oct, HD): the
+        # recording has a 0.1 s blip and a pause there. Dropped for both.
         rest = head[match.end():].lstrip(" ,।.—-")
         return match.group("lead") + rest
     if word != getattr(agent, "_last_opener", ""):
@@ -3952,7 +3952,11 @@ class RealEstateAgent(Agent):
             # (calls 1439/1458). Property tenants' own prompts ask those, so
             # nothing property-specific is named in the platform rules at all.
             "Ask only about what THIS business offers, as its own prompt and knowledge base describe "
-            "it.\n"
+            # Call 1463 (22 Oct 2026, GPT-5.4 mini): a website enquiry from a
+            # real-estate caller got "कोई खास city?" and "leads या listings?",
+            # i.e. the caller was qualified as a buyer in THEIR industry.
+            "it. When the caller names their own industry, keep asking about what they need from "
+            "this business, not about their customers, stock or market.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "
