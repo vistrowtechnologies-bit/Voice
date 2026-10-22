@@ -9,6 +9,7 @@ import { ScriptMarquee } from '../../components/BharatBits'
 import { HERO_STATS, SOLUTIONS } from '../../lib/marketingContent'
 import { LOCAL_REAL_ESTATE_PAGES } from '../../lib/seoExpansionContent'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { PageFigures } from '../../components/PageFigure'
 
 // One template renders all five industry pages, keyed by the :slug route param.
 export function SolutionDetail() {
@@ -210,6 +211,7 @@ export function SolutionDetail() {
             </div>
           </div>
         </div>
+        <PageFigures route={solution.to} after="Don’t watch a generic demo. Test the work." />
       </section>
 
       {/* Page-specific depth (finance, real estate): what the agent does,
@@ -248,6 +250,7 @@ export function SolutionDetail() {
               <span>{section.note}</span>
             </p>
           )}
+          <PageFigures route={solution.to} after={section.title} />
         </section>
       ))}
 
@@ -329,6 +332,7 @@ export function SolutionDetail() {
             </article>
           ))}
         </div>
+        <PageFigures route={solution.to} after="How the conversation becomes an outcome." />
       </section>
 
       {/* Show the operational artifact customers actually buy: a useful,

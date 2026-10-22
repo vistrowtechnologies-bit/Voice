@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 
 // Landing page for "AI call center" / "call center automation". Claims are
 // limited to what the product does today: transfer works on phone calls only
@@ -156,6 +157,7 @@ export function AiCallCenter() {
             </tbody>
           </table>
         </div>
+        <PageFigures route="/ai-call-center" after="A sensible split between the agent and your team." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">

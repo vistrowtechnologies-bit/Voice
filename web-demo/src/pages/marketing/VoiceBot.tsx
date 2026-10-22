@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 
 // Plain-language explainer for "voice bot" / "voicebot" / "AI voice bot" /
 // "AI voice call". The sample conversation is written for illustration and is
@@ -142,6 +143,7 @@ export function VoiceBot() {
             </li>
           ))}
         </ol>
+        <PageFigures route="/voice-bot" after="Four things happen on every turn." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">

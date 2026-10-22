@@ -6,6 +6,7 @@ import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { Reveal } from '../../components/Reveal'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { PageFigures } from '../../components/PageFigure'
 import { DEMO_GLOBAL_LOCALES, LANGUAGES } from '../../lib/marketingContent'
 
 // Owner decision 21 Oct 2026: the site claims "more than 130 languages" (the
@@ -70,6 +71,10 @@ export function LanguagesOverview() {
           </Link>
           .
         </p>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
+        <PageFigures route="/languages" after="Your customer shouldn’t have to switch languages to be understood." className="" />
       </section>
 
       <TryALanguage />

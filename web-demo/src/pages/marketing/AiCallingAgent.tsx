@@ -4,6 +4,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
+import { PageFigures } from '../../components/PageFigure'
 import { LANGUAGES } from '../../lib/marketingContent'
 
 // Landing page for "AI calling agent" / "AI calling" / "automated calling
@@ -164,6 +165,7 @@ export function AiCallingAgent() {
           <Link to="/product/outbound" className={linkClass}>outbound calling campaigns</Link> and the{' '}
           <Link to="/product/widget" className={linkClass}>website call widget</Link>.
         </p>
+        <PageFigures route="/ai-calling-agent" after="The calls an AI calling agent can take on." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
@@ -282,6 +284,7 @@ export function AiCallingAgent() {
           <Link to="/help/compliance/calling-rules" className={linkClass}>calling window and Do-Not-Call</Link> and{' '}
           <Link to="/help/agents/agent-functions-and-transfer" className={linkClass}>functions and transfer</Link>.
         </p>
+        <PageFigures route="/ai-calling-agent" after="Rules checked by the system, not left to the script." />
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
