@@ -210,5 +210,19 @@ class WarmUpMatchesTheRealRequest(unittest.TestCase):
         self.assertEqual(seen["chat_ctx"].items[0].text_content, agent.instructions)
 
 
+class ImportingTheHarnessLeavesTheDatabaseAlone(unittest.TestCase):
+    def test_database_url_is_not_rewritten_on_import(self):
+        """PR #250: importing the harness set DATABASE_URL to localhost:1 for
+        the whole pytest run, breaking later real-DB tests."""
+        import subprocess
+        url = "postgresql://tester@127.0.0.1:5432/local_only"
+        env = dict(os.environ, DATABASE_URL=url)
+        code = "import os, measure_prompt_tokens; print(os.environ['DATABASE_URL'])"
+        out = subprocess.run([sys.executable, "-c", code], cwd=os.path.join(HERE, "scripts"),
+                             env=env, capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stderr[-2000:])
+        self.assertEqual(out.stdout.strip().splitlines()[-1], url)
+
+
 if __name__ == "__main__":
     unittest.main()
