@@ -1249,7 +1249,14 @@ def _current_objective(
 # 7050ms turn above is log_lead recording a timeline. Seven seconds of dead
 # air is exactly the silence this was built for, and at the delay below no
 # ordinary turn can reach it.
-_BACKCHANNEL_ENABLED = True
+#
+# OFF again 2026-10-22 (call 1462, GPT-5.4 mini + Bharat): all 4 acks played
+# AFTER the reply they were meant to cover ("अच्छा, कितने pages..." then
+# "अच्छा..."). LiveKit 1.8.6 makes the turn's reply handle the current speech
+# from the moment the turn commits, so a say() during "thinking" queues behind
+# it. It can only land first while a tool is still running, and slow tools now
+# speak their own filler (tools._await_with_still_checking).
+_BACKCHANNEL_ENABLED = False
 
 # The delay must clear the WHOLE median turn, not just the LLM leg. Set at
 # 0.9s it fired 9 times in one 3-minute call (898) and read as a verbal tic:
@@ -3927,13 +3934,18 @@ class RealEstateAgent(Agent):
         instructions += (
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
             "Use the tool that fits what this call is about:\n"
-            "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
-            "any detail at all — what they need, a timeline, a budget (any language or unit: \"50 "
-            "hazaar\", \"एक करोड़\"), a name. Pass only "
-            "what you just learned; omitted fields keep their value. You do NOT need their name or "
-            "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
-            "your very next tool call, before you reply and before any booking or end_call; many "
-            "one-field calls are exactly right. "
+            # Call 1462 (22 Oct 2026, GPT-5.4 mini): "call log_lead the MOMENT
+            # ... many one-field calls are exactly right" was followed
+            # literally - 7 saves in 9 turns, each a second LLM round trip
+            # (~+1.1 s per turn, 18 requests, ~2x the LLM cost). A call that
+            # drops before the save still gets the post-call extraction.
+            "- Any per-tenant business call (the default): call log_lead ONCE the caller has told you "
+            "what they need, with every field you have so far — what they need, a timeline, a budget "
+            "(any language or unit: \"50 hazaar\", \"एक करोड़\"), a name. Every log_lead call adds a "
+            "pause before your reply, so do NOT call it after each single detail; call it again only "
+            "when they give a name, a phone number or change something, and always before any "
+            "booking or end_call. Omitted fields keep their value. You do NOT need their name or "
+            "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". "
             # Call 1458 (21 Oct 2026, Sarvam 105B): naming the property questions
             # here, even to forbid them, primed the model to ask "business ya
             # investment?" and "kis city ya area mein?" on a website enquiry

@@ -24,8 +24,9 @@ TOOL_TURN = 7050
 
 
 class ItFiresOnlyWhereThereIsRealSilence(unittest.TestCase):
-    def test_it_is_on(self):
-        self.assertTrue(main._BACKCHANNEL_ENABLED)
+    def test_it_is_off(self):
+        # Off since call 1462: the ack queues behind the reply (main.py).
+        self.assertFalse(main._BACKCHANNEL_ENABLED)
 
     def test_no_ordinary_turn_can_reach_it(self):
         threshold_ms = main._BACKCHANNEL_DELAY_S * 1000
