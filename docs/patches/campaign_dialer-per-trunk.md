@@ -111,6 +111,17 @@ and one global dial stagger `_last_dial_at`. After the patch:
 `_OUTBOUND_CHANNELS` stays defined (the legacy gate and `ensure_platform_pool` both read
 `OUTBOUND_CHANNEL_LIMIT`), so the env var keeps meaning "lines on the platform pool".
 
+## Design note: which trunk a rotated caller ID counts against
+
+`telephony.inflight_by_trunk` attributes a live dial to `campaigns.from_number`'s trunk. When
+`campaign_caller_id` rotates a retry onto another number in `campaigns.from_numbers`, the call
+should count against **that caller ID's own number's trunk** (the carrier bills and caps by the
+number that places the call; coordinator decision, 22 Oct). `campaign_contacts` does not store
+the caller id used per dial, so this needs `record_campaign_dial_result` (calls_db.py, blocked
+until #253 merges) to persist it (e.g. `campaign_contacts.caller_id`), after which the join in
+`inflight_by_trunk` switches to `COALESCE(cc.caller_id, c.from_number)`. Until then the primary
+number's trunk carries the count, which over-counts that trunk and never under-counts the pool.
+
 ## Tests to add with the patch (server/test_campaign_dialer*.py)
 
 - One pool, one platform trunk, limit 2: a campaign at concurrency 3 dials 2, as today.
