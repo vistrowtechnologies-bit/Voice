@@ -441,6 +441,15 @@ _GEMINI38_TONE_LLM_HINTS = {
 }
 
 
+# Call 1467 (22 Oct 2026, Studio): English words in a Hindi reply ("website",
+# "SEO", "CRM") switched to an English accent mid-sentence.
+def _gemini38_accent_hint(reply_language: str) -> str:
+    if (reply_language or "").endswith("-IN"):
+        return ("Indian accent throughout; say English words the way urban Indians do in "
+                "Hinglish, never switching to an American or British accent")
+    return ""
+
+
 def _gemini38_voice_style_hint(voice_value: str) -> tuple[str | None, str | None]:
     """Get a safe, concise LLM/TTS hint from a Gemini 3.8 catalog persona."""
     if not voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
@@ -3042,6 +3051,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             _persona_name, persona_hint = _gemini38_voice_style_hint(speaker)
             if persona_hint and tone_name != "professional":
                 style = f"{style}; {persona_hint}"
+            style = "; ".join(p for p in (style, _gemini38_accent_hint(reply_language)) if p)
             gemini38_tts = GeminiInteractionsTTS(
                 model=model,
                 voice=voice_name,
@@ -6154,7 +6164,8 @@ class RealEstateAgent(Agent):
                 }.get(emotion, "") if emotion and self._emotion_intensity > 0 else ""
                 if emotion_style and self._emotion_intensity < 1:
                     emotion_style = f"subtle {emotion_style}"
-                style = "; ".join(part for part in (base_style, emotion_style) if part)
+                accent = _gemini38_accent_hint(getattr(self, "_reply_language", "") or "")
+                style = "; ".join(part for part in (base_style, accent, emotion_style) if part)
                 try:
                     self.tts.update_options(style=style)
                     logger.info("Gemini 3.8 delivery style updated for caller tone=%s", emotion or "neutral")
