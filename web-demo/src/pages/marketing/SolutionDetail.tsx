@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -253,14 +254,14 @@ export function SolutionDetail() {
               <div className="grid sm:grid-cols-2">
                 <div className="p-6 sm:p-8">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Icon name="psychology" className="text-[22px]" />
+                    <Icon3D name="psychology" size={32} className="text-[22px]" />
                   </span>
                   <h3 className="mt-4 font-display text-lg font-semibold">What Artha does</h3>
                   <p className="mt-2 text-sm leading-relaxed text-text-muted">{scenario.agentAction}</p>
                 </div>
                 <div className="border-t border-border p-6 sm:border-l sm:border-t-0 sm:p-8">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan/10 text-cyan">
-                    <Icon name="task_alt" className="text-[22px]" />
+                    <Icon3D name="task_alt" size={32} className="text-[22px]" />
                   </span>
                   <h3 className="mt-4 font-display text-lg font-semibold">Useful outcome</h3>
                   <p className="mt-2 text-sm leading-relaxed text-text-muted">{scenario.outcome}</p>
@@ -387,7 +388,7 @@ export function SolutionDetail() {
               <Reveal key={rule} delayMs={i * 70}>
                 <div className="flex gap-4 rounded-2xl border border-border bg-surface p-5">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan/10 text-cyan">
-                    <Icon name="shield" className="text-[20px]" />
+                    <Icon3D name="shield" size={30} className="text-[20px]" />
                   </span>
                   <p className="self-center text-sm leading-relaxed text-text">{rule}</p>
                 </div>

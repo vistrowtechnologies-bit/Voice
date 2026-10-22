@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../../components/Icon'
+import { Icon3D } from '../../../components/Icon3D'
 import { SectionEyebrow } from '../../../components/MarketingBits'
 import { IconTile, Reveal, SectionHead, Shot } from '../../../components/showcase'
 import type { PageFigureData } from '../../../lib/pageFigures'
@@ -42,7 +43,7 @@ export function BadgeTimeline({ steps, numbered = true }: { steps: BadgeStep[]; 
           <li key={step.title} className="relative pl-16 lg:pl-0">
             <Reveal delayMs={i * 80}>
               <span className="absolute left-0 top-0 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-magenta font-display text-lg font-bold text-white shadow-[0_10px_24px_-10px_rgba(168,85,247,0.9)] ring-4 ring-bg lg:relative">
-                {numbered || !step.icon ? <span aria-hidden="true">{i + 1}</span> : <Icon name={step.icon} className="text-[22px]" />}
+                {numbered || !step.icon ? <span aria-hidden="true">{i + 1}</span> : <Icon3D name={step.icon} size={34} plate className="text-[22px]" />}
               </span>
               <div className="lg:mt-6">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-bold uppercase tracking-widest text-text-muted">
@@ -255,7 +256,7 @@ export function BoundaryBand({ eyebrow, title, intro, items }: { eyebrow: string
             <Reveal key={i} delayMs={i * 70}>
               <div className="flex gap-4 rounded-2xl border border-border bg-surface p-5">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan/10 text-cyan">
-                  <Icon name="shield" className="text-[20px]" />
+                  <Icon3D name="shield" size={30} className="text-[20px]" />
                 </span>
                 <p className="self-center text-sm leading-relaxed text-text-muted">{item}</p>
               </div>

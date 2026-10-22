@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -147,7 +148,7 @@ export function ProductOverview() {
               className="bento-hero group relative flex h-full flex-col overflow-hidden rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)]"
             >
               <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-white">
-                <Icon name={lead.icon ?? 'circle'} className="text-[24px]" />
+                <Icon3D name={lead.icon ?? 'circle'} size={34} plate className="text-[24px]" />
               </span>
               <h3 className="mt-5 font-display text-2xl font-bold">{lead.label}</h3>
               <p className="mt-2 max-w-md text-[15px] leading-relaxed text-white/85">{lead.desc}</p>
@@ -162,7 +163,7 @@ export function ProductOverview() {
               <Link to={p.to} className="vv-lift group flex h-full flex-col justify-between rounded-3xl border border-border bg-surface p-7">
                 <div>
                   <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                    <Icon name={p.icon ?? 'circle'} className="text-[24px]" />
+                    <Icon3D name={p.icon ?? 'circle'} size={38} className="text-[24px]" />
                   </span>
                   <h3 className="mt-5 font-display text-xl font-semibold">{p.label}</h3>
                   <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">{p.desc}</p>

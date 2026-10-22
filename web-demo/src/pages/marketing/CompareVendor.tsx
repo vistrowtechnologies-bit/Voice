@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { FaqSection } from '../../components/FaqSection'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
 import { Seo } from '../../components/Seo'
@@ -108,7 +109,7 @@ export function CompareVendor() {
           <Reveal delayMs={140} className="h-full">
             <div className="bento-hero flex h-full flex-col rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)]">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
-                <Icon name="bolt" className="text-[22px]" />
+                <Icon3D name="bolt" size={32} plate className="text-[22px]" />
               </span>
               <h2 className="mt-5 font-display text-xl font-semibold text-white">When Vistrow fits</h2>
               <p className="mt-3 text-sm leading-relaxed text-white/85">{vendor.buyerIntent}</p>
@@ -184,7 +185,7 @@ export function CompareVendor() {
                 <li key={item}>
                   <Reveal delayMs={i * 60} className="flex gap-4 rounded-2xl border border-border bg-surface p-5">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
-                      <Icon name="help" className="text-[20px]" />
+                      <Icon3D name="help" size={30} className="text-[20px]" />
                     </span>
                     <span className="self-center text-sm leading-relaxed text-text">{item}</span>
                   </Reveal>

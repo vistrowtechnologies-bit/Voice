@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -104,7 +105,12 @@ export function Pricing() {
                     plan.key === 'growth' ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
                   }`}
                 >
-                  <Icon name={plan.key === 'starter' ? 'person' : plan.key === 'growth' ? 'groups' : 'apartment'} className="text-[22px]" />
+                  <Icon3D
+                    name={plan.key === 'starter' ? 'person' : plan.key === 'growth' ? 'groups' : 'apartment'}
+                    size={plan.key === 'growth' ? 32 : 36}
+                    plate={plan.key === 'growth'}
+                    className="text-[22px]"
+                  />
                 </span>
                 <h3 className="mt-5 font-display text-lg font-semibold">{plan.name}</h3>
                 <p className="mt-3 text-sm font-semibold text-cyan">Pricing on request</p>

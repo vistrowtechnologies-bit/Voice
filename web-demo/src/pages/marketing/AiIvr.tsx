@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -293,7 +294,7 @@ export function AiIvr() {
         <SplitRow figure={W3_IVR_SIP}>
           <Reveal>
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
-              <Icon name="dialpad" className="text-[22px]" />
+              <Icon3D name="dialpad" size={32} plate className="text-[22px]" />
             </span>
             <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Keep your existing number.</h2>
             <p className="mt-3 leading-relaxed text-text-muted">
@@ -319,7 +320,7 @@ export function AiIvr() {
         <SplitRow figure={W3_LANGUAGES_MAP} flip>
           <Reveal>
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
-              <Icon name="translate" className="text-[22px]" />
+              <Icon3D name="translate" className="text-[22px]" />
             </span>
             <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Languages callers can use.</h2>
             <p className="mt-3 leading-relaxed text-text-muted">
