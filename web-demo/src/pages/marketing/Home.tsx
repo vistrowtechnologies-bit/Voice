@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
@@ -407,7 +408,7 @@ export function Home() {
                       i === 0 ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
                     }`}
                   >
-                    <Icon name={f.icon ?? 'circle'} className="text-[20px]" />
+                    <Icon3D name={f.icon ?? 'circle'} size={i === 0 ? 28 : 32} plate={i === 0} className="text-[20px]" />
                   </span>
                   <h3 className="mt-4 flex items-center gap-1 font-display text-base font-semibold">
                     {f.label}
@@ -468,7 +469,7 @@ export function Home() {
                 )}
                 <div>
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan transition-transform group-hover:scale-110">
-                    <Icon name={s.icon ?? 'circle'} className="text-[22px]" />
+                    <Icon3D name={s.icon ?? 'circle'} className="text-[22px]" />
                   </span>
                   <h3 className={`mt-5 font-display font-semibold ${i === 0 ? 'text-2xl' : 'text-lg'}`}>{s.label}</h3>
                   <p className={`mt-2 leading-relaxed text-text-muted ${i === 0 ? 'max-w-md text-base' : 'text-sm'}`}>

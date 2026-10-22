@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -204,7 +205,7 @@ export function AiCallCenter() {
         <SplitRow figure={V.handover} className="">
           <Reveal>
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
-              <Icon name="support_agent" className="text-[22px]" />
+              <Icon3D name="support_agent" size={32} plate className="text-[22px]" />
             </span>
             <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Handing a call to a person.</h2>
             <p className="mt-3 leading-relaxed text-text-muted">
@@ -230,7 +231,7 @@ export function AiCallCenter() {
         <SplitRow figure={V.campaigns} flip className="">
           <Reveal>
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
-              <Icon name="phone_callback" className="text-[22px]" />
+              <Icon3D name="phone_callback" size={32} plate className="text-[22px]" />
             </span>
             <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Follow-ups and outbound calls.</h2>
             <p className="mt-3 leading-relaxed text-text-muted">

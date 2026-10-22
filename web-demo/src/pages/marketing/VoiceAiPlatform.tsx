@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -338,7 +339,7 @@ export function VoiceAiPlatform() {
               <li key={item.icon}>
                 <Reveal delayMs={i * 60} className="flex gap-4 rounded-2xl border border-border bg-surface p-4">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan/10 text-cyan">
-                    <Icon name={item.icon} className="text-[20px]" />
+                    <Icon3D name={item.icon} size={30} className="text-[20px]" />
                   </span>
                   <span>{item.body}</span>
                 </Reveal>

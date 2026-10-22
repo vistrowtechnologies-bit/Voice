@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -298,7 +299,7 @@ export function AiReceptionist() {
           <div className="grid gap-10">
             <Reveal>
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
-                <Icon name="calendar_month" className="text-[22px]" />
+                <Icon3D name="calendar_month" size={32} plate className="text-[22px]" />
               </span>
               <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Appointments, booked on the call.</h2>
               <p className="mt-3 leading-relaxed text-text-muted">
@@ -317,7 +318,7 @@ export function AiReceptionist() {
             <Reveal delayMs={80}>
               <div className="rounded-3xl border border-border bg-surface p-6 sm:p-7">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                  <Icon name="dark_mode" className="text-[22px]" />
+                  <Icon3D name="dark_mode" className="text-[22px]" />
                 </span>
                 <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">After-hours answering.</h2>
                 <p className="mt-3 text-sm leading-relaxed text-text-muted">
@@ -383,7 +384,7 @@ export function AiReceptionist() {
         <SplitRow figure={V.record} className="">
           <Reveal>
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
-              <Icon name="receipt_long" className="text-[22px]" />
+              <Icon3D name="receipt_long" size={32} plate className="text-[22px]" />
             </span>
             <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Every call leaves a record.</h2>
             <p className="mt-3 leading-relaxed text-text-muted">

@@ -1,4 +1,4 @@
-import { Icon } from '../Icon'
+import { Icon3D } from '../Icon3D'
 import { Reveal } from '../Reveal'
 import { TalkToArthaButton } from '../MarketingBits'
 import { BookDemoLink, ItemLink, RiskReducers, SectionHead } from './primitives'
@@ -70,7 +70,7 @@ export function ObjectionCards({
           <Reveal key={o.q} delayMs={(i % 2) * 70} className="h-full">
             <div className="vv-lift flex h-full gap-5 rounded-3xl border border-border bg-surface p-6">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                <Icon name={o.icon} className="text-[22px]" />
+                <Icon3D name={o.icon} className="text-[22px]" />
               </span>
               <div className="flex flex-col">
                 <h3 className="font-display text-lg font-semibold">{o.q}</h3>

@@ -1,5 +1,6 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -319,7 +320,7 @@ export function LanguageDetail() {
             <Reveal delayMs={80} className="lg:sticky lg:top-28 lg:mt-24">
               <aside className="bento-hero relative overflow-hidden rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)]">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
-                  <Icon name="record_voice_over" className="text-[22px]" />
+                  <Icon3D name="record_voice_over" size={32} plate className="text-[22px]" />
                 </span>
                 <h2 className="mt-4 font-display text-xl font-bold">Voices that speak {lang.name}</h2>
                 <p className="mt-2 text-sm leading-relaxed text-white/85">
@@ -433,7 +434,7 @@ export function LanguageDetail() {
                 }`}
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                  <Icon name={s.icon ?? 'circle'} className="text-[22px]" />
+                  <Icon3D name={s.icon ?? 'circle'} className="text-[22px]" />
                 </span>
                 <div>
                   <h3 className="flex items-center gap-1 font-display text-lg font-semibold">

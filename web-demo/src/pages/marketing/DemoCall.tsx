@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { FaqSection } from '../../components/FaqSection'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
 import { Seo } from '../../components/Seo'
@@ -154,7 +155,7 @@ export function DemoCall() {
           <Reveal delayMs={60} className="h-full">
             <div className="vv-lift flex h-full gap-4 rounded-3xl border border-border bg-surface p-6">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                <Icon name="translate" className="text-[22px]" />
+                <Icon3D name="translate" className="text-[22px]" />
               </span>
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Language</p>
@@ -165,7 +166,7 @@ export function DemoCall() {
           <Reveal delayMs={120} className="h-full">
             <div className="vv-lift flex h-full gap-4 rounded-3xl border border-border bg-surface p-6">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan/10 text-cyan">
-                <Icon name="task_alt" className="text-[22px]" />
+                <Icon3D name="task_alt" className="text-[22px]" />
               </span>
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Outcome</p>

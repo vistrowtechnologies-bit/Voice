@@ -1,4 +1,5 @@
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
@@ -123,7 +124,7 @@ export function Security() {
                     i === 0 ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
                   }`}
                 >
-                  <Icon name={c.icon} className="text-[22px]" />
+                  <Icon3D name={c.icon} size={i === 0 ? 32 : 36} plate={i === 0} className="text-[22px]" />
                 </span>
                 <h3 className="mt-5 font-display text-lg font-semibold">{c.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-text-muted">{c.body}</p>

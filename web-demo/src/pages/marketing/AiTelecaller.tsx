@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -255,7 +256,7 @@ export function AiTelecaller() {
             <Reveal delayMs={60}>
               <div className="bento-hero relative overflow-hidden rounded-3xl p-6 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)] sm:p-7">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
-                  <Icon name="translate" className="text-[22px]" />
+                  <Icon3D name="translate" size={32} plate className="text-[22px]" />
                 </span>
                 <h2 className="mt-4 font-display text-lg font-semibold text-white">Calls in the lead’s language</h2>
                 <p className="mt-2 text-sm leading-relaxed text-white/85">
@@ -279,7 +280,7 @@ export function AiTelecaller() {
             <Reveal delayMs={120}>
               <div className="rounded-3xl border border-border bg-surface p-6 sm:p-7">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                  <Icon name="support_agent" className="text-[22px]" />
+                  <Icon3D name="support_agent" className="text-[22px]" />
                 </span>
                 <h2 className="mt-4 font-display text-lg font-semibold">Handing over to a person</h2>
                 <p className="mt-2 text-sm leading-relaxed text-text-muted">

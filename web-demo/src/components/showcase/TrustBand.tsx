@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../Icon'
+import { Icon3D } from '../Icon3D'
 import { Reveal } from '../Reveal'
 import { TalkToArthaButton } from '../MarketingBits'
 import { BookDemoLink } from './primitives'
@@ -58,7 +59,7 @@ export function TrustBand({
             {facts.map((t, i) => (
               <Reveal key={t.title} delayMs={i * 70} className="h-full">
                 <div className="h-full rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur-sm">
-                  <Icon name={t.icon} className="text-[22px] text-white" />
+                  <Icon3D name={t.icon} size={30} plate className="text-[22px] text-white" />
                   <h3 className="mt-3 font-display text-base font-semibold text-white">{t.title}</h3>
                   <p className="mt-1.5 text-sm leading-relaxed text-white/80">{t.body}</p>
                 </div>

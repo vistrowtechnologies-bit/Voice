@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Icon } from '../Icon'
+import { Icon3D } from '../Icon3D'
 import { Reveal } from '../Reveal'
 import type { PageFigureData } from '../../lib/pageFigures'
 import { Shot, Waveform } from './primitives'
@@ -67,7 +67,7 @@ export function Bento({ visual, items, head }: { visual?: PageFigureData; items:
             {/* The lead item borrows the dashboard's violet hero tile. */}
             <div className="bento-hero relative flex h-full flex-col overflow-hidden rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)]">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
-                <Icon name={lead.icon} className="text-[22px]" />
+                <Icon3D name={lead.icon} size={32} plate className="text-[22px]" />
               </span>
               <h3 className="mt-5 font-display text-2xl font-bold">{lead.title}</h3>
               <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-white/85">{lead.body}</p>
@@ -86,7 +86,7 @@ export function Bento({ visual, items, head }: { visual?: PageFigureData; items:
           >
             <div className="vv-lift flex h-full flex-col rounded-3xl border border-border bg-surface p-6">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                <Icon name={f.icon} className="text-[22px]" />
+                <Icon3D name={f.icon} className="text-[22px]" />
               </span>
               <h3 className="mt-5 font-display text-lg font-semibold">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-text-muted">{f.body}</p>
