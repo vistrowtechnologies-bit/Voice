@@ -95,6 +95,12 @@ class NurturePlan(unittest.TestCase):
         policy = retry_rules.follow_up_policy({"nurtureDays": 7})
         self.assertEqual(follow_ups.plan(policy, {}, {"interest_level": "warm"}, NOW)["at"], at(21, 11))
 
+    def test_nurture_time_is_set_per_agent(self):
+        policy = retry_rules.follow_up_policy({"nurtureTime": "16:00"})
+        self.assertEqual(follow_ups.plan(policy, {}, {"interest_level": "warm"}, NOW)["at"], at(17, 16))
+        # A date-only callback keeps its own 11:00.
+        self.assertEqual(follow_ups.plan(policy, {"callback": {"date": "2026-10-16"}}, {}, NOW)["at"], at(16, 11))
+
     def test_not_interested_or_unknown_gets_nothing(self):
         for level in ("not interested", "none", "", "cold", None):
             self.assertIsNone(follow_ups.plan(POLICY, {}, {"interest_level": level}, NOW), level)

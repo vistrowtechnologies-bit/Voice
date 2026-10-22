@@ -22,7 +22,8 @@ into a campaign contact (db.schedule_follow_up_call).
 import datetime
 
 KINDS = ("callback", "visit_reminder", "nurture")
-# Owner's fixed time of day for a nurture call; the visit reminder's is a setting.
+# Time of day for a callback the caller gave only a date for, and the
+# default nurture time (policy["nurtureTime"] sets it per agent).
 NURTURE_TIME = "11:00"
 _VISIT_DEFAULT_TIME = "10:00"
 _REMINDER_AHEAD = datetime.timedelta(hours=24)
@@ -116,5 +117,5 @@ def plan(policy: dict, lead_data: dict, extracted: dict, now: datetime.datetime,
         return {"kind": "visit_reminder", "at": when, "summary": summary} if when else None
     if policy["nurtureEnabled"] and previous_kind != "nurture" and interested(extracted):
         day = now.date() + datetime.timedelta(days=policy["nurtureDays"])
-        return {"kind": "nurture", "at": _on_day(day, NURTURE_TIME, now), "summary": summary}
+        return {"kind": "nurture", "at": _on_day(day, policy.get("nurtureTime") or NURTURE_TIME, now), "summary": summary}
     return None
