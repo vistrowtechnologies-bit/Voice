@@ -5,6 +5,16 @@ import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { NavLink } from '../../components/MarketingLayout'
 import { Reveal } from '../../components/Reveal'
 import { BRAND } from '../../lib/brand'
+import { SectionHead, SplitHero, SplitRow, StickyCta, TrustBand, useStickyRefs, type TrustFact } from '../../components/showcase'
+import { SECURITY_HERO, SECURITY_RECORD } from './premium-w5/visuals'
+
+// Trust facts for the violet band, each restating a control listed below.
+const SECURITY_FACTS: TrustFact[] = [
+  { icon: 'lock', title: 'Workspace isolation', body: 'Calls, contacts, agents, recordings and knowledge bases are scoped to your workspace.' },
+  { icon: 'block', title: 'Do-Not-Call enforcement', body: 'Checked before any outbound dial leaves the platform.' },
+  { icon: 'auto_delete', title: 'Configurable retention', body: 'Records older than your retention period are purged automatically.' },
+  { icon: 'credit_card', title: 'No card data', body: 'Card details are entered with our payment provider, never stored by us.' },
+]
 
 // Every claim on this page maps to a control that actually exists in the
 // product today (compliance settings, tenant scoping, retention purge).
@@ -67,7 +77,11 @@ const ROADMAP = [
   'A published third-party penetration-test summary.',
 ]
 
+// Premium template (showcase kit): split hero with the pre-dial checks, the
+// controls as a card grid with a highlighted lead, "who controls what" beside
+// a saved call record, the violet trust band, the gaps and the report box.
 export function Security() {
+  const { heroCtaRef, endRef } = useStickyRefs()
   return (
     <MarketingLayout>
       <Seo
@@ -76,28 +90,42 @@ export function Security() {
         path="/security"
       />
 
-      <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
-        <SectionEyebrow>Security &amp; trust</SectionEyebrow>
-        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl">
-          Phone calls are sensitive. We treat them that way.
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          {BRAND.name} handles recordings, transcripts, and personal details captured on live calls.
-          This page lists the controls that exist today - and, at the bottom, the ones that don’t yet.
-        </p>
-      </section>
+      <SplitHero
+        eyebrow="Security & trust"
+        title="Phone calls are sensitive. We treat them that way."
+        subhead={
+          <>
+            {BRAND.name} handles recordings, transcripts, and personal details captured on live calls.
+            This page lists the controls that exist today - and, at the bottom, the ones that don’t yet.
+          </>
+        }
+        visual={SECURITY_HERO}
+        placement="security_hero"
+        ctaRef={heroCtaRef}
+      />
 
-      <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+        <Reveal>
+          <SectionHead eyebrow="Controls in place" title="What protects call data today." className="mb-10" />
+        </Reveal>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {CONTROLS.map((c, i) => (
             // Stagger resets every row so the delay never compounds into a
             // noticeable wait by the last card.
             <Reveal key={c.title} delayMs={(i % 3) * 70} className="h-full">
-              <div className="group h-full rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary/60">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary transition-transform group-hover:scale-105">
+              <div
+                className={`vv-lift group h-full rounded-3xl border p-6 ${
+                  i === 0 ? 'border-primary/40 bg-gradient-to-br from-primary/[0.14] via-surface to-surface' : 'border-border bg-surface'
+                }`}
+              >
+                <span
+                  className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+                    i === 0 ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
+                  }`}
+                >
                   <Icon name={c.icon} className="text-[22px]" />
                 </span>
-                <h2 className="mt-5 font-display text-lg font-semibold">{c.title}</h2>
+                <h3 className="mt-5 font-display text-lg font-semibold">{c.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-text-muted">{c.body}</p>
               </div>
             </Reveal>
@@ -106,11 +134,12 @@ export function Security() {
       </section>
 
       {/* Who controls what - the question every serious buyer actually asks */}
-      <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+        <SplitRow figure={SECURITY_RECORD} className="">
         <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
           <SectionEyebrow>Who controls what</SectionEyebrow>
           <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Your data stays yours.</h2>
-          <div className="mt-8 grid gap-8 md:grid-cols-2">
+          <div className="mt-8 grid gap-8">
             <div>
               <h3 className="flex items-center gap-2 font-display text-base font-semibold">
                 <Icon name="business" className="text-[20px] text-cyan" />
@@ -138,7 +167,18 @@ export function Security() {
             <NavLink to="/terms" className="text-cyan hover:underline">Terms</NavLink>.
           </p>
         </div>
+        </SplitRow>
       </section>
+
+      <TrustBand
+        eyebrow="Security & trust"
+        title="Controls that run on every call."
+        body="Each of these is a setting or a rule in the product today, listed in full above."
+        facts={SECURITY_FACTS}
+        placement="security_trust_band"
+        link={null}
+      />
+      <div className="h-16" />
 
       {/* Honesty section - deliberately load-bearing, not a disclaimer */}
       <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
@@ -178,7 +218,9 @@ export function Security() {
         </div>
       </section>
 
+      <div ref={endRef} />
       <CTABand />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

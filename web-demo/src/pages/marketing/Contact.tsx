@@ -6,6 +6,16 @@ import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 import { CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL } from '../../lib/marketingContent'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { FeatureList, Reveal, SectionHead, ShowcaseStyles, SplitRow } from '../../components/showcase'
+import { CONTACT_CALL } from './premium-w5/visuals'
+
+// What happens after the form, worded from the benefits above and the
+// confirmation message the form shows.
+const NEXT_STEPS = [
+  { icon: 'edit_note', title: '1. Tell us about your calls', body: 'Share your team size, monthly call volume, when you want to go live and what you want Artha to handle.' },
+  { icon: 'forum', title: '2. A person from our team replies', body: 'Our team reaches out to set up your walkthrough, by email, phone or WhatsApp.' },
+  { icon: 'record_voice_over', title: '3. See it on a live call', body: 'A live walkthrough tuned to your use case, with Artha qualifying a call in your language.' },
+]
 
 const BENEFITS = [
   'A live walkthrough tuned to your use case',
@@ -25,17 +35,25 @@ export function Contact() {
         description="Book a Vistrow Voice demo or contact Vistrow Technologies Pvt. Ltd. by email, phone or WhatsApp. See Artha qualify a call in your language."
         path="/contact"
       />
-      <section className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-5 py-16 md:px-8 lg:grid-cols-2 lg:py-20">
+      <div className="relative overflow-hidden">
+      <ShowcaseStyles />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -right-32 top-0 h-[520px] w-[620px] rounded-full bg-primary/20 blur-[120px]" />
+        <div className="absolute right-[18%] top-[45%] h-[300px] w-[380px] rounded-full bg-magenta/15 blur-[110px]" />
+      </div>
+      <section className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-5 pb-14 pt-10 md:px-8 lg:grid-cols-2 lg:pb-16 lg:pt-14">
         {/* Left - pitch + demo card */}
         <div>
           <SectionEyebrow>Book a demo</SectionEyebrow>
-          <h1 className="mt-4 font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+          <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight text-balance sm:text-5xl lg:text-[52px]">
             See Vistrow Voice on a live call.
           </h1>
           <ul className="mt-6 flex flex-col gap-3">
             {BENEFITS.map((b) => (
               <li key={b} className="flex items-center gap-3 text-text">
-                <Icon name="check_circle" className="text-[20px] text-cyan" />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+                  <Icon name="check_circle" className="text-[18px]" />
+                </span>
                 {b}
               </li>
             ))}
@@ -65,7 +83,7 @@ export function Contact() {
               Or message us on WhatsApp at {CONTACT_PHONE}
             </a>
           </div>
-          <div className="mt-8 rounded-2xl border border-border bg-surface p-5">
+          <div className="mt-8 rounded-3xl border border-border bg-surface/80 p-5 backdrop-blur">
             <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-text-muted">
               <Icon name="business" className="text-[18px]" />
               The company behind Vistrow Voice
@@ -111,7 +129,7 @@ export function Contact() {
               <DemoOrbCard />
             </div>
           ) : (
-            <div className="w-full rounded-3xl border border-border bg-surface p-7 sm:p-9">
+            <div className="w-full rounded-[2rem] border border-border bg-surface p-7 shadow-[0_40px_80px_-48px_rgba(76,29,149,0.7)] sm:p-9">
               <form
                 onSubmit={async (e) => {
                   e.preventDefault()
@@ -233,6 +251,17 @@ export function Contact() {
             </div>
           )}
         </div>
+      </section>
+      </div>
+
+      {/* What happens after the form, beside the call view the walkthrough shows. */}
+      <section className="mx-auto max-w-7xl px-5 pb-20 pt-6 md:px-8">
+        <SplitRow figure={CONTACT_CALL} className="">
+          <Reveal>
+            <SectionHead eyebrow="What happens next" title="From this form to a live call." />
+          </Reveal>
+          <FeatureList items={NEXT_STEPS} />
+        </SplitRow>
       </section>
     </MarketingLayout>
   )
