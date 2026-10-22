@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { InfoTip } from '../components/ui/Tooltip'
+import { ScheduleFollowUpModal } from '../components/ScheduleFollowUpModal'
 import { fetchFollowUps, followUpCallNow, followUpCancel, followUpReschedule } from '../lib/api'
 import { hasRole, useAuth } from '../lib/auth'
 import type { FollowUp, FollowUpList } from '../lib/types'
@@ -114,7 +115,7 @@ function FollowUpRow({ f, canAct, onChanged }: { f: FollowUp; canAct: boolean; o
         ) : (
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${f.state === 'cancelled' ? 'bg-surface-high text-text-muted' : f.status === 'done' ? 'bg-success/10 text-success' : 'bg-amber/12 text-amber'}`}>
-              {f.state === 'cancelled' ? 'Cancelled' : outcomeText(f)}
+              {f.state === 'cancelled' ? (f.outcome.startsWith('Skipped') ? f.outcome : 'Cancelled') : outcomeText(f)}
             </span>
             {f.lastAttemptAt && <span className="text-xs text-text-muted">{formatWhen(f.lastAttemptAt)}</span>}
             {f.callId != null && (
@@ -184,6 +185,8 @@ export function FollowUps() {
   const [view, setView] = useState<View>('upcoming')
   const [data, setData] = useState<FollowUpList | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [scheduling, setScheduling] = useState(false)
+  const [notice, setNotice] = useState('')
   const request = useRef(0)
 
   const load = useCallback(() => {
@@ -226,9 +229,32 @@ export function FollowUps() {
             </InfoTip>
           </p>
         }
-      />
+      >
+        {canAct && (
+          <button type="button" onClick={() => { setNotice(''); setScheduling(true) }} className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:opacity-90">
+            <Icon name="add" className="text-[18px]" /> Schedule follow-up
+          </button>
+        )}
+      </PageHeader>
+
+      {scheduling && (
+        <ScheduleFollowUpModal
+          onClose={() => setScheduling(false)}
+          onScheduled={(item, replaced) => {
+            setScheduling(false)
+            setNotice(`${replaced ? 'Moved the follow-up already waiting for' : 'Scheduled a follow-up for'} ${item.name} · ${formatWhen(item.dueAt)}`)
+            if (view === 'upcoming') load()
+            else setView('upcoming')
+          }}
+        />
+      )}
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
+        {notice && (
+          <p role="status" className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/5 px-3 py-2 text-sm font-semibold text-success">
+            <Icon name="check_circle" className="text-[18px]" /> {notice}
+          </p>
+        )}
         <div role="tablist" aria-label="Follow-up status" className="flex w-fit gap-1 rounded-full bg-surface p-1 ring-1 ring-border">
           {VIEWS.map((v) => (
             <button

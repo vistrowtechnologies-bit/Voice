@@ -181,5 +181,208 @@ class FollowUpsPage(unittest.TestCase):
         self.assertRegex(asha["body"], r"· \d{1,2} \w{3}, \d{1,2}:\d{2} (am|pm)$")
 
 
+
+@unittest.skipUnless(TEST_DB, "set TEST_DATABASE_URL to a throwaway Postgres database")
+class ManualFollowUps(unittest.TestCase):
+    """Phase 1 (owner, 22 Oct 2026): scheduling a follow-up by hand, and not
+    ringing a nurture follow-up to someone who has since talked to us."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ["DATABASE_URL"] = TEST_DB
+        calls_db.init_tables()
+        stamp = os.urandom(4).hex()
+        cls.stamp = stamp
+        cls.a = calls_db.create_account_with_owner("M", "M", f"mf-{stamp}@example.com", "h", email_verified=True)["account_id"]
+        cls.starter = calls_db.create_account_with_owner("S", "S", f"ms-{stamp}@example.com", "h", email_verified=True)["account_id"]
+        conn = calls_db._connect()
+        try:
+            with conn:
+                conn.execute("UPDATE accounts SET plan = 'growth' WHERE id = ?", (cls.a,))
+                cls.agent = conn.execute("SELECT MIN(id) id FROM agents WHERE account_id = ?", (cls.a,)).fetchone()["id"]
+                cls.bare_agent = conn.execute(
+                    "INSERT INTO agents (account_id, name) VALUES (?, 'No number') RETURNING id", (cls.a,)
+                ).fetchone()["id"]
+                cls.number = "+9179" + str(int(stamp, 16) % 10**8).zfill(8)
+                conn.execute(
+                    "INSERT INTO phone_numbers (account_id, number, agent_id, status) VALUES (?, ?, ?, 'active')",
+                    (cls.a, cls.number, cls.agent),
+                )
+                cls.call = conn.execute(
+                    "INSERT INTO calls (account_id, room_name, visitor_identity, started_at, ended_at, duration_seconds, "
+                    "transcript_json, call_type, agent_id, direction, lead_name, lead_phone) "
+                    "VALUES (?, ?, 'v', ?, ?, 90, '[]', 'phone', ?, 'inbound', 'Priya', '9876501234') RETURNING id",
+                    (cls.a, f"mf-src-{stamp}", _utc(-60), _utc(-58), cls.agent),
+                ).fetchone()["id"]
+        finally:
+            conn.close()
+
+    def _at(self, hours=3):
+        return (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=hours)).isoformat()
+
+    def test_from_a_call_uses_its_person_agent_and_number(self):
+        out = calls_db.create_follow_up(self.a, {"source_call_id": self.call, "kind": "callback", "at": self._at(),
+                                                 "note": "Ask whether the loan came through"}, user_id=7)
+        item = out["item"]
+        self.assertEqual((item["name"], item["kind"], item["sourceCallId"], item["agentId"], item["state"]),
+                         ("Priya", "callback", self.call, self.agent, "upcoming"))
+        conn = calls_db._connect()
+        try:
+            row = conn.execute(
+                "SELECT cc.phone, cc.phone_norm, cc.custom_fields, cp.from_number, cp.name, cp.status FROM campaign_contacts cc "
+                "JOIN campaigns cp ON cp.id = cc.campaign_id WHERE cc.id = ?", (item["id"],)).fetchone()
+        finally:
+            conn.close()
+        fields = json.loads(row["custom_fields"])
+        self.assertEqual(fields["note_for_this_call"], "Ask whether the loan came through")
+        self.assertEqual(fields["previous_call_id"], self.call)
+        self.assertEqual(fields["scheduled_by_user_id"], 7)
+        self.assertEqual(row["phone"], "+919876501234")  # E.164, like the agent writes
+        self.assertEqual((row["from_number"], row["name"], row["status"]), (self.number, "Follow-up calls", "running"))
+        # The dialer claims it once due, like an agent-scheduled one.
+        conn = calls_db._connect()
+        try:
+            camp = conn.execute("SELECT campaign_id FROM campaign_contacts WHERE id = ?", (item["id"],)).fetchone()["campaign_id"]
+            with conn:  # only this one due in the campaign
+                conn.execute("UPDATE campaign_contacts SET next_attempt_at = ? WHERE campaign_id = ? AND status = 'pending'",
+                             (_utc(600), camp))
+                conn.execute("UPDATE campaign_contacts SET next_attempt_at = ? WHERE id = ?", (_utc(-1), item["id"]))
+        finally:
+            conn.close()
+        claimed = calls_db.claim_next_campaign_contact(camp)
+        self.assertEqual(claimed["id"], item["id"])
+        calls_db.release_campaign_contact(item["id"])
+
+    def test_second_one_for_the_same_person_moves_the_first(self):
+        first = calls_db.create_follow_up(self.a, {"agent_id": self.agent, "phone": "+91 98765 00001", "name": "Ravi",
+                                                   "kind": "nurture", "at": self._at(5)})
+        second = calls_db.create_follow_up(self.a, {"agent_id": self.agent, "phone": "9876500001", "name": "Ravi K",
+                                                    "kind": "callback", "at": self._at(8)})
+        self.assertFalse(first["replaced"])
+        self.assertTrue(second["replaced"])
+        self.assertEqual(second["item"]["id"], first["item"]["id"])
+        self.assertEqual((second["item"]["kind"], second["item"]["name"]), ("callback", "Ravi K"))
+
+    def test_refusals(self):
+        cases = [
+            ({"agent_id": self.bare_agent, "phone": "9876500002", "kind": "callback", "at": self._at()}, "no phone number"),
+            ({"agent_id": self.agent, "phone": "12", "kind": "callback", "at": self._at()}, "valid phone"),
+            ({"agent_id": self.agent, "phone": "9876500003", "kind": "visit_reminder", "at": self._at()}, "type"),
+            ({"agent_id": self.agent, "phone": "9876500003", "kind": "callback", "at": "2020-01-01T10:00:00+00:00"}, "future"),
+            ({"phone": "9876500003", "kind": "callback", "at": self._at()}, "agent"),
+        ]
+        for data, words in cases:
+            with self.assertRaises(ValueError, msg=data) as ctx:
+                calls_db.create_follow_up(self.a, data)
+            self.assertIn(words, str(ctx.exception))
+        with self.assertRaises(LookupError):  # no such call in this account
+            calls_db.create_follow_up(self.a, {"source_call_id": 10**8, "kind": "callback", "at": self._at()})
+        with self.assertRaises(LookupError):  # no such agent in this account
+            calls_db.create_follow_up(self.a, {"agent_id": 10**8, "phone": "9876500005", "kind": "callback", "at": self._at()})
+        with self.assertRaises(ValueError) as ctx:  # plan without campaigns
+            calls_db.create_follow_up(self.starter, {"agent_id": self.agent, "phone": "9876500004", "kind": "callback", "at": self._at()})
+        self.assertIn("Growth", str(ctx.exception))
+
+    def test_dnc_number_is_refused(self):
+        conn = calls_db._connect()
+        try:
+            with conn:
+                conn.execute("INSERT INTO dnc_list (account_id, phone, phone_norm) VALUES (?, ?, ?)",
+                             (self.a, "9876500006", calls_db._normalize_phone("9876500006", self.a)))
+        finally:
+            conn.close()
+        with self.assertRaises(ValueError) as ctx:
+            calls_db.create_follow_up(self.a, {"agent_id": self.agent, "phone": "+919876500006", "kind": "callback", "at": self._at()})
+        self.assertIn("Do-Not-Call", str(ctx.exception))
+
+    # --- skip rule -------------------------------------------------------
+    def _nurture(self, phone, kind="nurture"):
+        out = calls_db.create_follow_up(self.a, {"agent_id": self.agent, "phone": phone, "kind": kind, "at": self._at(1)})
+        conn = calls_db._connect()
+        try:
+            return dict(conn.execute("SELECT * FROM campaign_contacts WHERE id = ?", (out["item"]["id"],)).fetchone())
+        finally:
+            conn.close()
+
+    def _call(self, phone, *, direction, seconds, room="", call_type="phone"):
+        conn = calls_db._connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO calls (account_id, room_name, visitor_identity, started_at, ended_at, duration_seconds, "
+                    "transcript_json, call_type, agent_id, direction, lead_phone) VALUES (?, ?, 'v', ?, ?, ?, '[]', ?, ?, ?, ?)",
+                    (self.a, room or f"mf-{os.urandom(4).hex()}", _utc(1), _utc(2), seconds, call_type, self.agent, direction, phone),
+                )
+        finally:
+            conn.close()
+
+    def test_nurture_skipped_after_they_call_in(self):
+        contact = self._nurture("9876511111")
+        self.assertIsNone(calls_db.follow_up_skip_reason(contact))
+        self._call("+91 98765 11111", direction="inbound", seconds=40)
+        self.assertIn("talked to us", calls_db.follow_up_skip_reason(contact))
+
+    def test_nurture_skipped_after_a_website_call_with_their_number(self):
+        contact = self._nurture("9876511112")
+        self._call("9876511112", direction=None, seconds=30, call_type="widget")
+        self.assertIsNotNone(calls_db.follow_up_skip_reason(contact))
+
+    def test_nurture_skipped_after_a_booking(self):
+        contact = self._nurture("9876511113")
+        conn = calls_db._connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO appointments (account_id, contact_name, contact_phone, appt_date, start_time, status, source) "
+                    "VALUES (?, 'B', '+919876511113', '2026-11-01', '10:00', 'confirmed', 'agent')", (self.a,))
+        finally:
+            conn.close()
+        self.assertIn("appointment booked for 2026-11-01", calls_db.follow_up_skip_reason(contact))
+
+    def test_what_does_not_count(self):
+        contact = self._nurture("9876511114")
+        self._call("9876511114", direction="outbound", seconds=120)        # our own dial
+        self._call("9876511114", direction="inbound", seconds=8)           # a drop
+        self._call("9876511114", direction="inbound", seconds=60, room="test-agent-1-x")  # dashboard test
+        self._call("9876500000", direction="inbound", seconds=60)          # someone else
+        self.assertIsNone(calls_db.follow_up_skip_reason(contact))
+
+    def test_callbacks_are_always_honoured(self):
+        contact = self._nurture("9876511115", kind="callback")
+        self._call("9876511115", direction="inbound", seconds=60)
+        self.assertIsNone(calls_db.follow_up_skip_reason(contact))
+
+    def test_dialer_skips_instead_of_dialling(self):
+        import campaign_dialer
+        from unittest.mock import patch
+        contact = self._nurture("9876511116")
+        self._call("9876511116", direction="inbound", seconds=60)
+        conn = calls_db._connect()
+        try:
+            with conn:
+                conn.execute("UPDATE campaign_contacts SET next_attempt_at = ? WHERE id = ?", (_utc(-1), contact["id"]))
+                # Only this contact due in the campaign for this tick.
+                conn.execute("UPDATE campaign_contacts SET next_attempt_at = ? WHERE campaign_id = ? AND id <> ? AND status = 'pending'",
+                             (_utc(600), contact["campaign_id"], contact["id"]))
+            camp = dict(conn.execute("SELECT * FROM campaigns WHERE id = ?", (contact["campaign_id"],)).fetchone())
+        finally:
+            conn.close()
+        # Rows other tests leave in flight must not make the trunk look full.
+        with patch.object(calls_db, "place_outbound_call_direct") as place, \
+             patch.object(calls_db, "campaign_inflight_all", return_value=0), \
+             patch.object(calls_db, "campaign_inflight", return_value=0), \
+             patch.object(calls_db, "count_active_calls", return_value=0), \
+             patch.object(calls_db, "concurrent_call_limit", return_value=10), \
+             patch.object(calls_db, "within_calling_window", return_value=(True, "")), \
+             patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False), \
+             patch.object(campaign_dialer, "_pace_dial"), \
+             patch.object(campaign_dialer.campaign_window, "campaign_block_reason", return_value=None):
+            campaign_dialer._dial_one(camp)
+        place.assert_not_called()
+        item = next(i for i in calls_db.list_follow_ups(self.a, view="cancelled")["items"] if i["id"] == contact["id"])
+        self.assertTrue(item["outcome"].startswith("Skipped: they talked to us"), item["outcome"])
+        self.assertEqual(item["attempts"], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

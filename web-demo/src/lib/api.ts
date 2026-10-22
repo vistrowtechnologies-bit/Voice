@@ -328,6 +328,16 @@ export const fetchFollowUps = (view: 'upcoming' | 'done' | 'cancelled' | 'all' =
 export const followUpCallNow = (id: number) => send<FollowUp>('POST', `/follow-ups/${id}/call-now`)
 export const followUpReschedule = (id: number, at: string) => send<FollowUp>('POST', `/follow-ups/${id}/reschedule`, { at })
 export const followUpCancel = (id: number) => send<FollowUp>('POST', `/follow-ups/${id}/cancel`)
+/** Schedule a follow-up call by hand. Phone, name and agent default to the source call's. */
+export const createFollowUp = (data: {
+  source_call_id?: number
+  agent_id?: number
+  phone?: string
+  name?: string
+  kind: 'callback' | 'nurture'
+  at: string
+  note?: string
+}) => send<{ item: FollowUp; replaced: boolean }>('POST', '/follow-ups', data)
 export const fetchInsights = (days = 30) => get<GrowthInsights>(`/dashboard/insights?days=${days}`)
 export const fetchLaunchReadiness = () => get<LaunchReadiness>('/dashboard/launch-readiness')
 export const fetchFeedbackSummary = () => get<FeedbackSummary>('/dashboard/feedback')

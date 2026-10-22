@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -15,9 +15,10 @@ import {
   pushCallToArthaleads,
   fetchFollowUps,
 } from '../lib/api'
-import { useAuth } from '../lib/auth'
+import { hasRole, useAuth } from '../lib/auth'
 import type { CallRecord, FollowUp } from '../lib/types'
 import { formatWhen } from '../lib/followUps'
+import { ScheduleFollowUpModal } from '../components/ScheduleFollowUpModal'
 import { Tooltip } from '../components/ui/Tooltip'
 
 const SENTIMENT_STYLE: Record<string, string> = {
@@ -106,11 +107,13 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
   const { user } = useAuth()
   const [call, setCall] = useState<CallRecord | null | undefined>(undefined)
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
-  useEffect(() => {
+  const [scheduling, setScheduling] = useState(false)
+  const loadFollowUps = useCallback(() => {
     const n = Number(id)
     if (!Number.isFinite(n)) return
     fetchFollowUps('all', n).then((d) => setFollowUps(d.items)).catch(() => setFollowUps([]))
   }, [id])
+  useEffect(loadFollowUps, [loadFollowUps])
   const [notes, setNotes] = useState('')
   // Which header value was just copied, for a brief check-mark.
   const [copied, setCopied] = useState<'id' | 'phone' | null>(null)
@@ -851,6 +854,18 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                       : `Follow-up made ${formatWhen(f.lastAttemptAt)} (${f.label.toLowerCase()})${f.callId != null ? ` · call #${f.callId}` : ''}`}
                 </Link>
               ),
+            )}
+            {hasRole(user, 'member') && call.phone && (
+              <button type="button" onClick={() => setScheduling(true)} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-primary/40 bg-transparent px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/5">
+                <Icon name="event_repeat" className="text-[16px]" /> Schedule a follow-up call
+              </button>
+            )}
+            {scheduling && (
+              <ScheduleFollowUpModal
+                source={{ callId: Number(call.id), name: call.name, phone: call.phone, agentId: call.agentId }}
+                onClose={() => setScheduling(false)}
+                onScheduled={() => { setScheduling(false); loadFollowUps() }}
+              />
             )}
           </Card>
 
