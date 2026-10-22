@@ -7,12 +7,11 @@ import { IntegrationLogo } from '../components/IntegrationLogo'
 import { Card } from '../components/ui/Card'
 import {
   disconnectGoogleSheets,
-  facebookIntegrationStartUrl,
   fetchAgents,
-  fetchFacebookLeads,
   fetchIntegrationDeliveries,
   fetchIntegrations,
   fetchLeadWebhook,
+  fetchPhoneNumbers,
   formatDateTime,
   formatRelativeTime,
   googleSheetsIntegrationStartUrl,
@@ -24,10 +23,20 @@ import {
   zohoIntegrationStartUrl,
   onCopilotChange,
 } from '../lib/api'
-import type { FacebookLead, IntegrationDeliveries } from '../lib/api'
-import type { AgentConfig, Integration } from '../lib/types'
+import type { IntegrationDeliveries } from '../lib/api'
+import type { AgentConfig, Integration, PhoneNumber } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import { StatusPill, hostOf, isUnavailableForNew, utcTime } from '../components/IntegrationBits'
+import { disconnectMeta, fetchMetaLeads, fetchMetaStatus, metaStartUrl, type MetaLeadEvent, type MetaStatusResult } from '../lib/metaLeads'
+import { MetaChecklist, MetaHealth, MetaReconnectBanner, MetaUnavailableNote, MetaWhatHappens } from '../components/meta/MetaOverview'
+import { MetaSettings } from '../components/meta/MetaSettings'
+import { MetaLeadsTab } from '../components/meta/MetaLeadsTab'
+
+// Facebook & Instagram Lead Ads (key "facebook") is served by
+// server/meta_leads.py, not the integrations row: its connection state,
+// Pages, rules and leads come from /integrations/meta*. The integrations row
+// still supplies the card's name, category and logo.
+const META_TITLE = 'Facebook & Instagram Lead Ads'
 
 // ------------------------------------------------------------ shared rules
 
@@ -113,6 +122,12 @@ export function IntegrationDetail() {
   const [testing, setTesting] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
+  const isMeta = key === 'facebook'
+  // undefined = loading; {ok:false} = not usable on this server (404/503).
+  const [meta, setMeta] = useState<MetaStatusResult | undefined>(undefined)
+  const [metaLeads, setMetaLeads] = useState<MetaLeadEvent[] | null>(null)
+  const [metaAgents, setMetaAgents] = useState<AgentConfig[]>([])
+  const [metaNumbers, setMetaNumbers] = useState<PhoneNumber[]>([])
   // Result of an OAuth round-trip (?sheets=connected|failed, ?zoho=failed...),
   // read once on arrival and then dropped from the URL.
   const [oauthResult] = useState(() => {
@@ -133,6 +148,12 @@ export function IntegrationDetail() {
     if (DELIVERY_KEYS.includes(key)) {
       fetchIntegrationDeliveries(key).then(setDeliveries).catch(() => setDeliveries(null))
     }
+    if (key === 'facebook') {
+      fetchMetaStatus().then(setMeta).catch(() => setMeta({ ok: false, reason: 'not_configured' }))
+      fetchMetaLeads().then(setMetaLeads).catch(() => setMetaLeads([]))
+      fetchAgents().then(setMetaAgents).catch(() => setMetaAgents([]))
+      fetchPhoneNumbers().then(setMetaNumbers).catch(() => setMetaNumbers([]))
+    }
   }, [key])
 
   useEffect(() => {
@@ -152,9 +173,15 @@ export function IntegrationDetail() {
   useEffect(() => {
     if (oauthResult === 'connected') setNotice({ tone: 'ok', text: 'Connected. Send a test to check that everything arrives.' })
     if (oauthResult === 'failed') setNotice({ tone: 'error', text: 'The connection did not finish. Please try again.' })
+    if (oauthResult === 'pick_pages') {
+      setNotice({ tone: 'ok', text: 'Signed in with Facebook. Choose the Pages to connect on the Settings tab.' })
+      setTab('settings')
+    }
+    if (oauthResult === 'no_pages')
+      setNotice({ tone: 'error', text: 'That Facebook account manages no Pages, or none were granted. Reconnect and tick the Pages that run your ads.' })
   }, [oauthResult])
 
-  if (integration === undefined) {
+  if (integration === undefined || (isMeta && meta === undefined)) {
     return (
       <DashboardLayout>
         <PageHeader title="Integrations" />
@@ -176,13 +203,15 @@ export function IntegrationDetail() {
     )
   }
 
-  const connected = integration.status === 'connected'
-  const noNewConnections = isUnavailableForNew(integration)
+  const metaUsable = isMeta && meta?.ok === true
+  const connected = metaUsable && meta.ok ? meta.status.connected : integration.status === 'connected'
+  const noNewConnections = isUnavailableForNew(integration) && !metaUsable
+  const title = isMeta ? META_TITLE : integration.name
 
   if (noNewConnections && !connected) {
     return (
       <DashboardLayout>
-        <PageHeader title={integration.name} subtitle={integration.category} />
+        <PageHeader title={title} subtitle={integration.category} />
         <section className="flex flex-col gap-4 p-4 sm:p-6">
           <Link to="/dashboard/integrations" className="flex w-fit items-center gap-1 text-xs font-semibold text-text-muted hover:text-text">
             <Icon name="arrow_back" className="text-[15px]" /> All integrations
@@ -191,7 +220,7 @@ export function IntegrationDetail() {
             <div className="flex min-w-0 items-center gap-4">
               <IntegrationLogo integrationKey={key} size="lg" />
               <div className="min-w-0">
-                <h2 className="text-lg font-bold">{integration.name}</h2>
+                <h2 className="text-lg font-bold">{title}</h2>
                 <p className="mt-1 text-xs text-text-muted">Coming soon. This integration is not available yet.</p>
               </div>
             </div>
@@ -206,7 +235,7 @@ export function IntegrationDetail() {
       key === 'slack'
         ? slackIntegrationStartUrl
         : key === 'facebook'
-          ? facebookIntegrationStartUrl
+          ? metaStartUrl
           : key === 'zoho_crm'
             ? zohoIntegrationStartUrl
             : key === 'sheets'
@@ -237,8 +266,9 @@ export function IntegrationDetail() {
     setConfirmDisconnect(false)
     try {
       if (isSheetsOauth(integration)) await disconnectGoogleSheets()
+      else if (isMeta) await disconnectMeta()
       else await updateIntegration(key, 'not_connected', {})
-      setNotice({ tone: 'ok', text: `${integration.name} disconnected.` })
+      setNotice({ tone: 'ok', text: `${title} disconnected.` })
       setTab('overview')
     } catch (error) {
       setNotice({ tone: 'error', text: error instanceof Error ? error.message : 'Could not disconnect' })
@@ -256,7 +286,7 @@ export function IntegrationDetail() {
 
   return (
     <DashboardLayout>
-      <PageHeader title={integration.name} subtitle={integration.category} />
+      <PageHeader title={title} subtitle={integration.category} />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <Link to="/dashboard/integrations" className="flex w-fit items-center gap-1 text-xs font-semibold text-text-muted hover:text-text">
@@ -269,10 +299,14 @@ export function IntegrationDetail() {
               <IntegrationLogo integrationKey={key} size="lg" />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-bold">{integration.name}</h2>
+                  <h2 className="text-lg font-bold">{title}</h2>
                   <StatusPill connected={connected} />
                 </div>
-                <p className="mt-1 text-xs text-text-muted">{integration.description}</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  {metaUsable
+                    ? 'Every lead from your Facebook and Instagram Lead Ads forms is called by the right agent within 60 seconds, with their answers in hand.'
+                    : integration.description}
+                </p>
               </div>
             </div>
 
@@ -283,7 +317,7 @@ export function IntegrationDetail() {
                     <GoogleSignInButton onClick={startOAuth} />
                   ) : usesOAuth ? (
                     <PrimaryButton icon="link" onClick={startOAuth}>
-                      {key === 'zoho_crm' ? 'Connect with Zoho' : `Connect ${integration.name}`}
+                      {key === 'zoho_crm' ? 'Connect with Zoho' : isMeta ? 'Connect with Facebook' : `Connect ${integration.name}`}
                     </PrimaryButton>
                   ) : (
                     <PrimaryButton icon="link" onClick={() => setTab('settings')}>
@@ -377,8 +411,12 @@ export function IntegrationDetail() {
           </div>
         )}
 
-        {key === 'facebook' ? (
-          <FacebookHealth integration={integration} />
+        {isMeta ? (
+          <>
+            {meta && !meta.ok && <MetaUnavailableNote reason={meta.reason} />}
+            {meta?.ok && <MetaReconnectBanner status={meta.status} canManage={canManage} onConnect={startOAuth} />}
+            <MetaHealth status={meta?.ok ? meta.status : null} leads={metaLeads} />
+          </>
         ) : (
           isDelivery && <DeliveryHealth integration={integration} deliveries={deliveries} />
         )}
@@ -399,13 +437,24 @@ export function IntegrationDetail() {
           ))}
         </div>
 
-        {tab === 'overview' && <OverviewTab integration={integration} />}
-        {tab === 'settings' && (
-          <SettingsTab integration={integration} canManage={canManage} onSaved={reload} onNotice={setNotice} />
-        )}
+        {tab === 'overview' &&
+          (isMeta && meta ? (
+            <MetaOverviewTab meta={meta} leads={metaLeads} canManage={canManage} onConnect={startOAuth} onOpenSettings={() => setTab('settings')} />
+          ) : (
+            <OverviewTab integration={integration} />
+          ))}
+        {tab === 'settings' &&
+          (isMeta && meta?.ok ? (
+            <div className="flex flex-col gap-4">
+              <MetaSettings status={meta.status} canManage={canManage} agents={metaAgents} numbers={metaNumbers} onChanged={reload} onNotice={setNotice} />
+              <LeadWebhookPanel />
+            </div>
+          ) : (
+            <SettingsTab integration={integration} canManage={canManage} onSaved={reload} onNotice={setNotice} />
+          ))}
         {tab === 'activity' &&
-          (key === 'facebook' ? (
-            <FacebookLeadsTab />
+          (isMeta ? (
+            <MetaLeadsTab leads={metaLeads} />
           ) : (
             <ActivityTab integrationKey={key} connected={connected} />
           ))}
@@ -433,17 +482,33 @@ function DeliveryHealth({ integration, deliveries }: { integration: Integration;
   )
 }
 
-function FacebookHealth({ integration }: { integration: Integration }) {
-  const [leads, setLeads] = useState<FacebookLead[] | null>(null)
-  useEffect(() => {
-    fetchFacebookLeads().then(setLeads).catch(() => setLeads([]))
-  }, [])
-  const last = leads?.[0]
+function MetaOverviewTab({
+  meta,
+  leads,
+  canManage,
+  onConnect,
+  onOpenSettings,
+}: {
+  meta: MetaStatusResult
+  leads: MetaLeadEvent[] | null
+  canManage: boolean
+  onConnect: () => void
+  onOpenSettings: () => void
+}) {
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-      <Tile icon="flag" label="Page" value={integration.config.pageName || '-'} />
-      <Tile icon="group_add" label="Leads · last 50" value={leads ? String(leads.length) : '-'} />
-      <Tile icon="schedule" label="Last lead" value={last ? formatRelativeTime(utcTime(last.createdAt)) : 'None yet'} />
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="flex flex-col gap-4">
+        {meta.ok ? (
+          <MetaChecklist status={meta.status} leads={leads} canManage={canManage} onConnect={onConnect} onOpenSettings={onOpenSettings} />
+        ) : (
+          <Panel title="Connection" icon="link">
+            <p className="text-xs text-text-muted">Not available on this server yet.</p>
+          </Panel>
+        )}
+      </div>
+      <Panel title="What happens to a lead" icon="route">
+        <MetaWhatHappens />
+      </Panel>
     </div>
   )
 }
@@ -1417,67 +1482,6 @@ function ResultBadge({ status }: { status: string }) {
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${style}`}>{label}</span>
 }
 
-const CALL_STATUS: Record<string, string> = {
-  pending: 'Queued',
-  calling: 'Calling now',
-  done: 'Called',
-  completed: 'Called',
-  failed: 'Call failed',
-  blocked: 'Blocked by your rules',
-  not_queued: 'Not called',
-}
-
-function FacebookLeadsTab() {
-  const [leads, setLeads] = useState<FacebookLead[] | null>(null)
-  useEffect(() => {
-    fetchFacebookLeads().then(setLeads).catch(() => setLeads([]))
-  }, [])
-  return (
-    <Card>
-      {leads === null ? (
-        <p className="py-6 text-center text-xs text-text-muted">Loading…</p>
-      ) : leads.length === 0 ? (
-        <div className="py-8 text-center">
-          <Icon name="inbox" className="text-[28px] text-text-muted" />
-          <p className="mt-2 text-sm font-semibold">No Facebook leads yet</p>
-          <p className="text-xs text-text-muted">Leads from your Lead Ads forms appear here as they arrive.</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-left text-xs">
-            <thead>
-              <tr className="border-b border-border text-[10px] uppercase tracking-widest text-text-muted">
-                <th className="py-2 pr-3 font-bold">Received</th>
-                <th className="py-2 pr-3 font-bold">Name</th>
-                <th className="py-2 pr-3 font-bold">Phone</th>
-                <th className="py-2 font-bold">Call</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => (
-                <tr key={lead.leadId} className="border-b border-border/60 last:border-0">
-                  <td className="whitespace-nowrap py-2.5 pr-3 text-text-muted">{formatDateTime(utcTime(lead.createdAt))}</td>
-                  <td className="py-2.5 pr-3 font-semibold">{lead.name || '-'}</td>
-                  <td className="whitespace-nowrap py-2.5 pr-3">{lead.phone || '-'}</td>
-                  <td className="py-2.5">
-                    {lead.callId ? (
-                      <Link to={`/dashboard/calls/${lead.callId}`} className="font-semibold text-primary hover:underline">
-                        {CALL_STATUS[lead.callStatus] ?? lead.callStatus}
-                      </Link>
-                    ) : (
-                      CALL_STATUS[lead.callStatus] ?? lead.callStatus
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  )
-}
-
 // --------------------------------------------------------------- help
 
 const HELP: Record<string, { steps: string[]; problems: Array<[string, string]> }> = {
@@ -1553,14 +1557,16 @@ const HELP: Record<string, { steps: string[]; problems: Array<[string, string]> 
   },
   facebook: {
     steps: [
-      'Click Connect Facebook and choose the Page that runs your Lead Ads.',
-      'We subscribe that Page to new leads automatically.',
-      'Each new lead is added to Contacts and called by your instant follow-up campaign.',
-      'Make sure the instant follow-up campaign is running and has a phone number, or leads won’t be called.',
+      'Click Connect with Facebook and sign in with the account that manages your Pages. Tick every Page that runs your ads.',
+      'On the Settings tab, choose the Pages to connect. We subscribe each one to new leads and check it took.',
+      'In Meta Business Suite, open Business Settings → Integrations → Leads Access, pick the Page, open the CRM tab and assign "Vistrow Voice". Without this, Meta sends us nothing.',
+      'Pick a default agent per Page, and add a rule for any form or ad that should go to a different agent.',
+      'Send a test lead from Meta’s Lead Ads Testing Tool: it shows on the Leads tab as a test and is never dialled.',
     ],
     problems: [
-      ['Leads aren’t arriving', 'Check the Page is the one running the ads, then click Reconnect.'],
-      ['Leads arrive but aren’t called', 'The instant follow-up campaign is paused or has no number, or your calling hours are closed.'],
+      ['Leads aren’t arriving', 'Check Leads Access in Meta Business Suite (step 3), then that the Page shows "Subscribed" on the Settings tab. Click Reconnect if access was removed.'],
+      ['Leads arrive but aren’t called', 'Open the Leads tab: each lead says why. Usually the agent is paused or has no number, your calling hours are closed, or the lead was older than 24 hours.'],
+      ['“Access stopped” banner', 'Facebook removed or expired our access (a password change or app removal does this). Click Reconnect.'],
     ],
   },
 }

@@ -10,14 +10,23 @@ import { StatusPill, integrationSummary, isUnavailableForNew, utcTime } from '..
 
 // The API returns integrations in undefined DB row order - pin a deliberate
 // display order instead (ArthaLeads first, since it's the flagship CRM)
-// rather than leaving card position to chance. Facebook Lead Ads and WhatsApp
-// are no longer offered: their cards only appear for an account that already
-// has one connected, so it can still manage or disconnect it.
+// rather than leaving card position to chance. A card the server flags as
+// unavailable for new connections (WhatsApp; Facebook until the Meta app is
+// live) only appears for an account that already has it connected, so it can
+// still manage or disconnect it.
 const DISPLAY_ORDER = ['arthaleads', 'zoho_crm', 'facebook', 'webhook', 'slack', 'whatsapp', 'sheets']
 const sortIntegrations = (list: Integration[]) =>
   list
     .filter((i) => !isUnavailableForNew(i) || i.status === 'connected')
     .sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
+
+// Facebook & Instagram Lead Ads is served by server/meta_leads.py; the
+// integrations row still carries the old "Facebook Lead Ads" name and copy.
+const displayName = (i: Integration) => (i.key === 'facebook' ? 'Facebook & Instagram Lead Ads' : i.name)
+const displayDescription = (i: Integration) =>
+  i.key === 'facebook' && !isUnavailableForNew(i)
+    ? 'Every lead from your Facebook and Instagram Lead Ads forms is called by the right agent within 60 seconds, with their answers in hand.'
+    : i.description
 
 export function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[] | null>(null)
@@ -71,14 +80,14 @@ export function Integrations() {
                 key={integration.key}
                 to={`/dashboard/integrations/${integration.key}`}
                 className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                aria-label={`Open ${integration.name}`}
+                aria-label={`Open ${displayName(integration)}`}
               >
                 <Card className="flex h-full flex-col transition-colors group-hover:border-primary/60">
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <IntegrationLogo integrationKey={integration.key} />
                       <div className="min-w-0">
-                        <p className="truncate font-semibold">{integration.name}</p>
+                        <p className="truncate font-semibold">{displayName(integration)}</p>
                         <p className="text-[11px] text-text-muted">{integration.category}</p>
                       </div>
                     </div>
@@ -87,7 +96,7 @@ export function Integrations() {
                   <p className="mb-4 text-xs text-text-muted">
                     {isUnavailableForNew(integration)
                       ? 'No longer offered for new connections. Your existing connection keeps working until you disconnect it.'
-                      : integration.description}
+                      : displayDescription(integration)}
                   </p>
                   <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-3 text-xs">
                     {isConnected && integration.lastError ? (
