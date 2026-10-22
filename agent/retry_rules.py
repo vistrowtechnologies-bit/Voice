@@ -132,7 +132,7 @@ FOLLOW_UP_DEFAULTS = {
     "visitReminderEnabled": True,
     "visitReminderTime": "11:00",
     "nurtureEnabled": True,
-    "nurtureDays": 3,
+    "nurtureDays": 2,
     "nurtureTime": "11:00",
     # A nurture sequence (owner, 22 Oct 2026): calls on these days after the
     # first interested call, at nurtureTime, moved off non-calling days.
