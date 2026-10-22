@@ -51,6 +51,18 @@ class SourceGuards(unittest.TestCase):
         self.assertIn('usage["ttsAudioSOut"]', src)
 
 
+
+class StudioKeepsTheIndianAccent(unittest.TestCase):
+    """Call 1467: Studio switched to an English accent on English words in Hindi."""
+
+    def test_indian_locales_get_the_hint_others_do_not(self):
+        for lang in ("hi-IN", "en-IN", "mr-IN"):
+            with self.subTest(lang=lang):
+                self.assertIn("Indian accent", main._gemini38_accent_hint(lang))
+        for lang in ("en-US", "fr-FR", ""):
+            with self.subTest(lang=lang):
+                self.assertEqual(main._gemini38_accent_hint(lang), "")
+
 if __name__ == "__main__":
     unittest.main()
 

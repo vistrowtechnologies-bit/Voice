@@ -441,6 +441,15 @@ _GEMINI38_TONE_LLM_HINTS = {
 }
 
 
+# Call 1467 (22 Oct 2026, Studio): English words in a Hindi reply ("website",
+# "SEO", "CRM") switched to an English accent mid-sentence.
+def _gemini38_accent_hint(reply_language: str) -> str:
+    if (reply_language or "").endswith("-IN"):
+        return ("Indian accent throughout; say English words the way urban Indians do in "
+                "Hinglish, never switching to an American or British accent")
+    return ""
+
+
 def _gemini38_voice_style_hint(voice_value: str) -> tuple[str | None, str | None]:
     """Get a safe, concise LLM/TTS hint from a Gemini 3.8 catalog persona."""
     if not voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
@@ -3042,6 +3051,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             _persona_name, persona_hint = _gemini38_voice_style_hint(speaker)
             if persona_hint and tone_name != "professional":
                 style = f"{style}; {persona_hint}"
+            style = "; ".join(p for p in (style, _gemini38_accent_hint(reply_language)) if p)
             gemini38_tts = GeminiInteractionsTTS(
                 model=model,
                 voice=voice_name,
@@ -3971,8 +3981,10 @@ class RealEstateAgent(Agent):
             # Call 1463 (22 Oct 2026, GPT-5.4 mini): a website enquiry from a
             # real-estate caller got "कोई खास city?" and "leads या listings?",
             # i.e. the caller was qualified as a buyer in THEIR industry.
-            "it. When the caller names their own industry, keep asking about what they need from "
-            "this business, not about their customers, stock or market.\n"
+            # Call 1466: "keep asking" read as "ask more" (type of website x2,
+            # pages x2) - the rule is about the topic, not the number.
+            "it. When the caller names their own industry, your questions stay on what they need "
+            "from this business, not on their customers, stock or market.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "
@@ -4172,7 +4184,9 @@ class RealEstateAgent(Agent):
             "(or send_brochure noted it for the team — then say only what it tells you to).\n"
             "2. Never ask again for anything listed under what you already know. If the caller "
             "says they already told you, they are right — acknowledge once, briefly, and move "
-            "on to something you genuinely do not know.\n"
+            "on to something you genuinely do not know. If they question or brush off one of "
+            "your questions (\"ये किस type का question है?\", \"ठीक है भाई\"), never ask it again; "
+            "move on.\n"
             "3. If a message is garbled or makes no sense in context, say in one short line "
             "that you did not catch it and ask them to repeat it. Never guess at its meaning, "
             "and never cover for it by asking a different question instead.\n"
@@ -6150,7 +6164,8 @@ class RealEstateAgent(Agent):
                 }.get(emotion, "") if emotion and self._emotion_intensity > 0 else ""
                 if emotion_style and self._emotion_intensity < 1:
                     emotion_style = f"subtle {emotion_style}"
-                style = "; ".join(part for part in (base_style, emotion_style) if part)
+                accent = _gemini38_accent_hint(getattr(self, "_reply_language", "") or "")
+                style = "; ".join(part for part in (base_style, accent, emotion_style) if part)
                 try:
                     self.tts.update_options(style=style)
                     logger.info("Gemini 3.8 delivery style updated for caller tone=%s", emotion or "neutral")
