@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import contextlib
 import fcntl
 import json
@@ -2719,6 +2720,16 @@ class _MarkupStrippedTTS(_BaseTTS):
         await self._inner.aclose()
 
 
+def _log_platform_error_off_loop(*args, **kwargs) -> None:
+    """db.log_platform_error from a sync callback on the agent loop, run in a
+    thread: the inline write held the loop ~0.9 s while a TTS fell over
+    (call 1460, 22 Oct 2026) - on top of the slower backup voice."""
+    try:
+        asyncio.get_running_loop().run_in_executor(None, functools.partial(db.log_platform_error, *args, **kwargs))
+    except RuntimeError:
+        db.log_platform_error(*args, **kwargs)
+
+
 def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_language: str, tone_name: str):
     """Keep Gemini calls inside the same voice persona during failover.
 
@@ -2783,7 +2794,7 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
                     primary_model,
                     fallback_model,
                 )
-                db.log_platform_error(
+                _log_platform_error_off_loop(
                     f"Google TTS {primary_model} unavailable — silently using {fallback_model} instead",
                     source="agent_tts", level="warning",
                 )
@@ -2794,7 +2805,7 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
                 logger.error(
                     "Both Gemini TTS models unavailable — falling back to Monika (ElevenLabs) until either recovers"
                 )
-                db.log_platform_error(
+                _log_platform_error_off_loop(
                     "Both Gemini TTS models unavailable — using ElevenLabs safety net",
                     source="agent_tts", level="error",
                 )

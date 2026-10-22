@@ -1018,14 +1018,14 @@ async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | 
         refreshed = await _zoho_refresh_access_token(http, config)
         if refreshed:
             access_token, config = refreshed
-            db.update_integration_config(account_id, "zoho_crm", config)
+            await asyncio.to_thread(db.update_integration_config, account_id, "zoho_crm", config)
 
     ok, status = await _post(access_token)
     if not ok and status == 401:
         refreshed = await _zoho_refresh_access_token(http, config)
         if refreshed:
             access_token, config = refreshed
-            db.update_integration_config(account_id, "zoho_crm", config)
+            await asyncio.to_thread(db.update_integration_config, account_id, "zoho_crm", config)
             ok, status = await _post(access_token)
     return ok
 

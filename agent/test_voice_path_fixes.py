@@ -93,3 +93,24 @@ class NativeVoiceDropsHmm(unittest.TestCase):
             with self.subTest(voice=voice):
                 a = self._agent(voice, provider)
                 self.assertTrue(main._vary_opener(a, "हम्म, ठीक है").startswith("हम्म"))
+
+
+class PlatformErrorLogOffTheLoop(unittest.TestCase):
+    """Call 1460: logging a TTS failover held the agent loop ~0.9 s."""
+
+    def test_runs_in_a_worker_thread(self):
+        import threading
+        seen = {}
+
+        def fake_log(msg, **kw):
+            seen["thread"] = threading.current_thread() is threading.main_thread()
+
+        async def go():
+            with patch.object(main.db, "log_platform_error", fake_log):
+                main._log_platform_error_off_loop("tts down", source="agent_tts", level="warning")
+                for _ in range(50):
+                    if "thread" in seen:
+                        break
+                    await asyncio.sleep(0.01)
+        asyncio.run(go())
+        self.assertIs(seen.get("thread"), False)
