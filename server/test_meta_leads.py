@@ -88,8 +88,17 @@ class MetaLeadsPhase1(unittest.TestCase):
             conn.execute("UPDATE agents SET status = 'live' WHERE id IN (?, ?)", (cls.agent_a, cls.agent_b))
         conn.close()
         tail = str(int(time.time() * 1000))[-7:]
-        calls_db.add_phone_number(f"+91224{tail}", cls.a, agent_id=cls.agent_a)
-        calls_db.add_phone_number(f"+91225{tail}", cls.b, agent_id=cls.agent_b)
+        cls.number_a, cls.number_a2, cls.number_b = f"+91224{tail}", f"+91226{tail}", f"+91225{tail}"
+        calls_db.add_phone_number(cls.number_a, cls.a, agent_id=cls.agent_a)
+        calls_db.add_phone_number(cls.number_b, cls.b, agent_id=cls.agent_b)
+        # A second live agent with its own number for account A: the routing
+        # tests need two agents to tell apart.
+        cls.agent_a2 = calls_db.create_agent({"name": "Riya"}, cls.a)["id"]
+        conn = calls_db._connect()
+        with conn:
+            conn.execute("UPDATE agents SET status = 'live' WHERE id = ?", (cls.agent_a2,))
+        conn.close()
+        calls_db.add_phone_number(cls.number_a2, cls.a, agent_id=cls.agent_a2)
         cls.page_a, cls.page_b = f"PA{stamp}", f"PB{stamp}"
         cls.conn_a = meta_leads.save_connection(cls.a, "user-token-a", 5_184_000, f"fbu-a-{stamp}", "Asha FB", cls.a_user)
         cls.conn_b = meta_leads.save_connection(cls.b, "user-token-b", 5_184_000, f"fbu-b-{stamp}", "Bala FB", cls.b_user)
@@ -407,6 +416,195 @@ class MetaLeadsPhase1(unittest.TestCase):
         url = self.ml.oauth_start_url("STATE", "https://x/cb", "APP")
         self.assertIn("auth_type=rerequest", url)
         self.assertIn("leads_retrieval", url)
+
+
+    # ------------------------------------------------------ phase 2: routing
+
+    def rule(self, page_id, kind, value, agent_id, from_number="", label="", account=None) -> dict:
+        return self.ml.create_rule(account or self.a, {"pageId": page_id, "matchKind": kind, "matchValue": value,
+                                                       "agentId": agent_id, "fromNumber": from_number, "label": label})
+
+    def set_agent_status(self, agent_id: int, status: str) -> None:
+        conn = self.db._connect()
+        with conn:
+            conn.execute("UPDATE agents SET status = ? WHERE id = ?", (status, agent_id))
+        conn.close()
+
+    def test_route_precedence_ad_beats_form_beats_page_default_exact_match_only(self):
+        ad, form = f"ADP{self.stamp}", f"FMP{self.stamp}"
+        self.rule(self.page_a, "ad", ad, self.agent_a2, label="Launch ad")
+        self.rule(self.page_a, "form", form, self.agent_a, label="Brochure form")
+        self.ml.set_page_default(self.a, self.page_a, self.agent_a2, self.number_a2)
+        try:
+            route, reason = self.ml.resolve_route(self.a, self.page_a, form, ad)
+            self.assertEqual((route["agentId"], route["matchKind"], route["label"], route["fromNumber"], reason),
+                             (self.agent_a2, "ad", "Launch ad", self.number_a2, ""))
+            route, _ = self.ml.resolve_route(self.a, self.page_a, form, "AD-other")
+            self.assertEqual((route["agentId"], route["matchKind"], route["fromNumber"]), (self.agent_a, "form", self.number_a),
+                             "a rule without a number dials from the agent's own number")
+            route, _ = self.ml.resolve_route(self.a, self.page_a, "FM-other", "AD-other")
+            self.assertEqual((route["agentId"], route["matchKind"]), (self.agent_a2, "page"))
+            route, _ = self.ml.resolve_route(self.a, self.page_a, form, ad + "0")
+            self.assertEqual(route["matchKind"], "form", "a different ad id is not a match")
+        finally:
+            self.ml.set_page_default(self.a, self.page_a, None, "")
+        self.assertEqual(self.ml.resolve_route(self.a, self.page_a, "FM-other", "AD-other"), (None, "no_rules"))
+
+    def test_a_rule_may_only_name_this_workspaces_page_agent_and_number(self):
+        ad = f"ADX{self.stamp}"
+        with self.assertRaises(ValueError) as ctx:
+            self.rule(self.page_a, "ad", ad, self.agent_b)
+        self.assertIn("not found in this workspace", str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            self.rule(self.page_a, "ad", ad, self.agent_a, from_number=self.number_b)
+        self.assertIn("not one of this workspace", str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            self.rule(self.page_b, "ad", ad, self.agent_a)
+        self.assertIn("not connected to this workspace", str(ctx.exception))
+        with self.assertRaises(ValueError):
+            self.rule(self.page_a, "campaign", ad, self.agent_a)
+        no_number = self.db.create_agent({"name": "No number"}, self.a)["id"]
+        self.set_agent_status(no_number, "live")
+        with self.assertRaises(ValueError) as ctx:
+            self.rule(self.page_a, "ad", ad, no_number)
+        self.assertIn("no phone number", str(ctx.exception))
+        self.set_agent_status(self.agent_a2, "paused")
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                self.rule(self.page_a, "ad", ad, self.agent_a2)
+            self.assertIn("paused", str(ctx.exception))
+        finally:
+            self.set_agent_status(self.agent_a2, "live")
+        self.assertNotIn(ad, [r["matchValue"] for r in self.ml.list_rules(self.a)], "nothing was written")
+
+    def test_another_workspaces_rule_never_matches(self):
+        ad = f"ADB{self.stamp}"
+        self.rule(self.page_b, "ad", ad, self.agent_b, account=self.b)
+        self.assertEqual(self.ml.resolve_route(self.a, self.page_a, "", ad), (None, "no_rules"))
+        self.assertEqual(self.ml.resolve_route(self.a, self.page_b, "", ad), (None, "no_rules"))
+        route, _ = self.ml.resolve_route(self.b, self.page_b, "", ad)
+        self.assertEqual(route["agentId"], self.agent_b)
+        self.assertNotIn(ad, [r["matchValue"] for r in self.ml.list_rules(self.a)])
+
+    def test_a_paused_agent_on_the_winning_rule_stops_the_call_with_the_reason(self):
+        ad, lid, phone = f"ADQ{self.stamp}", self.lid(), self.phone()
+        self.rule(self.page_a, "ad", ad, self.agent_a2)
+        self.set_agent_status(self.agent_a2, "paused")
+        try:
+            self.assertEqual(self.ml.resolve_route(self.a, self.page_a, "", ad), (None, "agent_paused"))
+            self.receive(self.page_a, [lid])
+            self.ml.process_pending(fetcher=self.fetcher_for({lid: _lead(lid, phone, ad_id=ad)}))
+            row = self.event(self.page_a, lid)
+            self.assertEqual((row["status"], row["reason"]), ("skipped", "agent_paused"))
+            self.assertEqual(self.queued_rows(self.a, phone), [], "never called from a different agent")
+            self.assertIsNotNone(self.contact(self.a, phone), "but the lead is kept")
+        finally:
+            self.set_agent_status(self.agent_a2, "live")
+
+    def test_a_duplicate_rule_is_refused_and_delete_is_scoped(self):
+        ad = f"ADD{self.stamp}"
+        self.rule(self.page_a, "ad", ad, self.agent_a)
+        with self.assertRaises(self.ml.DuplicateRule):
+            self.rule(self.page_a, "ad", ad, self.agent_a2)
+        [item] = [r for r in self.ml.list_rules(self.a) if r["matchValue"] == ad]
+        self.assertEqual((item["pageId"], item["matchKind"], item["agentId"], item["fromNumber"]), (self.page_a, "ad", self.agent_a, ""))
+        self.assertFalse(self.ml.delete_rule(self.b, item["id"]), "another workspace cannot delete it")
+        self.assertTrue(self.ml.delete_rule(self.a, item["id"]))
+        self.assertNotIn(ad, [r["matchValue"] for r in self.ml.list_rules(self.a)])
+
+    def test_options_list_only_this_workspaces_forms_ads_agents_and_numbers(self):
+        lid, phone, ad, form = self.lid(), self.phone(), f"ADO{self.stamp}", f"FO{self.stamp}"
+        self.receive(self.page_a, [lid])
+        self.ml.process_pending(fetcher=self.fetcher_for({lid: _lead(lid, phone, ad_id=ad, ad_name="Options ad", form_id=form)}))
+        out = self.ml.options(self.a)
+        self.assertIn((self.page_a, ad, "Options ad", "Khopoli Oct"),
+                      [(a["pageId"], a["adId"], a["adName"], a["campaignName"]) for a in out["ads"]])
+        self.assertIn((self.page_a, form), [(f["pageId"], f["formId"]) for f in out["forms"]])
+        self.assertTrue(all(f["pageId"] != self.page_b for f in out["forms"]))
+        self.assertTrue(all(a["pageId"] != self.page_b for a in out["ads"]))
+        agent_ids = {a["id"] for a in out["agents"]}
+        self.assertTrue({self.agent_a, self.agent_a2} <= agent_ids)
+        self.assertNotIn(self.agent_b, agent_ids)
+        self.assertEqual({n["number"] for n in out["numbers"]}, {self.number_a, self.number_a2})
+        self.assertNotIn(ad, [a["adId"] for a in self.ml.options(self.b)["ads"]])
+
+    def test_a_processed_lead_stores_its_route_and_is_queued_for_the_rules_agent(self):
+        ad, lid, phone = f"ADR{self.stamp}", self.lid(), self.phone()
+        self.rule(self.page_a, "ad", ad, self.agent_a2, from_number=self.number_a2, label="Riya takes launch leads")
+        self.receive(self.page_a, [lid])
+        self.ml.process_pending(fetcher=self.fetcher_for({lid: _lead(lid, phone, ad_id=ad)}))
+        row = self.event(self.page_a, lid)
+        self.assertEqual((row["status"], row["route_agent_id"], row["route_from_number"], row["route_label"]),
+                         ("queued", self.agent_a2, self.number_a2, "Riya takes launch leads"))
+        [queued] = self.queued_rows(self.a, phone)
+        self.assertEqual(json.loads(queued["custom_fields"])["route_label"], "Riya takes launch leads")
+        conn = self.db._connect()
+        try:
+            campaign = dict(conn.execute("SELECT name, agent_id, from_number FROM campaigns WHERE id = ?", (queued["campaign_id"],)).fetchone())
+        finally:
+            conn.close()
+        if self.ml._INGEST_ACCEPTS_ROUTE:
+            self.assertEqual((campaign["name"], campaign["agent_id"], campaign["from_number"]),
+                             ("Meta Instant Follow-up", self.agent_a2, self.number_a2))
+            self.assertEqual(row["reason"], "")
+        else:
+            self.assertEqual(row["reason"], "route_not_wired_generic_agent")
+
+    def test_leads_list_says_who_the_lead_is_and_links_the_call(self):
+        lid, phone = self.lid(), self.phone()
+        self.receive(self.page_a, [lid])
+        self.ml.process_pending(fetcher=self.fetcher_for({lid: _lead(lid, phone)}))
+        [item] = [i for i in self.ml.list_events(self.a) if i["leadgen_id"] == lid]
+        self.assertEqual((item["name"], item["phone"], item["call_id"], item["status"]), ("Priya Nair", phone, None, "queued"))
+        conn = self.db._connect()
+        with conn:
+            conn.execute("UPDATE campaign_contacts SET call_id = 424242 WHERE id = ?", (item["campaign_contact_id"],))
+        conn.close()
+        [item] = [i for i in self.ml.list_events(self.a) if i["leadgen_id"] == lid]
+        self.assertEqual(item["call_id"], 424242)
+        # A lead that was never queued is still named, from inbound_lead_events.
+        lid2 = self.lid()
+        self.receive(self.page_a, [lid2])
+        lead = _lead(lid2)
+        lead["field_data"] = [{"name": "full_name", "values": ["No Phone"]}]
+        self.ml.process_pending(fetcher=self.fetcher_for({lid2: lead}))
+        [item2] = [i for i in self.ml.list_events(self.a) if i["leadgen_id"] == lid2]
+        self.assertEqual((item2["status"], item2["name"], item2["phone"], item2["call_id"]), ("skipped", "No Phone", "", None))
+        self.assertEqual([i for i in self.ml.list_events(self.b) if i["leadgen_id"] in (lid, lid2)], [])
+
+    def test_the_integrations_card_and_status_follow_connect_and_disconnect(self):
+        stamp = os.urandom(3).hex()
+        c = self.db.create_account_with_owner("MC", "Chitra", f"mc-{stamp}@example.com", "h", email_verified=True)
+        acct, page_c = c["account_id"], f"PC{stamp}"
+        self.assertFalse(self.ml.status_for(acct)["connected"])
+        cid = self.ml.save_connection(acct, "tok-c", 5_184_000, f"fbu-c-{stamp}", "Chitra FB", c["user_id"])
+        self.assertFalse(self.ml.status_for(acct)["connected"], "a connection without a Page cannot receive leads")
+        with self.assertRaises(ValueError):
+            self.ml.connect_pages(acct, {page_c})
+        self.db.set_setting(self.ml._PENDING_PAGES_SETTING, self.ml._enc(json.dumps({"connection_id": cid, "pages": [
+            {"id": page_c, "name": "Chitra Homes", "access_token": "pt-c"},
+            {"id": self.page_a, "name": "Khopoli Homes", "access_token": "stolen"}]})), acct)
+        out = self.ml.connect_pages(acct, {page_c, self.page_a}, poster=lambda url, data: {"success": True},
+                                    fetcher=lambda url: {"data": [{"subscribed_fields": ["leadgen"]}]})
+        self.assertTrue(out["ok"])
+        self.assertEqual({(r["pageId"], r.get("ok"), r.get("reason")) for r in out["results"]},
+                         {(page_c, True, None), (self.page_a, False, "owned_elsewhere")})
+        self.assertEqual(self.ml.page_owner(self.page_a)["account_id"], self.a, "the other workspace's Page stays theirs")
+        self.assertTrue(self.ml.status_for(acct)["connected"])
+        card = next(i for i in self.db.list_integrations(acct) if i["key"] == "facebook")
+        self.assertEqual((card["status"], card["config"]), ("connected", {"pages": 1}))
+        self.assertIsNone(self.db.get_setting(self.ml._PENDING_PAGES_SETTING, acct) or None, "candidates are cleared")
+        self.ml.disconnect(acct, poster=lambda url, data: {})
+        self.assertFalse(self.ml.status_for(acct)["connected"])
+        card = next(i for i in self.db.list_integrations(acct) if i["key"] == "facebook")
+        self.assertEqual((card["status"], card["config"]), ("not_connected", {}))
+
+    def test_a_page_without_rules_uses_the_generic_agent_and_says_so(self):
+        lid, phone = self.lid(), self.phone()
+        self.receive(self.page_b, [lid])
+        self.ml.process_pending(fetcher=self.fetcher_for({lid: _lead(lid, phone, ad_id=f"ADN{self.stamp}")}))
+        row = self.event(self.page_b, lid)
+        self.assertEqual((row["status"], row["reason"], row["route_agent_id"]), ("queued", "no_route_generic_agent", None))
 
 
 if __name__ == "__main__":

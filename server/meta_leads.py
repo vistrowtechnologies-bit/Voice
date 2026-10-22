@@ -35,6 +35,7 @@ import base64
 import datetime
 import hashlib
 import hmac
+import inspect
 import json
 import logging
 import os
@@ -83,6 +84,18 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f  ]")
 
 Fetcher = Callable[[str], dict]
 Poster = Callable[[str, dict], dict]
+
+# Phase 2 routing needs calls_db.ingest_inbound_lead(route=...) (patch in
+# docs/patches/calls_db-meta-route.md). Until that lands, a resolved route is
+# recorded on the event and the lead still goes down the generic path.
+_INGEST_ACCEPTS_ROUTE = "route" in inspect.signature(calls_db.ingest_inbound_lead).parameters
+_warned: set[str] = set()
+
+
+def _warn_once(tag: str, message: str) -> None:
+    if tag not in _warned:
+        _warned.add(tag)
+        logger.warning(message)
 
 
 class GraphError(Exception):
@@ -164,6 +177,22 @@ CREATE TABLE IF NOT EXISTS meta_lead_rules (
     UNIQUE (page_id, match_kind, match_value)
 );
 
+-- Every ad we have seen a lead from, with the names Meta returned on the
+-- lead object, so the rules screen offers "2 BHK Khopoli launch" rather
+-- than an ad id typed by hand.
+CREATE TABLE IF NOT EXISTS meta_ads (
+    page_id TEXT NOT NULL,
+    ad_id TEXT NOT NULL,
+    account_id INTEGER NOT NULL,
+    ad_name TEXT DEFAULT '',
+    adset_name TEXT DEFAULT '',
+    campaign_id TEXT DEFAULT '',
+    campaign_name TEXT DEFAULT '',
+    first_seen_at TEXT DEFAULT {calls_db._NOW},
+    PRIMARY KEY (page_id, ad_id)
+);
+CREATE INDEX IF NOT EXISTS idx_meta_ads_account ON meta_ads (account_id);
+
 -- One row per lead Meta told us about (or we found by reconciliation). The
 -- webhook writes it and answers 200; the worker does the rest. Primary key
 -- makes Meta's redeliveries a no-op.
@@ -183,6 +212,9 @@ CREATE TABLE IF NOT EXISTS meta_lead_events (
     dialed_at TEXT,
     campaign_contact_id INTEGER,
     raw_json TEXT DEFAULT '',
+    route_agent_id INTEGER,
+    route_from_number TEXT DEFAULT '',
+    route_label TEXT DEFAULT '',
     PRIMARY KEY (page_id, leadgen_id)
 );
 CREATE INDEX IF NOT EXISTS idx_meta_lead_events_status ON meta_lead_events (status, next_attempt_at);
@@ -202,6 +234,10 @@ def init_tables() -> None:
     try:
         with conn:
             conn.execute(_SCHEMA)
+            # Phase 2 columns on a table Phase 1 may already have created.
+            for column, coltype in (("route_agent_id", "INTEGER"), ("route_from_number", "TEXT DEFAULT ''"),
+                                    ("route_label", "TEXT DEFAULT ''")):
+                conn.execute(f"ALTER TABLE meta_lead_events ADD COLUMN IF NOT EXISTS {column} {coltype}")
     finally:
         conn.close()
 
@@ -450,7 +486,89 @@ def disconnect(account_id: int, poster: Poster | None = None) -> dict:
             conn.execute("UPDATE meta_connections SET status = 'disconnected', user_token = '' WHERE account_id = ?", (account_id,))
     finally:
         conn.close()
+    # The Integrations list reads the `integrations` row; keep its card in step.
+    calls_db.update_integration("facebook", "not_connected", {}, account_id)
     return {"ok": True, "pages": pages}
+
+
+def status_for(account_id: int) -> dict:
+    """What the integration page shows. `connected` means leads can flow:
+    a live user connection AND at least one active Page."""
+    conn_row = connection(account_id)
+    pages = list_pages(account_id)
+    pending = []
+    stored = calls_db.get_setting(_PENDING_PAGES_SETTING, account_id)
+    if stored:
+        try:
+            pending = [{"id": p["id"], "name": p["name"]} for p in json.loads(_dec(stored)).get("pages", [])]
+        except (ValueError, TypeError):
+            pending = []
+    active = any(p["status"] == "active" for p in pages)
+    return {
+        "connected": bool(conn_row and conn_row["status"] == "connected" and active),
+        "status": conn_row["status"] if conn_row else "not_connected",
+        "fbUserName": conn_row["fb_user_name"] if conn_row else "",
+        "tokenExpiresAt": conn_row["token_expires_at"] if conn_row else None,
+        "lastError": conn_row["last_error"] if conn_row else "",
+        "pages": pages,
+        "pendingPages": pending,
+        "tokenStorageOk": token_storage_ok(),
+    }
+
+
+def connect_pages(account_id: int, page_ids: set[str], poster: Poster | None = None, fetcher: Fetcher | None = None) -> dict:
+    """Connect the chosen candidate Pages (stored server-side by the OAuth
+    callback): subscribe each to leadgen, verify, store, and mark the
+    `integrations` card connected. Returns {"ok", "results", "pages"}; ok is
+    False when nothing connected. Raises ValueError without a pending list."""
+    stored = calls_db.get_setting(_PENDING_PAGES_SETTING, account_id)
+    if not stored:
+        raise ValueError("Connect with Facebook first")
+    pending = json.loads(_dec(stored))
+    results = []
+    for page in pending.get("pages", []):
+        if page["id"] not in page_ids:
+            continue
+        try:
+            add_page(account_id, pending.get("connection_id"), page["id"], page["name"], page["access_token"])
+        except PageOwnedElsewhere:
+            results.append({"pageId": page["id"], "ok": False, "reason": "owned_elsewhere"})
+            continue
+        try:
+            ok = subscribe_page(page["id"], page["access_token"], poster=poster, fetcher=fetcher)
+        except GraphError as exc:
+            ok = False
+            logger.warning("meta subscribe failed for page %s: %s", page["id"], exc)
+        results.append({"pageId": page["id"], "ok": True, "subscribed": ok})
+    calls_db.set_setting(_PENDING_PAGES_SETTING, "", account_id)
+    pages = list_pages(account_id)
+    connected = [p for p in pages if p["status"] == "active"]
+    if any(r.get("ok") for r in results):
+        # Never a token in this config: it is what the Integrations list reads.
+        calls_db.update_integration("facebook", "connected", {"pages": len(connected)}, account_id)
+    return {"ok": any(r.get("ok") for r in results), "results": results, "pages": pages}
+
+
+def list_events(account_id: int, limit: int = 200) -> list[dict]:
+    """The Leads tab: every event with, when known, who the lead is and the
+    call it produced (campaign_contacts.call_id)."""
+    conn = calls_db._connect()
+    try:
+        rows = conn.execute(
+            "SELECT e.page_id, p.page_name, e.leadgen_id, e.form_id, f.form_name, e.ad_id, e.via, e.status, e.reason, "
+            "e.attempts, e.received_at, e.processed_at, e.dialed_at, e.campaign_contact_id, "
+            "e.route_agent_id, e.route_from_number, e.route_label, cc.call_id, "
+            "COALESCE(NULLIF(cc.name, ''), ile.name, '') AS name, COALESCE(NULLIF(cc.phone, ''), ile.phone, '') AS phone "
+            "FROM meta_lead_events e LEFT JOIN meta_pages p ON p.page_id = e.page_id "
+            "LEFT JOIN meta_forms f ON f.page_id = e.page_id AND f.form_id = e.form_id "
+            "LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id "
+            "LEFT JOIN inbound_lead_events ile ON ile.account_id = e.account_id AND ile.source = ? AND ile.external_id = e.leadgen_id "
+            "WHERE e.account_id = ? ORDER BY e.received_at DESC LIMIT ?",
+            (SOURCE, account_id, max(1, min(int(limit), 500))),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
 
 
 def _graph_delete(url: str, data: dict) -> dict:
@@ -610,6 +728,217 @@ def lead_fields(lead: dict, page: dict, account_id: int) -> tuple[str, str, str,
     return name, phone, email, fields
 
 
+# ---------------------------------------------------------------- routing
+# Phase 2: which agent and caller number a lead gets. Most specific wins: an
+# ad rule, then a form rule, then the Page's default. Exact match only. A rule
+# may only name this account's own agents and active numbers; that is checked
+# when the rule is written AND again when a lead arrives, because an agent can
+# be paused or a number released later. The winning match is never skipped
+# for a less specific one: if its agent is paused, the lead is not called and
+# the reason is on the event, which is what the customer configured.
+
+class DuplicateRule(Exception):
+    """A rule for this (page, kind, value) already exists."""
+
+
+_RULE_KINDS = ("ad", "form")
+_TARGET_PROBLEMS = {
+    "agent_missing": "Agent not found in this workspace",
+    "agent_paused": "That agent is paused; put it live first",
+    "agent_demo": "The demo agent cannot make lead calls",
+    "number_inactive": "That phone number is not one of this workspace's active numbers",
+    "no_number": "This agent has no phone number to call from. Assign one in Phone Numbers or pick a number for the rule",
+}
+
+
+def _agent_state(conn, account_id: int, agent_id: int) -> str:
+    row = conn.execute(
+        "SELECT status, is_platform_demo, public_demo_slug FROM agents WHERE id = ? AND account_id = ?",
+        (agent_id, account_id),
+    ).fetchone()
+    if row is None:
+        return "agent_missing"
+    if row["is_platform_demo"] or (row["public_demo_slug"] or ""):
+        return "agent_demo"
+    if row["status"] != "live":
+        return "agent_paused"
+    return ""
+
+
+def _number_for(conn, account_id: int, agent_id: int, from_number: str) -> tuple[str, str]:
+    """(number, '') for the caller number: the one named, else the agent's
+    own active number; ('', reason) when neither works."""
+    if from_number:
+        row = conn.execute(
+            "SELECT number FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+            (account_id, from_number),
+        ).fetchone()
+        return (row["number"], "") if row else ("", "number_inactive")
+    row = conn.execute(
+        "SELECT number FROM phone_numbers WHERE account_id = ? AND agent_id = ? AND status = 'active' ORDER BY id LIMIT 1",
+        (account_id, agent_id),
+    ).fetchone()
+    return (row["number"], "") if row else ("", "no_number")
+
+
+def resolve_route(account_id: int, page_id: str, form_id: str, ad_id: str) -> tuple[dict | None, str]:
+    """(route, reason).
+
+    route = {"agentId", "fromNumber", "label", "matchKind": "ad"|"form"|"page"}
+    with reason "". Otherwise route is None and reason is "no_rules" (nothing
+    configured for this Page) or why the winning rule/default cannot be used:
+    "agent_paused", "agent_missing", "agent_demo", "number_inactive",
+    "no_number"."""
+    conn = calls_db._connect()
+    try:
+        candidates: list[tuple[str, int, str, str]] = []
+        for kind, value in (("ad", ad_id), ("form", form_id)):
+            if not value:
+                continue
+            row = conn.execute(
+                "SELECT agent_id, from_number, label FROM meta_lead_rules "
+                "WHERE account_id = ? AND page_id = ? AND match_kind = ? AND match_value = ?",
+                (account_id, str(page_id), kind, str(value)),
+            ).fetchone()
+            if row:
+                candidates.append((kind, int(row["agent_id"]), row["from_number"] or "", row["label"] or ""))
+        page = conn.execute(
+            "SELECT default_agent_id, default_from_number, page_name FROM meta_pages "
+            "WHERE page_id = ? AND account_id = ? AND status = 'active'",
+            (str(page_id), account_id),
+        ).fetchone()
+        if page and page["default_agent_id"]:
+            label = f"Page default: {page['page_name']}" if page["page_name"] else "Page default"
+            candidates.append(("page", int(page["default_agent_id"]), page["default_from_number"] or "", label))
+        if not candidates:
+            return None, "no_rules"
+        kind, agent_id, from_number, label = candidates[0]
+        reason = _agent_state(conn, account_id, agent_id)
+        if reason:
+            return None, reason
+        number, reason = _number_for(conn, account_id, agent_id, from_number)
+        if reason:
+            return None, reason
+        return {"agentId": agent_id, "fromNumber": number, "label": label or f"{kind} rule", "matchKind": kind}, ""
+    finally:
+        conn.close()
+
+
+def _rule_item(row) -> dict:
+    return {"id": row["id"], "pageId": row["page_id"], "matchKind": row["match_kind"], "matchValue": row["match_value"],
+            "agentId": row["agent_id"], "fromNumber": row["from_number"] or "", "label": row["label"] or "",
+            "position": row["position"] or 0}
+
+
+def list_rules(account_id: int) -> list[dict]:
+    conn = calls_db._connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, page_id, match_kind, match_value, agent_id, from_number, label, position FROM meta_lead_rules "
+            "WHERE account_id = ? ORDER BY page_id, match_kind, position, id",
+            (account_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [_rule_item(r) for r in rows]
+
+
+def create_rule(account_id: int, data: dict) -> dict:
+    """Raises ValueError with a plain-English detail, or DuplicateRule."""
+    page_id = _text(data.get("pageId"), 64)
+    kind = _text(data.get("matchKind"), 10).lower()
+    value = _text(data.get("matchValue"), 100)
+    label = _text(data.get("label"), 120)
+    from_number = _text(data.get("fromNumber"), 40)
+    try:
+        agent_id = int(data.get("agentId"))
+    except (TypeError, ValueError):
+        raise ValueError("Pick the agent who should make the call") from None
+    if kind not in _RULE_KINDS:
+        raise ValueError("A rule matches an ad or a form")
+    if not value:
+        raise ValueError("Pick the ad or form the rule applies to")
+    conn = calls_db._connect()
+    try:
+        with conn:
+            if conn.execute(
+                "SELECT 1 FROM meta_pages WHERE page_id = ? AND account_id = ? AND status = 'active'", (page_id, account_id)
+            ).fetchone() is None:
+                raise ValueError("That Facebook Page is not connected to this workspace")
+            problem = _agent_state(conn, account_id, agent_id) or _number_for(conn, account_id, agent_id, from_number)[1]
+            if problem:
+                raise ValueError(_TARGET_PROBLEMS[problem])
+            if conn.execute(
+                "SELECT 1 FROM meta_lead_rules WHERE page_id = ? AND match_kind = ? AND match_value = ?", (page_id, kind, value)
+            ).fetchone():
+                raise DuplicateRule(f"{kind}:{value}")
+            position = conn.execute(
+                "SELECT count(*) n FROM meta_lead_rules WHERE page_id = ? AND match_kind = ?", (page_id, kind)
+            ).fetchone()["n"]
+            row = conn.execute(
+                "INSERT INTO meta_lead_rules (account_id, page_id, match_kind, match_value, agent_id, from_number, label, position) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, page_id, match_kind, match_value, agent_id, from_number, label, position",
+                (account_id, page_id, kind, value, agent_id, from_number, label, position),
+            ).fetchone()
+            return _rule_item(row)
+    finally:
+        conn.close()
+
+
+def delete_rule(account_id: int, rule_id: int) -> bool:
+    conn = calls_db._connect()
+    try:
+        with conn:
+            return conn.execute("DELETE FROM meta_lead_rules WHERE id = ? AND account_id = ?", (rule_id, account_id)).rowcount == 1
+    finally:
+        conn.close()
+
+
+def options(account_id: int) -> dict:
+    """What the rules screen may pick from: this account's forms and ads seen
+    on its leads, its live agents, its active numbers. Nothing typed by hand."""
+    conn = calls_db._connect()
+    try:
+        forms = conn.execute(
+            "SELECT f.page_id, f.form_id, f.form_name, f.label FROM meta_forms f "
+            "JOIN meta_pages p ON p.page_id = f.page_id AND p.account_id = f.account_id "
+            "WHERE f.account_id = ? AND p.status = 'active' ORDER BY f.form_name, f.form_id",
+            (account_id,),
+        ).fetchall()
+        ads = conn.execute(
+            "SELECT page_id, ad_id, ad_name, campaign_name FROM meta_ads WHERE account_id = ? ORDER BY first_seen_at DESC, ad_id",
+            (account_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    agents = [{"id": a["id"], "name": a["name"], "status": a["status"]}
+              for a in calls_db.list_agents(account_id) if not a.get("isPlatformDemo")]
+    numbers = [{"number": n["number"], "agentId": n.get("agentId")}
+               for n in calls_db.list_phone_numbers(account_id) if n.get("status") == "active"]
+    return {
+        "forms": [{"pageId": f["page_id"], "formId": f["form_id"], "formName": f["form_name"] or "", "label": f["label"] or ""} for f in forms],
+        "ads": [{"pageId": a["page_id"], "adId": a["ad_id"], "adName": a["ad_name"] or "", "campaignName": a["campaign_name"] or ""} for a in ads],
+        "agents": agents,
+        "numbers": numbers,
+    }
+
+
+def _remember_ad(conn, page: dict, lead: dict) -> None:
+    ad_id = _text(lead.get("ad_id"), 100)
+    if not ad_id:
+        return
+    conn.execute(
+        "INSERT INTO meta_ads (page_id, ad_id, account_id, ad_name, adset_name, campaign_id, campaign_name) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (page_id, ad_id) DO UPDATE SET "
+        "ad_name = CASE WHEN excluded.ad_name <> '' THEN excluded.ad_name ELSE meta_ads.ad_name END, "
+        "adset_name = CASE WHEN excluded.adset_name <> '' THEN excluded.adset_name ELSE meta_ads.adset_name END, "
+        "campaign_id = CASE WHEN excluded.campaign_id <> '' THEN excluded.campaign_id ELSE meta_ads.campaign_id END, "
+        "campaign_name = CASE WHEN excluded.campaign_name <> '' THEN excluded.campaign_name ELSE meta_ads.campaign_name END",
+        (page["page_id"], ad_id, page["account_id"], _text(lead.get("ad_name"), 200), _text(lead.get("adset_name"), 200),
+         _text(lead.get("campaign_id"), 100), _text(lead.get("campaign_name"), 200)),
+    )
+
+
 # ---------------------------------------------------------------- worker
 
 _wake = threading.Event()
@@ -727,14 +1056,20 @@ def process_event(event: dict, fetcher: Fetcher | None = None, now: datetime.dat
         return "received"
 
     name, phone, email, fields = lead_fields(lead, page, account_id)
+    form_id = str(lead.get("form_id") or event.get("form_id") or "")
+    ad_id = str(lead.get("ad_id") or event.get("ad_id") or "")
+    route, route_reason = resolve_route(account_id, page_id, form_id, ad_id)
+    fields["route_label"] = route["label"] if route else ""
     conn = calls_db._connect()
     try:
         with conn:
-            _remember_form(conn, page, str(lead.get("form_id") or event.get("form_id") or ""), str(lead.get("form_name") or ""))
+            _remember_form(conn, page, form_id, str(lead.get("form_name") or ""))
+            _remember_ad(conn, page, lead)
             conn.execute(
-                "UPDATE meta_lead_events SET form_id = COALESCE(NULLIF(?, ''), form_id), ad_id = COALESCE(NULLIF(?, ''), ad_id) "
-                "WHERE page_id = ? AND leadgen_id = ?",
-                (str(lead.get("form_id") or ""), str(lead.get("ad_id") or ""), page_id, leadgen_id),
+                "UPDATE meta_lead_events SET form_id = COALESCE(NULLIF(?, ''), form_id), ad_id = COALESCE(NULLIF(?, ''), ad_id), "
+                "route_agent_id = ?, route_from_number = ?, route_label = ? WHERE page_id = ? AND leadgen_id = ?",
+                (form_id, ad_id, route["agentId"] if route else None, route["fromNumber"] if route else "",
+                 route["label"] if route else "", page_id, leadgen_id),
             )
     finally:
         conn.close()
@@ -752,14 +1087,31 @@ def process_event(event: dict, fetcher: Fetcher | None = None, now: datetime.dat
         calls_db._record_lead_event(account_id, SOURCE, leadgen_id, name, phone)
         _finish_event(page_id, leadgen_id, "stale", f"older_than_{STALE_AFTER_HOURS}h", contact_id)
         return "stale"
-    result = calls_db.ingest_inbound_lead(account_id, name, phone, SOURCE, external_id=leadgen_id, custom_fields=fields)
+    if route is None and route_reason != "no_rules":
+        # The configured agent or number cannot take the call (paused, released).
+        # Calling from a different agent is not what the customer set up.
+        calls_db._record_lead_event(account_id, SOURCE, leadgen_id, name, phone)
+        _finish_event(page_id, leadgen_id, "skipped", route_reason, contact_id)
+        return "skipped"
+    kwargs: dict = {}
+    route_note = ""
+    if route and _INGEST_ACCEPTS_ROUTE:
+        kwargs["route"] = {"agentId": route["agentId"], "fromNumber": route["fromNumber"], "label": route["label"]}
+    elif route:
+        route_note = "route_not_wired_generic_agent"
+        _warn_once("route", "meta leads: calls_db.ingest_inbound_lead has no route parameter yet; "
+                            "rules are recorded but leads use the generic agent (docs/patches/calls_db-meta-route.md)")
+    else:
+        route_note = "no_route_generic_agent"
+    result = calls_db.ingest_inbound_lead(account_id, name, phone, SOURCE, external_id=leadgen_id, custom_fields=fields, **kwargs)
     if not result.get("ok"):
         _finish_event(page_id, leadgen_id, "skipped", str(result.get("reason") or "not_queued"), contact_id)
         return "skipped"
     if not result.get("queued"):
         _finish_event(page_id, leadgen_id, "skipped", str(result.get("reason") or "no_campaign"), contact_id)
         return "skipped"
-    _finish_event(page_id, leadgen_id, "queued", "deduped" if result.get("deduped") else "",
+    _finish_event(page_id, leadgen_id, "queued",
+                  ";".join(part for part in (route_note, "deduped" if result.get("deduped") else "") if part),
                   result.get("contact_id"))
     if result.get("delay_seconds"):
         campaign_dialer.notify_after(result["delay_seconds"])
@@ -1175,24 +1527,7 @@ def meta_callback(request: Request, code: str | None = None, state: str | None =
 @router.get("/integrations/meta")
 def meta_status(request: Request):
     user = _admin(request)
-    conn_row = connection(user["account_id"])
-    pending = []
-    stored = calls_db.get_setting(_PENDING_PAGES_SETTING, user["account_id"])
-    if stored:
-        try:
-            pending = [{"id": p["id"], "name": p["name"]} for p in json.loads(_dec(stored)).get("pages", [])]
-        except (ValueError, TypeError):
-            pending = []
-    return {
-        "connected": bool(conn_row and conn_row["status"] == "connected"),
-        "status": conn_row["status"] if conn_row else "not_connected",
-        "fbUserName": conn_row["fb_user_name"] if conn_row else "",
-        "tokenExpiresAt": conn_row["token_expires_at"] if conn_row else None,
-        "lastError": conn_row["last_error"] if conn_row else "",
-        "pages": list_pages(user["account_id"]),
-        "pendingPages": pending,
-        "tokenStorageOk": token_storage_ok(),
-    }
+    return status_for(user["account_id"])
 
 
 @router.post("/integrations/meta/pages")
@@ -1202,30 +1537,14 @@ async def meta_connect_pages(request: Request):
     user = _admin(request)
     body = await request.json()
     wanted = {str(p) for p in (body.get("pageIds") or [])}
-    stored = calls_db.get_setting(_PENDING_PAGES_SETTING, user["account_id"])
-    if not stored:
-        raise HTTPException(400, "Connect with Facebook first")
-    pending = json.loads(_dec(stored))
-    results = []
-    for page in pending.get("pages", []):
-        if page["id"] not in wanted:
-            continue
-        try:
-            add_page(user["account_id"], pending.get("connection_id"), page["id"], page["name"], page["access_token"])
-        except PageOwnedElsewhere:
-            results.append({"pageId": page["id"], "ok": False, "reason": "owned_elsewhere"})
-            continue
-        try:
-            ok = subscribe_page(page["id"], page["access_token"])
-        except GraphError as exc:
-            ok = False
-            logger.warning("meta subscribe failed for page %s: %s", page["id"], exc)
-        results.append({"pageId": page["id"], "ok": True, "subscribed": ok})
-    calls_db.set_setting(_PENDING_PAGES_SETTING, "", user["account_id"])
-    if any(r.get("reason") == "owned_elsewhere" for r in results) and not any(r.get("ok") for r in results):
-        return JSONResponse({"ok": False, "results": results,
+    try:
+        out = connect_pages(user["account_id"], wanted)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not out["ok"] and any(r.get("reason") == "owned_elsewhere" for r in out["results"]):
+        return JSONResponse({"ok": False, "results": out["results"],
                              "detail": "That Facebook Page is already connected to another Vistrow workspace."}, status_code=409)
-    return {"ok": True, "results": results, "pages": list_pages(user["account_id"])}
+    return {"ok": True, "results": out["results"], "pages": out["pages"]}
 
 
 @router.patch("/integrations/meta/pages/{page_id}")
@@ -1252,16 +1571,48 @@ def meta_disconnect(request: Request):
 @router.get("/integrations/meta/leads")
 def meta_leads_list(request: Request, limit: int = 200):
     user = _admin(request)
-    conn = calls_db._connect()
+    return {"items": list_events(user["account_id"], limit)}
+
+
+# ------------------------------------------------------------ rules routes
+# Contract (the dashboard codes against this):
+#   GET    /integrations/meta/rules        -> {items: [{id, pageId, matchKind: 'ad'|'form', matchValue,
+#                                                        agentId, fromNumber, label, position}]}
+#   POST   /integrations/meta/rules        {pageId, matchKind, matchValue, agentId, fromNumber?, label?}
+#                                          -> {ok, item}; 400 {detail} on a bad page/agent/number; 409 on a duplicate
+#   DELETE /integrations/meta/rules/{id}   -> {ok}; 404 when it is not this workspace's rule
+#   GET    /integrations/meta/options      -> {forms: [{pageId, formId, formName, label}],
+#                                              ads: [{pageId, adId, adName, campaignName}],
+#                                              agents: [{id, name, status}], numbers: [{number, agentId}]}
+
+@router.get("/integrations/meta/rules")
+def meta_rules_list(request: Request):
+    user = _admin(request)
+    return {"items": list_rules(user["account_id"])}
+
+
+@router.post("/integrations/meta/rules")
+async def meta_rules_create(request: Request):
+    user = _admin(request)
+    body = await request.json()
     try:
-        rows = conn.execute(
-            "SELECT e.page_id, p.page_name, e.leadgen_id, e.form_id, f.form_name, e.ad_id, e.via, e.status, e.reason, "
-            "e.attempts, e.received_at, e.processed_at, e.dialed_at, e.campaign_contact_id "
-            "FROM meta_lead_events e LEFT JOIN meta_pages p ON p.page_id = e.page_id "
-            "LEFT JOIN meta_forms f ON f.page_id = e.page_id AND f.form_id = e.form_id "
-            "WHERE e.account_id = ? ORDER BY e.received_at DESC LIMIT ?",
-            (user["account_id"], max(1, min(int(limit), 500))),
-        ).fetchall()
-    finally:
-        conn.close()
-    return {"items": [dict(r) for r in rows]}
+        item = create_rule(user["account_id"], body if isinstance(body, dict) else {})
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except DuplicateRule as exc:
+        raise HTTPException(409, "A rule for that ad or form already exists. Delete it first to change it.") from exc
+    return {"ok": True, "item": item}
+
+
+@router.delete("/integrations/meta/rules/{rule_id}")
+def meta_rules_delete(rule_id: int, request: Request):
+    user = _admin(request)
+    if not delete_rule(user["account_id"], rule_id):
+        raise HTTPException(404, "Rule not found in this workspace")
+    return {"ok": True}
+
+
+@router.get("/integrations/meta/options")
+def meta_rule_options(request: Request):
+    user = _admin(request)
+    return options(user["account_id"])
