@@ -84,6 +84,7 @@ const Usage = lazy(() => import('./pages/Usage').then((m) => ({ default: m.Usage
 const Contacts = lazy(() => import('./pages/Contacts').then((m) => ({ default: m.Contacts })))
 const ContactDetail = lazy(() => import('./pages/ContactDetail').then((m) => ({ default: m.ContactDetail })))
 const Appointments = lazy(() => import('./pages/Appointments').then((m) => ({ default: m.Appointments })))
+const FollowUps = lazy(() => import('./pages/FollowUps').then((m) => ({ default: m.FollowUps })))
 const PhoneNumbers = lazy(() => import('./pages/PhoneNumbers').then((m) => ({ default: m.PhoneNumbers })))
 const Support = lazy(() => import('./pages/Support').then((m) => ({ default: m.Support })))
 const LeadDetail = lazy(() => import('./pages/LeadDetail').then((m) => ({ default: m.LeadDetail })))
@@ -232,6 +233,7 @@ function App() {
         <Route path="/dashboard/contacts" element={guard(<Contacts />)} />
         <Route path="/dashboard/contacts/:id" element={guard(<ContactDetail />)} />
         <Route path="/dashboard/appointments" element={guard(<Appointments />)} />
+        <Route path="/dashboard/follow-ups" element={guard(<FollowUps />)} />
         <Route path="/dashboard/integrations" element={guard(<Integrations />)} />
         <Route path="/dashboard/integrations/:key" element={guard(<IntegrationDetail />)} />
         <Route path="/dashboard/channels" element={guard(<Navigate to="/dashboard/numbers" replace />)} />

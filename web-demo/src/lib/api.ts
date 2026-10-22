@@ -2,6 +2,8 @@ import type {
   AgentActivity,
   GrowthInsights,
   MissedMoneyQueue,
+  FollowUp,
+  FollowUpList,
   SpeedToLead,
   ActiveCallInfo,
   AgentConfig,
@@ -321,6 +323,11 @@ export const fetchPeriodComparison = (r: DashboardRangeQuery) => get<DashboardPe
 export const fetchAnalytics = () => get<Analytics>('/dashboard/analytics')
 export const fetchSpeedToLead = (r: DashboardRangeQuery) => get<SpeedToLead>(`/dashboard/speed-to-lead?${rangeParams(r)}`)
 export const fetchMissedMoney = () => get<MissedMoneyQueue>('/dashboard/missed-money')
+export const fetchFollowUps = (view: 'upcoming' | 'done' | 'cancelled' | 'all' = 'upcoming', sourceCallId?: number) =>
+  get<FollowUpList>(`/follow-ups?view=${view}${sourceCallId != null ? `&source_call_id=${sourceCallId}` : ''}`)
+export const followUpCallNow = (id: number) => send<FollowUp>('POST', `/follow-ups/${id}/call-now`)
+export const followUpReschedule = (id: number, at: string) => send<FollowUp>('POST', `/follow-ups/${id}/reschedule`, { at })
+export const followUpCancel = (id: number) => send<FollowUp>('POST', `/follow-ups/${id}/cancel`)
 export const fetchInsights = (days = 30) => get<GrowthInsights>(`/dashboard/insights?days=${days}`)
 export const fetchLaunchReadiness = () => get<LaunchReadiness>('/dashboard/launch-readiness')
 export const fetchFeedbackSummary = () => get<FeedbackSummary>('/dashboard/feedback')

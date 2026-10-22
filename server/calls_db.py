@@ -4477,6 +4477,174 @@ def missed_money_queue(account_id: int, limit: int = 20) -> dict:
 
 
 
+# --- Follow-ups page (owner, 22 Oct 2026) ---------------------------------
+# A follow-up is a campaign_contacts row whose custom_fields carry
+# follow_up_kind (agent/db.py schedule_follow_up_call). previous_call_id is the
+# call that created it; call_id, once dialled, is the follow-up call itself.
+_FOLLOW_UP_RETRY = ("no_answer", "failed", "voicemail")
+_FOLLOW_UP_DONE = ("done", "no_answer", "failed", "voicemail", "blocked")
+
+
+def _utc_iso(value: str | None) -> str | None:
+    """Stored UTC text ('YYYY-MM-DD HH:MM:SS' or ISO) as ISO-8601 with Z, so the
+    browser reads it as UTC rather than local time."""
+    if not value:
+        return None
+    text = str(value).strip().replace(" ", "T")
+    if text.endswith("Z") or "+" in text[10:]:
+        return text
+    return text + "Z"
+
+
+def _follow_up_state(status: str, next_attempt_at: str | None) -> str:
+    if status == "cancelled":
+        return "cancelled"
+    if status in ("pending", "calling") or (status in _FOLLOW_UP_RETRY and next_attempt_at):
+        return "upcoming"
+    return "done"
+
+
+def _follow_up_item(r) -> dict:
+    fields = _load_json_field(r["custom_fields"], {})
+    kind = str(fields.get("follow_up_kind") or "")
+    try:
+        source = int(fields.get("previous_call_id")) if fields.get("previous_call_id") not in (None, "") else None
+    except (TypeError, ValueError):
+        source = None
+    return {
+        "id": r["id"],
+        "name": _queue_name(r["name"], r["phone"], "Follow-up"),
+        "phone": r["phone"] or "",
+        "kind": kind,
+        "label": _FOLLOW_UP_LABELS.get(kind, "Follow-up call"),
+        "summary": str(fields.get("follow_up_summary") or ""),
+        "visitAt": str(fields.get("follow_up_visit_at") or ""),
+        "status": r["status"],
+        "state": _follow_up_state(r["status"], r["next_attempt_at"]),
+        "outcome": r["outcome"] or "",
+        "attempts": r["attempts"] or 0,
+        "dueAt": _utc_iso(r["next_attempt_at"]),
+        "lastAttemptAt": _utc_iso(r["last_attempt_at"]),
+        "createdAt": _utc_iso(r["created_at"]),
+        "sourceCallId": source,
+        "callId": r["call_id"],
+        "agentId": r["agent_id"],
+        "agentName": r["agent_name"] or "",
+        "campaignId": r["campaign_id"],
+        "campaignPaused": r["campaign_status"] not in ("running", "completed"),
+        "contactId": r["contact_id"],
+    }
+
+
+_FOLLOW_UP_SELECT = """
+    SELECT cc.id, cc.name, cc.phone, cc.status, cc.outcome, cc.attempts, cc.next_attempt_at,
+           cc.last_attempt_at, cc.created_at, cc.call_id, cc.custom_fields, cc.campaign_id,
+           cp.status AS campaign_status, cp.agent_id, a.name AS agent_name, ct.id AS contact_id
+    FROM campaign_contacts cc
+    JOIN campaigns cp ON cp.id = cc.campaign_id
+    LEFT JOIN agents a ON a.id = cp.agent_id
+    LEFT JOIN contacts ct ON ct.account_id = cc.account_id AND ct.phone = cc.phone AND ct.deleted_at IS NULL
+    WHERE cc.account_id = ? AND cc.custom_fields LIKE ?
+"""
+_FOLLOW_UP_MARK = "%follow_up_kind%"
+
+
+def list_follow_ups(account_id: int, view: str = "upcoming", source_call_id: int | None = None,
+                    limit: int = 300) -> dict:
+    """Every follow-up the AI scheduled for this account. view: 'upcoming'
+    (waiting or being retried), 'done' (dialled for the last time),
+    'cancelled', or 'all'. With source_call_id, the follow-ups that call
+    created plus the one it fulfilled (any state), for the call page."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            _FOLLOW_UP_SELECT + " ORDER BY cc.id DESC LIMIT 1000", (account_id, _FOLLOW_UP_MARK)
+        ).fetchall()
+    finally:
+        conn.close()
+    items = [_follow_up_item(r) for r in rows]
+    counts = {k: sum(1 for i in items if i["state"] == k) for k in ("upcoming", "done", "cancelled")}
+    if source_call_id is not None:
+        items = [i for i in items if i["sourceCallId"] == source_call_id or i["callId"] == source_call_id]
+    elif view in counts:
+        items = [i for i in items if i["state"] == view]
+    if view == "upcoming" and source_call_id is None:
+        items.sort(key=lambda i: i["dueAt"] or "")
+    else:
+        items.sort(key=lambda i: i["lastAttemptAt"] or i["createdAt"] or "", reverse=True)
+    return {"items": items[:limit], "counts": counts}
+
+
+def act_on_follow_up(account_id: int, follow_up_id: int, action: str, at: str | None = None) -> dict:
+    """Call now, reschedule or cancel one upcoming follow-up. Raises LookupError
+    when it is not this account's follow-up, ValueError when the action does
+    not apply. Every update is conditional on the status just read, so it
+    never races the dialer claiming the same row."""
+    if action not in ("call_now", "reschedule", "cancel"):
+        raise ValueError("Unknown action")
+    when = None
+    if action == "reschedule":
+        try:
+            parsed = datetime.datetime.fromisoformat(str(at or "").replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("Pick a valid date and time") from exc
+        if parsed.tzinfo is None:
+            raise ValueError("The time must include a time zone")
+        when = parsed.astimezone(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if when < now - datetime.timedelta(minutes=1):
+            raise ValueError("Pick a time in the future")
+        if when > now + datetime.timedelta(days=90):
+            raise ValueError("Pick a time within the next 90 days")
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(_FOLLOW_UP_SELECT + " AND cc.id = ?", (account_id, _FOLLOW_UP_MARK, follow_up_id)).fetchone()
+            if row is None:
+                raise LookupError("Follow-up not found")
+            if row["status"] == "calling":
+                raise ValueError("The AI is calling this person right now")
+            if _follow_up_state(row["status"], row["next_attempt_at"]) != "upcoming":
+                raise ValueError("This follow-up has already finished")
+            if action == "cancel":
+                cur = conn.execute(
+                    "UPDATE campaign_contacts SET status = 'cancelled', outcome = 'cancelled', next_attempt_at = NULL "
+                    "WHERE id = ? AND status = ?",
+                    (follow_up_id, row["status"]),
+                )
+            else:
+                due = (when or datetime.datetime.now(datetime.timezone.utc)).strftime("%Y-%m-%d %H:%M:%S")
+                # A retry keeps its status and attempts; a waiting one stays pending.
+                cur = conn.execute(
+                    "UPDATE campaign_contacts SET next_attempt_at = ? WHERE id = ? AND status = ?",
+                    (due, follow_up_id, row["status"]),
+                )
+                # The dialer auto-completes a campaign once its queue is empty.
+                conn.execute(
+                    "UPDATE campaigns SET status = 'running' WHERE id = ? AND status = 'completed'",
+                    (row["campaign_id"],),
+                )
+            if cur.rowcount != 1:
+                raise ValueError("The follow-up just changed; refresh and try again")
+            row = conn.execute(_FOLLOW_UP_SELECT + " AND cc.id = ?", (account_id, _FOLLOW_UP_MARK, follow_up_id)).fetchone()
+    finally:
+        conn.close()
+    return _follow_up_item(row)
+
+
+def _follow_up_when(value: str | None, tz: str) -> str:
+    """'22 Oct, 11:00 am' in the account's time zone, like the dashboard."""
+    iso = _utc_iso(value)
+    if not iso:
+        return ""
+    try:
+        dt = datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(ZoneInfo(tz))
+    except (ValueError, ZoneInfoNotFoundError):
+        return str(value)
+    return f"{dt.day} {dt:%b}, {dt.hour % 12 or 12}:{dt:%M} {'am' if dt.hour < 12 else 'pm'}"
+
+
+
 def _contact_budget_inr(fields: dict) -> int | None:
     """A contact's form budget: numeric budget_min/budget_max when the form
     sent them, else its free-text budget."""
@@ -11031,6 +11199,47 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                 })
         except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: appointments section failed", exc_info=True)
+
+        # Follow-ups the AI scheduled, and how each dial went (owner, 22 Oct:
+        # a follow-up rang with nothing on the dashboard beforehand). One item
+        # per schedule and one per attempt, so a retry notifies again.
+        try:
+            tz = get_compliance(account_id).get("timezone") or "Asia/Kolkata"
+            for r in conn.execute(
+                _FOLLOW_UP_SELECT + " AND cc.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '48 hours' "
+                "AND cc.status NOT IN ('cancelled', 'calling') AND cc.next_attempt_at IS NOT NULL "
+                "ORDER BY cc.id DESC LIMIT 8",
+                (account_id, _FOLLOW_UP_MARK),
+            ).fetchall():
+                item = _follow_up_item(r)
+                items.append({
+                    "id": f"follow-up:{r['id']}:scheduled",
+                    "severity": "info",
+                    "title": f"Follow-up scheduled: {item['name']}",
+                    "body": f"{item['label']} · {_follow_up_when(r['next_attempt_at'], tz)}",
+                    "to": "/dashboard/follow-ups",
+                    "at": r["created_at"],
+                    "kind": "follow_up",
+                })
+            for r in conn.execute(
+                _FOLLOW_UP_SELECT + " AND cc.last_attempt_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '48 hours' "
+                "AND cc.status IN ('done', 'no_answer', 'failed', 'voicemail') ORDER BY cc.last_attempt_at DESC LIMIT 8",
+                (account_id, _FOLLOW_UP_MARK),
+            ).fetchall():
+                item = _follow_up_item(r)
+                outcome = "connected" if r["status"] == "done" else (r["outcome"] or r["status"]).replace("_", " ")
+                retry = f" · trying again {_follow_up_when(r['next_attempt_at'], tz)}" if r["next_attempt_at"] else ""
+                items.append({
+                    "id": f"follow-up:{r['id']}:attempt:{r['attempts'] or 0}",
+                    "severity": "info",
+                    "title": f"AI called {item['name']} (follow-up) – {outcome}",
+                    "body": item["label"] + retry,
+                    "to": f"/dashboard/calls/{r['call_id']}" if r["call_id"] else "/dashboard/follow-ups",
+                    "at": r["last_attempt_at"],
+                    "kind": "follow_up",
+                })
+        except Exception:  # best-effort per section: never blank the feed
+            logger.warning("notifications: follow-ups section failed", exc_info=True)
     finally:
         conn.close()
 

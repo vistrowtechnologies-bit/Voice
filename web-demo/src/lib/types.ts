@@ -1041,3 +1041,35 @@ export interface HelpSearchHit {
   topicSlug: string
   topicTitle: string
 }
+
+/** A follow-up call the AI scheduled (GET /follow-ups). Times are ISO UTC. */
+export interface FollowUp {
+  id: number
+  name: string
+  phone: string
+  kind: string
+  label: string
+  summary: string
+  visitAt: string
+  status: string
+  state: 'upcoming' | 'done' | 'cancelled'
+  outcome: string
+  attempts: number
+  dueAt: string | null
+  lastAttemptAt: string | null
+  createdAt: string | null
+  /** The call that created it. */
+  sourceCallId: number | null
+  /** The follow-up call itself, once dialled. */
+  callId: number | null
+  agentId: number | null
+  agentName: string
+  campaignId: number
+  campaignPaused: boolean
+  contactId: number | null
+}
+
+export interface FollowUpList {
+  items: FollowUp[]
+  counts: Record<'upcoming' | 'done' | 'cancelled', number>
+}
