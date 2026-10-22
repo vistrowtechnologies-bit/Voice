@@ -4,6 +4,8 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 import { BRAND } from '../../lib/brand'
+import { Bento, SectionHead, SplitHero } from '../../components/showcase'
+import { CAREERS_CALLS, CAREERS_HERO } from './premium-w5/visuals'
 
 // Add roles here as they open. An empty array is a supported, deliberate
 // state - the page renders an honest "nothing open right now, send us your
@@ -47,38 +49,48 @@ export function Careers() {
         path="/careers"
       />
 
-      <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
-        <SectionEyebrow>Careers</SectionEyebrow>
-        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl">
-          Build voice AI that speaks like people do.
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          We’re a small team making phone calls answerable by an AI that actually sounds like it’s from
-          here - in more than 130 languages, in real time.
-        </p>
-        <p className="mx-auto mt-3 max-w-xl text-sm text-text-muted">
-          Read{' '}
-          <Link to="/about" className="font-semibold text-primary hover:underline">about Vistrow Voice and how we build</Link>
-          , or see{' '}
-          <Link to="/changelog" className="font-semibold text-primary hover:underline">what we shipped recently</Link>.
-        </p>
-      </section>
+      {/* Premium template (showcase kit): split hero with the language-switch
+          visual, the reasons as a bento around a calls view, then open roles. */}
+      <SplitHero
+        eyebrow="Careers"
+        title="Build voice AI that speaks like people do."
+        subhead={
+          <>
+            We’re a small team making phone calls answerable by an AI that actually sounds like it’s from
+            here - in more than 130 languages, in real time.
+          </>
+        }
+        visual={CAREERS_HERO}
+        actions={
+          <>
+            <a
+              href="#open-roles"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white shadow-[0_14px_36px_-14px_rgba(147,51,234,0.8)] transition-transform hover:-translate-y-0.5"
+            >
+              <Icon name="work" className="text-[18px]" />
+              See open roles
+            </a>
+            <a
+              href={`mailto:${APPLY_EMAIL}?subject=${encodeURIComponent('Speculative application')}`}
+              className="inline-flex items-center justify-center rounded-full border border-border bg-surface/70 px-6 py-3 text-sm font-bold text-text backdrop-blur transition-colors hover:border-primary hover:text-primary"
+            >
+              Send us your work
+            </a>
+          </>
+        }
+        trust={
+          <p className="mt-5 max-w-xl text-sm text-text-muted">
+            Read{' '}
+            <Link to="/about" className="font-semibold text-primary hover:underline">about Vistrow Voice and how we build</Link>
+            , or see{' '}
+            <Link to="/changelog" className="font-semibold text-primary hover:underline">what we shipped recently</Link>.
+          </p>
+        }
+      />
 
-      <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
-        <div className="grid gap-5 md:grid-cols-3">
-          {WHY.map((w) => (
-            <div key={w.title} className="rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={w.icon} className="text-[22px]" />
-              </span>
-              <h2 className="mt-5 font-display text-lg font-semibold">{w.title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{w.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <Bento visual={CAREERS_CALLS} items={WHY} head={<SectionHead eyebrow="Why work here" title="Hard problems, close to real calls." />} />
 
-      <section className="mx-auto max-w-3xl px-5 py-12 md:px-8">
+      <section id="open-roles" className="mx-auto max-w-3xl scroll-mt-28 px-5 pb-20 pt-6 md:px-8">
         <SectionEyebrow>Open roles</SectionEyebrow>
         {OPEN_ROLES.length > 0 ? (
           <div className="mt-6 flex flex-col gap-3">
@@ -104,7 +116,7 @@ export function Careers() {
             ))}
           </div>
         ) : (
-          <div className="mt-6 rounded-3xl border border-border bg-surface p-10 text-center">
+          <div className="mt-6 rounded-[2rem] border border-primary/25 bg-gradient-to-br from-primary/[0.12] via-surface to-surface p-10 text-center">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-high text-cyan">
               <Icon name="drafts" className="text-[26px]" />
             </span>
