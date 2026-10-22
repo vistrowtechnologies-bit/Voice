@@ -22,6 +22,10 @@ class AgentAdvanceOnNoAnswer(unittest.TestCase):
         import dbconn
 
         cls.db, cls.dbconn = db, dbconn
+        # Another module in the suite (scripts/measure_prompt_tokens.py, via
+        # test_llm_token_diet) points DATABASE_URL at a dead placeholder.
+        os.environ["DATABASE_URL"] = TEST_DB
+        dbconn._reset_pool()
         conn = dbconn.connect()
         try:
             with conn:

@@ -39,6 +39,10 @@ class FakeConn:
             cur.fetchone.return_value = self.contact
         elif sql.startswith("SELECT max_attempts") or sql.startswith("SELECT retry_policy"):
             cur.fetchone.return_value = self.campaign
+        elif sql.lstrip().startswith("SELECT"):
+            # Reads this test does not model (e.g. the nurture step advance) find nothing.
+            cur.fetchone.return_value = None
+            cur.fetchall.return_value = []
         else:
             self.writes.append((sql, params))
         return cur
