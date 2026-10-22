@@ -1018,14 +1018,14 @@ async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | 
         refreshed = await _zoho_refresh_access_token(http, config)
         if refreshed:
             access_token, config = refreshed
-            db.update_integration_config(account_id, "zoho_crm", config)
+            await asyncio.to_thread(db.update_integration_config, account_id, "zoho_crm", config)
 
     ok, status = await _post(access_token)
     if not ok and status == 401:
         refreshed = await _zoho_refresh_access_token(http, config)
         if refreshed:
             access_token, config = refreshed
-            db.update_integration_config(account_id, "zoho_crm", config)
+            await asyncio.to_thread(db.update_integration_config, account_id, "zoho_crm", config)
             ok, status = await _post(access_token)
     return ok
 
@@ -2447,12 +2447,13 @@ async def log_lead(
 ) -> str:
     """Record what you have learned about this caller so far.
 
-    Call this the MOMENT the caller gives you any detail — what they want, a
-    budget, a timeline. You do NOT need their name, you do NOT
-    need a phone number, and you do NOT need the full picture. Pass only the
-    fields you actually just learned; everything you omit is left exactly as
-    it was. Calling it eight times across a call with one field each is
-    correct and expected.
+    Call this once the caller has told you what they want, with every field
+    you have so far. You do NOT need their name, you do NOT need a phone
+    number, and you do NOT need the full picture. Each call adds a pause
+    before your reply, so do not call it after every single detail: call it
+    again only for a name, a phone number or a changed detail, and always
+    before a booking or end_call. Everything you omit is left exactly as it
+    was.
 
     `need` works for every business: put what they want there, in the
     caller's own words. Fill the other fields only with what they said -

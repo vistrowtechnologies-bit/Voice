@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import contextlib
 import fcntl
 import json
@@ -1248,7 +1249,14 @@ def _current_objective(
 # 7050ms turn above is log_lead recording a timeline. Seven seconds of dead
 # air is exactly the silence this was built for, and at the delay below no
 # ordinary turn can reach it.
-_BACKCHANNEL_ENABLED = True
+#
+# OFF again 2026-10-22 (call 1462, GPT-5.4 mini + Bharat): all 4 acks played
+# AFTER the reply they were meant to cover ("अच्छा, कितने pages..." then
+# "अच्छा..."). LiveKit 1.8.6 makes the turn's reply handle the current speech
+# from the moment the turn commits, so a say() during "thinking" queues behind
+# it. It can only land first while a tool is still running, and slow tools now
+# speak their own filler (tools._await_with_still_checking).
+_BACKCHANNEL_ENABLED = False
 
 # The delay must clear the WHOLE median turn, not just the LLM leg. Set at
 # 0.9s it fired 9 times in one 3-minute call (898) and read as a verbal tic:
@@ -1748,10 +1756,9 @@ _BACKCHANNEL_WORDS = {line.rstrip(".… ") for lines in _BACKCHANNEL_LINES.value
 _PURE_FILLER_OPENERS = {"हम्म", "hmm"}
 
 
-def _is_native_standard_voice(agent) -> bool:
-    return getattr(agent, "_tts_provider", None) == "google-native" and not voice_catalog.chirp3_persona(
-        getattr(agent, "_speaking_voice", "") or ""
-    )
+def _is_google_native_voice(agent) -> bool:
+    # Native Standard and HD (Chirp 3) voices alike.
+    return getattr(agent, "_tts_provider", None) == "google-native"
 
 
 def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
@@ -1763,9 +1770,10 @@ def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
         agent._last_opener = ""
         return head
     word = match.group("word").lower()
-    if word in _PURE_FILLER_OPENERS and _is_native_standard_voice(agent):
+    if word in _PURE_FILLER_OPENERS and _is_google_native_voice(agent):
         # Call 1452 (21 Oct 2026): a Native (locale Standard) voice reads the
-        # LLM's "हम्म," as a flat, odd syllable. Dropped for these voices.
+        # LLM's "हम्म," as a flat, odd syllable. Call 1463 (22 Oct, HD): the
+        # recording has a 0.1 s blip and a pause there. Dropped for both.
         rest = head[match.end():].lstrip(" ,।.—-")
         return match.group("lead") + rest
     if word != getattr(agent, "_last_opener", ""):
@@ -2719,6 +2727,16 @@ class _MarkupStrippedTTS(_BaseTTS):
         await self._inner.aclose()
 
 
+def _log_platform_error_off_loop(*args, **kwargs) -> None:
+    """db.log_platform_error from a sync callback on the agent loop, run in a
+    thread: the inline write held the loop ~0.9 s while a TTS fell over
+    (call 1460, 22 Oct 2026) - on top of the slower backup voice."""
+    try:
+        asyncio.get_running_loop().run_in_executor(None, functools.partial(db.log_platform_error, *args, **kwargs))
+    except RuntimeError:
+        db.log_platform_error(*args, **kwargs)
+
+
 def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_language: str, tone_name: str):
     """Keep Gemini calls inside the same voice persona during failover.
 
@@ -2783,7 +2801,7 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
                     primary_model,
                     fallback_model,
                 )
-                db.log_platform_error(
+                _log_platform_error_off_loop(
                     f"Google TTS {primary_model} unavailable — silently using {fallback_model} instead",
                     source="agent_tts", level="warning",
                 )
@@ -2794,7 +2812,7 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
                 logger.error(
                     "Both Gemini TTS models unavailable — falling back to Monika (ElevenLabs) until either recovers"
                 )
-                db.log_platform_error(
+                _log_platform_error_off_loop(
                     "Both Gemini TTS models unavailable — using ElevenLabs safety net",
                     source="agent_tts", level="error",
                 )
@@ -3916,20 +3934,29 @@ class RealEstateAgent(Agent):
         instructions += (
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
             "Use the tool that fits what this call is about:\n"
-            "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
-            "any detail at all — what they need, a timeline, a budget (any language or unit: \"50 "
-            "hazaar\", \"एक करोड़\"), a name. Pass only "
-            "what you just learned; omitted fields keep their value. You do NOT need their name or "
-            "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
-            "your very next tool call, before you reply and before any booking or end_call; many "
-            "one-field calls are exactly right. "
+            # Call 1462 (22 Oct 2026, GPT-5.4 mini): "call log_lead the MOMENT
+            # ... many one-field calls are exactly right" was followed
+            # literally - 7 saves in 9 turns, each a second LLM round trip
+            # (~+1.1 s per turn, 18 requests, ~2x the LLM cost). A call that
+            # drops before the save still gets the post-call extraction.
+            "- Any per-tenant business call (the default): call log_lead ONCE the caller has told you "
+            "what they need, with every field you have so far — what they need, a timeline, a budget "
+            "(any language or unit: \"50 hazaar\", \"एक करोड़\"), a name. Every log_lead call adds a "
+            "pause before your reply, so do NOT call it after each single detail; call it again only "
+            "when they give a name, a phone number or change something, and always before any "
+            "booking or end_call. Omitted fields keep their value. You do NOT need their name or "
+            "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". "
             # Call 1458 (21 Oct 2026, Sarvam 105B): naming the property questions
             # here, even to forbid them, primed the model to ask "business ya
             # investment?" and "kis city ya area mein?" on a website enquiry
             # (calls 1439/1458). Property tenants' own prompts ask those, so
             # nothing property-specific is named in the platform rules at all.
             "Ask only about what THIS business offers, as its own prompt and knowledge base describe "
-            "it.\n"
+            # Call 1463 (22 Oct 2026, GPT-5.4 mini): a website enquiry from a
+            # real-estate caller got "कोई खास city?" and "leads या listings?",
+            # i.e. the caller was qualified as a buyer in THEIR industry.
+            "it. When the caller names their own industry, keep asking about what they need from "
+            "this business, not about their customers, stock or market.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "

@@ -84,12 +84,35 @@ class NativeVoiceDropsHmm(unittest.TestCase):
     def _agent(self, voice, provider):
         return SimpleNamespace(_tts_provider=provider, _speaking_voice=voice, _last_opener="")
 
-    def test_native_voice_drops_leading_hmm(self):
-        a = self._agent("google:hi-IN-Standard-A", "google-native")
-        self.assertEqual(main._vary_opener(a, "हम्म, पुढच्या महिन्यात"), "पुढच्या महिन्यात")
+    def test_native_and_hd_voices_drop_leading_hmm(self):
+        for voice in ("google:hi-IN-Standard-A", "google:chirp3:Callirrhoe"):
+            with self.subTest(voice=voice):
+                a = self._agent(voice, "google-native")
+                self.assertEqual(main._vary_opener(a, "हम्म, पुढच्या महिन्यात"), "पुढच्या महिन्यात")
 
     def test_other_voices_keep_it(self):
-        for voice, provider in (("google:chirp3:Callirrhoe", "google-native"), ("priya", "sarvam")):
+        for voice, provider in (("priya", "sarvam"),):
             with self.subTest(voice=voice):
                 a = self._agent(voice, provider)
                 self.assertTrue(main._vary_opener(a, "हम्म, ठीक है").startswith("हम्म"))
+
+
+class PlatformErrorLogOffTheLoop(unittest.TestCase):
+    """Call 1460: logging a TTS failover held the agent loop ~0.9 s."""
+
+    def test_runs_in_a_worker_thread(self):
+        import threading
+        seen = {}
+
+        def fake_log(msg, **kw):
+            seen["thread"] = threading.current_thread() is threading.main_thread()
+
+        async def go():
+            with patch.object(main.db, "log_platform_error", fake_log):
+                main._log_platform_error_off_loop("tts down", source="agent_tts", level="warning")
+                for _ in range(50):
+                    if "thread" in seen:
+                        break
+                    await asyncio.sleep(0.01)
+        asyncio.run(go())
+        self.assertIs(seen.get("thread"), False)
