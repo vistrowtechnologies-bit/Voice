@@ -6543,19 +6543,27 @@ def _schedule_follow_up(
     if not (phone and account_id and agent_id):
         return None
     policy = retry_rules.follow_up_policy(cfg.get("follow_up_policy"))
+    compliance = db.get_compliance_config(account_id) or {}
     try:
-        tz = ZoneInfo(db.get_compliance_config(account_id).get("timezone") or "Asia/Kolkata")
+        tz = ZoneInfo(compliance.get("timezone") or "Asia/Kolkata")
     except (ZoneInfoNotFoundError, ValueError, TypeError):
         tz = ZoneInfo("Asia/Kolkata")
     previous = call_context.get("custom_fields") or {}
-    plan = follow_ups.plan(policy, lead_data, extracted, datetime.now(tz), str(previous.get("follow_up_kind") or ""))
+    plan = follow_ups.plan(
+        policy, lead_data, extracted, datetime.now(tz), str(previous.get("follow_up_kind") or ""),
+        previous_fields=previous, active_days=compliance.get("active_days"),
+    )
     if not plan:
         return None
     # The previous call's lead fields carry over (ArthaLeads lead id, project,
     # language...) so the follow-up updates the same CRM lead and opens on
-    # what they enquired about; the kind drives the opener.
+    # what they enquired about; the kind drives the opener. A nurture
+    # sequence's step and start date come from the plan; any other kind
+    # drops them, so a later interested call starts a fresh sequence.
+    carried = {k: v for k, v in previous.items() if k not in ("follow_up_step", "nurture_origin", "note_for_this_call")}
     fields = {
-        **previous,
+        **carried,
+        **(plan.get("fields") or {}),
         "follow_up_kind": plan["kind"],
         "previous_call_id": call_id,
         "follow_up_summary": plan["summary"],
