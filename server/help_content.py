@@ -74,7 +74,9 @@ text.
   opt out, book or call in. "If they don't answer, try the next step" (on
   by default) moves an unanswered step on to the next day.
   Do-Not-Call numbers are refused; the agent needs a phone number to call
-  from; calls respect the Compliance calling window.
+  from; calls respect the Compliance calling window. On the Growth plan the
+  Copilot can also schedule, reschedule, cancel or call one now for the
+  user (members and above), each only after they press Confirm.
 - **Contacts** — a global contact list automatically updated from qualified
   calls as well as manual/CSV imports. Search, import, export, add, delete,
   or call contacts; view status, tags, source, and last-called time. Table

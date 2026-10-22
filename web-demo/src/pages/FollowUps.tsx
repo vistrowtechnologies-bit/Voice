@@ -4,7 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { InfoTip } from '../components/ui/Tooltip'
 import { ScheduleFollowUpModal } from '../components/ScheduleFollowUpModal'
-import { fetchFollowUps, followUpCallNow, followUpCancel, followUpReschedule } from '../lib/api'
+import { fetchFollowUps, followUpCallNow, followUpCancel, followUpReschedule, onCopilotChange } from '../lib/api'
 import { hasRole, useAuth } from '../lib/auth'
 import type { FollowUp, FollowUpList } from '../lib/types'
 import { formatWhen } from '../lib/followUps'
@@ -203,6 +203,7 @@ export function FollowUps() {
     const timer = window.setInterval(load, 30_000)
     return () => window.clearInterval(timer)
   }, [load])
+  useEffect(() => onCopilotChange(load), [load])
 
   const replace = (f: FollowUp) => {
     setData((d) => {

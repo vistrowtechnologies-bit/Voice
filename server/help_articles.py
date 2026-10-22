@@ -331,6 +331,9 @@ Click **Schedule follow-up** (or **Schedule a follow-up call** on a lead's page)
 
 The time must be in the future and within 90 days. Numbers on your Do-Not-Call list cannot be scheduled, and the agent needs a phone number to call from.
 
+## Ask the Copilot
+On the Growth plan you can also ask the Copilot, for example "move Ravi's follow-up to Friday 4 pm" or "cancel Neha's follow-up call". It shows what it will do on a card, and nothing changes until you press **Confirm**.
+
 ## Where else you see them
 - **Calls**: calls the AI made as a follow-up carry a **Follow-up** tag.
 - The notification bell shows newly scheduled follow-ups and their results.
