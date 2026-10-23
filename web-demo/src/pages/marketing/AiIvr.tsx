@@ -1,11 +1,24 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
+import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { LANGUAGES } from '../../lib/marketingContent'
-import { PageFigures } from '../../components/PageFigure'
+import {
+  FeatureCards,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { CheckList, LinkCards, StepRail, TableCard } from './premium-w3/kit'
+import { W3_IVR_CALL_FLOW, W3_IVR_MENU_VS_SPOKEN, W3_IVR_SIP, W3_LANGUAGES_MAP, W3_TRANSCRIPT } from './premium-w3/visuals'
 
 // Commercial landing page for the "AI IVR" query cluster. /vs-ivr stays the
 // comparison page; this one explains the product as an IVR replacement.
@@ -131,7 +144,28 @@ const FAQ_JSONLD = {
   })),
 }
 
+const WHAT_IT_DOES = [
+  'Inbound phone calls, outbound calls and the website voice widget from one agent',
+  '130+ languages, including 10 Indian languages, switching when the caller does',
+  'Answers grounded in your knowledge base - it says so when it does not know',
+  'Recording, transcript and summary for every call',
+]
+
+// The four stages the call-flow image shows, as text beside it.
+const CALL_FLOW = [
+  { icon: 'record_voice_over', title: 'The caller says what they need', body: 'No menu to sit through: the request comes in a sentence.' },
+  { icon: 'translate', title: 'It understands the request in their language', body: 'Artha follows a switch mid-sentence instead of asking the caller to press a key.' },
+  { icon: 'event_available', title: 'It answers, books or transfers', body: 'Answers from your knowledge base, books in your hours, takes a message or dials in a colleague.' },
+  { icon: 'receipt_long', title: 'Your team gets the record', body: 'Every call is saved with the recording if it is on, the transcript, the summary and the fields you asked for.' },
+]
+
+// Composed from the showcase kit like the product pages: split hero with the
+// menu-vs-spoken visual, the plain answer beside a real transcript, the terms
+// as cards, the call flow beside its diagram, the comparison table, the
+// violet trust band, number and languages rows beside their visuals, setup
+// as a timeline, where it fits, pricing strip, guides, objections, FAQ.
 export function AiIvr() {
+  const { heroCtaRef, endRef } = useStickyRefs()
   return (
     <MarketingLayout>
       <Seo
@@ -141,19 +175,22 @@ export function AiIvr() {
         jsonLd={FAQ_JSONLD}
       />
 
-      <PageHero
+      <SplitHero
         eyebrow="AI IVR"
         title="An AI IVR that lets callers speak instead of pressing 1."
         subhead="Replace the menu on your IVR system with an AI voice agent that understands the caller on every IVR call, answers in their language, and books or transfers the call. It runs as a cloud IVR on your existing business number."
+        visual={W3_IVR_MENU_VS_SPOKEN}
+        placement="ai_ivr_hero"
+        ctaRef={heroCtaRef}
       />
 
       {/* The plain answer comes first: that's what someone searching
           "what is an AI IVR" needs before anything else. */}
-      <section className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <div className="grid gap-6 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.10] via-surface to-surface p-7 sm:p-9 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center">
-          <div>
+      <section className="mx-auto max-w-7xl px-5 md:px-8">
+        <SplitRow figure={W3_TRANSCRIPT} className="py-12 lg:py-14">
+          <Reveal>
             <SectionEyebrow>What is an AI IVR?</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">A phone line that listens, not a menu that lists.</h2>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl">A phone line that listens, not a menu that lists.</h2>
             <p className="mt-4 leading-relaxed text-text-muted">
               An AI IVR, or AI-based IVR, answers your business number with a conversational voice agent instead of a
               recorded “press 1 for sales” menu. The caller says what they need in their own words; the agent understands
@@ -161,61 +198,57 @@ export function AiIvr() {
               right person. It does the job a traditional IVR was meant to do - get each caller to the right outcome -
               without making them listen to options first.
             </p>
-          </div>
-          <ul className="space-y-3 text-sm leading-relaxed text-text-muted">
-            {[
-              'Inbound phone calls, outbound calls and the website voice widget from one agent',
-              '130+ languages, including 10 Indian languages, switching when the caller does',
-              'Answers grounded in your knowledge base - it says so when it does not know',
-              'Recording, transcript and summary for every call',
-            ].map((item) => (
-              <li key={item} className="flex gap-2">
-                <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-primary" />
-                <span>{item}</span>
+            <CheckList items={WHAT_IT_DOES} className="mt-6 grid gap-2.5 border-t border-border pt-6" />
+          </Reveal>
+        </SplitRow>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
+        <Reveal className="mb-10">
+          <SectionHead
+            eyebrow="IVR system, cloud IVR, IVR call"
+            title="Where an AI IVR fits among the terms you have heard."
+            intro={
+              <>
+                New to the vocabulary? Our guide to{' '}
+                <Link to="/resources/blog/what-is-ivr-interactive-voice-response" className="font-semibold text-primary underline-offset-4 hover:underline">
+                  what IVR is and how it works
+                </Link>{' '}
+                explains menus, keypad tones and call flows in more detail.
+              </>
+            }
+          />
+        </Reveal>
+        <FeatureCards items={IVR_TERMS} />
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 md:px-8">
+        <SplitRow figure={W3_IVR_CALL_FLOW} flip className="py-12 lg:py-14">
+          <Reveal>
+            <SectionHead eyebrow="How a call flows" title="From “hello” to a booked slot, without a menu." />
+          </Reveal>
+          <ol className="mt-8 grid gap-3">
+            {CALL_FLOW.map((step, i) => (
+              <li key={step.title}>
+                <Reveal delayMs={i * 70} className="flex gap-4 rounded-2xl border border-border bg-surface p-5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta font-display text-base font-bold text-white">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-semibold">{step.title}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-text-muted">{step.body}</p>
+                  </div>
+                </Reveal>
               </li>
             ))}
-          </ul>
-        </div>
-        <PageFigures route="/ai-ivr" after="A phone line that listens, not a menu that lists." />
+          </ol>
+        </SplitRow>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>IVR system, cloud IVR, IVR call</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Where an AI IVR fits among the terms you have heard.</h2>
-          <p className="mt-3 text-text-muted">
-            New to the vocabulary? Our guide to{' '}
-            <Link to="/resources/blog/what-is-ivr-interactive-voice-response" className="font-semibold text-primary underline-offset-4 hover:underline">
-              what IVR is and how it works
-            </Link>{' '}
-            explains menus, keypad tones and call flows in more detail.
-          </p>
-        </div>
-        <div className="grid gap-5 lg:grid-cols-3">
-          {IVR_TERMS.map((item) => (
-            <div key={item.title} className="rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={item.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-10 max-w-2xl">
-          <SectionEyebrow>How a call flows</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">From “hello” to a booked slot, without a menu.</h2>
-        </div>
-        <PageFigures route="/ai-ivr" after="From “hello” to a booked slot, without a menu." className="" />
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
         <div className="mb-8 max-w-2xl">
           <SectionEyebrow>What it replaces</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Menu IVR vs AI IVR, side by side.</h2>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">Menu IVR vs AI IVR, side by side.</h2>
           <p className="mt-3 text-text-muted">
             Comparing more options, including chatbots and a human receptionist? See the{' '}
             <Link to="/vs-ivr" className="font-semibold text-primary underline-offset-4 hover:underline">
@@ -224,8 +257,7 @@ export function AiIvr() {
             .
           </p>
         </div>
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full min-w-[600px] border-collapse text-left text-sm">
+        <TableCard minWidth="min-w-[600px]">
             <thead>
               <tr className="bg-surface-high">
                 <th scope="col" className="px-5 py-4 font-display text-sm font-semibold">
@@ -234,17 +266,17 @@ export function AiIvr() {
                 <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-text-muted">
                   Menu IVR
                 </th>
-                <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-primary">
+                <th scope="col" className="bg-primary/[0.08] px-5 py-4 font-display text-sm font-semibold text-primary">
                   AI IVR (Vistrow Voice)
                 </th>
               </tr>
             </thead>
             <tbody>
               {MENU_VS_AI.map((row) => (
-                <tr key={row.dimension} className="border-t border-border bg-surface">
-                  <th scope="row" className="px-5 py-4 font-semibold text-text">{row.dimension}</th>
-                  <td className="px-5 py-4 text-text-muted">{row.menu}</td>
-                  <td className="px-5 py-4">
+                <tr key={row.dimension} className="border-t border-border">
+                  <th scope="row" className="px-5 py-4 align-top font-semibold text-text">{row.dimension}</th>
+                  <td className="px-5 py-4 align-top text-text-muted">{row.menu}</td>
+                  <td className="bg-primary/[0.04] px-5 py-4 align-top">
                     <span className="flex items-start gap-2 text-text">
                       <Icon name="check_circle" className="mt-0.5 flex-shrink-0 text-[16px] text-cyan" />
                       {row.ai}
@@ -253,25 +285,25 @@ export function AiIvr() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </TableCard>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-              <Icon name="dialpad" className="text-[22px]" />
+      <TrustBand placement="ai_ivr_trust_band" />
+
+      <section className="mx-auto max-w-7xl px-5 md:px-8">
+        <SplitRow figure={W3_IVR_SIP}>
+          <Reveal>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
+              <Icon3D name="dialpad" size={32} plate className="text-[22px]" />
             </span>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Keep your existing number.</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Keep your existing number.</h2>
+            <p className="mt-3 leading-relaxed text-text-muted">
               Phone calls connect over SIP through your telecom provider. An existing number from a
               compatible provider can be connected once we confirm the connection setup, or you can use a new one.
               Each number is routed to an agent with its own hours, active days and concurrent-call limit, so you can
               start with one line and move the rest later.
             </p>
-            <PageFigures route="/ai-ivr" after="Keep your existing number." className="mt-5" />
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            <p className="mt-4 leading-relaxed text-text-muted">
               Callers on your website can talk to the same agent through the{' '}
               <Link to="/product/widget" className="font-semibold text-primary underline-offset-4 hover:underline">
                 website call widget
@@ -282,14 +314,16 @@ export function AiIvr() {
               </Link>
               .
             </p>
-          </div>
+          </Reveal>
+        </SplitRow>
 
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-              <Icon name="translate" className="text-[22px]" />
+        <SplitRow figure={W3_LANGUAGES_MAP} flip>
+          <Reveal>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
+              <Icon3D name="translate" className="text-[22px]" />
             </span>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Languages callers can use.</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Languages callers can use.</h2>
+            <p className="mt-3 leading-relaxed text-text-muted">
               Instead of “press 2 for Hindi”, the agent opens in your default language and follows the caller. These are
               the Indian languages it speaks, plus English:
             </p>
@@ -298,75 +332,46 @@ export function AiIvr() {
                 <li key={lang.slug}>
                   <Link
                     to={`/languages/${lang.slug}`}
-                    className="inline-block rounded-full border border-border px-3.5 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+                    className="inline-block rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
                   >
                     {lang.name} <span lang={lang.code}>{lang.native}</span>
                   </Link>
                 </li>
               ))}
             </ul>
-          </div>
-        </div>
+          </Reveal>
+        </SplitRow>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Setup</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Five steps from menu to conversation.</h2>
-          <p className="mt-3 text-text-muted">
-            All of it happens in the dashboard. The step that takes longest is usually the second one: writing down
-            the answers your team gives every day.
+      <StepRail
+        eyebrow="Setup"
+        title="Five steps from menu to conversation."
+        intro="All of it happens in the dashboard. The step that takes longest is usually the second one: writing down the answers your team gives every day."
+        steps={SETUP.map((step, i) => ({ ...step, icon: ['person', 'menu_book', 'science', 'call', 'hub'][i] }))}
+        footer={
+          <p className="mt-10 text-sm text-text-muted">
+            Step-by-step guides:{' '}
+            <Link to="/help/phone-numbers/connect-a-number" className="font-semibold text-primary underline-offset-4 hover:underline">
+              connect a phone number
+            </Link>{' '}
+            and{' '}
+            <Link to="/help/inbound/route-inbound-calls" className="font-semibold text-primary underline-offset-4 hover:underline">
+              route incoming calls to an agent
+            </Link>
+            .
           </p>
-        </div>
-        <ol className="grid gap-4 md:grid-cols-5">
-          {SETUP.map((step, i) => (
-            <li key={step.title} className="rounded-2xl border border-border bg-surface p-6">
-              <span className="font-display text-2xl font-bold text-primary">{i + 1}</span>
-              <h3 className="mt-3 font-display text-base font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-5 text-sm text-text-muted">
-          Step-by-step guides:{' '}
-          <Link to="/help/phone-numbers/connect-a-number" className="font-semibold text-primary underline-offset-4 hover:underline">
-            connect a phone number
-          </Link>{' '}
-          and{' '}
-          <Link to="/help/inbound/route-inbound-calls" className="font-semibold text-primary underline-offset-4 hover:underline">
-            route incoming calls to an agent
-          </Link>
-          .
-        </p>
+        }
+      />
+
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
+        <Reveal className="mb-10">
+          <SectionHead eyebrow="Where it fits" title="The lines where a menu wastes the most time." />
+        </Reveal>
+        <FeatureCards items={FITS} />
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-10 max-w-2xl">
-          <SectionEyebrow>Where it fits</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">The lines where a menu wastes the most time.</h2>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          {FITS.map((fit) => (
-            <div key={fit.title} className="rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={fit.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{fit.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{fit.body}</p>
-              <Link
-                to={fit.to}
-                className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
-              >
-                {fit.link}
-                <Icon name="arrow_forward" className="text-[16px]" />
-              </Link>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="flex flex-col gap-4 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/[0.08] to-surface p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+      <section className="mx-auto max-w-7xl px-5 py-8 md:px-8">
+        <div className="flex flex-col gap-4 rounded-3xl border border-primary/20 bg-gradient-to-r from-primary/[0.08] to-surface p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
           <div>
             <SectionEyebrow>Pricing</SectionEyebrow>
             <h2 className="mt-2 font-display text-xl font-bold tracking-tight">Billed by the minute of conversation.</h2>
@@ -393,35 +398,31 @@ export function AiIvr() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>IVR guides</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Read before you replace your menu.</h2>
-          <p className="mt-3 text-text-muted">
-            Answering front-desk calls rather than routing them? See the{' '}
-            <Link to="/ai-receptionist" className="font-semibold text-primary underline-offset-4 hover:underline">
-              AI receptionist
-            </Link>{' '}
-            page.
-          </p>
-        </div>
-        <ul className="grid gap-5 sm:grid-cols-2">
-          {GUIDES.map((guide) => (
-            <li key={guide.to} className="rounded-2xl border border-border bg-surface p-6">
-              <Link to={guide.to} className="group flex items-start justify-between gap-3">
-                <span>
-                  <span className="block font-display text-base font-semibold group-hover:text-primary">{guide.title}</span>
-                  <span className="mt-1 block text-sm text-text-muted">{guide.body}</span>
-                </span>
-                <Icon name="arrow_forward" className="mt-1 shrink-0 text-[18px] text-primary" />
-              </Link>
-            </li>
-          ))}
-        </ul>
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
+        <Reveal className="mb-10">
+          <SectionHead
+            eyebrow="IVR guides"
+            title="Read before you replace your menu."
+            intro={
+              <>
+                Answering front-desk calls rather than routing them? See the{' '}
+                <Link to="/ai-receptionist" className="font-semibold text-primary underline-offset-4 hover:underline">
+                  AI receptionist
+                </Link>{' '}
+                page.
+              </>
+            }
+          />
+        </Reveal>
+        <LinkCards items={GUIDES} />
       </section>
+
+      <ObjectionCards route="/ai-ivr" placement="ai_ivr_objections" />
 
       <FaqSection items={FAQ} title="AI IVR questions, answered." />
 
+      <div ref={endRef} />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
       <CTABand
         title="Hear an AI IVR before you build one."
         subtitle="Talk to Artha live in your browser, or book a walkthrough using your own call flow."

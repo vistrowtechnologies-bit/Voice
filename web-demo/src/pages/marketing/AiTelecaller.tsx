@@ -1,11 +1,26 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
-import { PageFigures } from '../../components/PageFigure'
-import { LANGUAGES } from '../../lib/marketingContent'
+import { CTABand } from '../../components/MarketingBits'
+import { HERO_STATS, LANGUAGES } from '../../lib/marketingContent'
+import {
+  Bento,
+  FeatureList,
+  HeroFacts,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { BadgeTimeline, BoundaryBand, SampleCall, Section } from './premium-w2/W2Kit'
+import { W2_VISUALS } from './premium-w2/visuals'
 
 // Landing page for "AI telecaller" / "AI calling agent". Claims are limited to
 // what the product does today: transfer works on phone calls only
@@ -15,6 +30,9 @@ import { LANGUAGES } from '../../lib/marketingContent'
 // server/campaign_dialer.py), and every outbound dial is checked against the
 // account's Do-Not-Call list and calling window. Outbound is described without
 // volume or scale claims.
+
+const ROUTE = '/ai-telecaller'
+const V = W2_VISUALS[ROUTE]
 
 const JOBS = [
   {
@@ -82,6 +100,13 @@ const SAMPLE: { speaker: 'Agent' | 'Lead'; native: string; gloss: string }[] = [
   },
 ]
 
+const START = [
+  { title: 'Pick a source', body: 'Website form leads or one inbound number. Leave the rest of the team’s list as it is.' },
+  { title: 'Write the script', body: 'The questions to ask, what the agent may answer, and when to hand over.' },
+  { title: 'Test hard calls', body: 'Use the Testing Lab: busy lead, language switch, price question, request for a person.' },
+  { title: 'Review and widen', body: 'Read a week of transcripts with your team lead, fix the knowledge base, then add sources.' },
+]
+
 const FAQ = [
   {
     q: 'What is an AI telecaller?',
@@ -122,6 +147,7 @@ const FAQ_JSONLD = {
 const linkClass = 'font-semibold text-primary underline-offset-4 hover:underline'
 
 export function AiTelecaller() {
+  const { heroCtaRef, endRef } = useStickyRefs()
   return (
     <MarketingLayout>
       <Seo
@@ -131,43 +157,42 @@ export function AiTelecaller() {
         jsonLd={FAQ_JSONLD}
       />
 
-      <PageHero
+      <SplitHero
         eyebrow="AI telecaller"
         title="AI telecaller for Indian businesses."
         subhead="An AI calling agent that answers lead calls, rings back new enquiries, asks your qualifying questions in the caller’s language and leaves your team a clean record - so people spend their time on the leads that are ready."
+        visual={V.hero}
+        chips={[
+          { label: 'Calling new leads', live: true },
+          { label: 'Do-Not-Call checked first', icon: 'block' },
+        ]}
+        placement="ai_telecaller_hero"
+        trust={<HeroFacts facts={HERO_STATS} />}
+        ctaRef={heroCtaRef}
       />
 
-      <section className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <div className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.10] via-surface to-surface p-7 sm:p-9">
-          <SectionEyebrow>Why teams look for one</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">The calls that slip are the ones that matter.</h2>
-          <p className="mt-4 max-w-3xl leading-relaxed text-text-muted">
-            A telecalling team spends much of the day on the same few conversations: confirming interest, asking budget
-            and timeline, explaining the basics, and chasing people who did not pick up. New enquiries arrive in the
-            evening and get called the next morning, by which time the prospect has spoken to someone else. An AI
-            voice calling agent takes those routine calls at any hour and writes down what was said, so your
-            telecallers start the day with qualified leads instead of a list of names.
-          </p>
-        </div>
-      </section>
+      <Section className="py-12 lg:py-14">
+        <SplitRow figure={V.flow} className="">
+          <Reveal>
+            <SectionHead eyebrow="Why teams look for one" title="The calls that slip are the ones that matter." />
+            <p className="mt-5 leading-relaxed text-text-muted">
+              A telecalling team spends much of the day on the same few conversations: confirming interest, asking budget
+              and timeline, explaining the basics, and chasing people who did not pick up. New enquiries arrive in the
+              evening and get called the next morning, by which time the prospect has spoken to someone else. An AI
+              voice calling agent takes those routine calls at any hour and writes down what was said, so your
+              telecallers start the day with qualified leads instead of a list of names.
+            </p>
+          </Reveal>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>What it does</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Inbound, follow-ups and callbacks.</h2>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          {JOBS.map((job) => (
-            <div key={job.title} className="rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-                <Icon name={job.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{job.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{job.body}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-5 text-sm text-text-muted">
+      <Bento
+        visual={V.campaigns}
+        items={JOBS}
+        head={<SectionHead eyebrow="What it does" title="Inbound, follow-ups and callbacks." />}
+      />
+      <Section className="-mt-8 pb-10 pt-0">
+        <p className="text-sm text-text-muted">
           More on{' '}
           <Link to="/product/inbound" className={linkClass}>inbound call answering</Link>,{' '}
           <Link to="/product/outbound" className={linkClass}>outbound campaigns</Link> and{' '}
@@ -175,21 +200,19 @@ export function AiTelecaller() {
           For the same agent on every kind of business call, see the{' '}
           <Link to="/ai-calling-agent" className={linkClass}>AI calling agent</Link> page.
         </p>
-        <PageFigures route="/ai-telecaller" after="Inbound, follow-ups and callbacks." />
-      </section>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
-          <div>
-            <SectionEyebrow>Lead qualification</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Your questions, asked the same way every time.</h2>
+      <Section>
+        <SplitRow figure={V.record} className="">
+          <Reveal>
+            <SectionHead eyebrow="Lead qualification" title="Your questions, asked the same way every time." />
             <p className="mt-4 leading-relaxed text-text-muted">
               You write the questions into the agent’s instructions and choose the fields to pull from every
               transcript. The agent asks them in order, accepts answers in mixed language, and does not invent
               prices or availability: with strict mode on, anything outside your knowledge base is passed to the team.
             </p>
-          </div>
-          <ul className="grid gap-3 text-sm leading-relaxed text-text-muted sm:grid-cols-2">
+          </Reveal>
+          <ul className="mt-6 grid gap-3 text-sm leading-relaxed text-text-muted sm:grid-cols-2">
             {[
               'Need, budget, location and timeline, or any field you define',
               'Interest level and the best time for a person to call',
@@ -197,174 +220,144 @@ export function AiTelecaller() {
               'Transcript, summary and recording on every call',
               'Leads sent to Zoho CRM, ArthaLeads, Slack, Google Sheets or a webhook',
               'Earlier calls from the same number, shown together in Calls history',
-            ].map((item) => (
-              <li key={item} className="flex gap-2 rounded-xl border border-border bg-surface p-4">
-                <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-primary" />
-                <span>{item}</span>
+            ].map((item, i) => (
+              <li key={item}>
+                <Reveal delayMs={(i % 2) * 60} className="vv-lift flex h-full gap-3 rounded-2xl border border-border bg-surface p-4">
+                  <Icon name="check_circle" className="mt-0.5 shrink-0 text-[18px] text-primary" />
+                  <span>{item}</span>
+                </Reveal>
               </li>
             ))}
           </ul>
-        </div>
-      </section>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
-          <figure className="rounded-3xl border border-border bg-surface p-6 sm:p-8">
-            <SectionEyebrow>Sample conversation</SectionEyebrow>
-            <figcaption className="mt-3">
-              <h2 className="font-display text-2xl font-bold tracking-tight">A follow-up call to a website enquiry, in Hinglish.</h2>
-              <p className="mt-2 text-sm text-text-muted">
-                A written example to show the style of call, with an English gloss under each line. It is not a recording
-                of a customer call, and the business name is a placeholder.
-              </p>
-            </figcaption>
-            <ol className="mt-6 space-y-4">
-              {SAMPLE.map((turn, i) => (
-                <li
-                  key={i}
-                  className={`rounded-2xl border p-4 ${turn.speaker === 'Agent' ? 'border-primary/25 bg-primary/[0.06]' : 'border-border bg-surface-high/60'}`}
-                >
-                  <p className="text-xs font-bold uppercase tracking-widest text-text-muted">
-                    {turn.speaker === 'Agent' ? 'AI telecaller' : 'Lead'}
-                  </p>
-                  <p lang="hi" className="mt-1.5 text-base leading-relaxed text-text">{turn.native}</p>
-                  <p className="mt-1 text-sm italic leading-relaxed text-text-muted">{turn.gloss}</p>
-                </li>
-              ))}
-            </ol>
-            <p className="mt-5 flex gap-2 text-sm leading-relaxed text-text-muted">
-              <Icon name="task_alt" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
-              <span>
-                The fee question goes to a person because it is not in the agent’s approved answers. Preferred mode and
-                the callback time are saved on the call for the counsellor.
-              </span>
-            </p>
-          </figure>
+      <Section>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-8">
+          <Reveal>
+            <SampleCall
+              eyebrow="Sample conversation"
+              titleAs="h2"
+              title="A follow-up call to a website enquiry, in Hinglish."
+              intro="A written example to show the style of call, with an English gloss under each line. It is not a recording of a customer call, and the business name is a placeholder."
+              badge="Written sample"
+              lang="hi"
+              turns={SAMPLE.map((turn) => ({
+                agent: turn.speaker === 'Agent',
+                label: turn.speaker === 'Agent' ? 'AI telecaller' : 'Lead',
+                text: turn.native,
+                gloss: turn.gloss,
+              }))}
+              outcome="The fee question goes to a person because it is not in the agent’s approved answers. Preferred mode and the callback time are saved on the call for the counsellor."
+            />
+          </Reveal>
 
-          <div className="grid gap-5">
-            <div className="rounded-2xl border border-border bg-surface p-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-                <Icon name="translate" className="text-[22px]" />
-              </span>
-              <h2 className="mt-4 font-display text-lg font-semibold">Calls in the lead’s language</h2>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                The agent opens in the language you set and follows the caller if they switch. It speaks English and
-                these Indian languages:
-              </p>
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {LANGUAGES.map((lang) => (
-                  <li key={lang.slug}>
-                    <Link
-                      to={`/languages/${lang.slug}`}
-                      className="inline-block rounded-full border border-border px-3 py-1 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
-                    >
-                      {lang.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-2xl border border-border bg-surface p-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-                <Icon name="support_agent" className="text-[22px]" />
-              </span>
-              <h2 className="mt-4 font-display text-lg font-semibold">Handing over to a person</h2>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                On phone calls, set a transfer number and the agent can dial your colleague into the same call, staying on
-                until they answer. If the transfer does not go through, it takes a callback request instead. Website
-                widget calls run in the browser and cannot be transferred to a phone. See{' '}
-                <Link to="/help/agents/agent-functions-and-transfer" className={linkClass}>functions and transfer</Link>.
-              </p>
-            </div>
+          <div className="grid gap-5 lg:sticky lg:top-28">
+            <Reveal delayMs={60}>
+              <div className="bento-hero relative overflow-hidden rounded-3xl p-6 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)] sm:p-7">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+                  <Icon3D name="translate" size={32} plate className="text-[22px]" />
+                </span>
+                <h2 className="mt-4 font-display text-lg font-semibold text-white">Calls in the lead’s language</h2>
+                <p className="mt-2 text-sm leading-relaxed text-white/85">
+                  The agent opens in the language you set and follows the caller if they switch. It speaks English and
+                  these Indian languages:
+                </p>
+                <ul className="mt-4 flex flex-wrap gap-2">
+                  {LANGUAGES.map((lang) => (
+                    <li key={lang.slug}>
+                      <Link
+                        to={`/languages/${lang.slug}`}
+                        className="inline-block rounded-full border border-white/30 bg-white/10 px-3 py-1 text-sm text-white transition-colors hover:bg-white/20"
+                      >
+                        {lang.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+            <Reveal delayMs={120}>
+              <div className="rounded-3xl border border-border bg-surface p-6 sm:p-7">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                  <Icon3D name="support_agent" className="text-[22px]" />
+                </span>
+                <h2 className="mt-4 font-display text-lg font-semibold">Handing over to a person</h2>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                  On phone calls, set a transfer number and the agent can dial your colleague into the same call, staying on
+                  until they answer. If the transfer does not go through, it takes a callback request instead. Website
+                  widget calls run in the browser and cannot be transferred to a phone. See{' '}
+                  <Link to="/help/agents/agent-functions-and-transfer" className={linkClass}>functions and transfer</Link>.
+                </p>
+              </div>
+            </Reveal>
           </div>
         </div>
-      </section>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-10 max-w-2xl">
-          <SectionEyebrow>Calling rules</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Checks that run before every outbound dial.</h2>
-          <p className="mt-3 text-text-muted">
-            These are dashboard settings enforced by the system, not instructions the agent could ignore. They help you
-            meet your obligations; they do not replace them.
+      <TrustBand placement="ai_telecaller_trust_band" />
+
+      <Section>
+        <SplitRow figure={V.checks} flip className="">
+          <Reveal>
+            <SectionHead
+              eyebrow="Calling rules"
+              title="Checks that run before every outbound dial."
+              intro="These are dashboard settings enforced by the system, not instructions the agent could ignore. They help you meet your obligations; they do not replace them."
+            />
+          </Reveal>
+          <FeatureList items={RULES} />
+          <p className="mt-5 text-sm text-text-muted">
+            Details:{' '}
+            <Link to="/help/compliance/calling-rules" className={linkClass}>calling window and Do-Not-Call</Link> and{' '}
+            <Link to="/help/compliance/consent-recording-retention" className={linkClass}>consent, recording and retention</Link>.
           </p>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {RULES.map((rule) => (
-            <div key={rule.title} className="rounded-2xl border border-border bg-surface p-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={rule.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{rule.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{rule.body}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-5 text-sm text-text-muted">
-          Details:{' '}
-          <Link to="/help/compliance/calling-rules" className={linkClass}>calling window and Do-Not-Call</Link> and{' '}
-          <Link to="/help/compliance/consent-recording-retention" className={linkClass}>consent, recording and retention</Link>.
-        </p>
-        <PageFigures route="/ai-telecaller" after="Checks that run before every outbound dial." />
-      </section>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-            <Icon name="info" className="text-[22px]" />
-          </span>
-          <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Where it does not replace your telecallers.</h2>
-          <ul className="mt-4 grid gap-3 text-sm leading-relaxed text-text-muted md:grid-cols-3">
-            <li>
-              <strong className="text-text">Negotiation and closing.</strong> Discounts, payment plans and the final
-              decision need a person who can make commitments. The agent books that conversation.
-            </li>
-            <li>
-              <strong className="text-text">Relationship calls.</strong> Long-standing customers, complaints and
-              sensitive situations are better handled by someone who knows the history.
-            </li>
-            <li>
-              <strong className="text-text">Cold lists.</strong> The agent works best on people who enquired or are
-              already customers. It is not a tool for calling numbers without consent.
-            </li>
-          </ul>
-        </div>
-      </section>
+      <BoundaryBand
+        eyebrow="Know the limits"
+        title="Where it does not replace your telecallers."
+        items={[
+          <>
+            <strong className="text-text">Negotiation and closing.</strong> Discounts, payment plans and the final
+            decision need a person who can make commitments. The agent books that conversation.
+          </>,
+          <>
+            <strong className="text-text">Relationship calls.</strong> Long-standing customers, complaints and
+            sensitive situations are better handled by someone who knows the history.
+          </>,
+          <>
+            <strong className="text-text">Cold lists.</strong> The agent works best on people who enquired or are
+            already customers. It is not a tool for calling numbers without consent.
+          </>,
+        ]}
+      />
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Getting started</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Start with one lead source.</h2>
-        </div>
-        <ol className="grid gap-4 md:grid-cols-4">
-          {[
-            { title: 'Pick a source', body: 'Website form leads or one inbound number. Leave the rest of the team’s list as it is.' },
-            { title: 'Write the script', body: 'The questions to ask, what the agent may answer, and when to hand over.' },
-            { title: 'Test hard calls', body: 'Use the Testing Lab: busy lead, language switch, price question, request for a person.' },
-            { title: 'Review and widen', body: 'Read a week of transcripts with your team lead, fix the knowledge base, then add sources.' },
-          ].map((step, i) => (
-            <li key={step.title} className="rounded-2xl border border-border bg-surface p-6">
-              <span className="font-display text-2xl font-bold text-primary">{i + 1}</span>
-              <h3 className="mt-3 font-display text-base font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-5 text-sm text-text-muted">
+      <Section className="py-14 lg:py-20">
+        <Reveal>
+          <SectionHead eyebrow="Getting started" title="Start with one lead source." className="mb-12" />
+        </Reveal>
+        <BadgeTimeline steps={START.map((step, i) => ({ ...step, badge: `Step ${i + 1}` }))} />
+        <p className="mt-10 text-sm text-text-muted">
           Property teams can start from{' '}
           <Link to="/solutions/real-estate" className={linkClass}>AI calling for real estate</Link>; reminder and
           collection calls are covered under{' '}
           <Link to="/solutions/finance" className={linkClass}>finance and collections</Link>. For a whole support floor,
           see <Link to="/ai-call-center" className={linkClass}>AI call center software</Link>.
         </p>
-      </section>
+      </Section>
+
+      <ObjectionCards route={ROUTE} placement="ai_telecaller_objections" />
 
       <FaqSection items={FAQ} title="AI telecaller questions." />
 
+      <div ref={endRef} />
       <CTABand
         title="Bring one lead list to a demo."
         subtitle="Tell us who you call and what you ask, and we will show the agent making that call - and handing over the rest."
       />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

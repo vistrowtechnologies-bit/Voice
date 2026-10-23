@@ -1,17 +1,36 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
-import { PageFigures } from '../../components/PageFigure'
-import { LANGUAGES } from '../../lib/marketingContent'
+import { CTABand } from '../../components/MarketingBits'
+import { HERO_STATS, LANGUAGES } from '../../lib/marketingContent'
+import {
+  AGENT_CALLOUTS,
+  DashboardCallouts,
+  FeatureCards,
+  HeroFacts,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { ActionBand, BadgeTimeline, CheckPanel, Section } from './premium-w2/W2Kit'
+import { W2_VISUALS } from './premium-w2/visuals'
 
 // Landing page for the "voice AI platform" query cluster. It describes the
 // platform as a whole: every module and developer hook below exists in the
 // dashboard today (checked against the help articles, AgentDetail custom
 // functions and the integrations page). No prices or credit figures here -
-// /pricing owns those.
+// /pricing owns those. No telephony vendor names (owner rule).
+
+const ROUTE = '/voice-ai-platform'
+const V = W2_VISUALS[ROUTE]
 
 const MODULES = [
   {
@@ -31,7 +50,7 @@ const MODULES = [
   {
     icon: 'dialpad',
     title: 'Phone numbers',
-    body: 'Connect a number over SIP through your telecom provider, route it to an agent, and set its hours, active days and how many calls it takes at once.',
+    body: 'Connect a number over SIP, route it to an agent, and set its hours, active days and how many calls it takes at once.',
     to: '/product/inbound',
     link: 'Inbound calling',
   },
@@ -137,7 +156,10 @@ const FUNCTION_EXAMPLE = `{
   ]
 }`
 
+const linkClass = 'font-semibold text-primary underline-offset-4 hover:underline'
+
 export function VoiceAiPlatform() {
+  const { heroCtaRef, endRef } = useStickyRefs()
   return (
     <MarketingLayout>
       <Seo
@@ -147,204 +169,252 @@ export function VoiceAiPlatform() {
         jsonLd={FAQ_JSONLD}
       />
 
-      <PageHero
+      <SplitHero
         eyebrow="Voice AI platform"
         title="A voice AI platform built for Indian businesses."
         subhead="Build an AI voice agent, teach it your facts, put it on your phone line and website, test it, and get a complete record of every call - in one workspace."
+        visual={V.hero}
+        chips={[
+          { label: 'Agents taking calls', live: true },
+          { label: 'Every call logged', icon: 'receipt_long' },
+        ]}
+        placement="voice_ai_platform_hero"
+        trust={<HeroFacts facts={HERO_STATS} />}
+        ctaRef={heroCtaRef}
       />
 
-      <section className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <div className="grid gap-6 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.10] via-surface to-surface p-7 sm:p-9 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center">
-          <div>
-            <SectionEyebrow>Platform, not a single bot</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Everything a voice agent needs, around the agent.</h2>
-            <p className="mt-4 leading-relaxed text-text-muted">
+      <Section className="py-12 lg:py-14">
+        <SplitRow
+          className=""
+          aside={
+            <CheckPanel
+              tone="violet"
+              items={[
+                'No-code agent builder, with an AI drafting assistant',
+                'Phone numbers and a website call widget on the same agent',
+                '130+ languages, including 10 Indian languages, switching mid-call',
+                'Webhooks and custom functions when you do want code',
+              ]}
+            />
+          }
+        >
+          <Reveal>
+            <SectionHead eyebrow="Platform, not a single bot" title="Everything a voice agent needs, around the agent." />
+            <p className="mt-5 leading-relaxed text-text-muted">
               A voice agent on its own is a model that can talk. What makes it usable for a business is everything
               around it: the knowledge it is allowed to answer from, the numbers and web pages callers reach it on,
               a safe place to test it, rules about when it may call, and a record your team can act on after the
               call ends. Vistrow Voice puts those pieces in one dashboard so a sales, support or operations team can
               run voice AI without stitching together separate speech, telephony and CRM tools.
             </p>
-          </div>
-          <ul className="space-y-3 text-sm leading-relaxed text-text-muted">
-            {[
-              'No-code agent builder, with an AI drafting assistant',
-              'Phone numbers and a website call widget on the same agent',
-              '130+ languages, including 10 Indian languages, switching mid-call',
-              'Webhooks and custom functions when you do want code',
-            ].map((item) => (
-              <li key={item} className="flex gap-2">
-                <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-primary" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+          </Reveal>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-10 max-w-2xl">
-          <SectionEyebrow>What the platform includes</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Nine parts, one workspace.</h2>
-          <p className="mt-3 text-text-muted">
-            Each of these is a page in the dashboard today. The links go to the product page or the help guide for it.
-          </p>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {MODULES.map((m) => (
-            <div key={m.title} className="flex flex-col rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={m.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{m.title}</h3>
-              <p className="mt-2 flex-1 text-sm leading-relaxed text-text-muted">{m.body}</p>
-              <Link
-                to={m.to}
-                className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
-              >
-                {m.link}
-                <Icon name="arrow_forward" className="text-[16px]" />
-              </Link>
-            </div>
-          ))}
-        </div>
-        <PageFigures route="/voice-ai-platform" after="Nine parts, one workspace." />
-      </section>
+      <Section>
+        <SplitRow figure={V.map} className="pb-12">
+          <Reveal>
+            <SectionHead
+              eyebrow="What the platform includes"
+              title="Nine parts, one workspace."
+              intro="Each of these is a page in the dashboard today. The links go to the product page or the help guide for it."
+            />
+            <ul className="mt-8 grid gap-3 sm:grid-cols-3">
+              {[
+                { icon: 'smart_toy', label: 'Build', parts: 'Agent builder, knowledge base, Testing Lab' },
+                { icon: 'call', label: 'Reach callers', parts: 'Phone numbers, website widget' },
+                { icon: 'insights', label: 'After the call', parts: 'Call records, analytics, integrations, team roles' },
+              ].map((group) => (
+                <li key={group.label} className="rounded-2xl border border-border bg-surface p-4">
+                  <Icon name={group.icon} className="text-[20px] text-primary" />
+                  <p className="mt-2 font-display text-sm font-semibold">{group.label}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-text-muted">{group.parts}</p>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </SplitRow>
+        <FeatureCards items={MODULES} />
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>From signup to live calls</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">How teams usually go live.</h2>
-          <p className="mt-3 text-text-muted">
-            The order matters more than the speed. Teams that test before they route a real number spend less time
-            apologising to callers in week one.
-          </p>
-        </div>
-        <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {PATH_TO_LIVE.map((step, i) => (
-            <li key={step.title} className="rounded-2xl border border-border bg-surface p-6">
-              <span className="font-display text-2xl font-bold text-primary">{i + 1}</span>
-              <h3 className="mt-3 font-display text-base font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-5 text-sm text-text-muted">
+      <DashboardCallouts
+        view={V.agent}
+        callouts={AGENT_CALLOUTS}
+        title="One page per agent."
+        intro="The agent page in the real Vistrow Voice dashboard, with sample data."
+      />
+
+      <Section className="py-14 lg:py-20">
+        <Reveal>
+          <SectionHead
+            eyebrow="From signup to live calls"
+            title="How teams usually go live."
+            intro="The order matters more than the speed. Teams that test before they route a real number spend less time apologising to callers in week one."
+            className="mb-12"
+          />
+        </Reveal>
+        <BadgeTimeline steps={PATH_TO_LIVE.map((step, i) => ({ ...step, badge: `Step ${i + 1}` }))} />
+        <p className="mt-10 text-sm text-text-muted">
           The full sequence is in the{' '}
-          <Link to="/help/getting-started/get-started" className="font-semibold text-primary underline-offset-4 hover:underline">
+          <Link to="/help/getting-started/get-started" className={linkClass}>
             get started guide
           </Link>
           . Start with one call type on one channel and widen once the transcripts look right.
         </p>
-      </section>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
-          <div>
-            <SectionEyebrow>For developers</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Hooks for the parts you want to own.</h2>
+      <TrustBand placement="voice_ai_platform_trust_band" />
+
+      <Section>
+        {/* Own grid rather than SplitRow: the code sample needs min-w-0 on the
+            column so a long line scrolls inside the card on phones. */}
+        <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-2 lg:gap-14">
+          <Reveal className="order-2 min-w-0 lg:sticky lg:top-28">
+            <div className="min-w-0 overflow-hidden rounded-3xl border border-border bg-[#17112a] shadow-[0_30px_60px_-40px_rgba(76,29,149,0.8)]">
+              <div className="flex items-center gap-2 border-b border-white/10 px-5 py-3">
+                <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
+                <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
+                <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
+                <p className="ml-2 text-xs font-bold uppercase tracking-widest text-white/60">Example custom function (illustrative)</p>
+              </div>
+              <pre className="overflow-x-auto p-5 text-xs leading-relaxed text-[#e9e3ff]">
+                <code>{FUNCTION_EXAMPLE}</code>
+              </pre>
+              <p className="border-t border-white/10 px-5 py-3 text-xs leading-relaxed text-white/65">
+                The fields mirror the custom function form on an agent. The endpoint and key are placeholders; the
+                description is what the agent reads when deciding whether to call it.
+              </p>
+            </div>
+          </Reveal>
+          <div className="order-1 min-w-0">
+          <Reveal>
+            <SectionHead eyebrow="For developers" title="Hooks for the parts you want to own." />
             <p className="mt-4 leading-relaxed text-text-muted">
               None of this is needed to go live. It is for teams that want the agent to work with their own
               order, booking or lead systems.
             </p>
-            <ul className="mt-6 space-y-4 text-sm leading-relaxed text-text-muted">
-              <li className="flex gap-3">
-                <Icon name="webhook" className="mt-0.5 shrink-0 text-[20px] text-cyan" />
-                <span>
-                  <strong className="text-text">Webhooks.</strong> A workspace webhook receives every qualified lead
-                  as JSON. Each agent can also post its lead, appointment and callback events to its own URL; the
-                  same URL in both places gets one delivery, not two.
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <Icon name="api" className="mt-0.5 shrink-0 text-[20px] text-cyan" />
-                <span>
-                  <strong className="text-text">Custom functions.</strong> Describe an endpoint - name, purpose, URL,
-                  method, headers and typed parameters - and the agent decides when to call it during the
-                  conversation, such as looking up an order or checking a booking.
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <Icon name="code" className="mt-0.5 shrink-0 text-[20px] text-cyan" />
-                <span>
-                  <strong className="text-text">Variables.</strong> Define {'{{variable}}'} names with fallback
-                  values and use them in prompts and greetings.
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <Icon name="bolt" className="mt-0.5 shrink-0 text-[20px] text-cyan" />
-                <span>
-                  <strong className="text-text">Instant Lead Follow-up.</strong> A private URL: post a lead from a
-                  form, CRM or automation tool and a call is queued, still subject to your Do-Not-Call list and
-                  calling window.
-                </span>
-              </li>
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-border bg-surface p-6 min-w-0">
-            <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Example custom function (illustrative)</p>
-            <pre className="mt-3 overflow-x-auto rounded-xl bg-surface-high p-4 text-xs leading-relaxed text-text">
-              <code>{FUNCTION_EXAMPLE}</code>
-            </pre>
-            <p className="mt-3 text-xs leading-relaxed text-text-muted">
-              The fields mirror the custom function form on an agent. The endpoint and key are placeholders; the
-              description is what the agent reads when deciding whether to call it.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-          <SectionEyebrow>Built for India</SectionEyebrow>
-          <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Languages your callers actually mix.</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-text-muted">
-            Indian callers rarely stay in one language for a whole call. Agents open in the language you choose and
-            follow the caller into Hinglish or another mix, and the transcript keeps what was said. Phone calls run
-            through an Indian telecom provider, and outbound dials respect the calling window and Do-Not-Call rules
-            you set on the Compliance page.
-          </p>
-          <ul className="mt-5 flex flex-wrap gap-2">
-            {LANGUAGES.map((lang) => (
-              <li key={lang.slug}>
-                <Link
-                  to={`/languages/${lang.slug}`}
-                  className="inline-block rounded-full border border-border px-3.5 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
-                >
-                  {lang.name} <span lang={lang.code}>{lang.native}</span>
-                </Link>
+          </Reveal>
+          <ul className="mt-6 space-y-3 text-sm leading-relaxed text-text-muted">
+            {[
+              {
+                icon: 'webhook',
+                body: (
+                  <>
+                    <strong className="text-text">Webhooks.</strong> A workspace webhook receives every qualified lead
+                    as JSON. Each agent can also post its lead, appointment and callback events to its own URL; the
+                    same URL in both places gets one delivery, not two.
+                  </>
+                ),
+              },
+              {
+                icon: 'api',
+                body: (
+                  <>
+                    <strong className="text-text">Custom functions.</strong> Describe an endpoint - name, purpose, URL,
+                    method, headers and typed parameters - and the agent decides when to call it during the
+                    conversation, such as looking up an order or checking a booking.
+                  </>
+                ),
+              },
+              {
+                icon: 'code',
+                body: (
+                  <>
+                    <strong className="text-text">Variables.</strong> Define {'{{variable}}'} names with fallback
+                    values and use them in prompts and greetings.
+                  </>
+                ),
+              },
+              {
+                icon: 'bolt',
+                body: (
+                  <>
+                    <strong className="text-text">Instant Lead Follow-up.</strong> A private URL: post a lead from a
+                    form, CRM or automation tool and a call is queued, still subject to your Do-Not-Call list and
+                    calling window.
+                  </>
+                ),
+              },
+            ].map((item, i) => (
+              <li key={item.icon}>
+                <Reveal delayMs={i * 60} className="flex gap-4 rounded-2xl border border-border bg-surface p-4">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan/10 text-cyan">
+                    <Icon3D name={item.icon} size={30} className="text-[20px]" />
+                  </span>
+                  <span>{item.body}</span>
+                </Reveal>
               </li>
             ))}
           </ul>
+          </div>
         </div>
-      </section>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="max-w-3xl">
-          <SectionEyebrow>Choosing a platform</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Ask who will maintain the agent.</h2>
-          <p className="mt-3 leading-relaxed text-text-muted">
+      <Section>
+        <SplitRow figure={V.languages} flip className="">
+          <Reveal>
+            <SectionHead eyebrow="Built for India" title="Languages your callers actually mix." />
+            <p className="mt-4 leading-relaxed text-text-muted">
+              Indian callers rarely stay in one language for a whole call. Agents open in the language you choose and
+              follow the caller into Hinglish or another mix, and the transcript keeps what was said. Phone calls run
+              through an Indian telecom provider, and outbound dials respect the calling window and Do-Not-Call rules
+              you set on the Compliance page.
+            </p>
+            <ul className="mt-5 flex flex-wrap gap-2">
+              {LANGUAGES.map((lang) => (
+                <li key={lang.slug}>
+                  <Link
+                    to={`/languages/${lang.slug}`}
+                    className="inline-block rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+                  >
+                    {lang.name} <span lang={lang.code}>{lang.native}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </SplitRow>
+      </Section>
+
+      <ActionBand
+        eyebrow="Choosing a platform"
+        title="Ask who will maintain the agent."
+        body={
+          <>
             Developer frameworks give full control and expect engineers to own prompts, telephony and storage. A
             finished platform lets the business team edit, test and read the results. When comparing, ask to see a
             finished call record as well as hearing a demo. The{' '}
-            <Link to="/best-ai-voice-calling-software-india" className="font-semibold text-primary underline-offset-4 hover:underline">
+            <Link to="/best-ai-voice-calling-software-india" className={linkClass}>
               guide to choosing AI voice calling software
             </Link>{' '}
             has a full checklist, and{' '}
-            <Link to="/pricing" className="font-semibold text-primary underline-offset-4 hover:underline">
+            <Link to="/pricing" className={linkClass}>
               plans and pricing
             </Link>{' '}
             explains what usage costs.
-          </p>
-        </div>
-      </section>
+          </>
+        }
+        actions={
+          <Link
+            to="/best-ai-voice-calling-software-india"
+            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white shadow-[0_14px_36px_-14px_rgba(147,51,234,0.8)] transition-transform hover:-translate-y-0.5"
+          >
+            Read the buyer’s checklist
+            <Icon name="arrow_forward" className="text-[16px]" />
+          </Link>
+        }
+      />
+
+      <ObjectionCards route={ROUTE} placement="voice_ai_platform_objections" />
 
       <FaqSection items={FAQ} title="Voice AI platform questions." />
 
+      <div ref={endRef} />
       <CTABand
         title="See the whole platform on a live call."
         subtitle="Talk to Artha in your browser, or book a walkthrough of the dashboard with your own use case."
       />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

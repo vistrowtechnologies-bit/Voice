@@ -1,19 +1,41 @@
 import { Link, useParams } from 'react-router-dom'
 import { FaqSection } from '../../components/FaqSection'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
 import { Seo } from '../../components/Seo'
-import { PageFigures } from '../../components/PageFigure'
 import { COMPARE_VENDORS } from '../../lib/seoExpansionContent'
+import {
+  BOOK_DEMO_CLASS,
+  FeatureCards,
+  FeatureList,
+  IconTile,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TALK_CLASS,
+  TrustBand,
+  useStickyRefs,
+  type FeatureItem,
+} from '../../components/showcase'
+import { RelatedPills, StepRail, TableCard } from './premium-w3/kit'
+import { W3_CALL_SUMMARY, W3_LAPTOP_CALL_DETAIL, W3_SCORECARD } from './premium-w3/visuals'
 import { NotFound } from './NotFound'
 
-const GLANCE: { icon: string; title: string; body: string; to: string }[] = [
-  { icon: 'translate', title: 'Languages', body: 'More than 130 languages, including 10 Indian languages and Hinglish, switching with the caller mid-call.', to: '/languages' },
-  { icon: 'call', title: 'Phone and website', body: 'Inbound phone calls through a connected number, plus a call widget that talks to website visitors in the browser.', to: '/product/widget' },
-  { icon: 'menu_book', title: 'Approved answers', body: 'A knowledge base with strict mode, so the agent quotes your material instead of improvising.', to: '/product/knowledge-base' },
-  { icon: 'receipt_long', title: 'A finished record', body: 'Transcript, summary, captured lead fields, optional recording and CRM or webhook delivery status for every call.', to: '/product/integrations' },
+const GLANCE: { icon: string; title: string; body: string; to: string; link: string }[] = [
+  { icon: 'translate', title: 'Languages', body: 'More than 130 languages, including 10 Indian languages and Hinglish, switching with the caller mid-call.', to: '/languages', link: 'See the languages' },
+  { icon: 'call', title: 'Phone and website', body: 'Inbound phone calls through a connected number, plus a call widget that talks to website visitors in the browser.', to: '/product/widget', link: 'The website widget' },
+  { icon: 'menu_book', title: 'Approved answers', body: 'A knowledge base with strict mode, so the agent quotes your material instead of improvising.', to: '/product/knowledge-base', link: 'The knowledge base' },
+  { icon: 'receipt_long', title: 'A finished record', body: 'Transcript, summary, captured lead fields, optional recording and CRM or webhook delivery status for every call.', to: '/product/integrations', link: 'Integrations' },
 ]
+
+const TESTS = ['First response latency', 'Interruption handling', 'Indian names and numbers', 'CRM payload quality']
+const TEST_ICONS = ['speed', 'record_voice_over', 'translate', 'hub']
+const SCENARIO_ICONS = ['call', 'hub', 'support_agent']
 
 const faqJsonLd = (items: { q: string; a: string }[]) => ({
   '@context': 'https://schema.org',
@@ -25,120 +47,148 @@ const faqJsonLd = (items: { q: string; a: string }[]) => ({
   })),
 })
 
+// One template renders every /compare/<vendor> page. Naming the compared
+// vendor is the point of these pages; the scorecard image stays neutral.
+// Layout follows the showcase kit: split hero with the real call record,
+// the three "fits" as a bento, the decision table, scenarios, what Vistrow
+// covers beside the call summary, the violet trust band, the testing
+// checklist beside the scorecard, side-by-side steps, objections, FAQ.
 export function CompareVendor() {
   const { slug } = useParams()
+  const { heroCtaRef, endRef } = useStickyRefs()
   const vendor = COMPARE_VENDORS.find((item) => item.slug === slug)
   if (!vendor) return <NotFound />
 
+  const route = `/compare/${vendor.slug}`
+  const glance: FeatureItem[] = GLANCE.map((g) => ({ icon: g.icon, title: g.title, body: g.body, to: g.to, link: g.link }))
+
   return (
     <MarketingLayout>
-      <Seo title={vendor.title} description={vendor.description} path={`/compare/${vendor.slug}`} jsonLd={faqJsonLd(vendor.faqs)} />
+      <Seo title={vendor.title} description={vendor.description} path={route} jsonLd={faqJsonLd(vendor.faqs)} />
 
-      <section className="mx-auto max-w-4xl px-5 py-16 text-center md:px-8 lg:py-20">
-        <SectionEyebrow>Comparison</SectionEyebrow>
-        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl">
-          Vistrow Voice vs {vendor.name}
-        </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-text-muted">
-          A practical comparison for teams evaluating {vendor.category} and AI voice agents for real customer calls.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <TalkToArthaButton />
-          <Link to="/contact" className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary">
-            Talk to sales
-          </Link>
+      <SplitHero
+        eyebrow="Comparison"
+        title={`Vistrow Voice vs ${vendor.name}`}
+        subhead={`A practical comparison for teams evaluating ${vendor.category} and AI voice agents for real customer calls.`}
+        visual={W3_LAPTOP_CALL_DETAIL}
+        chips={[
+          { label: 'Call answered by Artha', live: true },
+          { label: 'Transcript and summary saved', icon: 'receipt_long' },
+        ]}
+        placement="compare_hero"
+        ctaRef={heroCtaRef}
+        actions={
+          <>
+            <TalkToArthaButton className={TALK_CLASS} />
+            <Link to="/contact" className={BOOK_DEMO_CLASS}>
+              Talk to sales
+            </Link>
+          </>
+        }
+      />
+
+      {/* The three verdicts as a bento: two plain cards and the violet tile. */}
+      <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-12">
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Reveal className="h-full">
+            <div className="vv-lift flex h-full flex-col rounded-3xl border border-border bg-surface p-7">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan/12 text-cyan">
+                <Icon name="check_circle" className="text-[22px]" />
+              </span>
+              <h2 className="mt-5 font-display text-xl font-semibold">When {vendor.name} fits</h2>
+              <p className="mt-3 text-sm leading-relaxed text-text-muted">{vendor.bestFor}</p>
+            </div>
+          </Reveal>
+          <Reveal delayMs={70} className="h-full">
+            <div className="vv-lift flex h-full flex-col rounded-3xl border border-border bg-surface p-7">
+              <IconTile name="swap_horiz" />
+              <h2 className="mt-5 font-display text-xl font-semibold">The tradeoff</h2>
+              <p className="mt-3 text-sm leading-relaxed text-text-muted">{vendor.tradeoff}</p>
+            </div>
+          </Reveal>
+          <Reveal delayMs={140} className="h-full">
+            <div className="bento-hero flex h-full flex-col rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+                <Icon3D name="bolt" size={32} plate className="text-[22px]" />
+              </span>
+              <h2 className="mt-5 font-display text-xl font-semibold text-white">When Vistrow fits</h2>
+              <p className="mt-3 text-sm leading-relaxed text-white/85">{vendor.buyerIntent}</p>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
-        <div className="grid gap-5 lg:grid-cols-3">
-          <div className="rounded-3xl border border-border bg-surface p-7">
-            <Icon name="check_circle" className="text-[28px] text-cyan" />
-            <h2 className="mt-4 font-display text-xl font-semibold">When {vendor.name} fits</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">{vendor.bestFor}</p>
-          </div>
-          <div className="rounded-3xl border border-border bg-surface p-7">
-            <Icon name="swap_horiz" className="text-[28px] text-primary" />
-            <h2 className="mt-4 font-display text-xl font-semibold">The tradeoff</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">{vendor.tradeoff}</p>
-          </div>
-          <div className="rounded-3xl border border-primary/30 bg-primary/[0.07] p-7">
-            <Icon name="bolt" className="text-[28px] text-primary" />
-            <h2 className="mt-4 font-display text-xl font-semibold">When Vistrow fits</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">{vendor.buyerIntent}</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="bg-surface-high">
-                <th className="px-5 py-4 font-display text-sm font-semibold">Decision point</th>
-                <th className="px-5 py-4 font-display text-sm font-semibold text-text-muted">Typical {vendor.category} approach</th>
-                <th className="px-5 py-4 font-display text-sm font-semibold text-primary">Vistrow Voice</th>
+      <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-12">
+        <Reveal className="mb-8">
+          <SectionHead eyebrow="Side by side" title={`${vendor.category[0].toUpperCase()}${vendor.category.slice(1)} and Vistrow Voice, point by point.`} />
+        </Reveal>
+        <TableCard
+          note={
+            <>
+              The left column describes the {vendor.category} category in general terms, not {vendor.name}&rsquo;s current product. Vendor products change, so this page is a buyer checklist, not a spec sheet. Verify current features directly with each vendor before you decide.
+            </>
+          }
+        >
+          <thead>
+            <tr className="bg-surface-high">
+              <th className="px-5 py-4 font-display text-sm font-semibold">Decision point</th>
+              <th className="px-5 py-4 font-display text-sm font-semibold text-text-muted">Typical {vendor.category} approach</th>
+              <th className="bg-primary/[0.08] px-5 py-4 font-display text-sm font-semibold text-primary">Vistrow Voice</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vendor.rows.map((row) => (
+              <tr key={row.dimension} className="border-t border-border">
+                <td className="px-5 py-4 align-top font-semibold text-text">{row.dimension}</td>
+                <td className="px-5 py-4 align-top text-text-muted">{row.vendor}</td>
+                <td className="bg-primary/[0.04] px-5 py-4 align-top text-text">
+                  <span className="flex items-start gap-2">
+                    <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
+                    {row.vistrow}
+                  </span>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {vendor.rows.map((row) => (
-                <tr key={row.dimension} className="border-t border-border bg-surface">
-                  <td className="px-5 py-4 font-semibold text-text">{row.dimension}</td>
-                  <td className="px-5 py-4 text-text-muted">{row.vendor}</td>
-                  <td className="px-5 py-4 text-text">{row.vistrow}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-3 text-xs leading-relaxed text-text-muted">
-          The left column describes the {vendor.category} category in general terms, not {vendor.name}&rsquo;s current product. Vendor products change, so this page is a buyer checklist, not a spec sheet. Verify current features directly with each vendor before you decide.
-        </p>
+            ))}
+          </tbody>
+        </TableCard>
       </section>
 
       {vendor.scenarios && (
-        <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-          <div className="mb-8 max-w-2xl">
-            <SectionEyebrow>Which approach fits</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Match the tool to the job, not the brand.</h2>
-          </div>
-          <div className="grid gap-5 md:grid-cols-3">
-            {vendor.scenarios.map((item) => (
-              <div key={item.title} className="rounded-2xl border border-border bg-surface p-6">
-                <h3 className="font-display text-lg font-semibold">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-              </div>
-            ))}
-          </div>
+        <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-14">
+          <Reveal className="mb-10">
+            <SectionHead eyebrow="Which approach fits" title="Match the tool to the job, not the brand." />
+          </Reveal>
+          <FeatureCards items={vendor.scenarios.map((s, i) => ({ icon: SCENARIO_ICONS[i % SCENARIO_ICONS.length], title: s.title, body: s.body }))} />
         </section>
       )}
 
-      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>What Vistrow Voice covers</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">The parts of a call it handles for you.</h2>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {GLANCE.map((item) => (
-            <Link key={item.title} to={item.to} className="rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary">
-              <Icon name={item.icon} className="text-[24px] text-primary" />
-              <h3 className="mt-4 font-display text-base font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-            </Link>
-          ))}
-        </div>
+      <section className="mx-auto max-w-7xl px-5 md:px-8">
+        <SplitRow figure={W3_CALL_SUMMARY}>
+          <Reveal>
+            <SectionHead eyebrow="What Vistrow Voice covers" title="The parts of a call it handles for you." />
+          </Reveal>
+          <FeatureList items={glance} twoCol />
+        </SplitRow>
       </section>
 
+      <TrustBand placement="compare_trust_band" />
+
       {vendor.ask && (
-        <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-          <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
-            <SectionEyebrow>Questions for any vendor</SectionEyebrow>
-            <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Ask these before you shortlist, including us.</h2>
-            <ul className="mt-6 space-y-3">
-              {vendor.ask.map((item) => (
-                <li key={item} className="flex gap-3 text-sm leading-relaxed text-text-muted">
-                  <Icon name="help" className="mt-0.5 shrink-0 text-[18px] text-primary" />
-                  <span>{item}</span>
+        <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
+            <Reveal>
+              <SectionEyebrow>Questions for any vendor</SectionEyebrow>
+              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance">Ask these before you shortlist, including us.</h2>
+            </Reveal>
+            <ul className="grid gap-3">
+              {vendor.ask.map((item, i) => (
+                <li key={item}>
+                  <Reveal delayMs={i * 60} className="flex gap-4 rounded-2xl border border-border bg-surface p-5">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+                      <Icon3D name="help" size={30} className="text-[20px]" />
+                    </span>
+                    <span className="self-center text-sm leading-relaxed text-text">{item}</span>
+                  </Reveal>
                 </li>
               ))}
             </ul>
@@ -146,64 +196,41 @@ export function CompareVendor() {
         </section>
       )}
 
-      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-        <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
-          <SectionEyebrow>Testing checklist</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Run the same real-call test before choosing.</h2>
-          <div className="mt-7 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {['First response latency', 'Interruption handling', 'Indian names and numbers', 'CRM payload quality'].map((item) => (
-              <div key={item} className="rounded-2xl border border-border bg-surface-high p-5">
-                <Icon name="task_alt" className="text-[22px] text-cyan" />
-                <p className="mt-3 font-semibold">{item}</p>
-              </div>
+      <section className="mx-auto max-w-7xl px-5 md:px-8">
+        <SplitRow figure={W3_SCORECARD} flip>
+          <Reveal>
+            <SectionHead eyebrow="Testing checklist" title="Run the same real-call test before choosing." />
+          </Reveal>
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            {TESTS.map((item, i) => (
+              <Reveal key={item} delayMs={i * 60} className="h-full">
+                <div className="flex h-full items-center gap-3 rounded-2xl border border-border bg-surface p-5">
+                  <IconTile name={TEST_ICONS[i]} size="sm" strong={i === 0} />
+                  <p className="font-semibold">{item}</p>
+                </div>
+              </Reveal>
             ))}
           </div>
-        </div>
-        <PageFigures route={`/compare/${vendor.slug}`} after="Run the same real-call test before choosing." />
+        </SplitRow>
       </section>
 
       {vendor.steps && (
-        <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-          <div className="rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.10] via-surface to-surface-high p-8 sm:p-10">
-            <SectionEyebrow>Side-by-side testing</SectionEyebrow>
-            <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Try it next to what you use today.</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-text-muted">
-              Moving to an AI voice agent does not need a cut-over. Run it alongside your current setup on one narrow slice of calls, and keep the old path as fallback until the transcripts convince you.
-            </p>
-            <ol className="mt-6 space-y-3">
-              {vendor.steps.map((step, i) => (
-                <li key={step} className="flex gap-3 text-sm leading-relaxed text-text-muted">
-                  <span className="font-display text-base font-bold text-primary">{i + 1}</span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
+        <StepRail
+          eyebrow="Side-by-side testing"
+          title="Try it next to what you use today."
+          intro="Moving to an AI voice agent does not need a cut-over. Run it alongside your current setup on one narrow slice of calls, and keep the old path as fallback until the transcripts convince you."
+          steps={vendor.steps.map((step) => ({ body: step, icon: 'task_alt' }))}
+        />
       )}
+
+      <ObjectionCards route={route} placement="compare_objections" />
 
       <FaqSection items={vendor.faqs} />
-      {vendor.related && (
-        <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
-          <div className="rounded-2xl border border-border bg-surface/50 px-6 py-7">
-            <p className="text-center text-xs font-bold uppercase tracking-widest text-text-muted">{`Related to ${vendor.name} comparisons`}</p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {vendor.related.map((r) => (
-                <Link
-                  key={r.to}
-                  to={r.to}
-                  className="inline-flex items-center gap-1 rounded-full border border-border px-4 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
-                >
-                  {r.label}
-                  <Icon name="arrow_forward" className="text-[14px]" />
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      {vendor.related && <RelatedPills label={`Related to ${vendor.name} comparisons`} items={vendor.related} />}
 
+      <div ref={endRef} />
       <CTABand title={`Compare ${vendor.name} with a live Vistrow call.`} subtitle="Test the voice, latency, transcript, and CRM-ready outcome before you decide." />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

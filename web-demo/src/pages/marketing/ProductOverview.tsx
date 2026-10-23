@@ -1,12 +1,29 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
-import { PageFigures } from '../../components/PageFigure'
+import { CTABand } from '../../components/MarketingBits'
 import { PRODUCT_PAGES, HOW_IT_WORKS } from '../../lib/marketingContent'
 import { COMPARE_VENDORS } from '../../lib/seoExpansionContent'
+import {
+  CALLS_CALLOUTS,
+  DashboardCallouts,
+  FeatureCards,
+  FeatureList,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  Shot,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  Timeline,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { PRODUCT_AGENT_CARDS, PRODUCT_CALL_FLOW, PRODUCT_DASHBOARD, PRODUCT_HERO } from './premium-w5/visuals'
 
 const FAQ = [
   {
@@ -72,7 +89,14 @@ const FAQ_JSONLD = {
   })),
 }
 
+// Premium template (showcase kit): split hero with the dashboard overview, the
+// six products as a bento around the agent cards, the call flow beside its
+// diagram, starting points, the violet trust band, a dashboard tour,
+// comparisons, the stack timeline, objections, FAQ and the CTA band.
 export function ProductOverview() {
+  const { heroCtaRef, endRef } = useStickyRefs()
+  const [lead, ...products] = PRODUCT_PAGES
+
   return (
     <MarketingLayout>
       <Seo
@@ -81,110 +105,124 @@ export function ProductOverview() {
         path="/product"
         jsonLd={FAQ_JSONLD}
       />
-      <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
-        <SectionEyebrow>The platform</SectionEyebrow>
-        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.05] tracking-tight min-[400px]:text-5xl">
-          One platform for every voice conversation.
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Inbound, outbound, and web calls - built, grounded, and analyzed in one place.
-          Everything you need to put an AI agent on every call.
-        </p>
-      </section>
+      <SplitHero
+        eyebrow="The platform"
+        title="One platform for every voice conversation."
+        subhead={
+          <>
+            Inbound, outbound, and web calls - built, grounded, and analyzed in one place.
+            Everything you need to put an AI agent on every call.
+          </>
+        }
+        visual={PRODUCT_HERO}
+        chips={[
+          { label: 'Inbound, outbound and web', live: true },
+          { label: 'One dashboard', icon: 'dashboard' },
+        ]}
+        placement="product_overview_hero"
+        ctaRef={heroCtaRef}
+      />
 
-      {/* Bento grid of products */}
-      <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {PRODUCT_PAGES.map((p) => (
-            <Link
-              key={p.to}
-              to={p.to}
-              className="group flex flex-col justify-between rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-primary"
-            >
-              <div>
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                  <Icon name={p.icon ?? 'circle'} className="text-[24px]" />
-                </span>
-                <h3 className="mt-5 font-display text-xl font-semibold">{p.label}</h3>
-                <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">{p.desc}</p>
+      {/* The six products as a bento: the agent cards view with the first
+          product as the violet lead tile, the rest as lifted link cards. */}
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
+          <Reveal className="h-full sm:col-span-2 lg:col-span-8">
+            <figure className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-[#f4f1fb]">
+              <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/25 blur-[90px]" />
+              <div className="relative flex flex-1 items-center justify-center p-4 sm:p-6">
+                <Shot
+                  figure={PRODUCT_AGENT_CARDS}
+                  sizes="(min-width: 1280px) 780px, (min-width: 1024px) 64vw, calc(100vw - 40px)"
+                  className="rounded-xl shadow-[0_20px_40px_-24px_rgba(76,29,149,0.6)]"
+                />
               </div>
-              <span className="mt-5 flex items-center gap-1 text-sm font-semibold text-primary">
+              <figcaption className="relative border-t border-[#e4def2] bg-white/70 px-5 py-3 text-xs leading-relaxed text-[#5d5776]">
+                {PRODUCT_AGENT_CARDS.caption}
+              </figcaption>
+            </figure>
+          </Reveal>
+          <Reveal delayMs={60} className="h-full lg:col-span-4">
+            <Link
+              to={lead.to}
+              className="bento-hero group relative flex h-full flex-col overflow-hidden rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)]"
+            >
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-white">
+                <Icon3D name={lead.icon ?? 'circle'} size={34} plate className="text-[24px]" />
+              </span>
+              <h3 className="mt-5 font-display text-2xl font-bold">{lead.label}</h3>
+              <p className="mt-2 max-w-md text-[15px] leading-relaxed text-white/85">{lead.desc}</p>
+              <span className="mt-auto flex items-center gap-1 pt-6 text-sm font-semibold text-white">
                 Learn more
                 <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
               </span>
             </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Follow one call</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What happens from first ring to your CRM.</h2>
-          <p className="mt-3 text-text-muted">
-            The six products are parts of one flow. Each step below is a page in the dashboard, and each links to the product page that covers it.
-          </p>
-        </div>
-        <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
-          {CALL_FLOW.map((step, i) => (
-            <li key={step.title} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
-              <span className="flex items-center justify-between">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Icon name={step.icon} className="text-[22px]" />
+          </Reveal>
+          {products.map((p, i) => (
+            <Reveal key={p.to} delayMs={(i % 3) * 60} className={`h-full ${i < 2 ? 'lg:col-span-6' : 'lg:col-span-4'}`}>
+              <Link to={p.to} className="vv-lift group flex h-full flex-col justify-between rounded-3xl border border-border bg-surface p-7">
+                <div>
+                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                    <Icon3D name={p.icon ?? 'circle'} size={38} className="text-[24px]" />
+                  </span>
+                  <h3 className="mt-5 font-display text-xl font-semibold">{p.label}</h3>
+                  <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">{p.desc}</p>
+                </div>
+                <span className="mt-5 flex items-center gap-1 text-sm font-semibold text-primary">
+                  Learn more
+                  <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
                 </span>
-                <span className="font-display text-2xl font-bold text-border">{`0${i + 1}`}</span>
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-              {step.to && step.link && (
-                <Link to={step.to} className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline">
-                  {step.link}
-                  <Icon name="arrow_forward" className="text-[16px]" />
-                </Link>
-              )}
-            </li>
-          ))}
-        </ol>
-        <PageFigures route="/product" after="What happens from first ring to your CRM." />
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Where to start</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Pick the problem you have today.</h2>
-          <p className="mt-3 text-text-muted">
-            Most teams begin with one channel, usually inbound calls or the website widget, get that agent right in the Testing Lab, and add the rest later.
-          </p>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {START_HERE.map((item) => (
-            <div key={item.title} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Icon name={item.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-              <Link to={item.to} className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline">
-                {item.link}
-                <Icon name="arrow_forward" className="text-[16px]" />
               </Link>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-7 max-w-2xl">
-          <SectionEyebrow>Compare your options</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Evaluating voice AI vendors?</h2>
-          <p className="mt-3 text-text-muted">Use these practical comparisons to understand what each platform covers and what your team would still need to build.</p>
-        </div>
+      {/* The call flow beside its diagram. */}
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+        <SplitRow figure={PRODUCT_CALL_FLOW} className="">
+          <Reveal>
+            <SectionHead
+              eyebrow="Follow one call"
+              title="What happens from first ring to your CRM."
+              intro="The six products are parts of one flow. Each step below is a page in the dashboard, and each links to the product page that covers it."
+            />
+          </Reveal>
+          <FeatureList items={CALL_FLOW.map((step, i) => ({ ...step, title: `${i + 1}. ${step.title}` }))} />
+        </SplitRow>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+        <Reveal>
+          <SectionHead
+            eyebrow="Where to start"
+            title="Pick the problem you have today."
+            intro="Most teams begin with one channel, usually inbound calls or the website widget, get that agent right in the Testing Lab, and add the rest later."
+            className="mb-10"
+          />
+        </Reveal>
+        <FeatureCards items={START_HERE} />
+      </section>
+
+      <TrustBand placement="product_overview_trust_band" />
+
+      <DashboardCallouts view={PRODUCT_DASHBOARD} callouts={CALLS_CALLOUTS} />
+
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+        <Reveal>
+          <SectionHead
+            eyebrow="Compare your options"
+            title="Evaluating voice AI vendors?"
+            intro="Use these practical comparisons to understand what each platform covers and what your team would still need to build."
+            className="mb-8"
+          />
+        </Reveal>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {COMPARE_VENDORS.map((vendor) => (
             <Link
               key={vendor.slug}
               to={`/compare/${vendor.slug}`}
-              className="group flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary"
+              className="vv-lift group flex items-center justify-between gap-3 rounded-3xl border border-border bg-surface p-5"
             >
               <span>
                 <span className="block font-semibold text-text">Vistrow vs {vendor.name}</span>
@@ -194,12 +232,9 @@ export function ProductOverview() {
             </Link>
           ))}
         </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 pb-4 md:px-8">
         <Link
           to="/ai-ivr"
-          className="group flex flex-col gap-2 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/[0.08] to-surface p-6 transition-colors hover:border-primary sm:flex-row sm:items-center sm:justify-between"
+          className="vv-lift group mt-6 flex flex-col gap-2 rounded-3xl border border-primary/25 bg-gradient-to-r from-primary/[0.10] via-surface to-surface p-6 sm:flex-row sm:items-center sm:justify-between"
         >
           <span>
             <span className="block font-display text-lg font-semibold text-text">Replacing a press-1 phone menu?</span>
@@ -215,31 +250,16 @@ export function ProductOverview() {
       </section>
 
       {/* How it fits */}
-      <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
-        <div className="mb-12 text-center">
-          <SectionEyebrow>How it fits your stack</SectionEyebrow>
-          <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Number → Agent → Your tools.</h2>
-        </div>
-        <div className="grid gap-6 md:grid-cols-3">
-          {HOW_IT_WORKS.map((step, i) => (
-            <div key={step.title} className="rounded-2xl border border-border bg-surface p-7">
-              <div className="flex items-center justify-between">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-primary">
-                  <Icon name={step.icon} className="text-[22px]" />
-                </span>
-                <span className="font-display text-3xl font-bold text-border">{`0${i + 1}`}</span>
-              </div>
-              <h3 className="mt-5 font-display text-xl font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <Timeline eyebrow="How it fits your stack" title="Number → Agent → Your tools." steps={HOW_IT_WORKS} />
+
+      <ObjectionCards route="/product" placement="product_overview_objections" />
 
       {/* FAQ */}
       <FaqSection items={FAQ} />
 
+      <div ref={endRef} />
       <CTABand />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

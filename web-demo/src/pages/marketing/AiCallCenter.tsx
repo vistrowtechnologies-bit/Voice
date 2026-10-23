@@ -1,16 +1,34 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
-import { PageFigures } from '../../components/PageFigure'
+import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
+import { HERO_STATS } from '../../lib/marketingContent'
+import {
+  FeatureList,
+  HeroFacts,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { BadgeTimeline, BoundaryBand, Section, TableCard } from './premium-w2/W2Kit'
+import { W2_VISUALS } from './premium-w2/visuals'
 
 // Landing page for "AI call center" / "call center automation". Claims are
 // limited to what the product does today: transfer works on phone calls only
 // (agent/tools.py transfer_call refuses web calls and offers a callback), and
 // the compliance controls are the ones on the Compliance and Inbound pages.
 // Outbound is described without volume or scale claims.
+
+const ROUTE = '/ai-call-center'
+const V = W2_VISUALS[ROUTE]
 
 const SPLIT: { task: string; ai: string; team: string }[] = [
   { task: 'Repeat questions', ai: 'Timings, locations, prices, eligibility, order status from your approved answers', team: 'Questions your knowledge base does not cover' },
@@ -53,6 +71,13 @@ const COMPLIANCE = [
   },
 ]
 
+const ROLLOUT = [
+  { title: 'Pick one queue', body: 'After-hours, one enquiry number, or one campaign. Leave the rest of the floor as it is.' },
+  { title: 'Write the boundary', body: 'List what the agent answers, what it collects, and when it must transfer.' },
+  { title: 'Test the hard calls', body: 'Run Testing Lab scenarios: angry caller, silent caller, language switch, transfer unavailable.' },
+  { title: 'Review weekly', body: 'Read transcripts with the team leads, fix the knowledge base, then widen.' },
+]
+
 const FAQ = [
   {
     q: 'What is AI call center software?',
@@ -90,7 +115,10 @@ const FAQ_JSONLD = {
   })),
 }
 
+const linkClass = 'font-semibold text-primary underline-offset-4 hover:underline'
+
 export function AiCallCenter() {
+  const { heroCtaRef, endRef } = useStickyRefs()
   return (
     <MarketingLayout>
       <Seo
@@ -100,169 +128,179 @@ export function AiCallCenter() {
         jsonLd={FAQ_JSONLD}
       />
 
-      <PageHero
+      <SplitHero
         eyebrow="AI call center"
         title="AI call center software for the first line, not the whole floor."
         subhead="Let an AI voice agent answer the repeat calls, capture every enquiry and handle routine follow-ups, and hand your team the calls that need a person - with the transcript already written."
+        visual={V.hero}
+        chips={[
+          { label: 'Answering the first line', live: true },
+          { label: 'Handed to your team', icon: 'swap_calls' },
+        ]}
+        placement="ai_call_center_hero"
+        trust={<HeroFacts facts={HERO_STATS} />}
+        ctaRef={heroCtaRef}
       />
 
-      <section className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <div className="grid gap-8 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.10] via-surface to-surface p-7 sm:p-9 lg:grid-cols-2">
-          <div>
-            <SectionEyebrow>What it is</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">An agent that picks up first.</h2>
-            <p className="mt-4 leading-relaxed text-text-muted">
-              In most call centers, a large share of calls ask the same few things: where is my order, what are your
-              timings, is this still available, can I book for Saturday. AI call center software puts a voice agent
-              at the front of the queue to answer those in the caller’s language, from information you have approved,
-              and to collect the details your team needs for everything else.
-            </p>
-          </div>
-          <div>
-            <SectionEyebrow>Call center automation</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Automate steps, not judgement.</h2>
-            <p className="mt-4 leading-relaxed text-text-muted">
-              Call center automation is usually sold as replacing people. In practice the parts worth automating are
-              narrower: answering, note-taking, form-filling, booking and the follow-up call nobody got round to. With
-              Vistrow Voice those steps happen on the call, and the result - recording, transcript, summary and
-              captured fields - lands in your CRM, Slack or Google Sheets without anyone typing it up.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Who handles what</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">A sensible split between the agent and your team.</h2>
-          <p className="mt-3 text-text-muted">You decide the boundary in the agent’s instructions; this is where most teams start.</p>
-        </div>
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="bg-surface-high">
-                <th scope="col" className="px-5 py-4 font-display text-sm font-semibold">Call type</th>
-                <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-primary">AI agent</th>
-                <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-text-muted">Your team</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SPLIT.map((row) => (
-                <tr key={row.task} className="border-t border-border bg-surface">
-                  <th scope="row" className="px-5 py-4 font-semibold text-text">{row.task}</th>
-                  <td className="px-5 py-4 text-text">{row.ai}</td>
-                  <td className="px-5 py-4 text-text-muted">{row.team}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <PageFigures route="/ai-call-center" after="A sensible split between the agent and your team." />
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+      <Section className="py-12 lg:py-14">
         <div className="grid gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-              <Icon name="support_agent" className="text-[22px]" />
+          <Reveal className="h-full">
+            <div className="bento-hero relative h-full overflow-hidden rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)] sm:p-9">
+              <span className="text-xs font-bold uppercase tracking-widest text-white/75">What it is</span>
+              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-white">An agent that picks up first.</h2>
+              <p className="mt-4 leading-relaxed text-white/85">
+                In most call centers, a large share of calls ask the same few things: where is my order, what are your
+                timings, is this still available, can I book for Saturday. AI call center software puts a voice agent
+                at the front of the queue to answer those in the caller’s language, from information you have approved,
+                and to collect the details your team needs for everything else.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delayMs={80} className="h-full">
+            <div className="h-full rounded-3xl border border-border bg-surface p-7 sm:p-9">
+              <SectionEyebrow>Call center automation</SectionEyebrow>
+              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Automate steps, not judgement.</h2>
+              <p className="mt-4 leading-relaxed text-text-muted">
+                Call center automation is usually sold as replacing people. In practice the parts worth automating are
+                narrower: answering, note-taking, form-filling, booking and the follow-up call nobody got round to. With
+                Vistrow Voice those steps happen on the call, and the result - recording, transcript, summary and
+                captured fields - lands in your CRM, Slack or Google Sheets without anyone typing it up.
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </Section>
+
+      <Section>
+        <SplitRow figure={V.split} className="pb-10">
+          <Reveal>
+            <SectionHead
+              eyebrow="Who handles what"
+              title="A sensible split between the agent and your team."
+              intro="You decide the boundary in the agent’s instructions; this is where most teams start."
+            />
+          </Reveal>
+        </SplitRow>
+        <TableCard minWidth="min-w-[640px]">
+          <thead>
+            <tr className="bg-gradient-to-r from-primary/[0.10] to-surface-high">
+              <th scope="col" className="px-5 py-4 font-display text-sm font-semibold">Call type</th>
+              <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-primary">AI agent</th>
+              <th scope="col" className="px-5 py-4 font-display text-sm font-semibold text-text-muted">Your team</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SPLIT.map((row) => (
+              <tr key={row.task} className="border-t border-border">
+                <th scope="row" className="px-5 py-4 font-semibold text-text">{row.task}</th>
+                <td className="bg-primary/[0.04] px-5 py-4 text-text">{row.ai}</td>
+                <td className="px-5 py-4 text-text-muted">{row.team}</td>
+              </tr>
+            ))}
+          </tbody>
+        </TableCard>
+      </Section>
+
+      <Section>
+        <SplitRow figure={V.handover} className="">
+          <Reveal>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
+              <Icon3D name="support_agent" size={32} plate className="text-[22px]" />
             </span>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Handing a call to a person.</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Handing a call to a person.</h2>
+            <p className="mt-3 leading-relaxed text-text-muted">
               On phone calls, set a transfer number on the agent and transfer becomes available to it. When a caller
               asks for a human, or the call needs one, the agent dials your colleague into the same call and stays on
               until they answer, then steps back. If the transfer does not go through, it apologises and takes a
               callback number instead of leaving the caller on hold.
             </p>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            <p className="mt-3 leading-relaxed text-text-muted">
               Website widget calls run in the browser and cannot be transferred to a phone. There the agent offers a
               callback and captures the number, which shows up in the call record and your integrations. The
               guide to{' '}
-              <Link to="/help/agents/agent-functions-and-transfer" className="font-semibold text-primary underline-offset-4 hover:underline">
+              <Link to="/help/agents/agent-functions-and-transfer" className={linkClass}>
                 functions and transfer
               </Link>{' '}
               covers the settings.
             </p>
-          </div>
-          <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-              <Icon name="phone_callback" className="text-[22px]" />
+          </Reveal>
+        </SplitRow>
+      </Section>
+
+      <Section>
+        <SplitRow figure={V.campaigns} flip className="">
+          <Reveal>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
+              <Icon3D name="phone_callback" size={32} plate className="text-[22px]" />
             </span>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Follow-ups and outbound calls.</h2>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Follow-ups and outbound calls.</h2>
+            <p className="mt-3 leading-relaxed text-text-muted">
               Callbacks the agent promised, leads that arrived overnight, reminders that are due: these are the calls
               that slip when the floor is busy.{' '}
-              <Link to="/product/outbound" className="font-semibold text-primary underline-offset-4 hover:underline">
+              <Link to="/product/outbound" className={linkClass}>
                 Outbound campaigns
               </Link>{' '}
               let you pick a number, an agent and a contact list or segment, and show each campaign’s connected,
               pending, no-answer, failed and blocked counts.
             </p>
-            <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            <p className="mt-3 leading-relaxed text-text-muted">
               For new leads, the Instant Lead Follow-up webhook queues a call when a website form, CRM or automation
               tool posts a lead to it. Start outbound with a small list and read the transcripts before widening it;
               every dial still passes the compliance checks below. For lead calls specifically, see the{' '}
-              <Link to="/ai-telecaller" className="font-semibold text-primary underline-offset-4 hover:underline">
+              <Link to="/ai-telecaller" className={linkClass}>
                 AI telecaller
               </Link>{' '}
               page; for one agent across inbound and outbound calls, see the{' '}
-              <Link to="/ai-calling-agent" className="font-semibold text-primary underline-offset-4 hover:underline">
+              <Link to="/ai-calling-agent" className={linkClass}>
                 AI calling agent
               </Link>{' '}
               page.
             </p>
-          </div>
-        </div>
-      </section>
+          </Reveal>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-10 max-w-2xl">
-          <SectionEyebrow>Compliance controls</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Rules the agent cannot talk its way around.</h2>
-          <p className="mt-3 text-text-muted">
-            These are settings in the dashboard, checked by the system rather than left to the agent’s instructions.
-            You remain responsible for your own calling and consent obligations; these controls help you meet them.
+      <TrustBand placement="ai_call_center_trust_band" />
+
+      <Section>
+        <SplitRow figure={V.checks} className="">
+          <Reveal>
+            <SectionHead
+              eyebrow="Compliance controls"
+              title="Rules the agent cannot talk its way around."
+              intro="These are settings in the dashboard, checked by the system rather than left to the agent’s instructions. You remain responsible for your own calling and consent obligations; these controls help you meet them."
+            />
+          </Reveal>
+          <FeatureList items={COMPLIANCE} twoCol />
+          <p className="mt-5 text-sm text-text-muted">
+            Details:{' '}
+            <Link to="/help/compliance/calling-rules" className={linkClass}>
+              calling window and Do-Not-Call
+            </Link>
+            ,{' '}
+            <Link to="/help/compliance/consent-recording-retention" className={linkClass}>
+              consent, recording and retention
+            </Link>
+            , and how we handle data on the{' '}
+            <Link to="/security" className={linkClass}>
+              security page
+            </Link>
+            .
           </p>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {COMPLIANCE.map((c) => (
-            <div key={c.title} className="rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={c.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{c.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{c.body}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-5 text-sm text-text-muted">
-          Details:{' '}
-          <Link to="/help/compliance/calling-rules" className="font-semibold text-primary underline-offset-4 hover:underline">
-            calling window and Do-Not-Call
-          </Link>
-          ,{' '}
-          <Link to="/help/compliance/consent-recording-retention" className="font-semibold text-primary underline-offset-4 hover:underline">
-            consent, recording and retention
-          </Link>
-          , and how we handle data on the{' '}
-          <Link to="/security" className="font-semibold text-primary underline-offset-4 hover:underline">
-            security page
-          </Link>
-          .
-        </p>
-      </section>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
-          <div>
-            <SectionEyebrow>Reporting</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What a supervisor sees.</h2>
+      <Section>
+        <SplitRow figure={V.overview} flip className="">
+          <Reveal>
+            <SectionHead eyebrow="Reporting" title="What a supervisor sees." />
             <p className="mt-4 leading-relaxed text-text-muted">
               Every call is in Calls history, filterable by channel, direction and feedback, with the transcript,
               recording, captured fields and earlier calls from the same number. Nothing has to be reconstructed from
               memory after a shift.
             </p>
-          </div>
-          <ul className="grid gap-3 text-sm leading-relaxed text-text-muted sm:grid-cols-2">
+          </Reveal>
+          <ul className="mt-6 grid gap-3 text-sm leading-relaxed text-text-muted sm:grid-cols-2">
             {[
               'Calls, qualified leads, minutes and bookings against the previous period',
               'Breakdown by language, peak hour, sentiment, channel and agent',
@@ -270,77 +308,65 @@ export function AiCallCenter() {
               'CRM delivery status on each call, with re-send',
               'Cards that flag a CRM that stopped receiving leads or calls that ended before anyone spoke',
               'Optional email alerts when integration deliveries start failing',
-            ].map((item) => (
-              <li key={item} className="flex gap-2 rounded-xl border border-border bg-surface p-4">
-                <Icon name="bar_chart" className="mt-0.5 shrink-0 text-[16px] text-primary" />
-                <span>{item}</span>
+            ].map((item, i) => (
+              <li key={item}>
+                <Reveal delayMs={(i % 2) * 60} className="vv-lift flex h-full gap-3 rounded-2xl border border-border bg-surface p-4">
+                  <Icon name="bar_chart" className="mt-0.5 shrink-0 text-[18px] text-primary" />
+                  <span>{item}</span>
+                </Reveal>
               </li>
             ))}
           </ul>
-        </div>
-      </section>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-            <Icon name="info" className="text-[22px]" />
-          </span>
-          <h2 className="mt-5 font-display text-2xl font-bold tracking-tight">Where it does not replace your team.</h2>
-          <ul className="mt-4 grid gap-3 text-sm leading-relaxed text-text-muted md:grid-cols-3">
-            <li>
-              <strong className="text-text">Escalations and disputes.</strong> An angry customer needs someone who can
-              make a decision. The agent’s job is to capture the facts and transfer.
-            </li>
-            <li>
-              <strong className="text-text">Anything outside your knowledge base.</strong> With strict mode on, the
-              agent says it will check with the team rather than improvising an answer.
-            </li>
-            <li>
-              <strong className="text-text">Sensitive or regulated advice.</strong> Medical, legal and financial
-              judgement stays with qualified people; the agent can book them, not stand in for them.
-            </li>
-          </ul>
-        </div>
-      </section>
+      <BoundaryBand
+        eyebrow="Know the limits"
+        title="Where it does not replace your team."
+        items={[
+          <>
+            <strong className="text-text">Escalations and disputes.</strong> An angry customer needs someone who can
+            make a decision. The agent’s job is to capture the facts and transfer.
+          </>,
+          <>
+            <strong className="text-text">Anything outside your knowledge base.</strong> With strict mode on, the
+            agent says it will check with the team rather than improvising an answer.
+          </>,
+          <>
+            <strong className="text-text">Sensitive or regulated advice.</strong> Medical, legal and financial
+            judgement stays with qualified people; the agent can book them, not stand in for them.
+          </>,
+        ]}
+      />
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Rollout</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">A low-risk first month.</h2>
-        </div>
-        <ol className="grid gap-4 md:grid-cols-4">
-          {[
-            { title: 'Pick one queue', body: 'After-hours, one enquiry number, or one campaign. Leave the rest of the floor as it is.' },
-            { title: 'Write the boundary', body: 'List what the agent answers, what it collects, and when it must transfer.' },
-            { title: 'Test the hard calls', body: 'Run Testing Lab scenarios: angry caller, silent caller, language switch, transfer unavailable.' },
-            { title: 'Review weekly', body: 'Read transcripts with the team leads, fix the knowledge base, then widen.' },
-          ].map((step, i) => (
-            <li key={step.title} className="rounded-2xl border border-border bg-surface p-6">
-              <span className="font-display text-2xl font-bold text-primary">{i + 1}</span>
-              <h3 className="mt-3 font-display text-base font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-5 text-sm text-text-muted">
+      <Section className="py-14 lg:py-20">
+        <Reveal>
+          <SectionHead eyebrow="Rollout" title="A low-risk first month." className="mb-12" />
+        </Reveal>
+        <BadgeTimeline steps={ROLLOUT.map((step, i) => ({ ...step, badge: `Step ${i + 1}` }))} />
+        <p className="mt-10 text-sm text-text-muted">
           Support-heavy teams can start from{' '}
-          <Link to="/solutions/support" className="font-semibold text-primary underline-offset-4 hover:underline">
+          <Link to="/solutions/support" className={linkClass}>
             AI voice agents for customer support
           </Link>
           ; usage is billed by conversation minutes, explained on the{' '}
-          <Link to="/pricing" className="font-semibold text-primary underline-offset-4 hover:underline">
+          <Link to="/pricing" className={linkClass}>
             pricing page
           </Link>
           .
         </p>
-      </section>
+      </Section>
+
+      <ObjectionCards route={ROUTE} placement="ai_call_center_objections" />
 
       <FaqSection items={FAQ} title="AI call center questions." />
 
+      <div ref={endRef} />
       <CTABand
         title="Bring one queue to a demo."
         subtitle="Tell us the calls your team answers most, and we will show the agent handling them - and handing off the rest."
       />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

@@ -76,13 +76,16 @@ function applyAppShell(template) {
     .replace(/\s*<link rel="canonical" href="[^"]*"\s*\/>/, '')
 }
 
+const RENDERED_IMAGES = new Map()
+
 function sitemapXml() {
   const rows = PAGES.filter((page) => !page.noindex)
     // We don't currently maintain modification timestamps per route. Omitting
     // lastmod is more accurate than publishing one stale date for every URL.
     .map((page) => {
-      // The page's social/cover image plus any images shown in its content.
-      const images = [...new Set([page.image, ...(page.images ?? [])])]
+      // The page's social/cover image, the images listed for it, and every
+      // content image the prerendered page actually shows.
+      const images = [...new Set([page.image, ...(page.images ?? []), ...(RENDERED_IMAGES.get(page.path) ?? [])])]
         .map((image) => `<image:image><image:loc>${escapeHtml(image)}</image:loc></image:image>`)
         .join('')
       return `  <url><loc>${escapeHtml(`${CANONICAL_ORIGIN}${page.path}`)}</loc>${images}</url>`
@@ -115,6 +118,9 @@ async function main() {
     const bodyHtml = render(page.path)
     if (!bodyHtml) throw new Error(`SSR render for ${page.path} produced no HTML`)
     const html = applyPage(template, page, bodyHtml)
+    // Full-size content images (not the -800 srcset copies) for the image sitemap.
+    RENDERED_IMAGES.set(page.path, [...bodyHtml.matchAll(/\ssrc="(\/(?:media\/pages|blog)\/[^"]+?\.(?:webp|jpg|png))"/g)]
+      .map((m) => m[1]).filter((src) => !/-800\.\w+$/.test(src)).map((src) => `${CANONICAL_ORIGIN}${src}`))
     const outPath = outputPathFor(page.path)
     await mkdir(path.dirname(outPath), { recursive: true })
     await writeFile(outPath, html)
