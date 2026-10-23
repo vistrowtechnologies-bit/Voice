@@ -427,7 +427,7 @@ def require_platform_owner(request: Request) -> dict:
     user = calls_db.get_user_by_id(acting_uid)
     # The flag is on the workspace, so only its owner (not a teammate) is
     # the platform admin (security audit 2026-10-12).
-    if user is None or not user["is_platform_owner"] or user["role"] != "owner":
+    if not calls_db.can_open_admin(user):
         raise HTTPException(404, "Not found")
     if not user.get("mfa_enabled_at"):
         raise HTTPException(403, ADMIN_MFA_SETUP_REQUIRED)
@@ -1004,6 +1004,9 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         "accountCountry": calls_db.get_account_country(user["account_id"]),
         "plan": user["account_plan"],
         "isPlatformOwner": bool(user["is_platform_owner"]),
+        # Admin-panel access for this login (calls_db.can_open_admin); the
+        # workspace's owner-only features stay on isPlatformOwner.
+        "isPlatformAdmin": calls_db.can_open_admin(user),
         "onboarded": user["onboarded_at"] is not None,
         "consent": calls_db.get_consent(user["account_id"]),
         "tourCompleted": user["tour_completed_at"] is not None,
@@ -1021,6 +1024,7 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         # sidebar admin link stays available so the owner can exit.
         payload["impersonating"] = True
         payload["isPlatformOwner"] = True
+        payload["isPlatformAdmin"] = True
     return payload
 
 
@@ -1924,7 +1928,7 @@ def auth_admin_login(req: LoginRequest, response: Response, request: Request) ->
         raise HTTPException(401, "Incorrect email or password")
     profile = calls_db.get_user_by_id(user["id"]) or {}
     if (not auth.verify_password(req.password, user["password_hash"])
-            or not profile.get("is_platform_owner") or profile.get("role") != "owner"):
+            or not calls_db.can_open_admin(profile)):
         _note_login_failure(email)
         calls_db.record_security_event(user["id"], "admin_login_failed", "password", request.headers.get("user-agent", ""))
         raise HTTPException(401, "Incorrect email or password")
@@ -2672,7 +2676,7 @@ def profile_mfa(user: dict = Depends(current_user)) -> dict:
         "enabledAt": state.get("enabled_at"),
         "recoveryCodesLeft": len(state.get("recovery") or []),
         # The platform owner can't open the admin panel without it.
-        "required": bool(profile.get("is_platform_owner")) and profile.get("role") == "owner",
+        "required": calls_db.can_open_admin(profile),
     }
 
 
@@ -3620,7 +3624,7 @@ def admin_impersonate_exit(request: Request, response: Response) -> dict:
     if session is None or not session.get("imp"):
         raise HTTPException(400, "Not in a support session")
     owner = calls_db.get_user_by_id(session["imp"])
-    if owner is None or not owner["is_platform_owner"] or owner["role"] != "owner":
+    if not calls_db.can_open_admin(owner):
         raise HTTPException(403, "Not permitted")
     # A stolen support cookie must not become a fresh admin session after
     # the admin signed out everywhere.
