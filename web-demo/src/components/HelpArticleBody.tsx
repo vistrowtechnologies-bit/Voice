@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react'
+import { slugify } from './showcase/utils'
 
 // Renders server/help_articles.py's small body format as React elements —
 // never as HTML, so article text can't inject markup. Supported:
 // "## Heading", "- bullet", "1. step", blank line = paragraph, **bold**.
+// The dashboard (Support.tsx) uses the default compact look with "##" as h3;
+// the public help centre passes variant="reading" for h2s with anchor ids
+// and full-contrast 16px text.
 
 function inline(text: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
@@ -10,7 +14,8 @@ function inline(text: string): ReactNode[] {
   )
 }
 
-export function HelpArticleBody({ body }: { body: string }) {
+export function HelpArticleBody({ body, variant = 'dashboard' }: { body: string; variant?: 'dashboard' | 'reading' }) {
+  const reading = variant === 'reading'
   const blocks: ReactNode[] = []
   let list: { ordered: boolean; items: string[] } | null = null
   let para: string[] = []
@@ -40,7 +45,14 @@ export function HelpArticleBody({ body }: { body: string }) {
     } else if (line.startsWith('## ')) {
       flushPara()
       flushList()
-      blocks.push(<h3 key={`h${blocks.length}`} className="mt-2 text-base font-semibold text-text">{line.slice(3)}</h3>)
+      const text = line.slice(3)
+      blocks.push(
+        reading ? (
+          <h2 key={`h${blocks.length}`} id={slugify(text)} className="mt-6 scroll-mt-28 font-display text-2xl font-bold tracking-tight text-text">{text}</h2>
+        ) : (
+          <h3 key={`h${blocks.length}`} className="mt-2 text-base font-semibold text-text">{text}</h3>
+        ),
+      )
     } else if (bullet || step) {
       flushPara()
       const ordered = Boolean(step)
@@ -54,5 +66,5 @@ export function HelpArticleBody({ body }: { body: string }) {
   }
   flushPara()
   flushList()
-  return <div className="flex flex-col gap-3 text-[15px] text-text-muted">{blocks}</div>
+  return <div className={reading ? 'flex max-w-[54ch] flex-col gap-4 text-base leading-[1.75] text-text' : 'flex flex-col gap-3 text-[15px] text-text-muted'}>{blocks}</div>
 }

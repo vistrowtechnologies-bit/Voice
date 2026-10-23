@@ -30,4 +30,16 @@ export {
   Shot,
   Waveform,
 } from './primitives'
-export { BOOK_DEMO_CLASS, TALK_CLASS, isPortrait, srcSetFor, withoutVendorNames } from './utils'
+export { BOOK_DEMO_CLASS, TALK_CLASS, isPortrait, READING_PROSE, slugify, srcSetFor, withoutVendorNames } from './utils'
+export {
+  ArthaCard,
+  Breadcrumbs,
+  ReadingFeedback,
+  ReadingHero,
+  ReadingLayout,
+  ReadingPrevNext,
+  ReadingRelated,
+  type Crumb,
+  type ReadingLink,
+  type TocItem,
+} from './ReadingLayout'
