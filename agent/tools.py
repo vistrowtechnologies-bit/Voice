@@ -2221,11 +2221,11 @@ async def request_callback(
         "time": preferred_time,
         "purpose": reason,
     }
-    await _publish_event(context, event)
-    await _post_webhook(context, event)
     # Same fan-out a booking gets: this is the lead the clinic would otherwise
     # have lost, so it needs to reach Slack/Sheets/CRM, not just the database.
-    await _fan_out_integrations(context, event)
+    # In the background, as for log_lead: awaited here it held the reply
+    # 3.8 s in call 1476.
+    _fan_out_in_background(context, event)
     if result is None:
         logger.warning("callback request could not be stored for %s", _mask_phone(phone))
         return (
@@ -2365,9 +2365,7 @@ async def book_appointment(
             "name": name,
             "phone": phone,
         }
-        await _publish_event(context, event)
-        await _post_webhook(context, event)
-        await _fan_out_integrations(context, event)
+        _fan_out_in_background(context, event)
     if result is None:
         # Recorded on the lead + pushed to integrations, but the native
         # calendar DB call failed — be honest rather than claim a slot exists.
