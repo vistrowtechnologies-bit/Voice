@@ -136,7 +136,7 @@ export function Pricing() {
         </div>
         <details className="mt-6 rounded-3xl border border-border bg-surface p-6">
           <summary className="cursor-pointer font-semibold">Included in every plan</summary>
-          <ul className="mt-4 grid gap-3 text-sm text-text-muted sm:grid-cols-2">
+          <ul className="mt-4 grid gap-3 text-sm text-text-muted sm:grid-cols-2 sm:grid-close-2">
             {SHARED_PLAN_FEATURES.map((feature) => (
               <li key={feature} className="flex items-start gap-2">
                 <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-cyan" />

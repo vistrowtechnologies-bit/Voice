@@ -1176,3 +1176,11 @@ Local note: the Mac restarted ~15:00 UTC and cleared /private/tmp; the test Post
 - Verified: agent suite 1033 passed / 0 failed (livekit 1.8.6 venv from requirements.txt, placeholder DATABASE_URL); new test fails on origin/main.
 - Not verified: a live call on a gpt-5-nano agent after deploy. `server/help_chat.py` ACTION_MODEL can be overridden by the COPILOT_ACTION_MODEL env — if someone sets it to an undotted gpt-5 model it would hit the same 400 (not set as far as known).
 - Next: deployer merges, then `lk agent deploy` with BOTH livekit.tenant.toml and livekit.platform-demo.toml (agent-only change: Railway skips it).
+
+### Claude (dashboard/seo lane) — 2026-10-23 — marketing layout fixes (branch `claude/layout-fixes-1023`, LOCAL commit, NOT pushed)
+
+- Owner report: healthcare Bento left "Repetitive FAQs" alone on a third row; improve responsiveness. Measured 52 marketing pages x 5 widths (390/768/1024/1280/1440) on the built site with headless Chrome.
+- Verified: unclosed grid rows 87 -> 0; horizontal overflow 0, broken images 0, JS errors 0 before and after. Gates: build, check-blog-seo, test:seo, check-blog-queue all pass.
+- Changes (web-demo only, Vercel deploy only): Bento spans per item count/visual shape; new `grid-close-2` / `grid-close-3` utilities in index.css used by FeatureCards, LanguageDetail, Integrations, Home, BuyerGuide, CompareIvr, Pricing, SolutionDetail; SplitRow flip now keeps the wide track on the text side; FeatureList twoCol is one column lg->xl; W2Kit 6-step timeline 3x2 until xl; DashboardCallouts markers moved off the text they point at.
+- Unverified: not checked on a real tenant page or in dark mode; marker positions judged from screenshots at 1440/390.
+- Next step: owner previews, then a deployer merges.

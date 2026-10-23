@@ -33,11 +33,14 @@ export interface BadgeStep {
 /** Numbered steps on a gradient line with a free-text badge per step (a time
  * of day, a week), horizontal from lg and vertical on phones. */
 export function BadgeTimeline({ steps, numbered = true }: { steps: BadgeStep[]; numbered?: boolean }) {
-  const cols = steps.length >= 6 ? 'lg:grid-cols-6' : steps.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'
+  // Six steps in one row leave ~140px columns at 1024px, so they sit in two
+  // rows of three until xl; the connecting line shows only on the single row.
+  const six = steps.length >= 6
+  const cols = six ? 'lg:grid-cols-3 xl:grid-cols-6' : steps.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'
   return (
     <div className="relative">
       <span aria-hidden="true" className="absolute bottom-6 left-[23px] top-6 w-0.5 bg-gradient-to-b from-primary via-magenta to-cyan lg:hidden" />
-      <span aria-hidden="true" className="absolute left-6 right-6 top-[23px] hidden h-0.5 bg-gradient-to-r from-primary via-magenta to-cyan lg:block" />
+      <span aria-hidden="true" className={`absolute left-6 right-6 top-[23px] hidden h-0.5 bg-gradient-to-r from-primary via-magenta to-cyan ${six ? 'xl:block' : 'lg:block'}`} />
       <ol className={`relative grid gap-8 ${cols} lg:gap-6`}>
         {steps.map((step, i) => (
           <li key={step.title} className="relative pl-16 lg:pl-0">
