@@ -329,6 +329,8 @@ async def require_session(request: Request, call_next):
         request.state.impersonator_id = session.get("imp")
         # When two-step login was passed (the admin's, in a support session).
         request.state.mfa = session.get("imfa") if session.get("imp") else session.get("mfa")
+        # Signed in through the admin sign-in (admin.vistrowvoice.com).
+        request.state.admin_session = session.get("iadm") if session.get("imp") else session.get("adm")
         return await call_next(request)
     # No session cookie — accept a programmatic API key instead. The key maps
     # to a tenant account; we give the request that account's owner user so
@@ -431,14 +433,25 @@ def require_platform_owner(request: Request) -> dict:
         raise HTTPException(403, ADMIN_MFA_SETUP_REQUIRED)
     if not getattr(request.state, "mfa", None):
         raise HTTPException(403, ADMIN_MFA_SIGNIN_REQUIRED)
+    if _ADMIN_SEPARATE_LOGIN and not getattr(request.state, "admin_session", None):
+        raise HTTPException(403, ADMIN_SEPARATE_LOGIN_REQUIRED)
     return {"user_id": acting_uid, "email": user["email"]}
 
 
+# Owner, 23 Oct 2026: the admin panel lives on admin.vistrowvoice.com with its
+# own sign-in (/auth/admin/login: password + code, owner only, 8 h). Session
+# cookies are host-only, so a dashboard session on app.vistrowvoice.com never
+# reaches it. Off until the admin host and its login page are live, so the
+# owner is never locked out mid-rollout.
+_ADMIN_SEPARATE_LOGIN = os.environ.get("ADMIN_SEPARATE_LOGIN", "").strip() == "1"
+ADMIN_HOST_URL = "https://admin.vistrowvoice.com"
+ADMIN_SEPARATE_LOGIN_REQUIRED = f"The admin panel has its own sign-in. Open {ADMIN_HOST_URL} and sign in there."
 ADMIN_MFA_SETUP_REQUIRED = "Two-step login is required for the admin panel. Turn it on in Settings, then sign in again."
 ADMIN_MFA_SIGNIN_REQUIRED = "Sign out and sign back in with your two-step code to open the admin panel."
 
 
-_STATIC_DASHBOARD_ORIGINS = {"https://app.vistrowvoice.com", "https://www.vistrowvoice.com", "https://vistrowvoice.com"}
+_STATIC_DASHBOARD_ORIGINS = {"https://app.vistrowvoice.com", "https://admin.vistrowvoice.com",
+                             "https://www.vistrowvoice.com", "https://vistrowvoice.com"}
 
 
 def _dashboard_origins() -> set[str]:
@@ -502,7 +515,8 @@ def _live_session(request: Request) -> dict | None:
 # A blocked visitor can still reach sign-in and the admin panel, so the
 # platform owner can never lock themselves out (adding a block that covers
 # the admin's own IP is refused too); everything else answers 403.
-_IP_BLOCK_EXEMPT_PATHS = {"/healthz", "/auth/config", "/auth/login", "/auth/login/mfa", "/auth/me", "/auth/logout"}
+_IP_BLOCK_EXEMPT_PATHS = {"/healthz", "/auth/config", "/auth/login", "/auth/login/mfa", "/auth/admin/login", "/auth/me",
+                          "/auth/logout"}
 _IP_BLOCK_EXEMPT_PREFIXES = ("/admin/", "/auth/oauth/")
 IP_BLOCKED_MESSAGE = "Access from your network has been blocked."
 
@@ -915,10 +929,13 @@ def _set_session_cookie(
     provider: str = "",
     mfa_at: int | None = None,
     new_sign_in: bool = False,
+    admin: bool = False,
 ) -> str:
     """mfa_at: when two-step login was passed for this session (carried over
     when a session is re-issued). new_sign_in: a real sign-in, so a new
-    device gets a security email."""
+    device gets a security email. admin: a session from the admin sign-in,
+    marked "adm" and limited to ADMIN_SESSION_TTL_SECONDS."""
+    ttl = auth.ADMIN_SESSION_TTL_SECONDS if admin else auth.SESSION_TTL_SECONDS
     profile = calls_db.get_user_by_id(user_id)
     # Every sign-in path (password, two-step, Google, GitHub, reset, invite)
     # and every session re-issue goes through here.
@@ -939,7 +956,7 @@ def _set_session_cookie(
         device_id,
         request.headers.get("user-agent", "") if request is not None else "",
         provider or str((profile or {}).get("auth_provider") or ""),
-        auth.SESSION_TTL_SECONDS,
+        ttl,
     )
     response.set_cookie(
         auth.COOKIE_NAME,
@@ -948,9 +965,10 @@ def _set_session_cookie(
             account_id,
             session_version=int((profile or {}).get("session_version") or 1),
             session_id=session_id,
-            claims={"mfa": mfa_at},
+            ttl_seconds=ttl,
+            claims={"mfa": mfa_at, "adm": 1 if admin else None},
         ),
-        max_age=auth.SESSION_TTL_SECONDS,
+        max_age=ttl,
         httponly=True,
         secure=_COOKIE_SECURE,
         samesite="lax",
@@ -1887,6 +1905,36 @@ def auth_login(req: LoginRequest, response: Response, request: Request) -> dict:
     return {"ok": True, "user": _me_payload(user["id"])}
 
 
+@app.post("/auth/admin/login")
+def auth_admin_login(req: LoginRequest, response: Response, request: Request) -> dict:
+    """admin.vistrowvoice.com's own sign-in: password, then ALWAYS the
+    authenticator code (/auth/login/mfa), platform owner only, no Google or
+    GitHub. Its session is marked "adm" (what /admin/* requires once
+    ADMIN_SEPARATE_LOGIN is on) and lasts 8 hours. Anyone else gets the same
+    answer as a wrong password, so the panel's existence is not disclosed."""
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many attempts — please wait a minute and try again.")
+    email = req.email.strip().lower()
+    if _login_locked(email):
+        raise HTTPException(429, "Too many failed sign-ins for this account. Wait 15 minutes or reset your password.")
+    user = calls_db.get_user_by_email(email)
+    if user is None:
+        auth.verify_password(req.password, _DUMMY_PASSWORD_HASH)  # same time as a real check
+        _note_login_failure(email)
+        raise HTTPException(401, "Incorrect email or password")
+    profile = calls_db.get_user_by_id(user["id"]) or {}
+    if (not auth.verify_password(req.password, user["password_hash"])
+            or not profile.get("is_platform_owner") or profile.get("role") != "owner"):
+        _note_login_failure(email)
+        calls_db.record_security_event(user["id"], "admin_login_failed", "password", request.headers.get("user-agent", ""))
+        raise HTTPException(401, "Incorrect email or password")
+    if not user.get("mfa_enabled_at"):
+        raise HTTPException(403, ADMIN_MFA_SETUP_REQUIRED)
+    _clear_login_failures(email)
+    _set_mfa_pending(response, user["id"], user["account_id"], "admin")
+    return {"ok": True, "mfaRequired": True}
+
+
 class MfaLoginRequest(BaseModel):
     code: str
 
@@ -1909,13 +1957,14 @@ def auth_login_mfa(req: MfaLoginRequest, response: Response, request: Request) -
         raise HTTPException(401, "That code didn't work. Check your authenticator app and try again.")
     _clear_login_failures(lock_key)
     response.delete_cookie(_MFA_PENDING_COOKIE, path="/")
+    admin = pending["prov"] == "admin"
     _set_session_cookie(response, pending["uid"], pending["aid"], request, pending["prov"],
-                        mfa_at=int(time.time()), new_sign_in=True)
+                        mfa_at=int(time.time()), new_sign_in=True, admin=admin)
     calls_db.record_login(pending["uid"])
     # mfaVerified is otherwise only added by /auth/me: without it the app's
     # admin gate showed "Sign in again with your code" right after a correct
     # code, until a reload (owner, 23 Oct 2026).
-    return {"ok": True, "user": {**_me_payload(pending["uid"]), "mfaVerified": True}}
+    return {"ok": True, "user": {**_me_payload(pending["uid"]), "mfaVerified": True, "adminSession": admin}}
 
 
 # Per-account sign-in failures (on top of the per-IP limit): 10 in 15 min
@@ -2251,6 +2300,7 @@ def auth_me(request: Request, response: Response) -> dict:
     payload = _me_payload(session["uid"], session.get("imp"))
     # This browser passed two-step login (the admin's, in a support session).
     payload["mfaVerified"] = bool(session.get("imfa") if session.get("imp") else session.get("mfa"))
+    payload["adminSession"] = bool(session.get("iadm") if session.get("imp") else session.get("adm"))
     if session.get("imp"):
         admin = calls_db.get_user_by_id(session["imp"]) or {}
         payload["impersonating"] = {
@@ -3554,7 +3604,8 @@ def admin_impersonate(account_id: int, request: Request, response: Response, adm
             session_version=int(owner.get("session_version") or 1), session_id=session_id,
             ttl_seconds=auth.IMPERSONATION_TTL_SECONDS,
             claims={"isv": int((calls_db.get_user_by_id(admin["user_id"]) or {}).get("session_version") or 1),
-                    "imfa": getattr(request.state, "mfa", None)},
+                    "imfa": getattr(request.state, "mfa", None),
+                    "iadm": 1 if getattr(request.state, "admin_session", None) else None},
         ),
         max_age=auth.IMPERSONATION_TTL_SECONDS, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/",
     )
@@ -3580,7 +3631,8 @@ def admin_impersonate_exit(request: Request, response: Response) -> dict:
         raise HTTPException(401, "Support session expired — please sign in again")
     if session.get("sid"):
         calls_db.revoke_user_session(session["sid"], session["uid"])
-    _set_session_cookie(response, owner["id"], owner["account_id"], request, mfa_at=session.get("imfa"))
+    _set_session_cookie(response, owner["id"], owner["account_id"], request, mfa_at=session.get("imfa"),
+                        admin=bool(session.get("iadm")))
     admin_db.write_audit(owner["id"], owner["email"], "impersonate_exit", session["aid"], session["uid"], detail="ended support session")
     return {"ok": True}
 
