@@ -192,7 +192,7 @@ function SolutionsPanel({ group, onNavigate }: { group: NavGroup; onNavigate: ()
           By language
           <HeaderIcon name="arrow_forward" size={16} />
         </NavLink>
-        <ul className="mt-2 grid grid-cols-2 gap-x-2 grid-close-2">
+        <ul className="mt-2 grid grid-cols-2 gap-x-2">
           {LANGUAGES.map((lang) => (
             <li key={lang.slug}>
               <NavLink
@@ -205,6 +205,17 @@ function SolutionsPanel({ group, onNavigate }: { group: NavGroup; onNavigate: ()
               </NavLink>
             </li>
           ))}
+          {/* Twelfth cell, as in the mobile menu, so the last row closes. */}
+          <li>
+            <NavLink
+              to="/languages"
+              onClick={onNavigate}
+              className="mh-item flex flex-col rounded-lg px-2 py-1.5 outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <span className="text-sm font-semibold text-primary">130+ in all</span>
+              <span className="text-xs text-text-muted">Every other language</span>
+            </NavLink>
+          </li>
         </ul>
       </div>
     </div>
