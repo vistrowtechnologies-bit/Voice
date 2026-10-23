@@ -1,6 +1,6 @@
 # Language-switch voice samples and language-page redesign (2026-10-15)
 
-Every /languages page now opens with a playable two-speaker sample call in the hero. The caller starts in Hindi and switches to the page's language at turn 3, and the AI agent follows. On /languages/hindi the call starts in English and switches to Hindi (changed 2026-10-23; see below). Each sample reuses the scenario of the page's written example.
+Every /languages page now opens with a playable two-speaker sample call in the hero. Since 2026-10-23 every sample is agent-led: the AI agent opens in the business's default language, the caller simply answers in the page's language, and the agent carries on in it without being asked (see the dated sections below). The original takes had the caller ask to switch at turn 3. Each sample reuses the scenario of the page's written example.
 
 ## Files
 
@@ -41,20 +41,20 @@ The agent follows the caller's language, books or notes details, never quotes pr
   - RMS was about 0.096 and peak at most 0.70;
   - the longest silence was 0.58 s or less.
 
-Current files (Aarti agent voice, 2026-10-23):
+Current files (natural, agent-led takes, 2026-10-23). "Switch at" is when the agent first speaks the page language:
 
 | Page | Scenario | Switch | Switch at | Duration | Size |
 |---|---|---|---|---|---|
-| /languages/hindi | Outbound EMI reminder (Saarthi Finance) | Agent-led, English to Hindi (pilot) | 0:10 | 30.3 s | 241 KB |
-| /languages/marathi | Home blood-sample booking, Pune lab | Hindi to Marathi | 0:07 | 31.3 s | 249 KB |
-| /languages/tamil | OMR property enquiry follow-up | Hindi to Tamil | 0:08 | 29.4 s | 234 KB |
-| /languages/telugu | Clinic appointment | Hindi to Telugu | 0:07 | 28.6 s | 227 KB |
-| /languages/kannada | Whitefield 2BHK enquiry | Hindi to Kannada | 0:08 | 32.6 s | 259 KB |
-| /languages/malayalam | Kochi 2BHK, caller in Dubai | Hindi to Malayalam | 0:09 | 28.9 s | 230 KB |
-| /languages/gujarati | Invoice 1042 reminder, Surat | Hindi to Gujarati | 0:10 | 30.6 s | 243 KB |
-| /languages/bengali | Order 5821 status | Hindi to Bengali | 0:06 | 27.3 s | 217 KB |
-| /languages/punjabi | Canada study-visa counselling | Hindi to Punjabi | 0:08 | 29.8 s | 237 KB |
-| /languages/odia | Class 10 demo class, Bhubaneswar | Hindi to Odia | 0:08 | 27.8 s | 221 KB |
+| /languages/hindi | Outbound EMI reminder (Saarthi Finance) | Agent opens in English, caller answers in Hindi | 0:10 | 32.6 s | 259 KB |
+| /languages/marathi | Home blood-sample booking, Pune lab | Agent opens in Hindi, caller answers in Marathi | 0:08 | 35.3 s | 280 KB |
+| /languages/tamil | OMR property enquiry follow-up | Agent opens in English, caller answers in Tamil | 0:06 | 28.4 s | 226 KB |
+| /languages/telugu | Clinic appointment | Agent opens in Hindi, caller answers in Telugu | 0:06 | 33.8 s | 268 KB |
+| /languages/kannada | Whitefield 2BHK enquiry | Agent opens in English, caller answers in Kannada | 0:06 | 33.6 s | 267 KB |
+| /languages/malayalam | Kochi 2BHK, caller in Dubai | Agent opens in English, caller answers in Malayalam | 0:07 | 31.6 s | 251 KB |
+| /languages/gujarati | Invoice 1042 reminder, Surat | Agent opens in Hindi, caller answers in Gujarati | 0:12 | 28.9 s | 230 KB |
+| /languages/bengali | Order 5821 status | Agent opens in Hindi, caller answers in Bengali | 0:09 | 27.9 s | 222 KB |
+| /languages/punjabi | Canada study-visa counselling | Agent opens in English, caller answers in Punjabi | 0:07 | 27.5 s | 219 KB |
+| /languages/odia | Class 10 demo class, Bhubaneswar | Agent opens in Hindi, caller answers in Odia | 0:07 | 32.1 s | 255 KB |
 
 ## 2026-10-23: Hindi sample now ends in Hindi
 
@@ -92,6 +92,39 @@ The owner found the sample "looks scripted", and that a caller who speaks good E
 - **Player:** `VoiceSample.switchTurn` (optional, defaults to `SWITCH_TURN`) sets where the chip flips. On this sample it is the agent's first Hindi line (turn 3), so the chip changes when the agent starts speaking Hindi. The "speaking …" label now uses each line's own language, and the divider, "Press play" hint and JSON-LD say the agent follows the caller.
 - **Checks:** decoded m4a is 30.3 s, RMS 0.096, peak 0.67, longest silence 0.60 s, and each `start` is within 0.03 s of the line onset. STT round trip passed for meaning on every line. "हाँ, thank you, bye bye." was detected as English, which is expected since it is mostly English words.
 - **Usage:** TTS 15 requests, 611 characters (including the first draft where the caller asked to switch, and one re-roll); STT 31 requests, about 1.5 minutes of audio.
+
+## 2026-10-23: natural, agent-led takes on all ten pages
+
+The owner approved the Hindi pilot ("natural is good, do all 9 like this, just add a greeting after the call finishes"). All ten samples now follow the same method.
+- **Flow:** the agent (Aarti) opens in the business's likely default language, and the caller answers in the page's language. The agent continues in that language from its next line, which is `switchTurn` = 2 in `voiceSamples.ts`, so the chip flips when the agent speaks it. Nobody asks to switch or mentions language. Every call ends with the agent's short closing greeting after the caller's goodbye.
+- **Opener language:**
+  - English for Hindi (the approved pilot), Tamil (a Chennai builder following up a lead), Kannada (Bengaluru real estate), Malayalam (Kochi flats, caller in Dubai) and Punjabi (Canada study-visa counselling).
+  - Hindi for Marathi (Pune lab), Telugu (Hyderabad clinic), Gujarati (Surat invoice reminder), Bengali (order status) and Odia (Bhubaneswar coaching institute).
+- **Scripts:** same scenarios and facts as before, rewritten as spoken phone talk with fillers, half-sentences, a self-correction where it fits, and short confirmations. Inbound calls open with a neutral greeting ("Artha बोल रही हूँ, बताइए…" / "Hello, this is Artha. How can I help you?"). Closing lines that implied the agent would meet the caller ("see you Saturday") became "have a good day / take care". There are no prices and no transfer.
+  - For TTS only, "Kothrud" is spelt कोथरूड and Punjabi "IELTS" is spelt ਆਈਲਟਸ; the transcript keeps IELTS.
+- **Voice and mix:** the same as the Hindi pilot: temperature 0.9, pace 1.1-1.25 per line, gaps 100-550 ms, and two small overlaps (-120 ms and -100 ms) at the goodbye. The caller is on a phone band with room tone 38 dB down; the agent is wideband and slightly closer. -20 dBFS RMS per line, soft limiter, and the same libfdk_aac encode.
+- **Checks:** every line (92) was round-tripped through `saarika:v2.5` with auto-detect, and every agent line in the page language was detected in that language. The re-rolls and remaining flags are listed below.
+  - Re-voiced:
+    - Punjabi agent turn 3: "IELTS" misheard, and a 0.7 s pause inside the line.
+    - Punjabi agent turn 5: STT heard the masculine "ਦਿੰਦੇ".
+    - Odia agent turn 5: "class 10" garbled.
+    - Gujarati caller turn 2.
+  - Rewritten:
+    - Odia agent turn 9: "ସୌରଭଙ୍କ" garbled twice, now "ସୌରଭ ପାଇଁ".
+    - Marathi: the agent's address confirmation was detected as English, so it was dropped and the fasting question merged into the caller's line.
+    - Marathi caller's goodbye: "ठीक आहे" was heard as Hindi "ठीक है"; it is now "बरं बरं, थँक यू".
+    - Malayalam caller turn 2: now "Dubai-ൽ നിന്നാണ്".
+    - Tamil caller turn 2: the pause after "ஆ" was removed.
+  - Short or mostly-English caller lines still detect as another language, with the meaning intact. These are expected, and none of them is an agent line:
+    - "சூப்பர், thanks!" and "ಸೂಪರ್, thank you." are detected as English.
+    - Marathi "बरं बरं, थँक यू." is detected as English.
+    - Punjabi "ਹਾਂ ਜੀ, 6.5 bands ਆਏ ਨੇ।" is detected as Hindi.
+    - Odia name "ସୌରଭ ମହାନ୍ତି।" is detected as Hindi.
+    - Hindi "हाँ, thank you, bye bye." is detected as English.
+- **Measurements:** decoded RMS 0.095-0.097, peak 0.62-0.67, longest silence 0.46-0.60 s, and every `start` within 0.06 s of its line onset. Durations are 27.5-35.3 s; Punjabi (27.5 s) and Bengali (27.9 s) are slightly under 28 s.
+- **Copy:** the player hint, divider, tick and JSON-LD now say the agent opens in X, the caller answers in Y, and the agent follows automatically. The footer reads "Demo call voiced by Vistrow Voice. Not a real customer." (it was "Scripted sample voiced by Vistrow Voice voices. Not a real customer call."), and `test-language-seo.mjs` checks the new text. The "caller switches" wording was also removed from the Product menu card (`MarketingLayout.tsx`) and one blog paragraph (`olderPostUpgrades.ts`).
+- **Usage:** TTS 98 requests, 4,578 characters; STT 108 requests, about 5.8 minutes of audio.
+- **Not verified:** a native-speaker listen in each language. Aarti is a Hindi-tagged voice.
 
 ## Usage (both takes)
 

@@ -1,12 +1,10 @@
-// Two-speaker sample calls for the /languages pages: the caller starts in
-// Hindi and switches to the page's language at turn 3, and the agent follows.
-// Hindi page (pilot, 2026-10-23): the agent opens in English, the caller just
-// answers in Hindi, and the agent carries on in Hindi without being asked. Drafted with Sarvam
-// sarvam-105b-conversations, then rewritten as spoken lines; voiced with
-// Sarvam bulbul:v4-flash (agent aarti_hi_customer since 2026-10-23, caller
-// aditya_hi_conversational, pace 1.2, temperature 0.7). `start` is
-// each line's offset in the file, in seconds. Generated; see
-// docs/SEO-VOICE-SAMPLES-2026-10-15.md.
+// Two-speaker sample calls for the /languages pages, agent-led: the AI agent
+// opens in the business's default language (`from`), the caller just answers
+// in the page's language (`to`), and the agent carries on in it without being
+// asked. Nobody mentions language. Voiced with Sarvam bulbul:v4-flash (agent
+// aarti_hi_customer, caller aditya_hi_conversational on a phone-band line,
+// temperature 0.9). `start` is each line's offset in the file, in seconds.
+// Generated; see docs/SEO-VOICE-SAMPLES-2026-10-15.md.
 
 export interface VoiceSampleTurn {
   speaker: 'Caller' | 'Agent'
@@ -24,8 +22,8 @@ export interface VoiceSample {
   from: string
   to: string
   languages: string[]
-  /** Index of the turn where the switch chip flips to `to`; defaults to
-   * SWITCH_TURN. On agent-led samples it is the agent's first line in `to`. */
+  /** Index of the agent's first line in `to`, where the switch chip flips;
+   * defaults to SWITCH_TURN. */
   switchTurn?: number
   turns: VoiceSampleTurn[]
 }
@@ -35,82 +33,86 @@ export const SWITCH_TURN = 2
 
 export const switchTurnOf = (sample: VoiceSample) => sample.switchTurn ?? SWITCH_TURN
 
-/** True when the agent changes language on its own after the caller answers
- * in `to` (nobody asks to switch). */
-export const agentLedSwitch = (sample: VoiceSample) => sample.turns[switchTurnOf(sample)].speaker === 'Agent'
-
 export const VOICE_SAMPLES: Record<string, VoiceSample> = {
   marathi: {
     "src": "/media/samples/marathi-switch.m4a",
-    "seconds": 31,
+    "seconds": 35,
     "from": "Hindi",
     "to": "Marathi",
     "languages": [
       "hi-IN",
       "mr-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
-        "speaker": "Caller",
+        "speaker": "Agent",
         "lang": "hi-IN",
-        "native": "Hello, कल सुबह घर से blood sample collect हो जाएगा क्या?",
+        "native": "नमस्ते, Artha बोल रही हूँ। बताइए, मैं क्या मदद कर सकती हूँ?",
         "start": 0.2,
-        "gloss": "Hello, can a blood sample be collected from home tomorrow morning?"
-      },
-      {
-        "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "जी हाँ, हो जाएगा। कल सुबह 7 से 9 का slot खाली है।",
-        "start": 3.31,
-        "gloss": "Yes, it can. Tomorrow’s 7 to 9 morning slot is free."
+        "gloss": "Hello, this is Artha. Tell me, how can I help?"
       },
       {
         "speaker": "Caller",
         "lang": "mr-IN",
-        "native": "अच्छा, मराठीत बोलूया का? माझा address Kothrud मधला आहे.",
-        "start": 6.85,
-        "gloss": "Okay, can we speak in Marathi? My address is in Kothrud."
+        "native": "हां, नमस्कार… उद्या सकाळी घरून blood sample घेऊन जाल का?",
+        "start": 4.12,
+        "gloss": "Yes, hello… could you collect a blood sample from home tomorrow morning?"
       },
       {
         "speaker": "Agent",
         "lang": "mr-IN",
-        "native": "हो, चालेल ना! पूर्ण address आणि pin code सांगा.",
-        "start": 10.57,
-        "gloss": "Yes, sure! Tell me the full address and pin code."
+        "native": "हो, नक्की! उद्या सकाळी 7 ते 9 चा slot खाली आहे.",
+        "start": 8.61,
+        "gloss": "Yes, sure! Tomorrow’s 7 to 9 morning slot is free."
       },
       {
         "speaker": "Caller",
         "lang": "mr-IN",
-        "native": "कोथरूड, 411038. आणि fasting लागेल का?",
-        "start": 13.65,
-        "gloss": "Kothrud, 411038. And is fasting needed?"
+        "native": "अं, चालेल. माझा पत्ता कोथरूड मधला आहे, 411038. आणि… fasting लागेल का?",
+        "start": 12.79,
+        "gloss": "Um, that works. My address is in Kothrud, 411038. And… is fasting needed?"
       },
       {
         "speaker": "Agent",
         "lang": "mr-IN",
         "native": "हो, lab च्या instructions नुसार 10 तास. म्हणजे रात्री 9 नंतर काही खाऊ नका, पाणी चालेल.",
-        "start": 18.43,
+        "start": 20.02,
         "gloss": "Yes, 10 hours as per the lab’s instructions. So nothing to eat after 9 at night; water is fine."
       },
       {
         "speaker": "Caller",
         "lang": "mr-IN",
-        "native": "ओके, मग 7 ते 9 चा slot book करा.",
-        "start": 24.81,
-        "gloss": "Okay, then book the 7 to 9 slot."
+        "native": "ओके ओके, मग 7 ते 9 चा slot book करा.",
+        "start": 25.44,
+        "gloss": "Okay, okay, then book the 7 to 9 slot."
       },
       {
         "speaker": "Agent",
         "lang": "mr-IN",
-        "native": "झालं! उद्या 7 ते 9, Kothrud ला आमची team येईल.",
-        "start": 27.48,
+        "native": "झालं! उद्या 7 ते 9, कोथरूडला आमची team येईल.",
+        "start": 28.57,
         "gloss": "Done! Tomorrow 7 to 9, our team will come to Kothrud."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "mr-IN",
+        "native": "बरं बरं, थँक यू.",
+        "start": 32.8,
+        "gloss": "Okay, okay, thank you."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "mr-IN",
+        "native": "धन्यवाद, काळजी घ्या!",
+        "start": 33.76,
+        "gloss": "Thank you, take care!"
       }
     ]
   },
   hindi: {
     "src": "/media/samples/hindi-switch.m4a",
-    "seconds": 30,
+    "seconds": 33,
     "from": "English",
     "to": "Hindi",
     "languages": [
@@ -187,290 +189,341 @@ export const VOICE_SAMPLES: Record<string, VoiceSample> = {
         "native": "हाँ, thank you, bye bye.",
         "start": 27.75,
         "gloss": "Yes, thank you, bye bye."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "hi-IN",
+        "native": "जी, धन्यवाद राहुल जी, bye! ध्यान रखिए।",
+        "start": 29.76,
+        "gloss": "Thank you, Rahul ji, bye! Take care."
       }
     ]
   },
   tamil: {
     "src": "/media/samples/tamil-switch.m4a",
-    "seconds": 29,
-    "from": "Hindi",
+    "seconds": 28,
+    "from": "English",
     "to": "Tamil",
     "languages": [
-      "hi-IN",
+      "en-IN",
       "ta-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
         "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "नमस्ते कार्तिक जी, Artha बोल रही हूँ। आपने OMR project के लिए enquiry की थी, दो मिनट बात हो सकती है?",
-        "start": 0.2,
-        "gloss": "Hello Karthik ji, this is Artha. You enquired about the OMR project; can we talk for two minutes?"
-      },
-      {
-        "speaker": "Caller",
-        "lang": "hi-IN",
-        "native": "हाँ जी, बोलिए, मैं सुन रहा हूँ।",
-        "start": 6.14,
-        "gloss": "Yes, go ahead, I’m listening."
+        "lang": "en-IN",
+        "native": "Hi Karthik, this is Artha. You’d enquired about the OMR project. Can we talk for two minutes?",
+        "start": 0.2
       },
       {
         "speaker": "Caller",
         "lang": "ta-IN",
-        "native": "தமிழ்ல பேசலாமா? எனக்கு அது easy.",
-        "start": 7.89,
-        "gloss": "Can we speak in Tamil? That’s easier for me."
+        "native": "ஆ, சொல்லுங்க சொல்லுங்க.",
+        "start": 5.59,
+        "gloss": "Ah, go ahead, go ahead."
       },
       {
         "speaker": "Agent",
         "lang": "ta-IN",
-        "native": "கண்டிப்பா, தமிழ்லயே பேசலாம்! சொல்லுங்க, நீங்க இருக்கவா, இல்ல investment-க்கா?",
-        "start": 9.86,
-        "gloss": "Of course, let’s speak in Tamil! Tell me, is it to live in, or as an investment?"
+        "native": "சரி! நீங்க இருக்கவா பாக்குறீங்க, இல்ல investment-க்கா?",
+        "start": 6.72,
+        "gloss": "Okay! Are you looking to live in it, or as an investment?"
       },
       {
         "speaker": "Caller",
         "lang": "ta-IN",
-        "native": "இருக்கத்தான், family-ஓட. 2BHK வேணும்.",
-        "start": 14.32,
-        "gloss": "To live in, with my family. I want a 2BHK."
+        "native": "இருக்கத்தான்… family-ஓட. ம்ம், 2BHK வேணும்.",
+        "start": 10.32,
+        "gloss": "To live in… with my family. Hmm, I want a 2BHK."
       },
       {
         "speaker": "Agent",
         "lang": "ta-IN",
         "native": "சரி, family-க்கு 2BHK. ஒரு தடவை site-அ நேர்ல வந்து பாக்கலாமா?",
-        "start": 16.76,
+        "start": 13.8,
         "gloss": "Okay, a 2BHK for the family. Would you like to come and see the site once?"
       },
       {
         "speaker": "Caller",
         "lang": "ta-IN",
-        "native": "ஆமா, இந்த Sunday வரலாமா?",
-        "start": 21.22,
-        "gloss": "Yes, can I come this Sunday?"
+        "native": "ஆமா… இந்த Sunday வரலாமா?",
+        "start": 18.4,
+        "gloss": "Yes… can I come this Sunday?"
       },
       {
         "speaker": "Agent",
         "lang": "ta-IN",
         "native": "Sunday காலை 10 மணிக்கு slot இருக்கு, book பண்ணிட்டேன். எங்க team அங்க உங்களுக்காக wait பண்ணுவாங்க.",
-        "start": 22.96,
+        "start": 20.37,
         "gloss": "There’s a slot on Sunday at 10 in the morning; I’ve booked it. Our team will be waiting for you there."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "ta-IN",
+        "native": "சூப்பர், thanks!",
+        "start": 25.31,
+        "gloss": "Super, thanks!"
+      },
+      {
+        "speaker": "Agent",
+        "lang": "ta-IN",
+        "native": "ரொம்ப நன்றி கார்த்திக், bye!",
+        "start": 26.46,
+        "gloss": "Thanks a lot, Karthik, bye!"
       }
     ]
   },
   telugu: {
     "src": "/media/samples/telugu-switch.m4a",
-    "seconds": 29,
+    "seconds": 34,
     "from": "Hindi",
     "to": "Telugu",
     "languages": [
       "hi-IN",
       "te-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
-        "speaker": "Caller",
+        "speaker": "Agent",
         "lang": "hi-IN",
-        "native": "Hello, कल doctor का appointment मिलेगा क्या?",
+        "native": "नमस्ते, Artha बोल रही हूँ। बताइए, कैसे मदद करूँ?",
         "start": 0.2,
-        "gloss": "Hello, can I get a doctor’s appointment tomorrow?"
-      },
-      {
-        "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "जी हाँ, मिलेगा। कल शाम 5 बजे का slot खाली है, चलेगा?",
-        "start": 2.9,
-        "gloss": "Yes, you can. There’s a free slot tomorrow at 5 in the evening; does that work?"
+        "gloss": "Hello, this is Artha. Tell me, how can I help?"
       },
       {
         "speaker": "Caller",
         "lang": "te-IN",
-        "native": "తెలుగులో మాట్లాడొచ్చా? 5 గంటలు ఓకే.",
-        "start": 6.78,
-        "gloss": "Can I speak in Telugu? 5 o’clock is okay."
+        "native": "హలో అండి… రేపు doctor appointment దొరుకుతుందా?",
+        "start": 3.47,
+        "gloss": "Hello… can I get a doctor’s appointment tomorrow?"
       },
       {
         "speaker": "Agent",
         "lang": "te-IN",
-        "native": "అలాగే అండి, తెలుగులోనే మాట్లాడుదాం! Patient పేరు చెప్పండి.",
-        "start": 10.31,
-        "gloss": "Sure, let’s talk in Telugu! Tell me the patient’s name."
+        "native": "దొరుకుతుంది అండి. రేపు సాయంత్రం 5 గంటలకి slot ఖాళీగా ఉంది, ఓకేనా?",
+        "start": 6.49,
+        "gloss": "Yes, you can. There’s a free slot tomorrow at 5 in the evening; is that okay?"
       },
       {
         "speaker": "Caller",
         "lang": "te-IN",
-        "native": "రవి కుమార్. నా కోసమే.",
-        "start": 13.24,
-        "gloss": "Ravi Kumar. It’s for me."
+        "native": "ఆ, 5 ఓకే.",
+        "start": 11.35,
+        "gloss": "Yeah, 5 is okay."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "te-IN",
+        "native": "సరే. Patient పేరు చెప్పండి?",
+        "start": 12.36,
+        "gloss": "Okay. The patient’s name?"
+      },
+      {
+        "speaker": "Caller",
+        "lang": "te-IN",
+        "native": "రవి కుమార్… నా కోసమే అండి.",
+        "start": 14.43,
+        "gloss": "Ravi Kumar… it’s for me."
       },
       {
         "speaker": "Agent",
         "lang": "te-IN",
         "native": "సరే అండి. Doctor గారికి చెప్పడానికి, ఏం problem అని కొంచెం చెప్తారా?",
-        "start": 15.24,
+        "start": 17.11,
         "gloss": "Okay. So I can tell the doctor, could you say briefly what the problem is?"
       },
       {
         "speaker": "Caller",
         "lang": "te-IN",
-        "native": "మూడు రోజులుగా జ్వరం, దగ్గు ఉన్నాయి అండి.",
-        "start": 19.89,
-        "gloss": "I’ve had fever and cough for three days."
+        "native": "అది… మూడు రోజులుగా జ్వరం, దగ్గు ఉన్నాయి.",
+        "start": 21.66,
+        "gloss": "Well… I’ve had fever and cough for three days."
       },
       {
         "speaker": "Agent",
         "lang": "te-IN",
         "native": "సరే రవి గారు, రేపు సాయంత్రం 5 కి book అయింది. 10 నిమిషాలు ముందే రండి.",
-        "start": 22.83,
+        "start": 25.47,
         "gloss": "Okay Ravi garu, you’re booked for 5 in the evening tomorrow. Please come 10 minutes early."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "te-IN",
+        "native": "సరే అండి, thank you.",
+        "start": 29.09,
+        "gloss": "Okay, thank you."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "te-IN",
+        "native": "ధన్యవాదాలు రవి గారు, జాగ్రత్తగా ఉండండి!",
+        "start": 30.65,
+        "gloss": "Thank you, Ravi garu, take care!"
       }
     ]
   },
   kannada: {
     "src": "/media/samples/kannada-switch.m4a",
-    "seconds": 33,
-    "from": "Hindi",
+    "seconds": 34,
+    "from": "English",
     "to": "Kannada",
     "languages": [
-      "hi-IN",
+      "en-IN",
       "kn-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
-        "speaker": "Caller",
-        "lang": "hi-IN",
-        "native": "Hello, Whitefield के पास 2BHK फ्लैट मिलेगा?",
-        "start": 0.2,
-        "gloss": "Hello, can I get a 2BHK flat near Whitefield?"
-      },
-      {
         "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "जी हाँ, मिलेगा! Whitefield के पास 2BHK के कुछ options हैं।",
-        "start": 3.1,
-        "gloss": "Yes, you can! There are some 2BHK options near Whitefield."
+        "lang": "en-IN",
+        "native": "Hello, this is Artha. How can I help you today?",
+        "start": 0.2
       },
       {
         "speaker": "Caller",
         "lang": "kn-IN",
-        "native": "ಕನ್ನಡದಲ್ಲಿ ಮಾತಾಡ್ಬಹುದಾ? ನಂಗೆ ಅದೇ easy.",
-        "start": 7.9,
-        "gloss": "Can we talk in Kannada? That’s easier for me."
+        "native": "ಹಲೋ… Whitefield ಹತ್ರ 2BHK flat ಸಿಗುತ್ತಾ?",
+        "start": 2.93,
+        "gloss": "Hello… can I get a 2BHK flat near Whitefield?"
       },
       {
         "speaker": "Agent",
         "lang": "kn-IN",
-        "native": "ಖಂಡಿತ, ಕನ್ನಡದಲ್ಲೇ ಮಾತಾಡೋಣ! ನಿಮ್ಮ budget ಎಷ್ಟು ಅಂತ ಹೇಳ್ತೀರಾ?",
-        "start": 10.36,
-        "gloss": "Of course, let’s talk in Kannada! Could you tell me your budget?"
+        "native": "ಸಿಗುತ್ತೆ! Whitefield ಹತ್ರ 2BHK ಕೆಲವು options ಇವೆ. ನಿಮ್ಮ budget ಎಷ್ಟು?",
+        "start": 6.83,
+        "gloss": "You can! There are some 2BHK options near Whitefield. What’s your budget?"
       },
       {
         "speaker": "Caller",
         "lang": "kn-IN",
-        "native": "ಸುಮಾರು 80 lakh ಒಳಗೆ. 6 ತಿಂಗಳಲ್ಲಿ shift ಆಗ್ಬೇಕು.",
-        "start": 14.7,
-        "gloss": "Under about 80 lakh. I need to move in within 6 months."
+        "native": "ಹ್ಮ್… ಸುಮಾರು 80 lakh ಒಳಗೆ. 6 ತಿಂಗಳಲ್ಲಿ shift ಆಗ್ಬೇಕು.",
+        "start": 12.42,
+        "gloss": "Hmm… under about 80 lakh. I need to move in within 6 months."
       },
       {
         "speaker": "Agent",
         "lang": "kn-IN",
         "native": "ಸರಿ, 80 lakh ಒಳಗೆ, 6 ತಿಂಗಳಲ್ಲಿ. ಒಂದ್ಸಲ site visit ಮಾಡ್ತೀರಾ?",
-        "start": 18.36,
+        "start": 17.3,
         "gloss": "Okay, under 80 lakh, within 6 months. Would you like to do a site visit?"
       },
       {
         "speaker": "Caller",
         "lang": "kn-IN",
         "native": "ಹೌದು, ಈ weekend ಆಗುತ್ತಾ? ಶನಿವಾರ ಆದ್ರೆ ಒಳ್ಳೇದು.",
-        "start": 23.44,
+        "start": 22.03,
         "gloss": "Yes, is this weekend possible? Saturday would be good."
       },
       {
         "speaker": "Agent",
         "lang": "kn-IN",
         "native": "ಆಗುತ್ತೆ. ಶನಿವಾರ ಬೆಳಿಗ್ಗೆ 11ಕ್ಕೆ book ಮಾಡಿದೀನಿ. ನಮ್ಮ team site-ಅಲ್ಲಿ ಇರುತ್ತೆ.",
-        "start": 27.17,
+        "start": 25.81,
         "gloss": "It is. I’ve booked Saturday at 11 in the morning. Our team will be at the site."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "kn-IN",
+        "native": "ಸೂಪರ್, thank you.",
+        "start": 30.22,
+        "gloss": "Super, thank you."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "kn-IN",
+        "native": "ಧನ್ಯವಾದಗಳು, ಒಳ್ಳೇ ದಿನ ಆಗ್ಲಿ!",
+        "start": 31.31,
+        "gloss": "Thank you, have a good day!"
       }
     ]
   },
   malayalam: {
     "src": "/media/samples/malayalam-switch.m4a",
-    "seconds": 29,
-    "from": "Hindi",
+    "seconds": 32,
+    "from": "English",
     "to": "Malayalam",
     "languages": [
-      "hi-IN",
+      "en-IN",
       "ml-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
-        "speaker": "Caller",
-        "lang": "hi-IN",
-        "native": "नमस्ते, Kochi में 2BHK flat मिलेगा? मैं Dubai से बोल रहा हूँ।",
-        "start": 0.2,
-        "gloss": "Hello, can I get a 2BHK flat in Kochi? I’m calling from Dubai."
-      },
-      {
         "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "जी हाँ, Kakkanad area में 2BHK के options हैं।",
-        "start": 4.82,
-        "gloss": "Yes, there are 2BHK options in the Kakkanad area."
+        "lang": "en-IN",
+        "native": "Hello, this is Artha. How can I help you?",
+        "start": 0.2
       },
       {
         "speaker": "Caller",
         "lang": "ml-IN",
-        "native": "മലയാളത്തിൽ സംസാരിക്കാമോ? അതാ എളുപ്പം.",
-        "start": 8.87,
-        "gloss": "Can I speak in Malayalam? That’s easier."
+        "native": "ഹലോ… ഞാൻ Dubai-ൽ നിന്നാണ് വിളിക്കുന്നത്. Kochi-ൽ ഒരു 2BHK flat കിട്ടുമോ?",
+        "start": 2.47,
+        "gloss": "Hello… I’m calling from Dubai. Can I get a 2BHK flat in Kochi?"
       },
       {
         "speaker": "Agent",
         "lang": "ml-IN",
-        "native": "പിന്നെന്താ, മലയാളത്തിൽ സംസാരിക്കാം! Budget എത്രയാ?",
-        "start": 11.09,
-        "gloss": "Of course, let’s speak in Malayalam! What’s the budget?"
+        "native": "കിട്ടും! Kakkanad area-യിൽ 2BHK options ഉണ്ട്. Budget എത്രയാ?",
+        "start": 7.76,
+        "gloss": "You can! There are 2BHK options in the Kakkanad area. What’s the budget?"
       },
       {
         "speaker": "Caller",
         "lang": "ml-IN",
-        "native": "ഏകദേശം 70 lakh. അടുത്ത മാസം നാട്ടിൽ വരും, അപ്പോ site visit പറ്റുമോ?",
-        "start": 14.21,
-        "gloss": "About 70 lakh. I’m coming home next month; can we do a site visit then?"
+        "native": "ഏകദേശം… 70 lakh. അടുത്ത മാസം നാട്ടിൽ വരും, അപ്പോ site visit പറ്റുമോ?",
+        "start": 12.31,
+        "gloss": "About… 70 lakh. I’m coming home next month; can we do a site visit then?"
       },
       {
         "speaker": "Agent",
         "lang": "ml-IN",
         "native": "പറ്റും. ഏതൊക്കെ dates-ൽ ആണ് നാട്ടിൽ ഉണ്ടാവുക?",
-        "start": 18.75,
+        "start": 17.43,
         "gloss": "Yes. Which dates will you be home?"
       },
       {
         "speaker": "Caller",
         "lang": "ml-IN",
-        "native": "അടുത്ത മാസം 10 മുതൽ 20 വരെ.",
-        "start": 21.21,
-        "gloss": "From the 10th to the 20th of next month."
+        "native": "ആ, അടുത്ത മാസം 10 മുതൽ 20 വരെ.",
+        "start": 20.36,
+        "gloss": "Ah, from the 10th to the 20th of next month."
       },
       {
         "speaker": "Agent",
         "lang": "ml-IN",
         "native": "ഓക്കേ, 10 മുതൽ 20 വരെ. അതിനിടയിൽ ഒരു ദിവസം visit fix ചെയ്ത് confirm ചെയ്യാം.",
-        "start": 23.61,
+        "start": 23.02,
         "gloss": "Okay, the 10th to the 20th. We’ll fix a visit on one of those days and confirm it with you."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "ml-IN",
+        "native": "ശരി, thanks!",
+        "start": 28.81,
+        "gloss": "Okay, thanks!"
+      },
+      {
+        "speaker": "Agent",
+        "lang": "ml-IN",
+        "native": "നന്ദി, നല്ലൊരു ദിവസം!",
+        "start": 29.66,
+        "gloss": "Thank you, have a nice day!"
       }
     ]
   },
   gujarati: {
     "src": "/media/samples/gujarati-switch.m4a",
-    "seconds": 31,
+    "seconds": 29,
     "from": "Hindi",
     "to": "Gujarati",
     "languages": [
       "hi-IN",
       "gu-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
         "speaker": "Agent",
@@ -481,256 +534,272 @@ export const VOICE_SAMPLES: Record<string, VoiceSample> = {
       },
       {
         "speaker": "Caller",
-        "lang": "hi-IN",
-        "native": "हाँ हाँ, पता है, याद है मुझे।",
-        "start": 7.53,
-        "gloss": "Yes, yes, I know, I remember."
-      },
-      {
-        "speaker": "Caller",
         "lang": "gu-IN",
-        "native": "ગુજરાતીમાં વાત કરીએ? સોમવાર સુધીમાં transfer કરી દઈશ.",
-        "start": 9.73,
-        "gloss": "Shall we talk in Gujarati? I’ll transfer it by Monday."
+        "native": "હા હા, ખબર છે, યાદ છે… સોમવાર સુધીમાં transfer કરી દઈશ.",
+        "start": 8.23,
+        "gloss": "Yes, yes, I know, I remember… I’ll transfer it by Monday."
       },
       {
         "speaker": "Agent",
         "lang": "gu-IN",
-        "native": "હા, ચોક્કસ, ગુજરાતીમાં વાત કરીએ! તો સોમવાર payment date તરીકે note કરી લીધું.",
-        "start": 12.62,
-        "gloss": "Yes, of course, let’s talk in Gujarati! So I’ve noted Monday as the payment date."
+        "native": "સરસ, તો સોમવાર payment date તરીકે note કરી લીધું.",
+        "start": 12.54,
+        "gloss": "Great, so I’ve noted Monday as the payment date."
       },
       {
         "speaker": "Caller",
         "lang": "gu-IN",
-        "native": "અને હા, account statement પણ email પર મોકલી દેજો ને.",
-        "start": 17.73,
-        "gloss": "And yes, please send the account statement by email too."
+        "native": "અને હા… account statement પણ email પર મોકલી દેજો ને.",
+        "start": 15.88,
+        "gloss": "And yes… please send the account statement by email too."
       },
       {
         "speaker": "Agent",
         "lang": "gu-IN",
         "native": "હા, ચોક્કસ. Request note કરી લીધી છે, accounts team email પર મોકલી દેશે.",
-        "start": 21.13,
+        "start": 19.09,
         "gloss": "Yes, sure. I’ve noted the request; the accounts team will email it."
       },
       {
         "speaker": "Caller",
         "lang": "gu-IN",
-        "native": "સારું, આભાર.",
-        "start": 25.67,
-        "gloss": "Okay, thanks."
+        "native": "સારું સારું, આભાર. આવજો.",
+        "start": 24.6,
+        "gloss": "Okay, okay, thanks. Bye."
       },
       {
         "speaker": "Agent",
         "lang": "gu-IN",
         "native": "આભાર મહેશભાઈ, તમારો દિવસ સારો જાય! આવજો.",
-        "start": 27.02,
-        "gloss": "Thank you Maheshbhai, have a good day! Bye."
+        "start": 26.08,
+        "gloss": "Thank you, Maheshbhai, have a good day! Bye."
       }
     ]
   },
   bengali: {
     "src": "/media/samples/bengali-switch.m4a",
-    "seconds": 27,
+    "seconds": 28,
     "from": "Hindi",
     "to": "Bengali",
     "languages": [
       "hi-IN",
       "bn-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
-        "speaker": "Caller",
+        "speaker": "Agent",
         "lang": "hi-IN",
-        "native": "Hello, मेरा order कब तक आएगा?",
+        "native": "नमस्ते, Artha बोल रही हूँ। बताइए, कैसे मदद कर सकती हूँ?",
         "start": 0.2,
-        "gloss": "Hello, when will my order arrive?"
-      },
-      {
-        "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "नमस्ते! मैं अभी check करती हूँ, आप order number बताइए?",
-        "start": 2.19,
-        "gloss": "Hello! Let me check right away; what’s the order number?"
+        "gloss": "Hello, this is Artha. Tell me, how can I help?"
       },
       {
         "speaker": "Caller",
         "lang": "bn-IN",
-        "native": "বাংলায় বলি? Order number 5821.",
-        "start": 5.52,
-        "gloss": "Can I speak in Bengali? Order number 5821."
+        "native": "হ্যালো… আমার order-টা কবে আসবে বলুন তো? Order number 5821.",
+        "start": 3.33,
+        "gloss": "Hello… could you tell me when my order will come? Order number 5821."
       },
       {
         "speaker": "Agent",
         "lang": "bn-IN",
-        "native": "হ্যাঁ, অবশ্যই বাংলায় বলুন! দেখে নিলাম, আপনার order আজ বিকেল 5টার মধ্যে পৌঁছে যাবে।",
-        "start": 9.05,
-        "gloss": "Yes, of course, go ahead in Bengali! I’ve checked: your order will arrive by 5 in the evening today."
+        "native": "এক সেকেন্ড, দেখছি… হ্যাঁ, আপনার order আজ বিকেল 5টার মধ্যে পৌঁছে যাবে।",
+        "start": 9.57,
+        "gloss": "One second, checking… yes, your order will arrive by 5 this evening."
       },
       {
         "speaker": "Caller",
         "lang": "bn-IN",
-        "native": "আমি তো 6টার আগে বাড়ি থাকব না। সন্ধ্যার দিকে দেওয়া যাবে?",
-        "start": 14.65,
-        "gloss": "I won’t be home before 6. Can it be delivered in the evening?"
+        "native": "উফ, আমি তো 6টার আগে বাড়ি থাকব না। সন্ধ্যার দিকে দেওয়া যাবে?",
+        "start": 14.29,
+        "gloss": "Oh, I won’t be home before 6. Can it be delivered in the evening?"
       },
       {
         "speaker": "Agent",
         "lang": "bn-IN",
         "native": "আচ্ছা, কোনো চিন্তা নেই। 6টার পরে delivery-র request delivery team-এর জন্য note করে নিলাম।",
-        "start": 17.92,
+        "start": 18.76,
         "gloss": "Okay, no worries. I’ve noted a request for delivery after 6 for the delivery team."
       },
       {
         "speaker": "Caller",
         "lang": "bn-IN",
-        "native": "ঠিক আছে, অনেক ধন্যবাদ।",
-        "start": 23.32,
-        "gloss": "Okay, thanks a lot."
+        "native": "ঠিক আছে, অনেক ধন্যবাদ। রাখছি।",
+        "start": 23.44,
+        "gloss": "Okay, thanks a lot. Bye now."
       },
       {
         "speaker": "Agent",
         "lang": "bn-IN",
         "native": "আপনাকেও ধন্যবাদ, ভালো থাকবেন!",
-        "start": 24.99,
+        "start": 25.65,
         "gloss": "Thank you too, take care!"
       }
     ]
   },
   punjabi: {
     "src": "/media/samples/punjabi-switch.m4a",
-    "seconds": 30,
-    "from": "Hindi",
+    "seconds": 27,
+    "from": "English",
     "to": "Punjabi",
     "languages": [
-      "hi-IN",
+      "en-IN",
       "pa-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
-        "speaker": "Caller",
-        "lang": "hi-IN",
-        "native": "Hello, Canada study visa की counselling कब मिल सकती है?",
-        "start": 0.2,
-        "gloss": "Hello, when can I get counselling for a Canada study visa?"
-      },
-      {
         "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "नमस्ते! कल सुबह 11 बजे का slot खाली है। आपका IELTS हो गया?",
-        "start": 3.26,
-        "gloss": "Hello! There’s a free slot tomorrow at 11 in the morning. Have you done your IELTS?"
+        "lang": "en-IN",
+        "native": "Hello, this is Artha. How can I help you today?",
+        "start": 0.2
       },
       {
         "speaker": "Caller",
         "lang": "pa-IN",
-        "native": "ਪੰਜਾਬੀ ਵਿੱਚ ਗੱਲ ਕਰੀਏ? ਹਾਂ ਜੀ, 6.5 bands ਆਏ ਨੇ।",
-        "start": 7.71,
-        "gloss": "Can we talk in Punjabi? Yes, I got 6.5 bands."
+        "native": "ਹਾਂ ਜੀ, ਸਤ ਸ੍ਰੀ ਅਕਾਲ… Canada study visa ਦੀ counselling ਕਦੋਂ ਮਿਲ ਸਕਦੀ ਆ?",
+        "start": 2.93,
+        "gloss": "Yes, hello… when can I get counselling for a Canada study visa?"
       },
       {
         "speaker": "Agent",
         "lang": "pa-IN",
-        "native": "ਹਾਂ ਜੀ, ਜ਼ਰੂਰ! ਵਧੀਆ score ਹੈ। ਨਾਂ ਦੱਸ ਦਿਓ, 11 ਵਜੇ book ਕਰ ਦਿੰਦੀ ਹਾਂ।",
-        "start": 11.81,
-        "gloss": "Yes, of course! That’s a good score. Tell me your name and I’ll book 11 o’clock."
+        "native": "ਕੱਲ੍ਹ ਸਵੇਰੇ 11 ਵਜੇ ਦਾ slot ਖਾਲੀ ਹੈ। ਤੁਹਾਡਾ IELTS ਹੋ ਗਿਆ?",
+        "start": 7.01,
+        "gloss": "There’s a free slot tomorrow at 11 in the morning. Have you done your IELTS?"
       },
       {
         "speaker": "Caller",
         "lang": "pa-IN",
-        "native": "ਜੀ, ਮੇਰਾ ਨਾਂ ਗੁਰਪ੍ਰੀਤ ਸਿੰਘ ਹੈ।",
-        "start": 16.05,
-        "gloss": "My name is Gurpreet Singh."
+        "native": "ਹਾਂ ਜੀ, 6.5 bands ਆਏ ਨੇ।",
+        "start": 11.74,
+        "gloss": "Yes, I got 6.5 bands."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "pa-IN",
+        "native": "ਵਧੀਆ score ਹੈ! ਨਾਂ ਦੱਸ ਦਿਓ, 11 ਵਜੇ book ਕਰ ਦਿੰਦੀ ਹਾਂ।",
+        "start": 13.46,
+        "gloss": "That’s a good score! Tell me your name and I’ll book 11 o’clock."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "pa-IN",
+        "native": "ਗੁਰਪ੍ਰੀਤ… ਗੁਰਪ੍ਰੀਤ ਸਿੰਘ।",
+        "start": 17.29,
+        "gloss": "Gurpreet… Gurpreet Singh."
       },
       {
         "speaker": "Agent",
         "lang": "pa-IN",
         "native": "ਠੀਕ ਆ ਗੁਰਪ੍ਰੀਤ ਜੀ, ਕੱਲ੍ਹ 11 ਵਜੇ book ਹੋ ਗਈ। IELTS scorecard ਨਾਲ ਲੈ ਆਇਓ।",
-        "start": 18.15,
+        "start": 19.23,
         "gloss": "Okay Gurpreet ji, you’re booked for 11 tomorrow. Please bring your IELTS scorecard."
       },
       {
         "speaker": "Caller",
         "lang": "pa-IN",
-        "native": "ਠੀਕ ਆ ਜੀ, scorecard ਲੈ ਆਵਾਂਗਾ। ਧੰਨਵਾਦ।",
-        "start": 24.89,
-        "gloss": "Okay, I’ll bring the scorecard. Thanks."
+        "native": "ਠੀਕ ਆ ਜੀ, ਲੈ ਆਵਾਂਗਾ। ਧੰਨਵਾਦ।",
+        "start": 23.37,
+        "gloss": "Okay, I’ll bring it. Thanks."
       },
       {
         "speaker": "Agent",
         "lang": "pa-IN",
-        "native": "ਧੰਨਵਾਦ ਜੀ, ਕੱਲ੍ਹ ਮਿਲਦੇ ਹਾਂ!",
-        "start": 27.92,
-        "gloss": "Thank you, see you tomorrow!"
+        "native": "ਧੰਨਵਾਦ ਜੀ, ਆਪਣਾ ਖਿਆਲ ਰੱਖਿਓ!",
+        "start": 25.5,
+        "gloss": "Thank you, take care!"
       }
     ]
   },
   odia: {
     "src": "/media/samples/odia-switch.m4a",
-    "seconds": 28,
+    "seconds": 32,
     "from": "Hindi",
     "to": "Odia",
     "languages": [
       "hi-IN",
       "or-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
-        "speaker": "Caller",
+        "speaker": "Agent",
         "lang": "hi-IN",
-        "native": "नमस्ते, आपके institute में नया batch कब से शुरू हो रहा है?",
+        "native": "नमस्ते, Artha बोल रही हूँ। बताइए, कैसे मदद कर सकती हूँ?",
         "start": 0.2,
-        "gloss": "Hello, when does the new batch start at your institute?"
-      },
-      {
-        "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "नमस्ते! अगले सोमवार से शुरू हो रहा है। आप किस class के लिए पूछ रहे हैं?",
-        "start": 3.8,
-        "gloss": "Hello! It starts next Monday. Which class are you asking about?"
+        "gloss": "Hello, this is Artha. Tell me, how can I help?"
       },
       {
         "speaker": "Caller",
         "lang": "or-IN",
-        "native": "ଓଡ଼ିଆରେ କଥା ହେବା କି? ମୋ ପୁଅ ପାଇଁ, class 10।",
-        "start": 8.13,
-        "gloss": "Can we speak in Odia? It’s for my son, class 10."
+        "native": "ନମସ୍କାର… ଆପଣଙ୍କ institute ରେ ନୂଆ batch କେବେଠୁ ଆରମ୍ଭ ହେଉଛି?",
+        "start": 3.33,
+        "gloss": "Hello… when does the new batch start at your institute?"
       },
       {
         "speaker": "Agent",
         "lang": "or-IN",
-        "native": "ହଁ, ନିଶ୍ଚୟ, ଓଡ଼ିଆରେ କଥା ହେବା। କାଲି ସକାଳ 10ଟାରେ class 10ର demo class ଅଛି, book କରିଦେବି?",
-        "start": 11.13,
-        "gloss": "Yes, of course, let’s speak in Odia! There’s a class 10 demo class tomorrow at 10 in the morning; shall I book it?"
+        "native": "ଆସନ୍ତା ସୋମବାରଠୁ ଆରମ୍ଭ ହେଉଛି। କେଉଁ class ପାଇଁ ପଚାରୁଛନ୍ତି?",
+        "start": 7.16,
+        "gloss": "It starts next Monday. Which class are you asking about?"
+      },
+      {
+        "speaker": "Caller",
+        "lang": "or-IN",
+        "native": "ମୋ ପୁଅ ପାଇଁ… class 10।",
+        "start": 11.02,
+        "gloss": "For my son… class 10."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "or-IN",
+        "native": "ଆଚ୍ଛା। କାଲି ସକାଳ 10ଟାରେ class 10ର demo class ଅଛି, book କରିଦେବି?",
+        "start": 13.57,
+        "gloss": "I see. There’s a class 10 demo class tomorrow at 10 in the morning; shall I book it?"
       },
       {
         "speaker": "Caller",
         "lang": "or-IN",
         "native": "ହଁ, କରିଦିଅନ୍ତୁ। ସେ ଆସିବ।",
-        "start": 17.14,
+        "start": 19.39,
         "gloss": "Yes, please do. He’ll come."
       },
       {
         "speaker": "Agent",
         "lang": "or-IN",
         "native": "ଠିକ୍ ଅଛି। ପିଲାର ନାଁ କଣ କହିବେ?",
-        "start": 19.18,
+        "start": 21.94,
         "gloss": "Okay. Could you tell me the child’s name?"
       },
       {
         "speaker": "Caller",
         "lang": "or-IN",
         "native": "ସୌରଭ ମହାନ୍ତି।",
-        "start": 21.64,
+        "start": 24.43,
         "gloss": "Sourav Mohanty."
       },
       {
         "speaker": "Agent",
         "lang": "or-IN",
-        "native": "ବାସ୍, ସୌରଭଙ୍କ demo class କାଲି ସକାଳ 10ଟାରେ book ହୋଇଗଲା। ଧନ୍ୟବାଦ!",
-        "start": 22.75,
-        "gloss": "Done, Sourav’s demo class is booked for 10 tomorrow morning. Thank you!"
+        "native": "ବାସ୍, ସୌରଭ ପାଇଁ demo class କାଲି ସକାଳ 10ଟାରେ book ହୋଇଗଲା।",
+        "start": 25.66,
+        "gloss": "Done, the demo class for Sourav is booked for 10 tomorrow morning."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "or-IN",
+        "native": "ଠିକ୍ ଅଛି, ଧନ୍ୟବାଦ।",
+        "start": 29.39,
+        "gloss": "Okay, thank you."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "or-IN",
+        "native": "ଧନ୍ୟବାଦ, ଭଲରେ ରହିବେ!",
+        "start": 30.5,
+        "gloss": "Thank you, take care!"
       }
     ]
   },

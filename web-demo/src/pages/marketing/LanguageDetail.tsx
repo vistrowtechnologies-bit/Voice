@@ -11,7 +11,7 @@ import { pageFigures } from '../../lib/pageFigures'
 import arthaAvatar from '../../assets/artha-avatar.webp'
 import { INDIAN_LANGUAGE_VOICES, LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
 import { SEO_ORIGIN, seoForPath } from '../../lib/seoPages'
-import { VOICE_SAMPLES, agentLedSwitch, type VoiceSample } from '../../lib/voiceSamples'
+import { VOICE_SAMPLES, type VoiceSample } from '../../lib/voiceSamples'
 import {
   ObjectionCards,
   Reveal,
@@ -43,12 +43,8 @@ function audioJsonLd(sample: VoiceSample) {
   return {
     '@context': 'https://schema.org',
     '@type': 'AudioObject',
-    name: agentLedSwitch(sample)
-      ? `Sample call: the AI agent follows the caller from ${sample.from} to ${sample.to}`
-      : `Sample call: a caller switches from ${sample.from} to ${sample.to}`,
-    description: agentLedSwitch(sample)
-      ? `Scripted two-speaker phone call voiced by Vistrow Voice voices. The AI agent opens in ${sample.from}, the caller answers in ${sample.to}, and the agent continues in ${sample.to} automatically. Not a real customer call.`
-      : `Scripted two-speaker phone call voiced by Vistrow Voice voices. The caller starts in ${sample.from} and switches to ${sample.to}, and the AI agent follows. Not a real customer call.`,
+    name: `Sample call: the AI agent follows the caller from ${sample.from} to ${sample.to}`,
+    description: `Demo two-speaker phone call voiced by Vistrow Voice. The AI agent opens in ${sample.from}, the caller answers in ${sample.to}, and the agent continues in ${sample.to} automatically. Not a real customer.`,
     contentUrl: `${SEO_ORIGIN}${sample.src}`,
     encodingFormat: 'audio/mp4',
     duration: `PT${sample.seconds}S`,

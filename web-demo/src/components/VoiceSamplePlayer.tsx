@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import arthaAvatar from '../assets/artha-avatar.webp'
-import { agentLedSwitch, switchTurnOf, type VoiceSample } from '../lib/voiceSamples'
+import { switchTurnOf, type VoiceSample } from '../lib/voiceSamples'
 
 const BARS = 24
 
@@ -45,7 +45,6 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
   const started = playing || time > 0
   const active = started ? sample.turns.reduce((cur, t, i) => (t.start <= time + 0.05 ? i : cur), 0) : -1
   const switchTurn = switchTurnOf(sample)
-  const agentLed = agentLedSwitch(sample)
   const switchAt = sample.turns[switchTurn].start
   const switched = active >= switchTurn
   const current = active >= 0 ? sample.turns[active] : null
@@ -183,7 +182,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
             />
             <span
               aria-hidden="true"
-              title={`Switch to ${sample.to}`}
+              title={`Agent continues in ${sample.to}`}
               className="pointer-events-none absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded bg-cyan"
               style={{ left: `${(switchAt / sample.seconds) * 100}%` }}
             />
@@ -209,9 +208,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
           </>
         ) : (
           <p className="text-sm text-text-muted">
-            {agentLed
-              ? `Press play: the agent opens in ${sample.from}, the caller answers in ${sample.to}, and the agent follows.`
-              : `Press play: the caller starts in ${sample.from}, then switches to ${sample.to}.`}
+            Press play: the agent opens in {sample.from}, the caller answers in {sample.to}, and the agent follows.
           </p>
         )}
       </div>
@@ -225,7 +222,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
               {i === switchTurn && (
                 <p className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-cyan">
                   <span className="h-px flex-1 bg-cyan/30" />
-                  {agentLed ? 'Agent continues in' : 'Caller switches to'} {sample.to} at {clock(switchAt)}
+                  Agent continues in {sample.to} at {clock(switchAt)}
                   <span className="h-px flex-1 bg-cyan/30" />
                 </p>
               )}
@@ -255,7 +252,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
 
       <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-text-muted">
         <Icon name="info" className="mt-px shrink-0 text-[14px]" />
-        <span>Scripted sample voiced by Vistrow Voice voices. Not a real customer call.</span>
+        <span>Demo call voiced by Vistrow Voice. Not a real customer.</span>
       </p>
 
       <audio
