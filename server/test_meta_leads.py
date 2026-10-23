@@ -16,6 +16,7 @@ import json
 import os
 import time
 import unittest
+import urllib.parse
 from unittest import mock
 
 TEST_DB = os.environ.get("TEST_DATABASE_URL")
@@ -416,6 +417,77 @@ class MetaLeadsPhase1(unittest.TestCase):
         url = self.ml.oauth_start_url("STATE", "https://x/cb", "APP")
         self.assertIn("auth_type=rerequest", url)
         self.assertIn("leads_retrieval", url)
+
+    def test_a_business_login_configuration_replaces_scope_and_its_token_never_expires(self):
+        url = self.ml.oauth_start_url("STATE", "https://x/cb", "APP", "CFG1")
+        query = dict(urllib.parse.parse_qsl(url.split("?", 1)[1]))
+        self.assertEqual((query["config_id"], query["override_default_response_type"], query["response_type"]), ("CFG1", "true", "code"))
+        self.assertNotIn("scope", query)
+        calls: list[str] = []
+
+        def fetch(url: str) -> dict:
+            calls.append(url)
+            if "oauth/access_token" in url:
+                return {"access_token": "SYSTEM-USER", "token_type": "bearer"}
+            raise AssertionError(url)
+
+        token = self.ml.exchange_code("CODE", "https://x/cb", "APP", "SECRET", fetcher=fetch)
+        self.assertEqual(token, {"access_token": "SYSTEM-USER", "expires_in": None, "long_lived": True})
+        self.assertFalse(any("fb_exchange_token" in c for c in calls), "a never-expiring token is not re-exchanged")
+        acct = self.db.create_account_with_owner("MS", "Sam", f"ms-{self.stamp}@example.com", "h", email_verified=True)
+        self.ml.save_connection(acct["account_id"], token["access_token"], token["expires_in"], "sys-1", "Sys", acct["user_id"])
+        self.assertIsNone(self.ml.status_for(acct["account_id"])["tokenExpiresAt"])
+
+    def test_the_popup_result_page_reports_back_and_never_echoes_arbitrary_input(self):
+        html = self.ml.popup_result_page("pick_pages", "https://app.example/dashboard/integrations/facebook?facebook=pick_pages").body.decode()
+        self.assertIn('{"source": "vv-meta", "result": "pick_pages"}', html)
+        self.assertIn("BroadcastChannel('vv-meta')", html)
+        self.assertIn("window.close()", html)
+        evil = self.ml.popup_result_page("<script>alert(1)</script>", "https://x/</script><script>alert(2)").body.decode()
+        self.assertIn('"result": "failed"', evil)
+        self.assertNotIn("alert(1)", evil)
+        self.assertNotIn("</script><script>", evil)
+
+    def test_the_connect_routes_use_the_popup_only_when_asked(self):
+        from starlette.requests import Request
+
+        def request(cookie: str = "") -> Request:
+            return Request({"type": "http", "method": "GET", "path": "/", "query_string": b"",
+                            "headers": [(b"cookie", cookie.encode())] if cookie else []})
+
+        def set_cookies(response) -> dict:
+            out = {}
+            for name, value in response.raw_headers:
+                if name == b"set-cookie":
+                    key, _, rest = value.decode().partition("=")
+                    out[key] = rest.split(";", 1)[0].strip('"')
+            return out
+
+        saved = dict(self.ml._deps)
+        env = {"META_OAUTH_CLIENT_ID": "APP", "META_OAUTH_REDIRECT_URI": "https://app.example/api/auth/oauth/meta/callback",
+               "META_LOGIN_CONFIG_ID": "CFG1"}
+        self.ml.configure(require_admin=None, live_session=lambda request: {"uid": self.a_user},
+                          app_base_url=lambda request: "https://app.example", cookie_secure=False)
+        try:
+            with mock.patch.dict(os.environ, env):
+                start = self.ml.meta_start(request(), popup=1)
+                self.assertEqual(start.status_code, 307)
+                self.assertIn("config_id=CFG1", start.headers["location"])
+                self.assertEqual(set_cookies(start).get("vv_meta_popup"), "1")
+                # Facebook sends the pop-up back (here with a cancelled sign-in).
+                back = self.ml.meta_callback(request("vv_meta_popup=1; vv_meta_state=s"), error="access_denied", state="s")
+                self.assertEqual(back.status_code, 200)
+                self.assertIn('"result": "failed"', back.body.decode())
+                self.assertEqual(set_cookies(back).get("vv_meta_popup"), "", "the pop-up flag is cleared")
+                # The full-page flow is unchanged.
+                plain_start = self.ml.meta_start(request(), popup=0)
+                self.assertEqual(set_cookies(plain_start).get("vv_meta_popup"), "", "a stale pop-up flag is cleared")
+                plain = self.ml.meta_callback(request("vv_meta_state=s"), error="access_denied", state="s")
+                self.assertEqual(plain.status_code, 307)
+                self.assertEqual(plain.headers["location"], "https://app.example/dashboard/integrations/facebook?facebook=failed")
+        finally:
+            self.ml._deps.clear()
+            self.ml._deps.update(saved)
 
 
     # ------------------------------------------------------ phase 2: routing

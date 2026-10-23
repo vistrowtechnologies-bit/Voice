@@ -50,7 +50,7 @@ from typing import Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 import calls_db
 import campaign_dialer
@@ -1314,24 +1314,35 @@ def deletion_status(code: str) -> dict | None:
 
 # -------------------------------------------------------------- OAuth flow
 
-def oauth_start_url(state: str, redirect_uri: str, client_id: str) -> str:
+def oauth_start_url(state: str, redirect_uri: str, client_id: str, config_id: str = "") -> str:
     """auth_type=rerequest: without it a user who once ticked no Pages gets
-    zero Pages for ever (ArthaLeads found this the hard way)."""
-    params = {"client_id": client_id, "redirect_uri": redirect_uri, "scope": SCOPES, "state": state,
+    zero Pages for ever (ArthaLeads found this the hard way). With a Facebook
+    Login for Business configuration (config_id) Meta takes the permissions
+    and the Page / ad account picker from that configuration, not scope."""
+    params = {"client_id": client_id, "redirect_uri": redirect_uri, "state": state,
               "response_type": "code", "auth_type": "rerequest"}
+    if config_id:
+        params.update(config_id=config_id, override_default_response_type="true")
+    else:
+        params["scope"] = SCOPES
     return f"https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth?{urllib.parse.urlencode(params)}"
 
 
 def exchange_code(code: str, redirect_uri: str, client_id: str, client_secret: str, fetcher: Fetcher | None = None) -> dict:
     """code → short-lived user token → long-lived (60-day) user token.
     Returns {access_token, expires_in}. If the long-lived exchange fails we
-    keep the short one and say so, rather than failing the whole connect."""
+    keep the short one and say so, rather than failing the whole connect.
+    A Business Login configuration that issues a system-user token answers
+    without expires_in: that token never expires, so there is nothing to
+    extend and expires_in is None."""
     fetcher = fetcher or _graph_get
     short = fetcher(f"{GRAPH}/oauth/access_token?" + urllib.parse.urlencode(
         {"client_id": client_id, "client_secret": client_secret, "redirect_uri": redirect_uri, "code": code}))
     token = short.get("access_token")
     if not token:
         raise GraphError(0, "no access_token in code exchange")
+    if not short.get("expires_in"):
+        return {"access_token": token, "expires_in": None, "long_lived": True}
     try:
         long = fetcher(f"{GRAPH}/oauth/access_token?" + urllib.parse.urlencode(
             {"grant_type": "fb_exchange_token", "client_id": client_id, "client_secret": client_secret,
@@ -1393,6 +1404,8 @@ def subscribe_page(page_id: str, page_token: str, poster: Poster | None = None, 
 router = APIRouter()
 _deps: dict = {"require_admin": None, "live_session": None, "app_base_url": None, "cookie_secure": True}
 _STATE_COOKIE = "vv_meta_state"
+_POPUP_COOKIE = "vv_meta_popup"
+_POPUP_RESULTS = {"failed", "no_pages", "pick_pages", "connected"}
 _PENDING_PAGES_SETTING = "meta_pending_pages"
 
 
@@ -1405,7 +1418,8 @@ def _env() -> dict:
     return {"client_id": os.environ.get("META_OAUTH_CLIENT_ID", ""),
             "client_secret": os.environ.get("META_OAUTH_CLIENT_SECRET", ""),
             "redirect_uri": os.environ.get("META_OAUTH_REDIRECT_URI", ""),
-            "verify_token": os.environ.get("META_WEBHOOK_VERIFY_TOKEN", "")}
+            "verify_token": os.environ.get("META_WEBHOOK_VERIFY_TOKEN", ""),
+            "login_config_id": os.environ.get("META_LOGIN_CONFIG_ID", "")}
 
 
 @router.get("/webhooks/meta")
@@ -1466,8 +1480,25 @@ def _admin(request: Request) -> dict:
     return {"user_id": session["uid"], "account_id": profile["account_id"]}
 
 
+def popup_result_page(result: str, fallback_url: str) -> HTMLResponse:
+    """What the callback shows when sign-in ran in the dashboard's pop-up:
+    hand the result to the dashboard tab and close. BroadcastChannel first,
+    because facebook.com can cut the pop-up's window.opener; if the window
+    cannot close (opened some other way) it carries on to the dashboard."""
+    result = result if result in _POPUP_RESULTS else "failed"
+    message = json.dumps({"source": "vv-meta", "result": result})
+    target = json.dumps(fallback_url).replace("<", "\\u003c")
+    return HTMLResponse(
+        "<!doctype html><meta charset=\"utf-8\"><title>Facebook</title>"
+        "<p style=\"font:14px system-ui,sans-serif;padding:24px\">You can close this window.</p>"
+        f"<script>(function(){{var m={message};"
+        "try{new BroadcastChannel('vv-meta').postMessage(m)}catch(e){}"
+        "try{if(window.opener)window.opener.postMessage(m,location.origin)}catch(e){}"
+        f"window.close();setTimeout(function(){{location.replace({target})}},800)}})()</script>")
+
+
 @router.get("/integrations/meta/start")
-def meta_start(request: Request):
+def meta_start(request: Request, popup: int = 0):
     user = _admin(request)
     env = _env()
     if not env["client_id"] or not env["client_secret"] or not env["redirect_uri"]:
@@ -1479,8 +1510,12 @@ def meta_start(request: Request):
     except Exception as exc:  # plan_policy.EntitlementError
         raise HTTPException(403, str(exc)) from exc
     state = secrets.token_urlsafe(24)
-    response = RedirectResponse(oauth_start_url(state, env["redirect_uri"], env["client_id"]))
+    response = RedirectResponse(oauth_start_url(state, env["redirect_uri"], env["client_id"], env["login_config_id"]))
     response.set_cookie(_STATE_COOKIE, state, max_age=600, httponly=True, secure=_deps["cookie_secure"], samesite="lax", path="/")
+    if popup:
+        response.set_cookie(_POPUP_COOKIE, "1", max_age=600, httponly=True, secure=_deps["cookie_secure"], samesite="lax", path="/")
+    else:
+        response.delete_cookie(_POPUP_COOKIE, path="/")
     return response
 
 
@@ -1491,9 +1526,13 @@ def meta_callback(request: Request, code: str | None = None, state: str | None =
     shows the Page picker (POST /integrations/meta/pages) rather than guessing."""
     base = _deps["app_base_url"](request) if _deps["app_base_url"] else ""
 
-    def finish(query: str) -> RedirectResponse:
-        response = RedirectResponse(f"{base}/dashboard/integrations/facebook{query}")
+    popup = request.cookies.get(_POPUP_COOKIE) == "1"
+
+    def finish(query: str) -> RedirectResponse | HTMLResponse:
+        target = f"{base}/dashboard/integrations/facebook{query}"
+        response = popup_result_page(query.split("=", 1)[-1], target) if popup else RedirectResponse(target)
         response.delete_cookie(_STATE_COOKIE, path="/")
+        response.delete_cookie(_POPUP_COOKIE, path="/")
         return response
 
     expected = request.cookies.get(_STATE_COOKIE)
