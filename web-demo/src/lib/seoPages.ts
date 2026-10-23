@@ -105,6 +105,8 @@ const LANGUAGE_PAGES = [
   ['malayalam', 'Malayalam', 'മലയാളം'],
   ['punjabi', 'Punjabi', 'ਪੰਜਾਬੀ'],
   ['odia', 'Odia', 'ଓଡ଼ିଆ'],
+  // Not a call language: an accent page (EXTRA_LANGUAGE_PAGES in marketingContent.ts).
+  ['american-british-english', 'American and British English', 'US and UK'],
 ] as const
 
 const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { title: string; description: string }>> = {
@@ -117,6 +119,11 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
     title: 'Indian English AI Voice Calling Agent | Vistrow Voice',
     description:
       'AI voice calling agent in Indian English for phone and web calls. Follows Indian accents, names and numbers, switches to Hindi mid-call and logs every call.',
+  },
+  'american-british-english': {
+    title: 'American & British English AI Voice Agent | Vistrow Voice',
+    description:
+      'AI voice agent that speaks natural American or British English on phone and web calls. Hear a demo where the agent matches a British caller\u2019s accent.',
   },
   kannada: {
     title: 'Kannada AI Voice Calling Agent for Karnataka | Vistrow Voice',
@@ -294,7 +301,9 @@ const SEO_PAGE_LIST: SeoPage[] = [
       LANGUAGE_SEO_META[slug]?.description ??
         `Handle inbound, outbound, and website customer conversations with a ${name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
       `language-${slug}`,
-      `${native} ${name} customer calls handled by the Vistrow Voice AI agent orb`,
+      native === 'US and UK'
+        ? 'American and British English customer calls in the US and UK handled by the Vistrow Voice AI agent orb'
+        : `${native} ${name} customer calls handled by the Vistrow Voice AI agent orb`,
       'language',
       name,
     ),
@@ -798,6 +807,7 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: '130+ languages, Hindi to Tamil.', proof: 'Mid-call language switching  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी  ·  ಕನ್ನಡ  ·  తెలుగు  ·  தமிழ்  ·  বাংলা' },
   'language-hindi': { eyebrow: 'HINDI AI VOICE AGENT', headline: 'हिन्दी calls, handled naturally.', proof: 'Hindi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी' },
   'language-english': { eyebrow: 'INDIAN ENGLISH AI VOICE AGENT', headline: 'Indian English calls, handled naturally.', proof: 'English + Hindi  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg' },
+  'language-american-british-english': { eyebrow: 'AMERICAN & BRITISH ENGLISH AI VOICE AGENT', headline: 'American and British English calls, handled naturally.', proof: 'US  \u00b7  UK  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg' },
   'language-marathi': { eyebrow: 'MARATHI AI VOICE AGENT', headline: 'मराठी calls, handled naturally.', proof: 'Marathi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'मराठी' },
   'language-tamil': { eyebrow: 'TAMIL AI VOICE AGENT', headline: 'தமிழ் calls, handled naturally.', proof: 'Tamil + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'தமிழ்' },
   'language-telugu': { eyebrow: 'TELUGU AI VOICE AGENT', headline: 'తెలుగు calls, handled naturally.', proof: 'Telugu + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'తెలుగు' },

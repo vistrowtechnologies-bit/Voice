@@ -1169,6 +1169,19 @@ export interface LanguagePage {
   related?: { to: string; label: string }[]
   /** Sentences linking to related guides, shown above the related links. Each may contain [text](/path) links. */
   guides?: string[]
+  /** A page for callers outside India (EXTRA_LANGUAGE_PAGES): hides the Indian
+   * script marquee and the Indian-language FAQs that every other page shares. */
+  international?: boolean
+  /** Label under the first hero stat; defaults to the native-script line. */
+  statLabel?: string
+  /** First trust-band fact; defaults to "<name> and <mixWith> in one call". */
+  trustFirst?: { icon: string; title: string; body: string }
+  /** Heading for the sample-call section; defaults to "<codeMixing.name> is the normal case". */
+  mixHeading?: string
+  /** Caption under the written example heading. */
+  exampleNote?: string
+  /** Body of the "Voices that speak <name>" aside; defaults to the Indian voices list. */
+  voicesNote?: string
 }
 
 /** Voices that speak every one of the ten Indian languages and keep the same
@@ -1284,6 +1297,8 @@ export const LANGUAGES: LanguagePage[] = [
     ],
     guides: [
       'Taking English, Hindi and Punjabi calls on one number? Read our guide to [a multilingual AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english).',
+
+      'Calling customers in the US or UK? See the [American and British English AI voice agent](/languages/american-british-english).',
     ],
     related: [
       { to: '/languages/hindi', label: 'Hindi calling agent' },
@@ -1821,6 +1836,118 @@ export const LANGUAGES: LanguagePage[] = [
       { to: '/product/knowledge-base', label: 'Knowledge base' },
       { to: '/solutions/support', label: 'Customer support calls' },
       { to: '/languages/bengali', label: 'Bengali calling agent' },
+    ],
+  },
+]
+
+// Pages under /languages/<slug> that are not one of the eleven call languages
+// above, so they stay out of the nav, footer, homepage greeting and script
+// marquee that LANGUAGES drives. LanguageDetail renders them with the same
+// template. Claims here are checked against what tenants can pick today: the
+// self-serve voice list has no American or British English voice, so those
+// are "set up with you", and the live agent does not change accent mid-call
+// (only the demo does).
+export const EXTRA_LANGUAGE_PAGES: LanguagePage[] = [
+  {
+    slug: 'american-british-english',
+    international: true,
+    name: 'US and UK English',
+    native: 'US · UK',
+    heroName: 'American and British English',
+    code: 'en-US',
+    region: 'US, UK and global',
+    greeting: 'Hello',
+    statLabel: 'American and British accents',
+    blurb: 'Natural American or British English for callers in the US, the UK and anywhere English is the working language.',
+    intro:
+      'An AI voice agent that speaks natural American or British English on phone and website calls. It answers enquiries, qualifies leads, books demos and appointments and logs every call, for businesses in the US and UK, Indian companies with customers abroad, and outsourcing teams. In the demo call below, the agent opens in an American accent and continues in a British one to match the caller. The same platform speaks more than 130 languages, including Hindi, English and 9 other Indian languages.',
+    regionalHeading: 'Where an American or British English AI voice agent helps most.',
+    localUseCases: [
+      'Front-desk and after-hours lines for businesses in the US and UK',
+      'Indian companies serving NRI, US or UK customers who expect a familiar accent',
+      'BPO and outsourcing teams adding an AI first line or overflow cover on English-language accounts',
+    ],
+    callBehaviors: [
+      'Holds a natural two-way conversation in English, and moves into Hindi or another language if the caller does',
+      'Books demos, appointments and callbacks, and captures names, numbers and dates in CRM-ready notes',
+      'Answers from your approved information and offers a callback or transfer when it should not guess',
+    ],
+    seoFaq: {
+      q: 'Can the AI voice agent speak with an American or British accent?',
+      a: 'Yes. Vistrow Voice agents can speak natural American or British English, and in the demo call on this page the agent opens in an American accent and continues in a British one to match the caller. American and British voices are set up with you on request rather than picked from the self-serve voice list, so tell us which accent your callers expect.',
+    },
+    extraFaqs: [
+      {
+        q: 'Will the live agent change accent mid-call like the demo?',
+        a: 'Not on its own today. The demo shows what the voices can do; on a live line the agent keeps the voice and accent it was set up with. Most businesses choose the one accent their callers expect, American for a US line and British for a UK line. The agent still moves into another language, such as Hindi, if the caller does.',
+      },
+      {
+        q: 'Can it work as an AI receptionist for a US or UK business?',
+        a: 'Yes. The agent answers your line or website call button at any hour, answers questions from your approved information, books appointments or callbacks and passes urgent calls to your team, with a transcript and summary of every call.',
+      },
+      {
+        q: 'Do you provide US or UK phone numbers?',
+        a: 'No. Telephony is bring your own: you connect a number from your own telephony provider over SIP, and overseas calling depends on that provider. The website voice widget works from any browser and needs no phone number.',
+      },
+      {
+        q: 'Can an Indian company use it for NRI, US or UK customers?',
+        a: 'Yes. The agent can speak English to customers abroad and move into Hindi, Punjabi, Gujarati or another Indian language if the caller does, which suits real-estate, education and financial-services firms with NRI customers.',
+      },
+      {
+        q: 'Can a BPO or outsourcing team use it on English-language accounts?',
+        a: 'Yes, as a first line or overflow: the agent answers routine calls, captures the details and hands complex calls to your human agents with a summary. Test it on your own call types and scripts before putting it on a client account.',
+      },
+      {
+        q: 'How is call data handled?',
+        a: 'You decide whether calls are recorded, whether spoken consent is required and how long call records are kept. If you work in a regulated sector, check your own obligations and ask us for our data-processing details before you go live.',
+      },
+    ],
+    sampleExchange: {
+      context: 'An inbound call to a London dental practice',
+      turns: [
+        { speaker: 'Agent', native: 'Good morning, Harbour Dental, this is Artha. How can I help?', gloss: '' },
+        { speaker: 'Caller', native: 'Hi, I chipped a tooth last night. Have you got anything this week?', gloss: '' },
+        { speaker: 'Agent', native: 'Sorry to hear that. We have Wednesday at quarter past nine, or Friday at four. Which suits you better?', gloss: '' },
+        { speaker: 'Caller', native: 'Wednesday morning, please.', gloss: '' },
+        { speaker: 'Agent', native: 'Lovely. I have noted Wednesday at quarter past nine for a chipped tooth, and the team will confirm it with you shortly.', gloss: '' },
+      ],
+      outcome: 'The caller’s name, the reason for the visit and the requested slot are saved on the call, so the practice team only has to confirm it.',
+    },
+    exampleNote: 'A short written sample to show the style of a British English call. It is not a recording of a customer call.',
+    mixHeading: 'An agent that matches the caller’s accent',
+    codeMixing: {
+      name: 'Accent',
+      body: 'A caller in Manchester says “half two” where a caller in Chicago says “two thirty”. In the demo call, Artha opens in American English, the caller answers with a British accent, and Artha carries on in British English, saying “half past two” the way the caller would. On a live line, you set the agent up with the accent your callers expect.',
+    },
+    trustFirst: {
+      icon: 'translate',
+      title: 'American or British English',
+      body: 'Natural English voices in either accent, set up with you for your line, plus Hindi and other languages if the caller moves into them.',
+    },
+    voicesNote:
+      'The self-serve voice list is built around Indian English and Indian languages. American and British English voices, like the ones in the demo call, are set up with you on request: tell us your callers’ accent and we will help you configure and test the agent before it goes live.',
+    regionalCalls: [
+      { title: 'Front desk and after-hours calls', body: 'Clinics, agencies, salons and trades in the US and UK that miss calls after hours: the agent answers, books or takes a message, and logs the call.', to: '/ai-receptionist', link: 'AI receptionist' },
+      { title: 'Demo bookings and lead follow-ups', body: 'Callbacks on website enquiries for software and services firms, like the demo call on this page, with the slot captured on the call.', to: '/product/outbound', link: 'Outbound calling' },
+      { title: 'NRI and overseas customers of Indian firms', body: 'Real-estate, education and financial-services firms in India whose customers live in the US, UK, Canada or the Gulf, in English or Hindi.', to: '/solutions/real-estate', link: 'Real estate calls' },
+      { title: 'Overflow for BPO and support teams', body: 'An AI first line on English-language accounts that answers routine calls and hands the rest to human agents with a summary.', to: '/ai-call-center', link: 'AI call center' },
+    ],
+    guide: [
+      { title: 'Pick one accent per line', body: 'Choose the accent your callers expect: American for a US line, British for a UK line. If your callers are split between markets, use the accent of the main one, or set up a separate agent per number.' },
+      { title: 'Dates, times and numbers', body: 'British and American callers say them differently: “the third of March” and “March third”, “half two” and “two thirty”, “oh” and “zero”. Run test calls that read out dates, times and phone numbers, and check the transcript before you go live.' },
+      { title: 'Telephony and disclosure', body: 'Connect a number from your own telephony provider over SIP, or start with the website voice widget. Tell callers they are speaking with an AI assistant where your local rules expect it, and set a transfer or callback for anything the agent cannot answer.' },
+    ],
+    guides: [
+      'Serving Hindi or Punjabi-speaking customers in the UK, Canada or the US? Read our guide to [a multilingual AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english).',
+      'Calling customers in India in English? See the [Indian English AI voice agent](/languages/english).',
+    ],
+    related: [
+      { to: '/languages/english', label: 'Indian English calling agent' },
+      { to: '/ai-receptionist', label: 'AI receptionist' },
+      { to: '/product/inbound', label: 'Inbound call answering' },
+      { to: '/product/widget', label: 'Website voice widget' },
+      { to: '/ai-call-center', label: 'AI call center' },
+      { to: '/languages/hindi', label: 'Hindi calling agent' },
     ],
   },
 ]

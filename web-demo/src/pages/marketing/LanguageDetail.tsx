@@ -9,7 +9,7 @@ import { ScriptMarquee } from '../../components/BharatBits'
 import { VoiceSamplePlayer } from '../../components/VoiceSamplePlayer'
 import { pageFigures } from '../../lib/pageFigures'
 import arthaAvatar from '../../assets/artha-avatar.webp'
-import { INDIAN_LANGUAGE_VOICES, LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
+import { EXTRA_LANGUAGE_PAGES, INDIAN_LANGUAGE_VOICES, LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
 import { SEO_ORIGIN, seoForPath } from '../../lib/seoPages'
 import { VOICE_SAMPLES, type VoiceSample } from '../../lib/voiceSamples'
 import {
@@ -40,17 +40,46 @@ const LANGUAGE_DEMO_CALLS: Record<string, { slug: string; title: string }> = {
 const GUIDE_ICONS = ['translate', 'record_voice_over', 'task_alt']
 
 function audioJsonLd(sample: VoiceSample) {
+  // An accent sample shows a scripted demo, not a live-product behaviour, so
+  // it says "matches" and drops "automatically".
+  const accent = Boolean(sample.accentLabels)
   return {
     '@context': 'https://schema.org',
     '@type': 'AudioObject',
-    name: `Sample call: the AI agent follows the caller from ${sample.from} to ${sample.to}`,
-    description: `Demo two-speaker phone call voiced by Vistrow Voice. The AI agent opens in ${sample.from}, the caller answers in ${sample.to}, and the agent continues in ${sample.to} automatically. Not a real customer.`,
+    name: accent
+      ? `Sample call: the AI agent matches the caller's accent, ${sample.from} to ${sample.to}`
+      : `Sample call: the AI agent follows the caller from ${sample.from} to ${sample.to}`,
+    description: accent
+      ? `Demo two-speaker phone call voiced by Vistrow Voice. The AI agent opens in ${sample.from}, the caller answers in ${sample.to}, and the agent continues in ${sample.to}. Not a real customer.`
+      : `Demo two-speaker phone call voiced by Vistrow Voice. The AI agent opens in ${sample.from}, the caller answers in ${sample.to}, and the agent continues in ${sample.to} automatically. Not a real customer.`,
     contentUrl: `${SEO_ORIGIN}${sample.src}`,
     encodingFormat: 'audio/mp4',
     duration: `PT${sample.seconds}S`,
     inLanguage: sample.languages,
     transcript: sample.turns.map((t) => `${t.speaker === 'Agent' ? 'AI agent' : 'Caller'}: ${t.native}`).join('\n'),
   }
+}
+
+// FAQs every Indian-language page shares, after its own.
+function sharedFaqs(name: string, mixWith: string, isEnglish: boolean) {
+  return [
+  {
+    q: `Can the AI agent handle a full call in ${name}?`,
+    a: `Yes - Artha answers, qualifies, and books entirely in ${name}, including numbers, dates, and Indian names.${isEnglish ? '' : " It isn't a translation layer bolted onto an English agent."}`,
+  },
+  {
+    q: `What if the caller mixes ${name} and ${mixWith}?`,
+    a: `That's the normal case, and Artha follows it. It switches mid-call to match whichever language the caller lands on, rather than forcing them to stay in one.`,
+  },
+  {
+    q: `Can I use ${name} for outbound campaigns too?`,
+    a: `Yes - reminder, follow-up, and collection campaigns all run in ${name}, personalised per contact, with every call recorded and logged.`,
+  },
+  {
+    q: `Do I need a separate agent for each language?`,
+    a: `No. One agent handles the switch on its own. Many teams still build separate agents per region when the script itself differs, not because the language forces it.`,
+  },
+  ]
 }
 
 function CheckList({ items, tone }: { items: string[]; tone: 'primary' | 'cyan' }) {
@@ -77,7 +106,7 @@ function CheckList({ items, tone }: { items: string[]; tone: 'primary' | 'cyan' 
 export function LanguageDetail() {
   const { slug } = useParams()
   const { heroCtaRef, endRef } = useStickyRefs()
-  const lang = LANGUAGES.find((l) => l.slug === slug)
+  const lang = [...LANGUAGES, ...EXTRA_LANGUAGE_PAGES].find((l) => l.slug === slug)
   if (!lang) return <Navigate to="/languages" replace />
   const route = `/languages/${lang.slug}`
   // Titles and descriptions live in the SEO registry (seoPages.ts), which
@@ -99,22 +128,8 @@ export function LanguageDetail() {
   const faqs = [
     ...(lang.seoFaq ? [lang.seoFaq] : []),
     ...(lang.extraFaqs ?? []),
-    {
-      q: `Can the AI agent handle a full call in ${lang.name}?`,
-      a: `Yes - Artha answers, qualifies, and books entirely in ${lang.name}, including numbers, dates, and Indian names.${isEnglish ? '' : " It isn't a translation layer bolted onto an English agent."}`,
-    },
-    {
-      q: `What if the caller mixes ${lang.name} and ${mixWith}?`,
-      a: `That's the normal case, and Artha follows it. It switches mid-call to match whichever language the caller lands on, rather than forcing them to stay in one.`,
-    },
-    {
-      q: `Can I use ${lang.name} for outbound campaigns too?`,
-      a: `Yes - reminder, follow-up, and collection campaigns all run in ${lang.name}, personalised per contact, with every call recorded and logged.`,
-    },
-    {
-      q: `Do I need a separate agent for each language?`,
-      a: `No. One agent handles the switch on its own. Many teams still build separate agents per region when the script itself differs, not because the language forces it.`,
-    },
+    // The shared FAQs are about Indian callers; international pages carry their own.
+    ...(lang.international ? [] : sharedFaqs(lang.name, mixWith, isEnglish)),
   ]
 
   const faqJsonLd = {
@@ -128,7 +143,7 @@ export function LanguageDetail() {
   }
 
   const stats = [
-    { value: lang.native, label: isEnglish ? 'Indian accents and names' : 'Native script, natively spoken', native: true },
+    { value: lang.native, label: lang.statLabel ?? (isEnglish ? 'Indian accents and names' : 'Native script, natively spoken'), native: true },
     { value: lang.region, label: 'Where your callers are' },
     { value: '24/7', label: 'Answers outside office hours too' },
   ]
@@ -136,7 +151,7 @@ export function LanguageDetail() {
   // Facts that hold for every language page (languages FAQ, calls history,
   // the voices aside below).
   const trustFacts: TrustFact[] = [
-    { icon: 'translate', title: `${lang.name} and ${mixWith} in one call`, body: 'The agent follows the caller when they move between languages, without changing voice.' },
+    lang.trustFirst ?? { icon: 'translate', title: `${lang.name} and ${mixWith} in one call`, body: 'The agent follows the caller when they move between languages, without changing voice.' },
     { icon: 'devices', title: 'Phone and website', body: 'The same agent can answer your number and the call button on your site.' },
     { icon: 'receipt_long', title: 'Every call logged', body: 'A transcript for every call, plus the lead fields captured and the audio if recording is on.' },
     { icon: 'verified_user', title: 'Consent and recording, your call', body: 'Require spoken consent, switch recording on or off and set how long records are kept.' },
@@ -189,7 +204,7 @@ export function LanguageDetail() {
         }
       />
 
-      <ScriptMarquee />
+      {!lang.international && <ScriptMarquee />}
 
       {/* ---------- Sample call player beside the code-mixing note ---------- */}
       {(voiceSample || lang.codeMixing) && (
@@ -210,7 +225,7 @@ export function LanguageDetail() {
               {lang.codeMixing ? (
                 <>
                   <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl">
-                    {lang.codeMixing.name} is the normal case
+                    {lang.mixHeading ?? `${lang.codeMixing.name} is the normal case`}
                   </h2>
                   <div className="relative mt-6 rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.12] via-surface to-cyan/[0.06] p-6 sm:p-8">
                     <span aria-hidden="true" className="absolute left-5 top-2 font-display text-6xl leading-none text-primary/30">&ldquo;</span>
@@ -287,9 +302,9 @@ export function LanguageDetail() {
                 <figcaption className="mt-3">
                   <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{lang.sampleExchange.context}, in {lang.name}.</h2>
                   <p className="mt-3 text-sm text-text-muted">
-                    {isEnglish
+                    {lang.exampleNote ?? (isEnglish
                       ? 'A short written sample to show the style of call, with a plain-English gloss under the lines that mix in Hindi. It is not a recording of a customer call.'
-                      : 'A short written sample to show the style of call, with an English gloss under each line. It is not a recording of a customer call.'}
+                      : 'A short written sample to show the style of call, with an English gloss under each line. It is not a recording of a customer call.')}
                   </p>
                 </figcaption>
                 <ol className="mt-7 space-y-4 rounded-3xl border border-border bg-gradient-to-br from-primary/[0.08] via-surface-high/40 to-transparent p-4 shadow-[0_30px_60px_-44px_rgba(76,29,149,0.55)] sm:p-6">
@@ -329,9 +344,11 @@ export function LanguageDetail() {
                 </span>
                 <h2 className="mt-4 font-display text-xl font-bold">Voices that speak {lang.name}</h2>
                 <p className="mt-2 text-sm leading-relaxed text-white/85">
+                  {lang.voicesNote ?? (<>
                   These Standard voices in the agent picker speak {lang.name} and keep the same voice if the caller
                   moves to {mixWith} or another Indian language: {INDIAN_LANGUAGE_VOICES.female.join(', ')} (female) and{' '}
                   {INDIAN_LANGUAGE_VOICES.male.join(', ')} (male).
+                  </>)}
                 </p>
               </aside>
             </Reveal>

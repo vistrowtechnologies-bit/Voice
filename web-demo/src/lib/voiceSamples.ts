@@ -28,6 +28,10 @@ export interface VoiceSample {
   /** Index of the agent's first line in `to`, where the language track
    * flips; defaults to SWITCH_TURN. */
   switchTurn?: number
+  /** Set when the two codes are accents of one language (en-US, en-GB):
+   * the player then labels accents, not languages. Keyed by code; `short`
+   * goes in the header pair, `label` on the track and lines. */
+  accentLabels?: Record<string, { short: string; label: string; tag: string }>
   turns: VoiceSampleTurn[]
   /** Waveform bar heights (0-100), from voiceSamplePeaks.ts. */
   peaks?: number[]
@@ -873,6 +877,77 @@ const SAMPLES: Record<string, VoiceSample> = {
         "lang": "en-IN",
         "native": "Thank you, Vikram ji! Have a good day.",
         "start": 39.48
+      }
+    ]
+  },
+  // Accent sample (not a language switch): both speakers talk English. The
+  // agent opens in American English, the caller answers in British English
+  // and the agent continues in British English. Voiced with a Studio voice
+  // on an accent style; marketing-assets-listings/review/accent/.
+  "american-british-english": {
+    "src": "/media/samples/american-british-english-switch.m4a",
+    "seconds": 39,
+    "from": "American English",
+    "to": "British English",
+    "languages": [
+      "en-US",
+      "en-GB"
+    ],
+    "switchTurn": 2,
+    "accentLabels": {
+      "en-US": {
+        "short": "American",
+        "label": "US English",
+        "tag": "US"
+      },
+      "en-GB": {
+        "short": "British",
+        "label": "UK English",
+        "tag": "UK"
+      }
+    },
+    "turns": [
+      {
+        "speaker": "Agent",
+        "lang": "en-US",
+        "native": "Hi, is this Oliver? This is Artha from Tidewell. You asked for a demo on our website, so I'm just calling to set that up.",
+        "start": 0.2
+      },
+      {
+        "speaker": "Caller",
+        "lang": "en-GB",
+        "native": "Oh, hello, yes, that was me. Erm, sorry, I'm just on my way into a meeting, but go ahead.",
+        "start": 8.9
+      },
+      {
+        "speaker": "Agent",
+        "lang": "en-GB",
+        "native": "No worries at all, I'll be quick. Would Thursday afternoon work, say around half past two?",
+        "start": 14.03
+      },
+      {
+        "speaker": "Caller",
+        "lang": "en-GB",
+        "native": "Thursday... yeah, half two's fine. Could my colleague join as well?",
+        "start": 20.81
+      },
+      {
+        "speaker": "Agent",
+        "lang": "en-GB",
+        "native": "Of course! I'll send the invite to you, and you can forward it to anyone on the team.",
+        "start": 24.78
+      },
+      {
+        "speaker": "Caller",
+        "lang": "en-GB",
+        "native": "Oh, lovely.",
+        "start": 29.71
+      },
+      {
+        "speaker": "Agent",
+        "lang": "en-GB",
+        "native": "Perfect, that's all booked for Thursday at half past two. Thanks so much, Oliver, and have a lovely afternoon!",
+        "start": 31.3
       }
     ]
   },

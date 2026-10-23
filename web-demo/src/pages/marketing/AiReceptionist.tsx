@@ -374,6 +374,10 @@ export function AiReceptionist() {
               <Link to="/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english" className={linkClass}>
                 a multilingual AI receptionist for Hindi, Punjabi and English callers
               </Link>
+              . For a front desk in the US or UK, see{' '}
+              <Link to="/languages/american-british-english" className={linkClass}>
+                the American and British English AI voice agent
+              </Link>
               .
             </p>
           </Reveal>
