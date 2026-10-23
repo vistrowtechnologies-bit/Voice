@@ -1687,6 +1687,11 @@ def init_tables() -> None:
             ):
                 conn.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER DEFAULT 1")
+            # Admin-panel access per LOGIN (owner, 23 Oct 2026): a dedicated
+            # admin login, separate from the platform owner's everyday
+            # workspace, which keeps its features (is_platform_owner) but
+            # not admin once any login has this. See can_open_admin().
+            conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_admin INTEGER DEFAULT 0")
             # NULL until the first-run dashboard tour is finished or skipped.
             # Per-user (not per-account like onboarded_at above) so a
             # teammate invited into an already-onboarded account still sees
@@ -2119,7 +2124,7 @@ def get_user_by_id(user_id: int) -> dict | None:
             """
             SELECT u.id, u.email, u.name, u.phone, u.role, u.account_id, u.tour_completed_at,
                    u.auth_provider, u.password_set, u.avatar_url, u.session_version, u.email_verified_at,
-                   u.mfa_enabled_at,
+                   u.mfa_enabled_at, COALESCE(u.platform_admin, 0) AS platform_admin,
                    a.name AS account_name, a.plan AS account_plan,
                    a.is_platform_owner, a.onboarded_at, a.status AS account_status
             FROM users u JOIN accounts a ON a.id = u.account_id
@@ -5169,6 +5174,26 @@ def concurrent_call_limit(account_id: int) -> int:
         return 10**9
     plan = get_account_plan(account_id)
     return CONCURRENT_CALL_LIMITS.get(plan, CONCURRENT_CALL_LIMITS["starter"])
+
+
+def can_open_admin(user: dict | None) -> bool:
+    """Whether this login (a get_user_by_id row) may use the admin panel.
+
+    A login marked platform_admin may. Until any login is, the platform
+    owner's workspace owner keeps admin as before, so the switch to a
+    dedicated admin login never locks the owner out midway."""
+    if not user or user.get("role") != "owner":
+        return False
+    if user.get("platform_admin"):
+        return True
+    if not user.get("is_platform_owner"):
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT 1 FROM users WHERE COALESCE(platform_admin, 0) = 1 LIMIT 1").fetchone()
+        return row is None
+    finally:
+        conn.close()
 
 
 def is_platform_owner(account_id: int) -> bool:

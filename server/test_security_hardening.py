@@ -122,6 +122,7 @@ class AdminSubdomainLoginTests(unittest.TestCase):
                     _set_mfa_pending=lambda resp, uid, aid, prov: pending.append(prov),
                     calls_db=types.SimpleNamespace(get_user_by_email=lambda e: user,
                                                    get_user_by_id=lambda uid: profile,
+                                                   can_open_admin=lambda u: bool(u.get("is_platform_owner")) and u.get("role") == "owner",
                                                    record_security_event=lambda *a: None),
                     auth=auth, HTTPException=HTTPError, LoginRequest=object, Response=object, Request=object)
 
@@ -151,7 +152,8 @@ class AdminSubdomainLoginTests(unittest.TestCase):
         ns = load("require_platform_owner", ADMIN_MFA_SETUP_REQUIRED="s", ADMIN_MFA_SIGNIN_REQUIRED="m",
                   ADMIN_SEPARATE_LOGIN_REQUIRED="a", _ADMIN_SEPARATE_LOGIN=True, HTTPException=HTTPError, Request=object,
                   calls_db=types.SimpleNamespace(get_user_by_id=lambda uid: {
-                      "is_platform_owner": True, "role": "owner", "mfa_enabled_at": "x", "email": "o@x.com"}))
+                      "is_platform_owner": True, "role": "owner", "mfa_enabled_at": "x", "email": "o@x.com"},
+                      can_open_admin=lambda u: True))
         state = types.SimpleNamespace(user_id=1, impersonator_id=None, mfa=123, admin_session=None, via_api_key=False)
         with self.assertRaises(HTTPError) as err:
             ns["require_platform_owner"](types.SimpleNamespace(state=state))
@@ -165,6 +167,27 @@ class AdminSubdomainLoginTests(unittest.TestCase):
         self.assertEqual(session["adm"], 1)
         self.assertLessEqual(session["exp"] - session["iat"], 8 * 3600)
         self.assertIsNone(auth.read_session_token(auth.make_session_token(1, 2))["adm"])
+
+
+class AdminAccessPerLoginTests(unittest.TestCase):
+    """Owner, 23 Oct 2026: a dedicated admin login; the everyday platform
+    workspace keeps its features but not admin once that login exists."""
+
+    def _can(self, user, admin_logins_exist):
+        conn = mock.MagicMock()
+        conn.execute.return_value.fetchone.return_value = (1,) if admin_logins_exist else None
+        with mock.patch.object(calls_db, "_connect", return_value=conn):
+            return calls_db.can_open_admin(user)
+
+    def test_rules(self):
+        owner_ws = {"role": "owner", "is_platform_owner": 1, "platform_admin": 0}
+        admin_login = {"role": "owner", "is_platform_owner": 1, "platform_admin": 1}
+        self.assertTrue(self._can(owner_ws, admin_logins_exist=False), "no lock-out before the switch")
+        self.assertFalse(self._can(owner_ws, admin_logins_exist=True), "everyday workspace loses admin")
+        self.assertTrue(self._can(admin_login, admin_logins_exist=True))
+        self.assertFalse(self._can({"role": "owner", "is_platform_owner": 0, "platform_admin": 0}, False))
+        self.assertFalse(self._can({"role": "admin", "is_platform_owner": 1, "platform_admin": 1}, True))
+        self.assertFalse(self._can(None, False))
 
 
 class LockoutTests(unittest.TestCase):
