@@ -28,6 +28,8 @@ import call_intelligence
 import calls_db
 import plan_policy
 import campaign_dialer
+import meta_leads
+import telephony
 import copilot
 import copilot_tools
 import db_backup
@@ -92,6 +94,15 @@ try:
     calls_db.encrypt_legacy_integration_configs()
 except Exception:
     logger.exception("could not encrypt existing integration configs")
+# Telephony lines (server/telephony/): the shared platform pool and trunk the
+# dialer reads its line ceiling from. Idempotent; with no customer lines sold
+# it reproduces OUTBOUND_CHANNEL_LIMIT exactly. Must run before the dialer
+# starts; if it fails the dialer falls back to the old trunk-wide ceiling.
+try:
+    telephony.init_tables()
+    telephony.ensure_platform_pool()
+except Exception:
+    logger.exception("could not set up telephony pools; dialer uses OUTBOUND_CHANNEL_LIMIT")
 # Background worker that places due campaign calls (compliance-gated). Daemon
 # thread, idempotent start — no-op until a campaign is set 'running'.
 campaign_dialer.start_dialer()
@@ -100,6 +111,11 @@ db_backup.start_backup_scheduler()
 # Applies each tenant's retention window daily. Before this, retention ran
 # only while somebody had the Compliance page open (see retention_worker.py).
 retention_worker.start_retention_worker()
+# Facebook / Instagram Lead Ads (server/meta_leads.py): tables, the lead
+# worker and the hourly reconciliation. The router is mounted at the end of
+# this file, after the session helpers it needs are defined.
+meta_leads.init_tables()
+meta_leads.start_worker()
 # Sends the emails behind Settings → Preferences → Notifications, which were
 # saved and never sent before 2026-09-24 (see notification_worker.py).
 notification_worker.start_notification_worker()
@@ -166,6 +182,9 @@ _PUBLIC_PREFIXES = (
     # itself checks the ?token= query param via
     # calls_db.account_id_for_lead_webhook_token instead.
     "/leads/inbound/",
+    # Meta deauthorize / data-deletion callbacks and the deletion status page
+    # (meta_leads.router); Meta calls them with no session.
+    "/webhooks/meta/",
 )  # signup/login/logout/me + invite-preview/accept handle their own logic; avatar images run on third-party sites, no session
 
 
@@ -1517,7 +1536,7 @@ def _require_integration_connectable(account_id: int, key: str) -> None:
         raise HTTPException(400, f"{label} is not available yet. New connections are turned off for now.")
 
 
-@app.get("/integrations/facebook/start")
+@app.get("/integrations/facebook/legacy-start", include_in_schema=False)
 def integration_facebook_start(user: dict = Depends(require_role("admin"))) -> RedirectResponse:
     _require_integration_connectable(user["account_id"], "facebook")
     """Same shape as Slack's start route: redirect to the provider's own
@@ -1549,7 +1568,7 @@ def integration_facebook_start(user: dict = Depends(require_role("admin"))) -> R
     return redirect
 
 
-@app.get("/integrations/facebook/callback")
+@app.get("/integrations/facebook/legacy-callback", include_in_schema=False)
 def integration_facebook_callback(
     request: Request,
     code: str | None = None,
@@ -7017,7 +7036,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
     return await asyncio.to_thread(_queued_until, account_id, result)
 
 
-@app.get("/webhooks/meta")
+@app.get("/webhooks/meta-legacy", include_in_schema=False)
 def webhooks_meta_verify(request: Request) -> PlainTextResponse:
     """Meta's one-time webhook verification handshake, run once when the
     URL is registered in the Meta App dashboard (or re-verified): it GETs
@@ -7046,7 +7065,7 @@ def _fetch_facebook_lead_fields(leadgen_id: str, page_access_token: str) -> list
         return json.loads(resp.read()).get("field_data") or []
 
 
-@app.post("/webhooks/meta")
+@app.post("/webhooks/meta-legacy", include_in_schema=False)
 async def webhooks_meta_event(request: Request) -> dict:
     """The real-time receiver for every Meta product this app is subscribed
     to — today just Facebook Lead Ads ('page' object, 'leadgen' field);
@@ -8097,3 +8116,9 @@ async def widget_chat_end(request: Request) -> dict:
         target=integrations_dispatch.deliver_widget_chat, args=(chat,), name="widget-chat-end", daemon=True,
     ).start()
     return {"ok": True}
+
+
+# Meta Lead Ads routes (OAuth start/callback, Page picker, rules, leads,
+# webhook and Meta's callbacks). Needs _live_session/_app_base_url, hence last.
+meta_leads.configure(require_admin=None, live_session=_live_session, app_base_url=_app_base_url, cookie_secure=_COOKIE_SECURE)
+app.include_router(meta_leads.router)

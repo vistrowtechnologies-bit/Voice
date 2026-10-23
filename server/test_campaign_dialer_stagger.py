@@ -31,7 +31,7 @@ def _base_campaign(**overrides):
 class DialsAreStaggered(unittest.TestCase):
     def setUp(self):
         self.clock = [1000.0]
-        campaign_dialer._last_dial_at = 0.0
+        campaign_dialer._last_dial_at = {}
 
     def _sleep(self, s):
         self.sleeps.append(round(s, 6))
@@ -44,6 +44,7 @@ class DialsAreStaggered(unittest.TestCase):
              patch.object(campaign_dialer.time, "sleep", side_effect=self._sleep), \
              patch.object(campaign_dialer.time, "monotonic", side_effect=lambda: self.clock[0]), \
              patch.object(campaign_dialer, "_OUTBOUND_CHANNELS", 99), \
+             patch.object(campaign_dialer.telephony, "trunk_for_number", return_value=None), \
              patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False):
             mock_db.require_feature.return_value = None
             mock_db.within_calling_window.return_value = (True, "")
@@ -83,7 +84,8 @@ class DialsAreStaggered(unittest.TestCase):
         self.assertTrue(all(g >= campaign_dialer._DIAL_STAGGER_SECONDS for g in gaps), gaps)
 
     def test_no_wait_when_last_dial_was_long_ago(self):
-        campaign_dialer._last_dial_at = self.clock[0] - 60
+        # No telephony pool in these unit tests, so the dial uses the legacy key.
+        campaign_dialer._last_dial_at = {"legacy": self.clock[0] - 60}
         self._run([(_base_campaign(), 1)])
         self.assertEqual(self.sleeps, [])
 
@@ -93,7 +95,7 @@ class CampaignScheduleAndRate(unittest.TestCase):
     rate can only be slower than the trunk-wide stagger."""
 
     def setUp(self):
-        campaign_dialer._last_dial_at = 0.0
+        campaign_dialer._last_dial_at = {}
 
     def _tick(self, campaign_extra, now_local=None):
         import datetime
@@ -101,6 +103,7 @@ class CampaignScheduleAndRate(unittest.TestCase):
         contacts = [{"id": 1, "phone": "+91990", "name": "x"}]
         with patch.object(campaign_dialer, "calls_db") as db, \
              patch.object(campaign_dialer, "_OUTBOUND_CHANNELS", 99), \
+             patch.object(campaign_dialer.telephony, "trunk_for_number", return_value=None), \
              patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False), \
              patch.object(campaign_dialer.time, "sleep", lambda s: None):
             db.require_feature.return_value = None
@@ -146,7 +149,7 @@ class CampaignDialRate(unittest.TestCase):
     def test_a_campaign_can_never_dial_faster_than_the_trunk_allows(self):
         # 600/min would be 0.1s between dials; the trunk floor is 2s.
         clock = [1000.0]
-        campaign_dialer._last_dial_at = 0.0
+        campaign_dialer._last_dial_at = {}
         slept = []
         with patch.object(campaign_dialer.time, "monotonic", side_effect=lambda: clock[0]), \
              patch.object(campaign_dialer.time, "sleep", side_effect=lambda s: (slept.append(s), clock.__setitem__(0, clock[0] + s))):
@@ -156,7 +159,7 @@ class CampaignDialRate(unittest.TestCase):
 
     def test_a_slower_campaign_rate_is_honoured(self):
         clock = [1000.0]
-        campaign_dialer._last_dial_at = 0.0
+        campaign_dialer._last_dial_at = {}
         slept = []
         with patch.object(campaign_dialer.time, "monotonic", side_effect=lambda: clock[0]), \
              patch.object(campaign_dialer.time, "sleep", side_effect=lambda s: (slept.append(s), clock.__setitem__(0, clock[0] + s))):

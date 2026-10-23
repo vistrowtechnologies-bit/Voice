@@ -111,6 +111,8 @@ FEATURE_MIN_PLAN = {
     "live_catalog": "growth", "basic_inbound": "starter",
     # Dashboard copilot actions (confirmed writes). Read-only answers stay on every plan.
     "copilot_actions": "growth",
+    # Facebook / Instagram Lead Ads → AI call (owner, 22 Oct 2026: Growth only).
+    "meta_leads": "growth",
     # The dashboard's Analytics tab (owner, 17 Oct): Growth and Scale. The
     # Overview's funnel and channel tiles stay on every plan.
     "analytics": "growth",
