@@ -107,9 +107,10 @@
          app.vistrowvoice.com (the dashboard app itself, see hostBuckets.ts)
          - a plain <script> tag here would load on both, so the floating
          button showed up while using the dashboard too. Gated behind a
-         hostname check so it only ever loads on the marketing site. -->
+         hostname check so it only ever loads on the marketing site (not
+         the app, and not admin.vistrowvoice.com). -->
     <script>
-      if (location.hostname.indexOf('app.') !== 0) {
+      if (location.hostname.indexOf('app.') !== 0 && location.hostname.indexOf('admin.') !== 0) {
         var vistrowWidgetScript = document.createElement('script')
         vistrowWidgetScript.src = '/api/widget.js'
         vistrowWidgetScript.setAttribute('data-site-key', 'av_live_K3WlEka3sKGHgFA-xwQrijJsTO8XfqhK')
