@@ -53,6 +53,8 @@ def verify_password(password: str, stored: str) -> bool:
 
 COOKIE_NAME = "vv_session"
 SESSION_TTL_SECONDS = 30 * 24 * 3600  # 30 days
+# admin.vistrowvoice.com's own sign-in (owner, 23 Oct 2026): short-lived.
+ADMIN_SESSION_TTL_SECONDS = 8 * 3600
 # A super-admin "View as" session expires on its own after two hours.
 IMPERSONATION_TTL_SECONDS = 2 * 3600
 
@@ -106,14 +108,16 @@ def make_session_token(
 
     `claims` adds signed extras: "mfa" (when two-step login was passed), and
     on a support session "isv"/"imfa" (the admin's own session_version and
-    mfa time), so the admin signing out everywhere also ends it."""
+    mfa time), so the admin signing out everywhere also ends it. "adm" marks
+    a session from the admin sign-in (admin.vistrowvoice.com), "iadm" the same
+    for the admin driving a support session."""
     now = int(time.time())
     payload = {"uid": user_id, "aid": account_id, "sv": session_version, "iat": now, "exp": now + ttl_seconds}
     if impersonator_id is not None:
         payload["imp"] = impersonator_id
     if session_id is not None:
         payload["sid"] = session_id
-    for key in ("mfa", "isv", "imfa"):
+    for key in ("mfa", "isv", "imfa", "adm", "iadm"):
         if claims and claims.get(key) is not None:
             payload[key] = claims[key]
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
@@ -147,6 +151,8 @@ def read_session_token(token: str | None) -> dict | None:
         "mfa": payload.get("mfa"),
         "isv": payload.get("isv"),
         "imfa": payload.get("imfa"),
+        "adm": payload.get("adm"),
+        "iadm": payload.get("iadm"),
     }
 
 

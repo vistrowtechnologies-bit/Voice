@@ -112,6 +112,7 @@ class SupportSessionTests(unittest.TestCase):
             "calls_db": calls_db, "admin_db": admin_db, "plan_policy": plan_policy, "JSONResponse": JSONResponse,
             "HTTPException": HTTPException, "Request": Request, "Response": Response, "Depends": Depends,
             "logger": logging.getLogger("test"), "_COOKIE_SECURE": False,
+            "_ADMIN_SEPARATE_LOGIN": False,
         })
         app = FastAPI()
         app.middleware("http")(ns["guard_support_session"])

@@ -91,6 +91,82 @@ class PendingCookieTests(unittest.TestCase):
             self.assertIsNone(self.ns["_read_mfa_pending"](token))
 
 
+class MfaLoginReplyTests(unittest.TestCase):
+    def test_reply_says_the_code_was_passed(self):
+        """Owner, 23 Oct 2026: without mfaVerified in this reply the admin gate
+        showed "Sign in again with your code" right after a correct code."""
+        ns = load("auth_login_mfa",
+                  _auth_rate_limited=lambda ip: False, _client_ip=lambda r: "1.2.3.4",
+                  _read_mfa_pending=lambda c: {"uid": 7, "aid": 3, "prov": "password"},
+                  _MFA_PENDING_COOKIE="p", _login_locked=lambda k: False,
+                  _verify_mfa_code=lambda uid, code: 1, _clear_login_failures=lambda k: None,
+                  _set_session_cookie=lambda *a, **k: "sid", _note_login_failure=lambda k: None,
+                  calls_db=types.SimpleNamespace(record_login=lambda uid: None),
+                  _me_payload=lambda uid: {"id": uid, "mfaEnabled": True},
+                  time=time, HTTPException=Exception, MfaLoginRequest=object, Response=object, Request=object)
+        response = types.SimpleNamespace(delete_cookie=lambda *a, **k: None)
+        request = types.SimpleNamespace(cookies={"p": "x"}, headers={})
+        out = ns["auth_login_mfa"](types.SimpleNamespace(code="123456"), response, request)
+        self.assertTrue(out["user"]["mfaVerified"])
+        self.assertTrue(out["user"]["mfaEnabled"])
+
+
+class AdminSubdomainLoginTests(unittest.TestCase):
+    """Owner, 23 Oct 2026: admin.vistrowvoice.com has its own sign-in."""
+
+    def _login_ns(self, user, profile, pending):
+        return load("auth_admin_login", "ADMIN_MFA_SETUP_REQUIRED",
+                    _auth_rate_limited=lambda ip: False, _client_ip=lambda r: "1.2.3.4",
+                    _login_locked=lambda k: False, _note_login_failure=lambda k: None,
+                    _clear_login_failures=lambda k: None, _DUMMY_PASSWORD_HASH=auth.hash_password("x"),
+                    _set_mfa_pending=lambda resp, uid, aid, prov: pending.append(prov),
+                    calls_db=types.SimpleNamespace(get_user_by_email=lambda e: user,
+                                                   get_user_by_id=lambda uid: profile,
+                                                   record_security_event=lambda *a: None),
+                    auth=auth, HTTPException=HTTPError, LoginRequest=object, Response=object, Request=object)
+
+    def _call(self, ns, password="right"):
+        req = types.SimpleNamespace(email="Owner@X.com", password=password)
+        return ns["auth_admin_login"](req, None, types.SimpleNamespace(headers={}))
+
+    def test_owner_with_two_step_gets_the_code_step(self):
+        user = {"id": 1, "account_id": 2, "password_hash": auth.hash_password("right"), "mfa_enabled_at": "x"}
+        pending = []
+        out = self._call(self._login_ns(user, {"is_platform_owner": True, "role": "owner"}, pending))
+        self.assertEqual(out, {"ok": True, "mfaRequired": True})
+        self.assertEqual(pending, ["admin"])
+
+    def test_anyone_else_looks_like_a_wrong_password(self):
+        user = {"id": 1, "account_id": 2, "password_hash": auth.hash_password("right"), "mfa_enabled_at": "x"}
+        for profile, password in (({"is_platform_owner": False, "role": "owner"}, "right"),
+                                  ({"is_platform_owner": True, "role": "member"}, "right"),
+                                  ({"is_platform_owner": True, "role": "owner"}, "wrong")):
+            pending = []
+            with self.assertRaises(HTTPError) as err:
+                self._call(self._login_ns(user, profile, pending), password)
+            self.assertEqual(err.exception.status_code, 401)
+            self.assertEqual(pending, [])
+
+    def test_admin_check_needs_the_admin_session_when_switched_on(self):
+        ns = load("require_platform_owner", ADMIN_MFA_SETUP_REQUIRED="s", ADMIN_MFA_SIGNIN_REQUIRED="m",
+                  ADMIN_SEPARATE_LOGIN_REQUIRED="a", _ADMIN_SEPARATE_LOGIN=True, HTTPException=HTTPError, Request=object,
+                  calls_db=types.SimpleNamespace(get_user_by_id=lambda uid: {
+                      "is_platform_owner": True, "role": "owner", "mfa_enabled_at": "x", "email": "o@x.com"}))
+        state = types.SimpleNamespace(user_id=1, impersonator_id=None, mfa=123, admin_session=None, via_api_key=False)
+        with self.assertRaises(HTTPError) as err:
+            ns["require_platform_owner"](types.SimpleNamespace(state=state))
+        self.assertEqual((err.exception.status_code, err.exception.detail), (403, "a"))
+        state.admin_session = 1
+        self.assertEqual(ns["require_platform_owner"](types.SimpleNamespace(state=state))["user_id"], 1)
+
+    def test_admin_claim_round_trips_in_the_session_token(self):
+        token = auth.make_session_token(1, 2, ttl_seconds=auth.ADMIN_SESSION_TTL_SECONDS, claims={"adm": 1, "mfa": 5})
+        session = auth.read_session_token(token)
+        self.assertEqual(session["adm"], 1)
+        self.assertLessEqual(session["exp"] - session["iat"], 8 * 3600)
+        self.assertIsNone(auth.read_session_token(auth.make_session_token(1, 2))["adm"])
+
+
 class LockoutTests(unittest.TestCase):
     def test_ten_failures_lock_that_email(self):
         # Database down: the in-memory fallback still locks (fail open only
