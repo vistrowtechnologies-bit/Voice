@@ -424,7 +424,7 @@ export function LanguageDetail() {
         <Reveal>
           <SectionHead center eyebrow="Where teams use it" title={`${lang.name} calls, handled end to end.`} className="mb-10" />
         </Reveal>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 sm:max-lg:grid-close-2 lg:grid-close-3">
           {SOLUTIONS.map((s, i) => (
             <Reveal key={s.to} delayMs={(i % 3) * 60} className="h-full">
               <Link

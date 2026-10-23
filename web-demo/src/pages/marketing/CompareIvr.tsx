@@ -255,7 +255,7 @@ export function CompareIvr() {
           <SectionHead eyebrow="The terms" title="IVR, IVA, conversational AI, voice agent: what each one means." />
         </Reveal>
         {/* A bento: the agent definition (what this page is about) is the violet tile. */}
-        <dl className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+        <dl className="grid gap-4 md:grid-cols-2 md:max-lg:grid-close-2 lg:grid-cols-6">
           {TERMS.map((item, i) => {
             const lead = item.term === 'AI voice agent'
             return (

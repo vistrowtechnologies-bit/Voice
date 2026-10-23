@@ -11,27 +11,64 @@ export interface BentoItem {
   body: ReactNode
 }
 
+// Tailwind only ships classes it can see in the source, so spans are looked
+// up from literal strings rather than built from numbers.
+const SPAN: Record<number, string> = { 3: 'lg:col-span-3', 4: 'lg:col-span-4', 5: 'lg:col-span-5', 6: 'lg:col-span-6', 7: 'lg:col-span-7', 8: 'lg:col-span-8', 12: 'lg:col-span-12' }
+const ROWS: Record<number, string> = { 1: '', 2: 'lg:row-span-2', 3: 'lg:row-span-3', 4: 'lg:row-span-4' }
+
+/** Column spans (of 12) that lay `n` cards out in full rows of 3 or 2. */
+function fullRows(n: number): number[] {
+  if (n <= 0) return []
+  if (n === 1) return [12]
+  if (n % 3 === 0) return Array(n).fill(4)
+  if (n % 3 === 2) return [...Array(n - 2).fill(4), 6, 6]
+  return [...Array(n - 4).fill(4), 6, 6, 6, 6]
+}
+
+interface BentoLayout {
+  visual: string
+  /** Column span (of 12) for each item, lead first. */
+  spans: number[]
+}
+
+/**
+ * Pick spans so every row of the 12-column grid closes, whatever the item
+ * count and the visual's shape.
+ */
+function bentoLayout(visual: PageFigureData | undefined, n: number): BentoLayout {
+  if (!visual) return { visual: '', spans: n === 3 ? [6, 3, 3] : n % 4 === 0 ? Array(n).fill(3) : fullRows(n) }
+  if (isPortrait(visual)) {
+    // A tall 4-column cell; the cards fill the 8 columns beside it, two per
+    // row. An odd count gives the lead tile a whole row.
+    const rows = Math.min(4, Math.ceil(n / 2))
+    const spans = n % 2 ? [8, ...Array(n - 1).fill(4)] : Array(n).fill(4)
+    return { visual: `lg:col-span-4 ${ROWS[rows]}`, spans }
+  }
+  if (visual.width / visual.height > 2.2) {
+    // Very wide strip (a dashboard panel). Three items: the strip shares its
+    // row with the lead tile, two cards below. Otherwise full width on top.
+    if (n === 3) return { visual: 'lg:col-span-8', spans: [4, 6, 6] }
+    return { visual: 'lg:col-span-12', spans: n % 4 === 0 ? Array(n).fill(3) : fullRows(n) }
+  }
+  // Landscape stage: 7 columns, with up to three cards stacked beside it and
+  // any further cards in full rows underneath.
+  const stacked = n <= 3 ? n : 2
+  return { visual: `lg:col-span-7 ${ROWS[Math.max(1, stacked)]}`, spans: [...Array(stacked).fill(5), ...fullRows(n - stacked)] }
+}
+
 /**
  * A dashboard-style bento: one large visual cell, a violet lead tile (the
  * first item) and plain cards for the rest. The grid shape follows the
  * visual (portrait, very wide strip, or a normal landscape stage) and the
- * item count (3 or 4) so the rows always close.
+ * item count so the rows always close, at two columns as well as twelve.
  */
 export function Bento({ visual, items, head }: { visual?: PageFigureData; items: BentoItem[]; head?: ReactNode }) {
   const portrait = visual ? isPortrait(visual) : false
   const wide = visual ? visual.width / visual.height > 2.2 : false
-  const three = items.length === 3
-  // 12-column grid. Portrait art: a tall 4-column cell beside the cards.
-  // Very wide strips (a dashboard panel): full width on top, cards below.
-  // Anything else: a 7-column stage plus a stack.
-  const layout = portrait
-    ? { visual: 'lg:col-span-4 lg:row-span-2', lead: three ? 'lg:col-span-8' : 'lg:col-span-4', rest: ['lg:col-span-4'] }
-    : wide
-      ? three
-        ? // Three items: the strip shares its row with the lead tile, two cards below.
-          { visual: 'lg:col-span-8', lead: 'lg:col-span-4', rest: ['lg:col-span-6'] }
-        : { visual: 'lg:col-span-12', lead: 'lg:col-span-3', rest: ['lg:col-span-3'] }
-      : { visual: 'lg:col-span-7 lg:row-span-2', lead: 'lg:col-span-5', rest: ['lg:col-span-5', 'lg:col-span-6'] }
+  const layout = bentoLayout(visual, items.length)
+  // Two-column (tablet) grid: an odd card count leaves the last card alone,
+  // so it takes the whole row.
+  const spanClass = (i: number) => `${SPAN[layout.spans[i]] ?? ''} ${items.length % 2 && i === items.length - 1 ? 'sm:col-span-2' : ''}`
   const [lead, ...rest] = items
 
   return (
@@ -63,7 +100,7 @@ export function Bento({ visual, items, head }: { visual?: PageFigureData; items:
         )}
 
         {lead && (
-          <Reveal delayMs={60} className={`h-full ${visual ? layout.lead : 'lg:col-span-6'}`}>
+          <Reveal delayMs={60} className={`h-full ${spanClass(0)}`}>
             {/* The lead item borrows the dashboard's violet hero tile. */}
             <div className="bento-hero relative flex h-full flex-col overflow-hidden rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)]">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
@@ -82,7 +119,7 @@ export function Bento({ visual, items, head }: { visual?: PageFigureData; items:
           <Reveal
             key={f.title}
             delayMs={120 + i * 60}
-            className={`h-full ${visual ? layout.rest[Math.min(i, layout.rest.length - 1)] : 'lg:col-span-3'}`}
+            className={`h-full ${spanClass(i + 1)}`}
           >
             <div className="vv-lift flex h-full flex-col rounded-3xl border border-border bg-surface p-6">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">

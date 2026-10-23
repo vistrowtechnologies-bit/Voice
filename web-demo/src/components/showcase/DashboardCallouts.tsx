@@ -38,7 +38,7 @@ export function DashboardCallouts({
               <span
                 key={c.title}
                 aria-hidden="true"
-                className="absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-primary to-magenta text-xs font-bold text-white shadow-[0_0_0_4px_rgba(255,255,255,0.9),0_8px_20px_-6px_rgba(124,58,237,0.9)] sm:h-8 sm:w-8 sm:text-sm"
+                className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-primary to-magenta text-[11px] font-bold text-white shadow-[0_0_0_4px_rgba(255,255,255,0.9),0_8px_20px_-6px_rgba(124,58,237,0.9)] sm:h-8 sm:w-8 sm:text-sm"
                 style={{ left: `${c.x}%`, top: `${c.y}%` }}
               >
                 <span className="absolute inset-0 rounded-full bg-primary/50 motion-safe:animate-ping" />
