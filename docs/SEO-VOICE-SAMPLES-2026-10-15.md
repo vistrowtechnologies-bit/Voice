@@ -18,7 +18,7 @@ Every /languages page now opens with a playable two-speaker sample call in the h
 2. **First take (replaced).** It used pace 0.85 and 350 ms gaps. The owner found it too slow and not human-sounding.
 3. **Current take.** Lines were rewritten by hand as spoken phone talk, with short clauses and fillers ("हाँ हाँ", "अच्छा", "हो, चालेल ना!", "சரி", "ಹೌದು", "ঠিক আছে"). No new facts were added.
    - **Model:** Sarvam TTS `bulbul:v4-flash`. This is the model Bharat voices use in calls; the API rejects `bulbul:v4`.
-   - **Voices:** agent `kavya_hi_conversational` (female), caller `aditya_hi_conversational` (male).
+   - **Voices:** agent `kavya_hi_conversational` (female), caller `aditya_hi_conversational` (male). Since 2026-10-23 the agent is `aarti_hi_customer` ("Aarti"); see below.
    - **Settings:** pace 1.2, temperature 0.7, loudness 1.1. `target_language_code` is set per line.
    - **Approval:** the owner approved the Marathi take before the other nine were made.
 4. **Stitching.** Each line was trimmed to 40 ms around audible speech and normalised to -20 dBFS RMS. Lines are joined with 200 ms gaps, plus 200 ms lead-in and 400 ms tail.
@@ -41,18 +41,20 @@ The agent follows the caller's language, books or notes details, never quotes pr
   - RMS was about 0.096 and peak at most 0.70;
   - the longest silence was 0.58 s or less.
 
+Current files (Aarti agent voice, 2026-10-23):
+
 | Page | Scenario | Switch | Switch at | Duration | Size |
 |---|---|---|---|---|---|
-| /languages/hindi | Outbound EMI reminder (Saarthi Finance) | English to Hindi | 0:09 | 29.1 s | 231 KB |
-| /languages/marathi | Home blood-sample booking, Pune lab | Hindi to Marathi | 0:07 | 30.3 s | 245 KB |
-| /languages/tamil | OMR property enquiry follow-up | Hindi to Tamil | 0:07 | 30.1 s | 244 KB |
-| /languages/telugu | Clinic appointment | Hindi to Telugu | 0:07 | 27.7 s | 225 KB |
-| /languages/kannada | Whitefield 2BHK enquiry | Hindi to Kannada | 0:08 | 31.0 s | 251 KB |
-| /languages/malayalam | Kochi 2BHK, caller in Dubai | Hindi to Malayalam | 0:08 | 29.2 s | 237 KB |
-| /languages/gujarati | Invoice 1042 reminder, Surat | Hindi to Gujarati | 0:08 | 28.2 s | 229 KB |
-| /languages/bengali | Order 5821 status | Hindi to Bengali | 0:05 | 27.1 s | 220 KB |
-| /languages/punjabi | Canada study-visa counselling | Hindi to Punjabi | 0:07 | 28.7 s | 233 KB |
-| /languages/odia | Class 10 demo class, Bhubaneswar | Hindi to Odia | 0:07 | 27.1 s | 221 KB |
+| /languages/hindi | Outbound EMI reminder (Saarthi Finance) | English to Hindi | 0:09 | 29.6 s | 236 KB |
+| /languages/marathi | Home blood-sample booking, Pune lab | Hindi to Marathi | 0:07 | 31.3 s | 249 KB |
+| /languages/tamil | OMR property enquiry follow-up | Hindi to Tamil | 0:08 | 29.4 s | 234 KB |
+| /languages/telugu | Clinic appointment | Hindi to Telugu | 0:07 | 28.6 s | 227 KB |
+| /languages/kannada | Whitefield 2BHK enquiry | Hindi to Kannada | 0:08 | 32.6 s | 259 KB |
+| /languages/malayalam | Kochi 2BHK, caller in Dubai | Hindi to Malayalam | 0:09 | 28.9 s | 230 KB |
+| /languages/gujarati | Invoice 1042 reminder, Surat | Hindi to Gujarati | 0:10 | 30.6 s | 243 KB |
+| /languages/bengali | Order 5821 status | Hindi to Bengali | 0:06 | 27.3 s | 217 KB |
+| /languages/punjabi | Canada study-visa counselling | Hindi to Punjabi | 0:08 | 29.8 s | 237 KB |
+| /languages/odia | Class 10 demo class, Bhubaneswar | Hindi to Odia | 0:08 | 27.8 s | 221 KB |
 
 ## 2026-10-23: Hindi sample now ends in Hindi
 
@@ -63,6 +65,18 @@ The owner flagged that the /languages/hindi sample switched from Hindi to Englis
 - **Checks:** all 8 lines round-tripped through `saarika:v2.5` with auto-detect; content intact (English loanwords came back transliterated, "Saarthi" as "Saathi") and detected language en-IN for lines 1-2 and hi-IN for lines 3-8. Decoded m4a: 29.1 s, RMS 0.096, peak 0.50, longest silence 0.55 s, correlation with the source 0.999; every `start` is within 0.05 s of the decoded line onset.
 - **Usage:** TTS 8 requests, 464 characters; STT 8 requests, about 27 s of audio.
 - **Not verified:** native-speaker review of the new Hindi lines.
+
+## 2026-10-23: agent voice changed to Aarti on all ten samples
+
+Owner decision: all demo audio uses Sarvam Bulbul v4 Flash, with "Aarti" as the AI agent voice. The playground lists it as a sweet, high, soft-spoken female voice tagged Customer support.
+- **Speaker id:** `aarti_hi_customer`. It is the only Aarti id the API accepts for `bulbul:v4-flash`; the API's own speaker list (211 ids) was checked, and plain `aarti` is rejected. The site catalog already lists it (`server/voice_catalog.py`).
+- **What changed:** only the 40 agent lines were re-voiced, with the same text, pace 1.2, temperature 0.7, loudness 1.1, 24 kHz and the same `target_language_code` per line (Odia's `or-IN` is sent as `od-IN`, which the API requires). Same trim, -20 dBFS RMS, 200 ms gaps, 200 ms lead-in, 400 ms tail, and the same encoder as the Hindi re-take (libfdk_aac, 64 kbps, faststart). Every `start` and `seconds` value in `voiceSamples.ts` was re-measured.
+- **Caller audio is the approved take:** the caller lines were not re-generated. For Hindi they come from the line WAVs of the English-to-Hindi take; for the other nine they were cut from the committed m4a at their `start` times. Each cut correlates 0.998 or better with the old file.
+- **Re-rolls:** three Aarti lines had a weaker STT round trip than the old Kavya take and were voiced again: Odia turn 8 (detected as English and transcribed romanised), Punjabi turn 4 ("11 ਵਜੇ" misheard) and Tamil turn 1 (two re-rolls). The second takes of Odia and Punjabi round-trip cleanly. In every Tamil turn 1 take, STT hears "बात हो सकती है" as "बाद हो सकती है", which the Kavya take did not; the second take is kept.
+- **Checks:** all 40 agent lines round-tripped through `saarika:v2.5` with auto-detect. Each was detected in the expected language, and content was intact apart from loanword transliteration, numbers written as words, and the Tamil turn 1 item above. In the decoded files, RMS is 0.096, the longest silence is 0.58 s or less, and every `start` is within 0.04 s of the line onset. Peak is 0.58 or less except Gujarati, at 0.708: that is the unchanged caller turn 7, which was already 0.698 in the old file and went slightly over after one more AAC pass.
+- **Pace comparison:** a Hindi take with the agent at pace 1.0 (caller unchanged) was made for the owner to compare. It runs 33.0 s against 29.6 s at pace 1.2. The site uses pace 1.2.
+- **Usage:** TTS 49 accepted requests, 3,188 characters (including the 4 pace-1.0 lines, 4 re-rolls and 1 speaker test), plus 3 rejected (wrong speaker name or language code). STT 84 requests, about 6 minutes of audio (including 3 checks of the old Kavya lines).
+- **Not verified:** a native-speaker listen to Aarti in the nine non-Hindi languages (the speaker is Hindi-tagged).
 
 ## Usage (both takes)
 
