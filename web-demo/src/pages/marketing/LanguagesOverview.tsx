@@ -160,6 +160,24 @@ export function LanguagesOverview() {
             </Reveal>
           ))}
         </div>
+        <Reveal>
+          <Link
+            to="/languages/american-british-english"
+            className="vv-lift group mt-4 flex flex-col gap-2 rounded-3xl border border-border bg-surface p-6 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <span>
+              <span className="block text-xs font-bold uppercase tracking-widest text-text-muted">Callers in the US or UK</span>
+              <span className="mt-1 flex items-center gap-1 font-display text-lg font-semibold">
+                American and British English AI voice agent
+                <Icon
+                  name="arrow_forward"
+                  className="text-[16px] text-text-muted transition-transform group-hover:translate-x-1 group-hover:text-primary"
+                />
+              </span>
+            </span>
+            <span className="text-sm text-text-muted sm:max-w-sm sm:text-right">Hear a demo call where the agent matches a British caller’s accent.</span>
+          </Link>
+        </Reveal>
       </section>
 
       <div className="bg-surface-high/40">

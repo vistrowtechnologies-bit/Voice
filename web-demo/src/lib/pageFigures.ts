@@ -166,6 +166,7 @@ const LANGUAGE_FIGURES: [slug: string, name: string, greeting: string, call: str
   ['malayalam', 'Malayalam', 'നമസ്കാരം', 'an inbound property call from a caller abroad', 1120],
   ['punjabi', 'Punjabi', 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ', 'an inbound call to a study-abroad consultancy', 1000],
   ['odia', 'Odia', 'ନମସ୍କାର', 'an inbound call to a coaching institute in Bhubaneswar', 1000],
+  ['american-british-english', 'US and UK English', 'Hello', 'an inbound call to a London dental practice', 1000],
 ]
 
 export const PAGE_FIGURES: Record<string, PageFigureData[]> = {
@@ -419,11 +420,15 @@ export const PAGE_FIGURES: Record<string, PageFigureData[]> = {
         {
           src: `/media/pages/${slug}-ai-voice-agent-sample-call.webp`,
           alt:
-            slug === 'english'
+            slug === 'american-british-english'
+              ? `Greeting ${greeting} beside a written sample of ${call} in British English, with Artha, the AI voice agent, booking the caller in`
+              : slug === 'english'
               ? `Greeting ${greeting} beside a written sample of ${call} in Indian English, with Artha, the AI voice agent, replying in English`
               : `${name} greeting ${greeting} in ${name} script beside a written sample of ${call}, with Artha, the AI voice agent, replying in ${name}`,
           caption:
-            slug === 'english'
+            slug === 'american-british-english'
+              ? `Written sample of ${call} in British English. Not a recording of a customer call.`
+              : slug === 'english'
               ? `Written sample of ${call} in Indian English, with the Hindi words callers mix in. Not a recording of a customer call.`
               : `Written sample of ${call} in ${name}, with the English words callers mix in. Not a recording of a customer call.`,
           width: 1600,

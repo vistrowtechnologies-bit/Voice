@@ -19,9 +19,13 @@ const LANG_META: Record<string, { native: string; tag: string }> = {
   or: { native: 'ଓଡ଼ିଆ', tag: 'OR' },
 }
 
-function langInfo(code: string, name: string) {
+// `native` is what the track, the lines and "Now speaking" show; `short` is
+// the header pair. An accent sample (accentLabels) names the accent instead.
+function langInfo(code: string, name: string, accents?: VoiceSample['accentLabels']) {
+  const accent = accents?.[code]
+  if (accent) return { code, name, native: accent.label, tag: accent.tag, short: accent.short }
   const meta = LANG_META[code.split('-')[0]] ?? { native: name, tag: code.slice(0, 2).toUpperCase() }
-  return { code, name, ...meta }
+  return { code, name, ...meta, short: meta.native }
 }
 
 function clock(seconds: number) {
@@ -64,8 +68,9 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
   const [time, setTime] = useState(0)
   const [ended, setEnded] = useState(false)
 
-  const from = langInfo(sample.languages[0], sample.from)
-  const to = langInfo(sample.languages[1], sample.to)
+  const accents = sample.accentLabels
+  const from = langInfo(sample.languages[0], sample.from, accents)
+  const to = langInfo(sample.languages[1], sample.to, accents)
   const switchTurn = switchTurnOf(sample)
   const switchAt = sample.turns[switchTurn].start
   const switchPct = (switchAt / sample.seconds) * 100
@@ -146,7 +151,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
     e.preventDefault()
   }
 
-  const speaking = current ? langInfo(current.lang, current.lang === to.code ? to.name : from.name) : null
+  const speaking = current ? langInfo(current.lang, current.lang === to.code ? to.name : from.name, accents) : null
 
   return (
     <div className="vs-card relative mx-auto w-full max-w-[460px] rounded-2xl border border-border bg-surface p-4 sm:p-5 lg:ml-auto">
@@ -163,12 +168,12 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
           className={`vs-pair inline-flex shrink-0 items-center gap-1 rounded-full border p-1 text-xs font-semibold ${switched ? 'is-switched border-primary/35' : 'border-border'}`}
         >
           <span lang={from.code} className={`vs-pair-from rounded-full px-2 py-0.5 ${switched ? 'text-text-muted' : 'bg-surface-high text-text'}`}>
-            {from.native}
+            {from.short}
           </span>
           <Icon name="arrow_forward" className="vs-pair-arrow text-[14px] text-text-muted" />
           <span className="sr-only"> to </span>
           <span lang={to.code} className={`vs-pair-to rounded-full px-2 py-0.5 ${switched ? 'bg-primary text-white' : 'text-text-muted'}`}>
-            {to.native}
+            {to.short}
           </span>
         </p>
       </div>
@@ -285,10 +290,10 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
             </span>
             <span className={`truncate font-semibold ${switched ? 'text-primary' : 'text-text'}`}>
               <span lang={to.code}>{to.native}</span>
-              {to.native !== to.name && <span className="font-normal text-text-muted"> · {to.name}</span>}
+              {to.native !== to.name && !accents && <span className="font-normal text-text-muted"> · {to.name}</span>}
             </span>
           </p>
-          <p className="mt-0.5 text-[11px] leading-snug text-text-muted">Agent switched automatically · {clock(switchAt)}</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-text-muted">Agent switched {accents ? 'accent ' : ''}automatically · {clock(switchAt)}</p>
         </div>
       </div>
       <p className="sr-only" aria-live="polite">
@@ -302,7 +307,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
       >
         {sample.turns.map((turn, i) => {
           const agent = turn.speaker === 'Agent'
-          const lang = langInfo(turn.lang, turn.lang === to.code ? to.name : from.name)
+          const lang = langInfo(turn.lang, turn.lang === to.code ? to.name : from.name, accents)
           const target = turn.lang === to.code
           const upcoming = started && i > active
           return (
@@ -311,7 +316,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
                 <p className="mb-2 flex w-full items-center gap-2 text-[11px] font-semibold text-primary">
                   <span className="h-px flex-1 bg-primary/25" />
                   <span>
-                    Agent continues in <span lang={to.code}>{to.native}</span> · {clock(switchAt)}
+                    Agent continues in <span lang={to.code}>{accents ? to.name : to.native}</span> · {clock(switchAt)}
                   </span>
                   <span className="h-px flex-1 bg-primary/25" />
                 </p>
