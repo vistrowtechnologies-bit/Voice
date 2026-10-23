@@ -251,6 +251,21 @@ def ensure_platform_pool() -> dict:
                     f"VALUES (NULL, ?, ?, 0, 'active', 'Platform shared trunk', {calls_db._NOW}) RETURNING id",
                     (pool_id, limit),
                 ).fetchone()["id"]
+            # OUTBOUND_CHANNEL_LIMIT stays the knob for the shared pool, as it
+            # was before pools existed: while no customer lines are sold from it,
+            # every start re-applies the setting. Once customer trunks exist the
+            # pool is managed through set_pool_capacity / set_trunk_lines.
+            sold = conn.execute(
+                "SELECT COUNT(*) n FROM trunks WHERE pool_id = ? AND account_id IS NOT NULL AND status = 'active'",
+                (pool_id,),
+            ).fetchone()["n"]
+            if not sold:
+                conn.execute(
+                    "UPDATE trunks SET lines = 0 WHERE id = ? AND lines > ?", (trunk_id, limit))
+                conn.execute(
+                    "UPDATE provider_pools SET lines_bought = ?, inbound_reserved_lines = ? WHERE id = ?",
+                    (limit + DEFAULT_INBOUND_RESERVE, DEFAULT_INBOUND_RESERVE, pool_id))
+                conn.execute("UPDATE trunks SET lines = ? WHERE id = ?", (limit, trunk_id))
             attached = conn.execute(
                 "UPDATE phone_numbers SET trunk_id = ? WHERE trunk_id IS NULL RETURNING id", (trunk_id,)
             ).fetchall()

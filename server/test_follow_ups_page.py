@@ -370,6 +370,7 @@ class ManualFollowUps(unittest.TestCase):
         # Rows other tests leave in flight must not make the trunk look full.
         with patch.object(calls_db, "place_outbound_call_direct") as place, \
              patch.object(calls_db, "campaign_inflight_all", return_value=0), \
+             patch.object(campaign_dialer.telephony, "trunk_for_number", return_value=None), \
              patch.object(calls_db, "campaign_inflight", return_value=0), \
              patch.object(calls_db, "count_active_calls", return_value=0), \
              patch.object(calls_db, "concurrent_call_limit", return_value=10), \

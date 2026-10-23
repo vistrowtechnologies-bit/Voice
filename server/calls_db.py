@@ -7321,6 +7321,14 @@ def _arthaleads_route_match(route: dict, fields: dict) -> bool:
     return value == match or (source == "website" and match in value)
 
 
+def _meta_campaign_setting_key(route: dict) -> str:
+    """One "Meta Instant Follow-up" campaign per (agent, caller number), as
+    ArthaLeads routes have, so a Page/form/ad rule's agent is the one that
+    calls (meta_leads.resolve_route)."""
+    digest = hashlib.sha256(f"{route.get('agentId')}:{route.get('fromNumber')}".encode()).hexdigest()[:20]
+    return f"meta_instant_campaign_{digest}"
+
+
 def _arthaleads_campaign_setting_key(route: dict) -> str:
     digest = hashlib.sha256(
         f"{route.get('source')}|{route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}".encode()
@@ -7545,16 +7553,22 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
     conn = _connect()
     try:
         arthaleads = source == "arthaleads"
+        # A Meta lead with a resolved Page/form/ad route gets that route's own
+        # campaign; without one it uses the generic shared campaign below.
+        meta_routed = source == "meta_lead_ads" and bool(route)
         setting_key = "arthaleads_instant_campaign_id" if arthaleads else _INSTANT_LEAD_CAMPAIGN_ID_SETTING
-        if arthaleads:
+        if arthaleads or meta_routed:
             if not route:
                 return None
             agent_id = int(route.get("agentId") or 0)
             from_number = str(route.get("fromNumber") or "")
-            setting_key = _arthaleads_campaign_setting_key(route)
+            setting_key = _meta_campaign_setting_key(route) if meta_routed else _arthaleads_campaign_setting_key(route)
+            # ArthaLeads agents must carry a knowledge base; a Meta rule's agent
+            # was validated when the rule was saved and again on resolve.
             agent_row = conn.execute(
                 "SELECT id FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
-                "AND kb_id IS NOT NULL AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+                + ("" if meta_routed else "AND kb_id IS NOT NULL ")
+                + "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
                 (agent_id, account_id),
             ).fetchone()
             number_row = conn.execute(
@@ -7602,7 +7616,8 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
                 "INSERT INTO campaigns (account_id, name, agent_id, from_number, status, "
                 f"started_at, max_attempts, retry_minutes, concurrency) "
                 f"VALUES (?, ?, ?, ?, 'running', {_NOW}, ?, ?, ?) RETURNING id",
-                (account_id, "ArthaLeads Instant Follow-up" if arthaleads else _INSTANT_LEAD_CAMPAIGN_NAME,
+                (account_id, "ArthaLeads Instant Follow-up" if arthaleads
+                 else ("Meta Instant Follow-up" if meta_routed else _INSTANT_LEAD_CAMPAIGN_NAME),
                  agent_row["id"], from_number, 3, 30, 2),
             )
             campaign_id = cur.fetchone()["id"]
@@ -7638,7 +7653,7 @@ def _record_lead_event(account_id: int, source: str, external_id: str, name: str
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
     external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
-    requested_agent_id: str = "",
+    requested_agent_id: str = "", route: dict | None = None,
 ) -> dict:
     """Entry point for every external lead source (Facebook Lead Ads via
     Zapier or a native Meta webhook, WhatsApp Cloud API, or any other
@@ -7666,7 +7681,9 @@ def ingest_inbound_lead(
     arthaleads_source = next((category for value in (
         fields.get("source_detail"), fields.get("lead_source"), fields.get("source"), fields.get("channel")
     ) if (category := _arthaleads_source(value))), "") if source == "arthaleads" else ""
-    route = None
+    # `route` is the caller's resolved {agentId, fromNumber, label}; only a Meta
+    # lead passes one (meta_leads.resolve_route). ArthaLeads resolves its own below.
+    route = route if (source == "meta_lead_ads" and allow_call and route) else None
     no_call_reason = "no_matching_enabled_route"
     if source == "arthaleads" and allow_call and requested_agent_id:
         # ArthaLeads routed the lead and named the agent: honour exactly that.
@@ -8989,7 +9006,11 @@ def mark_support_ticket_emailed(ticket_id: int, account_id: int) -> None:
 # Integrations the owner has switched off for NEW connections. Accounts that
 # already have one connected keep it (delivery is unchanged) and can still
 # update or disconnect it; once disconnected it cannot be connected again.
-NEW_CONNECTIONS_UNAVAILABLE = frozenset({"facebook", "whatsapp"})
+# Facebook Lead Ads reopened for Growth accounts on servers where the Meta app
+# is configured (server/meta_leads.py); WhatsApp stays off.
+NEW_CONNECTIONS_UNAVAILABLE = frozenset(
+    {"whatsapp"} | ({"facebook"} if not os.environ.get("META_OAUTH_CLIENT_ID") else set())
+)
 
 
 def integration_accepts_connect(account_id: int, key: str) -> bool:

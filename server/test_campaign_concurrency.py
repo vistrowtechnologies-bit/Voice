@@ -160,6 +160,7 @@ class ReplayCampaign20(unittest.TestCase):
         with patch.object(campaign_dialer, "calls_db", db), \
              patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False), \
              patch.object(campaign_dialer, "_OUTBOUND_CHANNELS", 99), \
+             patch.object(campaign_dialer.telephony, "trunk_for_number", return_value=None), \
              patch.object(campaign_dialer.time, "sleep", side_effect=sleep):
             campaign = {"id": 20, "account_id": 2, "from_number": "+917713128715", "agent_id": 26, "concurrency": 3}
             for _ in range(200):
@@ -231,6 +232,7 @@ class TrunkChannelCeiling(unittest.TestCase):
         db.place_outbound_call_direct.side_effect = lambda *a, **k: placed.append(k["campaign_contact_id"]) or {"ok": True, "room": "r"}
         with patch.object(campaign_dialer, "calls_db", db), \
              patch.object(campaign_dialer, "_OUTBOUND_CHANNELS", channels), \
+             patch.object(campaign_dialer.telephony, "trunk_for_number", return_value=None), \
              patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False), \
              patch.object(campaign_dialer.time, "sleep", lambda s: None):
             campaign_dialer._dial_one({"id": 20, "account_id": 2, "from_number": "+91771", "agent_id": 26, "concurrency": concurrency})
