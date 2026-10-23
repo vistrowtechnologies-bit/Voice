@@ -128,7 +128,7 @@ export function ProductOverview() {
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
           <Reveal className="h-full sm:col-span-2 lg:col-span-8">
-            <figure className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-[#f4f1fb]">
+            <figure className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-panel">
               <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/25 blur-[90px]" />
               <div className="relative flex flex-1 items-center justify-center p-4 sm:p-6">
                 <Shot
@@ -137,7 +137,7 @@ export function ProductOverview() {
                   className="rounded-xl shadow-[0_20px_40px_-24px_rgba(76,29,149,0.6)]"
                 />
               </div>
-              <figcaption className="relative border-t border-[#e4def2] bg-white/70 px-5 py-3 text-xs leading-relaxed text-[#5d5776]">
+              <figcaption className="relative border-t border-panel-line bg-surface/70 px-5 py-3 text-xs leading-relaxed text-text-muted">
                 {PRODUCT_AGENT_CARDS.caption}
               </figcaption>
             </figure>

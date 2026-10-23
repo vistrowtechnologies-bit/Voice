@@ -332,7 +332,7 @@ export function AiIvr() {
                 <li key={lang.slug}>
                   <Link
                     to={`/languages/${lang.slug}`}
-                    className="inline-block rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+                    className="inline-flex min-h-11 items-center rounded-full border border-border bg-surface px-3.5 py-1.5 sm:min-h-0 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
                   >
                     {lang.name} <span lang={lang.code}>{lang.native}</span>
                   </Link>

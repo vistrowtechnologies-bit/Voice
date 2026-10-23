@@ -235,7 +235,7 @@ export function Home() {
             <SectionEyebrow>Hear the difference</SectionEyebrow>
             <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl">An AI voice agent for India that switches language without restarting the call.</h2>
             <p className="mt-3 text-text-muted">Artha follows the caller naturally instead of forcing a language menu or a separate agent.</p>
-            <a href="#live-demo" className="mt-5 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline">Try it live <Icon name="arrow_forward" className="text-[16px]" /></a>
+            <a href="#live-demo" className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-bold text-primary hover:underline sm:mt-5 sm:min-h-0">Try it live <Icon name="arrow_forward" className="text-[16px]" /></a>
           </Reveal>
           <Reveal delayMs={80} className="mt-8">
           <div className="rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/10 to-surface p-7" aria-label="Example multilingual conversation">
@@ -332,7 +332,7 @@ export function Home() {
                   </p>
                   <Link
                     to="/languages"
-                    className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline"
+                    className="mt-1 inline-flex min-h-11 items-center gap-1 text-sm font-bold text-primary hover:underline sm:mt-4 sm:min-h-0"
                   >
                     See every language
                     <Icon name="arrow_forward" className="text-[16px]" />
@@ -437,7 +437,7 @@ export function Home() {
               <SectionEyebrow>Solutions</SectionEyebrow>
               <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Built for your industry.</h2>
             </div>
-            <Link to="/solutions" className="text-sm font-semibold text-primary hover:underline">
+            <Link to="/solutions" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline sm:min-h-0">
               All industries →
             </Link>
           </div>
@@ -463,7 +463,7 @@ export function Home() {
                 {/* The lead industry card carries its call scene from lg up,
                     where the card is wide enough for it to read. */}
                 {i === 0 && (
-                  <span className="hidden overflow-hidden rounded-2xl border border-border bg-[#f4f1fb] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:block">
+                  <span className="hidden overflow-hidden rounded-2xl border border-border bg-panel lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:block">
                     <Shot figure={HOME_REAL_ESTATE_SCENE} sizes="(min-width: 1280px) 440px, 36vw" />
                   </span>
                 )}

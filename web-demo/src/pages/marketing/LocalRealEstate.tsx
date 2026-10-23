@@ -250,7 +250,7 @@ export function LocalRealEstate() {
                 <li key={other.slug}>
                   <Link
                     to={`/solutions/real-estate/${other.slug}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-primary transition-colors hover:border-primary"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold sm:min-h-0 text-primary transition-colors hover:border-primary"
                   >
                     {`${other.language} calls in ${other.state}`}
                     <Icon name="arrow_forward" className="text-[16px]" />

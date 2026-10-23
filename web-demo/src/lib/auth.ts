@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useEffect } from 'react'
 
 export interface AuthUser {
   id: number
@@ -48,12 +48,19 @@ export interface AuthState {
   logout: () => Promise<void>
   refresh: () => Promise<void>
   setUser: (user: AuthUser) => void
+  /** Starts the one-time session probe (/auth/me). useAuth calls it, so pages
+   * that never read auth state (the marketing site) never make the request. */
+  ensureSession?: () => void
 }
 
 export const AuthContext = createContext<AuthState | null>(null)
 
 export function useAuth(): AuthState {
   const ctx = useContext(AuthContext)
+  const ensureSession = ctx?.ensureSession
+  useEffect(() => {
+    ensureSession?.()
+  }, [ensureSession])
   if (!ctx) throw new Error('useAuth must be used within <AuthProvider>')
   return ctx
 }

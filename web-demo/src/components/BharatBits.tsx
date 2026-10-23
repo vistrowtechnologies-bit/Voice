@@ -47,7 +47,7 @@ export function ScriptMarquee() {
   const items = [...LANGUAGES, ...LANGUAGES]
 
   return (
-    <section className="vv-marquee relative overflow-hidden border-y border-border bg-surface/40 py-6">
+    <section className="vv-marquee relative overflow-hidden border-y border-border bg-surface/40 py-4 sm:py-6">
       {/* Edge fades so glyphs dissolve rather than getting chopped at the
           viewport edge. pointer-events-none so they never eat hover. */}
       <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-bg to-transparent sm:w-28" />
@@ -59,7 +59,7 @@ export function ScriptMarquee() {
             to={`/languages/${lang.slug}`}
             aria-hidden={i >= LANGUAGES.length}
             tabIndex={i >= LANGUAGES.length ? -1 : undefined}
-            className="group flex shrink-0 items-baseline gap-3 transition-opacity hover:opacity-100 sm:gap-4"
+            className="group flex shrink-0 items-baseline gap-3 py-2 transition-opacity sm:py-0 hover:opacity-100 sm:gap-4"
           >
             <span className="font-display text-xl text-text transition-colors group-hover:text-primary sm:text-2xl">
               {lang.greeting}

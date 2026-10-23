@@ -199,7 +199,7 @@ export function MediaCard({
 }) {
   return (
     <div className="vv-lift flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-surface">
-      <div className="relative bg-[#f4f1fb] p-3 sm:p-4">
+      <div className="relative bg-panel p-3 sm:p-4">
         <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-primary/25 blur-[80px]" />
         <Shot figure={figure} sizes="(min-width: 1280px) 600px, (min-width: 1024px) 46vw, calc(100vw - 40px)" className="relative rounded-xl" />
       </div>
@@ -210,7 +210,7 @@ export function MediaCard({
         </div>
         <p className="mt-3 text-sm leading-relaxed text-text-muted">{body}</p>
         {to && link && (
-          <Link to={to} className={`mt-auto inline-flex items-center gap-1 pt-4 text-sm ${LINK_CLASS}`}>
+          <Link to={to} className={`mt-auto inline-flex min-h-11 items-center gap-1 pt-4 text-sm sm:min-h-0 ${LINK_CLASS}`}>
             {link}
             <Icon name="arrow_forward" className="text-[16px]" />
           </Link>
