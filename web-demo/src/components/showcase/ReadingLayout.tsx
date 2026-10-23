@@ -168,11 +168,29 @@ function SectionNav({ title, items }: { title: string; items: ReadingLink[] }) {
   )
 }
 
+function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <details className="group rounded-2xl border border-border bg-surface">
+      <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-text [&::-webkit-details-marker]:hidden">
+        {label}
+        <Icon name="expand_more" className="text-[20px] text-text-muted transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="flex flex-col gap-5 border-t border-border px-1 py-4">{children}</div>
+    </details>
+  )
+}
+
 /**
- * The reading template. `children` is the text column (54ch, about 75
- * characters a line, unless `wide`); `after` goes under it (prev/next,
- * related). The closing CTA band and the phone sticky CTA come last unless
- * `cta` is false.
+ * The reading template, laid out like a docs site. The title sits at the top
+ * of the text column so the side columns start level with it.
+ * - With `sidebar` (help): three columns from xl (left nav, text, contents +
+ *   Artha card), two from lg (the contents move to a disclosure), and a
+ *   "Browse" disclosure on phones.
+ * - Without: a centred text column beside one sticky aside.
+ * `children` is capped at 54ch (about 75 characters a line) unless `wide`;
+ * wide pages cap their own prose so media can use the full column. `after`
+ * goes under it (prev/next, related). The closing CTA band and the phone
+ * sticky CTA come last unless `cta` is false.
  */
 export function ReadingLayout({
   crumbs,
@@ -182,6 +200,8 @@ export function ReadingLayout({
   meta,
   heroActions,
   search,
+  sidebar,
+  sidebarLabel = 'Browse',
   toc,
   tocTitle,
   nav,
@@ -200,6 +220,9 @@ export function ReadingLayout({
   meta?: ReactNode
   heroActions?: ReactNode
   search?: ReactNode
+  /** Left navigation column (all topics); search goes above it. */
+  sidebar?: ReactNode
+  sidebarLabel?: string
   toc?: TocItem[]
   tocTitle?: string
   nav?: { title: string; items: ReadingLink[] }
@@ -215,40 +238,73 @@ export function ReadingLayout({
   const { heroCtaRef, endRef } = useStickyRefs()
   const hasToc = Boolean(toc && toc.length > 1)
   const hasNav = Boolean(nav && nav.items.length)
+  const three = Boolean(sidebar)
+  const sectionLinks = (
+    <>
+      {hasToc && <Toc items={toc!} title={tocTitle} />}
+      {hasNav && <SectionNav title={nav!.title} items={nav!.items} />}
+    </>
+  )
+  const sticky = 'sticky top-28 flex max-h-[calc(100vh-8rem)] flex-col gap-6 overflow-y-auto pb-2 pr-1'
 
   return (
-    <>
-      <ReadingHero crumbs={crumbs} eyebrow={eyebrow} title={title} lede={lede} meta={meta} actions={heroActions} heroRef={heroCtaRef} />
-
-      <div className="mx-auto max-w-7xl px-5 pb-6 md:px-8">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-14">
-          <div className="min-w-0">
-            {(search || hasToc || hasNav) && (
-              <div className="mb-8 flex flex-col gap-3 lg:hidden">
+    <div className="relative">
+      <ShowcaseStyles />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] overflow-hidden">
+        <div className="absolute -right-40 -top-24 h-[420px] w-[560px] rounded-full bg-primary/15 blur-[120px]" />
+        <div className="absolute right-[22%] top-[40%] h-[240px] w-[320px] rounded-full bg-magenta/10 blur-[110px]" />
+      </div>
+      <div className="mx-auto max-w-7xl px-5 pb-6 pt-6 md:px-8 lg:pt-8">
+        <div
+          className={`grid gap-8 ${
+            three
+              ? 'lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[248px_minmax(0,1fr)_248px]'
+              : 'lg:grid-cols-[minmax(0,38rem)_300px] lg:justify-center lg:gap-16'
+          }`}
+        >
+          {three && (
+            <aside className="hidden lg:block">
+              <div className={sticky}>
                 {search}
-                {(hasToc || hasNav) && (
-                  <details className="group rounded-2xl border border-border bg-surface">
-                    <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-text [&::-webkit-details-marker]:hidden">
-                      {mobileLabel}
-                      <Icon name="expand_more" className="text-[20px] text-text-muted transition-transform group-open:rotate-180" />
-                    </summary>
-                    <div className="flex flex-col gap-5 border-t border-border px-1 py-4">
-                      {hasToc && <Toc items={toc!} title={tocTitle} />}
-                      {hasNav && <SectionNav title={nav!.title} items={nav!.items} />}
-                    </div>
-                  </details>
+                {sidebar}
+              </div>
+            </aside>
+          )}
+
+          <div className="min-w-0">
+            <div ref={heroCtaRef}>
+              {crumbs && <Breadcrumbs items={crumbs} />}
+              <div className={crumbs ? 'mt-4' : 'mt-6'}>
+                <SectionEyebrow>{eyebrow}</SectionEyebrow>
+                <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight text-balance sm:text-5xl lg:text-[52px]">
+                  {title}
+                </h1>
+                {lede && <p className="mt-5 max-w-2xl text-lg leading-relaxed text-text-muted">{lede}</p>}
+                {meta && <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-muted">{meta}</div>}
+                {heroActions && <div className="mt-8 flex flex-wrap gap-3">{heroActions}</div>}
+              </div>
+            </div>
+
+            {(search || sidebar || hasToc || hasNav) && (
+              <div className={`mt-8 flex flex-col gap-3 ${three ? 'xl:hidden' : 'lg:hidden'}`}>
+                {search && <div className="lg:hidden">{search}</div>}
+                {sidebar && (
+                  <div className="lg:hidden">
+                    <Disclosure label={sidebarLabel}>{sidebar}</Disclosure>
+                  </div>
                 )}
+                {(hasToc || hasNav) && <Disclosure label={mobileLabel}>{sectionLinks}</Disclosure>}
               </div>
             )}
-            <div className={wide ? '' : 'max-w-[54ch]'}>{children}</div>
+
+            <div className={`mt-10 ${wide ? '' : 'max-w-[54ch]'}`}>{children}</div>
             {after && <div className="mt-14 flex flex-col gap-14">{after}</div>}
           </div>
 
-          <aside className="hidden lg:block">
-            <div className="sticky top-28 flex max-h-[calc(100vh-8rem)] flex-col gap-6 overflow-y-auto pb-2 pr-1">
-              {search}
-              {hasToc && <Toc items={toc!} title={tocTitle} />}
-              {hasNav && <SectionNav title={nav!.title} items={nav!.items} />}
+          <aside className={three ? 'hidden xl:block' : 'hidden lg:block'}>
+            <div className={sticky}>
+              {!three && search}
+              {sectionLinks}
               {asideCard ?? <ArthaCard placement={placement} />}
             </div>
           </aside>
@@ -258,7 +314,7 @@ export function ReadingLayout({
       <div ref={endRef} />
       {cta !== false && <CTABand {...cta} />}
       <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
-    </>
+    </div>
   )
 }
 

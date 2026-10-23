@@ -66,5 +66,5 @@ export function HelpArticleBody({ body, variant = 'dashboard' }: { body: string;
   }
   flushPara()
   flushList()
-  return <div className={reading ? 'flex flex-col gap-4 text-base leading-[1.75] text-text' : 'flex flex-col gap-3 text-[15px] text-text-muted'}>{blocks}</div>
+  return <div className={reading ? 'flex max-w-[54ch] flex-col gap-4 text-base leading-[1.75] text-text' : 'flex flex-col gap-3 text-[15px] text-text-muted'}>{blocks}</div>
 }

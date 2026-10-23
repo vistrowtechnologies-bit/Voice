@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { HelpArticleBody } from '../../components/HelpArticleBody'
 import { HelpVideoPlayer } from '../../components/HelpVideo'
@@ -76,27 +76,49 @@ function useArticleSearch(q: string) {
   }, [q])
 }
 
-function HelpSearch({ large = false }: { large?: boolean }) {
+function HelpSearch({ large = false, shortcut = false }: { large?: boolean; shortcut?: boolean }) {
   const [q, setQ] = useState('')
+  const [keys, setKeys] = useState('⌘K')
+  const input = useRef<HTMLInputElement>(null)
   const hits = useArticleSearch(q)
   const id = useId()
+  useEffect(() => {
+    if (!shortcut) return
+    if (!/Mac|iPhone|iPad/.test(navigator.platform)) setKeys('Ctrl K')
+    const onKey = (e: KeyboardEvent) => {
+      const el = input.current
+      // The same search renders in the desktop nav and the phone drawer; only the visible one takes focus.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k' && el?.offsetParent) {
+        e.preventDefault()
+        el.focus()
+        el.select()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [shortcut])
   return (
     <div role="search" className="w-full">
       <label
         className={`relative flex w-full items-center gap-3 rounded-full border border-border bg-surface text-left shadow-[0_20px_40px_-32px_rgba(76,29,149,0.6)] focus-within:border-primary ${
-          large ? 'px-5 py-3.5' : 'px-4 py-2.5'
+          large ? 'px-5 py-3.5' : 'min-h-[44px] px-4 py-2'
         }`}
       >
         <Icon name="search" className={`${large ? 'text-[22px]' : 'text-[20px]'} text-text-muted`} />
         <input
+          ref={input}
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={large ? 'Describe your issue' : 'Search help articles'}
+          placeholder={large ? 'Describe your issue' : 'Search help'}
           aria-label="Search the help center"
           aria-controls={id}
-          className={`min-h-[24px] w-full bg-transparent outline-none placeholder:text-text-muted ${large ? 'text-base' : 'text-sm'}`}
+          aria-keyshortcuts={shortcut ? 'Meta+K Control+K' : undefined}
+          className={`min-h-[28px] w-full min-w-0 bg-transparent outline-none placeholder:text-text-muted ${large ? 'text-base' : 'text-sm'}`}
         />
+        {shortcut && (
+          <kbd className="hidden shrink-0 rounded-md border border-border bg-bg px-1.5 py-0.5 font-sans text-[11px] font-semibold text-text-muted lg:inline">{keys}</kbd>
+        )}
       </label>
       <div id={id} aria-live="polite">
         {hits.length > 0 && (
@@ -123,8 +145,53 @@ function HelpSearch({ large = false }: { large?: boolean }) {
   )
 }
 
-const topicLinks = (current?: string): ReadingLink[] =>
-  HELP_TOPICS.map((t) => ({ label: t.title, to: `/help/${t.slug}`, icon: t.icon, current: t.slug === current }))
+/** Docs-style left navigation: every topic as a group with its guides; the current topic is open. */
+function HelpNav({ topicSlug, articleSlug }: { topicSlug: string; articleSlug?: string }) {
+  const item = (active: boolean) =>
+    `flex min-h-[44px] items-center rounded-lg px-3 py-2 text-sm leading-snug ${
+      active ? 'bg-primary/10 font-semibold text-primary' : 'text-text-muted hover:bg-surface-high hover:text-text'
+    }`
+  return (
+    <nav aria-label="Help topics" className="flex flex-col gap-0.5">
+      <Link to="/help" className={item(false)}>
+        <Icon name="home" className="mr-2.5 text-[18px]" /> Help Center home
+      </Link>
+      {HELP_TOPICS.map((t) => {
+        const current = t.slug === topicSlug
+        return (
+          <details key={`${t.slug}-${current}`} open={current} className="group">
+            <summary
+              className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2.5 rounded-lg px-3 text-sm font-semibold hover:bg-surface-high [&::-webkit-details-marker]:hidden ${
+                current ? 'text-text' : 'text-text-muted hover:text-text'
+              }`}
+            >
+              <Icon3D name={topicIcon(t)} size={22} className="text-[18px] text-primary" />
+              <span className="flex-1">{t.title}</span>
+              <Icon name="expand_more" className="text-[18px] text-text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <ul className="mb-1 ml-[23px] border-l border-border pl-2">
+              <li>
+                <Link to={`/help/${t.slug}`} aria-current={current && !articleSlug ? 'page' : undefined} className={item(current && !articleSlug)}>
+                  Overview
+                </Link>
+              </li>
+              {t.articles.map((a) => {
+                const active = current && a.slug === articleSlug
+                return (
+                  <li key={a.slug}>
+                    <Link to={articlePath(t, a)} aria-current={active ? 'page' : undefined} className={item(active)}>
+                      {a.title}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </details>
+        )
+      })}
+    </nav>
+  )
+}
 
 function HelpHome() {
   const seo = seoFor('/help')
@@ -249,9 +316,10 @@ function TopicPage({ topicSlug }: { topicSlug: string }) {
         eyebrow="Help topic"
         title={topic.title}
         lede={`${plural(topic.articles.length, 'guide')} for the ${topic.title} part of the Vistrow Voice dashboard.`}
-        search={<HelpSearch />}
-        nav={{ title: 'All topics', items: topicLinks(topic.slug) }}
-        mobileLabel="All help topics"
+        search={<HelpSearch shortcut />}
+        sidebar={<HelpNav topicSlug={topic.slug} />}
+        sidebarLabel="Browse help"
+        wide
         placement="help_topic"
         after={
           <>
@@ -332,9 +400,12 @@ function ArticlePage({ topicSlug, articleSlug }: { topicSlug: string; articleSlu
             )}
           </>
         }
-        search={<HelpSearch />}
+        search={<HelpSearch shortcut />}
+        sidebar={<HelpNav topicSlug={topic.slug} articleSlug={article.slug} />}
+        sidebarLabel="Browse help"
         toc={headingsOf(article.body)}
-        nav={{ title: topic.title, items: topic.articles.map((a) => ({ label: a.title, to: articlePath(topic, a), icon: 'article', current: a === article })) }}
+        mobileLabel="On this page"
+        wide
         placement="help_article"
         after={
           <>
