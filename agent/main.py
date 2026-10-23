@@ -2130,11 +2130,19 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
 _FALLBACK_LLM_MODEL = "gpt-5.4-nano"
 # reasoning_effort for GPT-5 voice turns: "none" keeps the first token fast;
 # anything higher spends hidden reasoning tokens while the caller waits.
+# Only GPT-5.x (gpt-5.4-nano, ...) accepts "none"; the original gpt-5,
+# gpt-5-mini and gpt-5-nano answer HTTP 400 to it (verified 2026-10-21), so
+# they get their lowest setting, "minimal".
 _GPT5_VOICE_REASONING = {"reasoning_effort": "none"}
+_GPT5_ORIGINAL_VOICE_REASONING = {"reasoning_effort": "minimal"}
 
 
 def _openai_voice_kwargs(model: str) -> dict:
-    return _GPT5_VOICE_REASONING if model.startswith("gpt-5") else {}
+    if model.startswith("gpt-5."):
+        return _GPT5_VOICE_REASONING
+    if model.startswith("gpt-5"):
+        return _GPT5_ORIGINAL_VOICE_REASONING
+    return {}
 
 
 def _build_llm(model: str, *, max_output_tokens: int = 220):
@@ -2156,7 +2164,14 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
         # Gemini 2.5 rejects thinking_level with 400 "Thinking level is not
         # supported for this model" (verified 2026-10-12), which left 2.5
         # Flash agents silent; 2.5 turns thinking off with a zero budget.
-        thinking = {"thinking_budget": 0} if "2.5" in model else {"thinking_level": "MINIMAL"}
+        # Gemini 3.7/3.8 Flash reject MINIMAL; LOW is their lowest (3.8 Flash
+        # answered in 1.5 s with LOW, probe 12 Oct 2026). Flash-Lite keeps MINIMAL.
+        if "2.5" in model:
+            thinking = {"thinking_budget": 0}
+        elif re.match(r"gemini-3\.[78]-flash(?!-lite)", model):
+            thinking = {"thinking_level": "LOW"}
+        else:
+            thinking = {"thinking_level": "MINIMAL"}
         return google.LLM(
             model=model,
             api_key=api_key,

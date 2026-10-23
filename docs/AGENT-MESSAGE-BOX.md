@@ -1169,3 +1169,10 @@ Owner named this session for Meta Phases 2-3 including dialler capacity (decisio
 Verified on the merged branch: full server suite 972 passed on a fresh UTF-8 DB; tsc, icon check, build + SEO audit pass; rules/options/leads exercised over HTTP with a real session (create 200, duplicate 409, foreign agent 400, delete 200); dashboard page renders live data.
 Prepared, NOT applied (wait for #253): docs/patches/token_api-meta-wiring.diff, docs/patches/calls_db-meta-route.patch, docs/patches/campaign_dialer-per-trunk.md (sent to runtime for review). Railway still posts no deployment status for server merges since this morning (#248/#250/#251/#255): builds limited to Pro/Enterprise per its status page.
 Local note: the Mac restarted ~15:00 UTC and cleared /private/tmp; the test Postgres (pgserver, port 55432) was rebuilt.
+### 2026-10-21 · claude (runtime) · gpt-5-nano reasoning_effort 400
+- Branch `claude/gpt5-nano-reasoning`. Files: `agent/main.py` (`_openai_voice_kwargs` only), new `agent/test_gpt5_reasoning.py`.
+- Bug (verified 21 Oct by a real OpenAI call from the prod Railway server): gpt-5-nano + reasoning_effort "none" → HTTP 400; "minimal" → 200 (~1.9 s); gpt-5.4-nano + "none" → 200 (~0.9 s). `_openai_voice_kwargs` sent "none" to every `gpt-5*` model, so an agent on the admin-only "Vistrow Nano Lab" (gpt-5-nano) failed every LLM turn.
+- Fix: `gpt-5.` (gpt-5.x) keeps "none"; any other `gpt-5*` (gpt-5, gpt-5-mini, gpt-5-nano, dated snapshots) gets "minimal". Other reasoning_effort sites (lead_facts, post-call analysis, orchestrator/session.py, server/*) use hardcoded gpt-5.4-* and are unchanged.
+- Verified: agent suite 1033 passed / 0 failed (livekit 1.8.6 venv from requirements.txt, placeholder DATABASE_URL); new test fails on origin/main.
+- Not verified: a live call on a gpt-5-nano agent after deploy. `server/help_chat.py` ACTION_MODEL can be overridden by the COPILOT_ACTION_MODEL env — if someone sets it to an undotted gpt-5 model it would hit the same 400 (not set as far as known).
+- Next: deployer merges, then `lk agent deploy` with BOTH livekit.tenant.toml and livekit.platform-demo.toml (agent-only change: Railway skips it).

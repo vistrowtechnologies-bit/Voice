@@ -1206,12 +1206,15 @@ def record_callback_request(
                 "contact_phone, contact_email, purpose, appt_date, start_time, duration_minutes, "
                 "status, source, notes) "
                 "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, 0, 'callback_requested', 'agent', ?)",
+                # appt_date/start_time are NOT NULL text: None failed every
+                # callback with no day or time (none stored before 23 Oct 2026).
                 (account_id, agent_id, name, account_phone(account_id, phone) or phone, reason or "callback requested",
-                 preferred_date or None, preferred_time or None,
+                 preferred_date or "", preferred_time or "",
                  f"Wanted {preferred_date or 'any day'} {preferred_time or ''}".strip()),
             )
             return {"ok": True}
     except psycopg.Error:
+        logger.exception("could not store callback request (account %s)", account_id)
         return None
     finally:
         conn.close()
