@@ -26,6 +26,8 @@ export interface AuthUser {
   mfaEnabled?: boolean
   /** This browser's session passed two-step login (needed for /admin). */
   mfaVerified?: boolean
+  /** Signed in through the admin host's own sign-in (admin.vistrowvoice.com). */
+  adminSession?: boolean
 }
 
 export interface AuthState {
@@ -87,6 +89,10 @@ export const apiMe = () => authFetch<{ user: AuthUser }>('/auth/me')
 export const apiLogin = (email: string, password: string) =>
   authFetch<{ user?: AuthUser; mfaRequired?: boolean }>('/auth/login', { email, password })
 export const apiLoginMfa = (code: string) => authFetch<{ user: AuthUser }>('/auth/login/mfa', { code })
+/** Admin host sign-in: owner email + password, always followed by the code
+ * step (/auth/login/mfa). Non-owners get 401, an owner without two-step 403. */
+export const apiAdminLogin = (email: string, password: string) =>
+  authFetch<{ ok: boolean; mfaRequired?: boolean }>('/auth/admin/login', { email, password })
 
 // --- two-step login (Settings → Security) ---
 export interface MfaStatus { enabled: boolean; enabledAt: string | null; recoveryCodesLeft: number; required: boolean }

@@ -39,6 +39,8 @@ import { Privacy } from './pages/marketing/Privacy'
 import { Terms } from './pages/marketing/Terms'
 import { NotFound } from './pages/marketing/NotFound'
 import { Login } from './pages/Login'
+import { adminHostServes, isAdminHost } from './lib/adminHost'
+import { useAuth } from './lib/auth'
 import { Signup } from './pages/Signup'
 import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
@@ -70,6 +72,20 @@ const AdminPrivacyRequests = lazy(() => import('./pages/admin/AdminPrivacyReques
 const AdminIpBlocks = lazy(() => import('./pages/admin/AdminIpBlocks').then((m) => ({ default: m.AdminIpBlocks })))
 const AdminSupport = lazy(() => import('./pages/admin/AdminSupport').then((m) => ({ default: m.AdminSupport })))
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })))
+const AdminLogin = lazy(() => import('./pages/AdminLogin').then((m) => ({ default: m.AdminLogin })))
+
+/** admin.vistrowvoice.com serves only the panel, its sign-in, and the tenant
+ * dashboard during a support ("View as") session started there; anything
+ * else (a marketing link, /dashboard after Exit) goes to /admin. The edge
+ * middleware does the same for full page loads. Rendered only on the admin
+ * host, so marketing pages never probe the session. */
+function AdminHostGate() {
+  const { pathname } = useLocation()
+  const { user, loading } = useAuth()
+  if (loading && pathname.startsWith('/dashboard')) return null
+  if (adminHostServes(pathname, !!user?.impersonating)) return null
+  return <Navigate to="/admin" replace />
+}
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
 const Agents = lazy(() => import('./pages/Agents').then((m) => ({ default: m.Agents })))
 const TestingLab = lazy(() => import('./pages/TestingLab').then((m) => ({ default: m.TestingLab })))
@@ -164,6 +180,7 @@ function App() {
       <AnalyticsListener />
       <AnalyticsConsentBanner />
       <StagingBadge />
+      {isAdminHost() && <AdminHostGate />}
       <Suspense fallback={<AppLoadingScreen />}>
       <Routes location={backgroundLocation ?? location}>
         {import.meta.env.DEV && <Route path="/__preview/sidebar" element={<SidebarPreview />} />}
@@ -204,7 +221,7 @@ function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
 
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={isAdminHost() ? <AdminLogin /> : <Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
