@@ -183,11 +183,119 @@ export const DAILY_POSTS: DailyBlogPost[] = [
       }
     ]
   },
+  {
+    "slug": "what-is-an-ai-receptionist",
+    "title": "What is an AI receptionist, and what should it handle?",
+    "seoTitle": "AI Receptionist: What It Is and What It Should Handle",
+    "metaDescription": "What an AI receptionist is, how it answers calls, which calls it should handle, which belong with a person, and how to tell if it is working.",
+    "shortAnswer": "An AI receptionist is a voice agent that answers your business calls, greets callers, answers common questions from approved information, books appointments, takes messages and hands the caller to a person when needed. It should handle frequent, repeatable calls with a clear next step, and pass complaints, sensitive topics and anything uncertain to your team.",
+    "excerpt": "A plain explanation of what an AI receptionist does on a call, which front-desk calls it should take on, and which it should always pass to a person.",
+    "category": "Voice AI basics",
+    "publishedAt": "2026-10-23",
+    "readTime": "",
+    "related": [
+      "ai-receptionist-vs-answering-service-vs-ivr",
+      "what-is-an-ai-voice-agent",
+      "write-ai-voice-agent-prompts"
+    ],
+    "sections": [
+      {
+        "heading": "What is an AI receptionist?",
+        "paragraphs": [
+          "An AI receptionist is software that answers a business phone line, or a voice button on a website, and holds a spoken conversation with the caller. It greets them, works out what they need from what they say, and replies out loud. It is a specific use of an [AI voice agent](/resources/blog/what-is-an-ai-voice-agent): one set up to do the front-desk part of a receptionist’s job.",
+          "That front-desk job is well defined. The US Bureau of Labor Statistics lists answering the telephone, taking messages or forwarding calls, scheduling and confirming appointments, and greeting visitors among a receptionist’s typical duties. An AI receptionist covers the phone part of that list. It does not greet people at the counter, file documents or use judgment the way an experienced colleague does. Our [AI receptionist overview](/ai-receptionist) shows what the role looks like on a real business line."
+        ]
+      },
+      {
+        "heading": "How does an AI receptionist work on a call?",
+        "paragraphs": [
+          "The call arrives on your number, which stays with your telephony provider and is routed to the agent. The agent picks up with the welcome line you wrote, listens, and turns the caller’s speech into text. A language model decides what to say or do next, using your instructions and approved facts, and a synthetic voice speaks the reply. This loop repeats for each turn until the call ends. The [inbound call answering page](/product/inbound) shows each step on Vistrow Voice."
+        ],
+        "points": [
+          "Greet: a short welcome in your business name, ideally saying the caller is speaking with an AI assistant.",
+          "Understand: work out the request from free speech, including mixed languages such as Hindi and English.",
+          "Act: answer, book a slot, take a callback request, capture details or transfer the call.",
+          "Record: save a transcript, a summary and the details your team asked for."
+        ]
+      },
+      {
+        "heading": "Which calls should an AI receptionist handle?",
+        "paragraphs": [
+          "Start with calls that are frequent, repeatable and have a clear end. If a new colleague could handle the call after a day of training and a printed FAQ sheet, an AI receptionist probably can too. The answers should come from material you approve, kept in a [knowledge base of approved answers](/product/knowledge-base), not from the agent’s general knowledge.",
+          "A useful test is to list last week’s calls by reason and mark each one as answer, book, capture or person. The first three are the AI receptionist’s job; the last column tells you which transfer rules to write. Most small businesses find that a handful of reasons make up most of their calls, and those are where to start. Leave the rest with your team until the first set runs smoothly."
+        ],
+        "points": [
+          "Opening hours, location, parking, documents to bring and other standing facts.",
+          "Appointment requests, rescheduling and cancellations within the hours and slot length you set.",
+          "New enquiries where a few questions, such as budget, location or timeline, qualify the lead before your team calls back.",
+          "Messages and callback requests with the caller’s name, number and reason.",
+          "After-hours calls that would otherwise reach voicemail."
+        ]
+      },
+      {
+        "heading": "Which calls should always go to a person?",
+        "paragraphs": [
+          "Decide this before launch and write it into the agent’s instructions as a fixed rule. A good AI receptionist knows the edge of its job and says so plainly, rather than guessing. On phone calls, Vistrow Voice can dial the colleague you set and stay on the line until they answer; the [functions and transfer guide](/help/agents/agent-functions-and-transfer) explains how that is set up."
+        ],
+        "points": [
+          "Complaints, disputes, refunds and anything that needs authority to decide.",
+          "Medical, legal or financial advice, and any possible emergency.",
+          "Questions the approved material does not cover.",
+          "Any caller who asks for a person."
+        ]
+      },
+      {
+        "heading": "Where does an AI receptionist get its answers?",
+        "paragraphs": [
+          "From you. Upload your FAQs, service list, policies or brochure, review the question-and-answer pairs extracted from them, and attach that knowledge base to the agent. With strict mode on, Vistrow Voice quotes your approved answers and says it will check with the team when something is not covered, instead of filling the gap with a plausible guess. The [guide to adding knowledge](/help/knowledge-base/add-knowledge) walks through the steps.",
+          "The agent’s instructions matter as much as its facts. They set its tone, the questions it asks, what it must never say and when it hands over. Our article on [writing a voice agent prompt](/resources/blog/write-ai-voice-agent-prompts) covers how to write instructions that hold up on real calls."
+        ]
+      },
+      {
+        "heading": "Can callers reach an AI receptionist from a website as well as a phone?",
+        "paragraphs": [
+          "Yes. Besides your phone number, the same agent can sit behind a voice button on your site, so a visitor taps it and talks from the browser without dialling. The [website voice widget](/product/widget) works in any modern browser, in any country, because no phone call is involved.",
+          "There is one difference to plan for. A conversation started in the browser cannot be transferred to a phone, so for those calls the agent takes a callback number instead. For phone callers abroad, whether they can reach your number depends on your telephony provider and the number you use, so check that with your provider first.",
+          "Many businesses use the phone line for existing customers who already know the number, and the website button for new visitors who arrive from search or social media and would rather talk than fill in a form."
+        ]
+      },
+      {
+        "heading": "How do you know an AI receptionist is working?",
+        "paragraphs": [
+          "Read the calls. Every call should leave a transcript, a short summary and the details captured, plus the recording if recording is on. In the first weeks, listen to a sample every day, starting with calls that ended in a transfer, a dropped caller or a repeated question. Our checklist for [AI call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) covers what to check.",
+          "Track a few simple measures: the share of calls that reach a clear outcome, how often callers ask for a person, and how many calls your team still has to return. If you are still choosing between options, compare them using our guide to [AI receptionist vs answering service vs IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr)."
+        ]
+      }
+    ],
+    "faqs": [
+      {
+        "q": "What does an AI receptionist do?",
+        "a": "It answers calls, greets callers, answers common questions from approved information, books appointments, takes messages and callback requests, and hands the call to a person when needed. Every call is saved with a transcript."
+      },
+      {
+        "q": "Does an AI receptionist replace a human receptionist?",
+        "a": "It covers the phone part of the job, especially busy periods and after hours. People are still needed for visitors at the counter, complaints, judgment calls and anything the agent hands over."
+      },
+      {
+        "q": "Can an AI receptionist book appointments?",
+        "a": "Yes. On Vistrow Voice the agent books into the built-in Appointments calendar, offering only slots inside the business hours, slot length and blackout dates you set, and confirms once the booking has saved."
+      },
+      {
+        "q": "Which languages can an AI receptionist speak?",
+        "a": "Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows the caller if they switch language mid-call. Test each language you need with native speakers before launch."
+      },
+      {
+        "q": "Should callers be told they are speaking to an AI?",
+        "a": "Yes. A short disclosure in the greeting, plus a clear route to a person, builds trust. Check recording and disclosure rules for each market you serve."
+      }
+    ]
+  },
 ]
 
 export const DAILY_IMAGE_ALTS: Record<string, string> = {
   'multilingual-ai-receptionist-hindi-punjabi-english': 'Large Hindi and Punjabi greetings and Hello beside a Sikh caller at a front desk, with an Artha AI badge',
   'ai-receptionist-vs-answering-service-vs-ivr': 'Comparison cover: Artha, the AI receptionist, wearing a headset beside three cards for an IVR menu, an answering service and an AI receptionist',
+  'what-is-an-ai-receptionist': 'Artha, the AI receptionist, at a bright front desk wearing a headset, with a white card asking what an AI receptionist is',
 }
 
 export const DAILY_SOURCES: Record<string, VoiceBlogPost['sources']> = {
@@ -196,9 +304,11 @@ export const DAILY_SOURCES: Record<string, VoiceBlogPost['sources']> = {
     { title: 'Statistics Canada: Asian History Month, let’s talk languages (2021 Census)', url: 'https://www.statcan.gc.ca/o1/en/plus/9158-asian-history-month-lets-talk-languages' },
   ],
   'ai-receptionist-vs-answering-service-vs-ivr': [{"title":"US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists","url":"https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm"}],
+  'what-is-an-ai-receptionist': [{"title":"US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists","url":"https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm"}],
 }
 
 export const DAILY_CONTEXTUAL_LINKS: Record<string, string> = {
   'multilingual-ai-receptionist-hindi-punjabi-english': 'To see how this works for a small team, read how an [AI receptionist answers and routes calls](/ai-receptionist), or browse every [language the voice agent supports](/languages).',
   'ai-receptionist-vs-answering-service-vs-ivr': 'To go deeper on the options, read [how an AI voice agent works on a call](/resources/blog/what-is-an-ai-voice-agent) or see [how an AI receptionist answers and routes calls](/ai-receptionist).',
+  'what-is-an-ai-receptionist': 'To see this in practice, explore the [Vistrow Voice AI receptionist](/ai-receptionist) or browse every [language the voice agent supports](/languages).',
 }
