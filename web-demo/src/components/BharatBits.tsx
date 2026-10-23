@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LANGUAGES } from '../lib/marketingContent'
 
+// The decorative script pieces (hero greeting, orbit ring, backdrop) show the
+// Indian scripts only; English has a page and a marquee slot but no script.
+const SCRIPTS = LANGUAGES.filter((l) => l.slug !== 'english')
+
 // Cultural identity here comes from the product itself - the actual scripts
 // Artha speaks - rather than from decorative "Indian" motifs. It's the
 // honest version (every glyph shown is a language the product really
@@ -16,11 +20,11 @@ export function RotatingGreeting({ className = '' }: { className?: string }) {
   useEffect(() => {
     const prefersReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     if (prefersReduced) return // hold on the first greeting rather than cycling
-    const id = setInterval(() => setIndex((i) => (i + 1) % LANGUAGES.length), 2200)
+    const id = setInterval(() => setIndex((i) => (i + 1) % SCRIPTS.length), 2200)
     return () => clearInterval(id)
   }, [])
 
-  const lang = LANGUAGES[index]
+  const lang = SCRIPTS[index]
 
   return (
     <span className={`inline-flex flex-col ${className}`}>
@@ -117,8 +121,8 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
           brightens a node - the one bit of this that's genuinely
           interactive rather than ambient. */}
       <div className="auth-orbit-ring absolute inset-0">
-        {LANGUAGES.map((lang, i) => {
-          const angle = (i / LANGUAGES.length) * 2 * Math.PI - Math.PI / 2
+        {SCRIPTS.map((lang, i) => {
+          const angle = (i / SCRIPTS.length) * 2 * Math.PI - Math.PI / 2
           const x = 50 + 47 * Math.cos(angle)
           const y = 50 + 47 * Math.sin(angle)
           return (
@@ -156,7 +160,7 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
  * attention. Purely decorative (aria-hidden), and inherits the same orbit
  * animation so it isn't just another static shape. */
 export function BharatBackdrop({ className = '', opacity = 0.06 }: { className?: string; opacity?: number }) {
-  const picks = [LANGUAGES[2], LANGUAGES[5], LANGUAGES[8]] // Tamil, Bengali, Punjabi - spread across scripts, not adjacent on the wheel
+  const picks = [SCRIPTS[2], SCRIPTS[5], SCRIPTS[8]] // Tamil, Bengali, Punjabi - spread across scripts, not adjacent on the wheel
   return (
     <div
       aria-hidden="true"

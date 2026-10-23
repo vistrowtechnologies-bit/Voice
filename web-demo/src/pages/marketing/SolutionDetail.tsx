@@ -117,7 +117,7 @@ export function SolutionDetail() {
     <div className="rounded-3xl border border-border bg-gradient-to-br from-surface to-surface-high p-6 sm:p-8">
       <SectionEyebrow>What your team receives</SectionEyebrow>
       <h2 className="mt-3 font-display text-2xl font-bold sm:text-3xl">No manual call reconstruction.</h2>
-      <ul className={`mt-6 grid gap-3 sm:grid-cols-2 ${outcomeVisual ? '' : 'lg:grid-cols-1'}`}>
+      <ul className={`mt-6 grid gap-3 sm:grid-cols-2 sm:grid-close-2 ${outcomeVisual ? '' : 'lg:grid-cols-1'}`}>
         {solution.features.map((feat) => (
           <li key={feat} className="flex items-center gap-3 rounded-xl border border-border bg-surface/70 px-4 py-3 text-sm font-medium text-text">
             <Icon name="check_circle" className="shrink-0 text-[20px] text-cyan" />

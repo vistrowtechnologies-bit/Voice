@@ -202,7 +202,7 @@ export function BuyerGuide() {
               intro="Products from different categories are often shortlisted together. Knowing what each is built for avoids comparing a phone network with a finished agent."
             />
           </Reveal>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+          <div className="grid gap-4 md:grid-cols-2 md:max-lg:grid-close-2 lg:grid-cols-6">
             {guide.approaches.map((item, i) => (
               <Reveal key={item.title} delayMs={(i % 3) * 70} className={`h-full ${i < 2 ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
                 <div className={i === 0 ? 'bento-hero flex h-full flex-col rounded-3xl p-7' : 'vv-lift flex h-full flex-col rounded-3xl border border-border bg-surface p-6'}>

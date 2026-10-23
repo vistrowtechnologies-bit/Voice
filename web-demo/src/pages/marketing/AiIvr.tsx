@@ -324,8 +324,8 @@ export function AiIvr() {
             </span>
             <h2 className="mt-5 font-display text-3xl font-bold tracking-tight">Languages callers can use.</h2>
             <p className="mt-3 leading-relaxed text-text-muted">
-              Instead of “press 2 for Hindi”, the agent opens in your default language and follows the caller. These are
-              the Indian languages it speaks, plus English:
+              Instead of “press 2 for Hindi”, the agent opens in your default language and follows the caller. It speaks
+              more than 130 languages, including Hindi, English and 9 other Indian languages:
             </p>
             <ul className="mt-4 flex flex-wrap gap-2">
               {LANGUAGES.map((lang) => (

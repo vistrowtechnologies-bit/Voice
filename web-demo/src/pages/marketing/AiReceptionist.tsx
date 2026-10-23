@@ -346,7 +346,7 @@ export function AiReceptionist() {
             <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Speaks the caller’s language.</h2>
             <p className="mt-3 leading-relaxed text-text-muted">
               The receptionist opens in the language you choose and follows the caller if they switch, so nobody has to
-              press a key to change language. It speaks English and these Indian languages:
+              press a key to change language. It speaks more than 130 languages, including Hindi, English and 9 other Indian languages:
             </p>
             <ul className="mt-5 flex flex-wrap gap-2">
               {LANGUAGES.map((lang) => (

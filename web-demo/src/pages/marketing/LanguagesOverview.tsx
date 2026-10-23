@@ -47,7 +47,7 @@ const WHY_HARD = [
 
 // Owner decision 21 Oct 2026: the site claims "more than 130 languages" (the
 // Studio voices' list, voice_catalog.GEMINI_38_FLASH_TTS_TOTAL_LANGUAGES) and
-// names the 10 Indian languages + English from lib/agentOptions.ts LANGUAGES
+// names Hindi, English and the 9 other Indian languages from lib/agentOptions.ts LANGUAGES
 // as the most tested. Keep copy and the hero stat in step with that decision.
 const LANGUAGE_SETUP = [
   {
@@ -97,7 +97,7 @@ export function LanguagesOverview() {
       <SplitHero
         eyebrow="Languages"
         title={HERO_TITLE}
-        subhead="Artha speaks more than 130 languages, including 10 Indian languages and English, and switches mid-call when the caller does - including the everyday mixed speech most people actually use on the phone, on phone calls and website calls."
+        subhead="Artha speaks more than 130 languages, including Hindi, English and 9 other Indian languages, and switches mid-call when the caller does - including the everyday mixed speech most people actually use on the phone, on phone calls and website calls."
         visual={heroVisual}
         placement="languages_hero"
         ctaRef={heroCtaRef}
@@ -127,12 +127,12 @@ export function LanguagesOverview() {
         <Reveal>
           <SectionHead
             eyebrow="Indian languages"
-            title="Ten Indian languages, each with its own page."
+            title="Hindi, English and 9 other Indian languages, each with its own page."
             intro="Open a language to read a sample call in its own script and hear the agent switch with the caller."
             className="mb-10"
           />
         </Reveal>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 sm:max-lg:grid-close-2 lg:grid-close-3">
           {LANGUAGES.map((lang, i) => (
             <Reveal key={lang.slug} delayMs={(i % 3) * 70} className="h-full">
               <Link
@@ -227,7 +227,7 @@ export function LanguagesOverview() {
  *  to the agent so it OPENS in that language — a visitor who picks Japanese
  *  should not have to first be greeted in Hindi and then correct it. */
 function TryALanguage() {
-  // The native 10 first (that is the product's centre of gravity), then
+  // The native 11 first (that is the product's centre of gravity), then
   // everything the global voices add, grouped so the list is navigable
   // rather than one long dropdown.
   const nativeOptions = useMemo(

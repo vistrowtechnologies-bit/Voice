@@ -125,7 +125,7 @@ export function IntegrationsDirectory() {
         {/* One grid for every entry, with the category on the card. Grouping them under
             separate headings left one or two cards per row and a large empty area to
             their right. */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={`grid gap-4 sm:grid-cols-2 sm:max-lg:grid-close-2 ${INTEGRATION_DIRECTORY.length % 4 ? 'lg:grid-close-3' : 'lg:grid-cols-4'}`}>
           {INTEGRATION_DIRECTORY.map((entry, i) => (
             <Reveal key={entry.name} delayMs={(i % 3) * 70} className="h-full">
               <div className="vv-lift flex h-full flex-col rounded-3xl border border-border bg-surface p-6">

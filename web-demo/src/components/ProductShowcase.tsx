@@ -104,9 +104,9 @@ const SHOWCASE: Record<string, ShowcaseCopy> = {
       { label: 'Updates', value: 'Next call', hint: 'No redeploy', icon: 'update', tone: 'amber' },
     ],
     callouts: [
-      { title: 'Knowledge is a setup step', body: 'The checklist shows whether answers and documents are attached to the agent.', x: 52, y: 42 },
-      { title: 'Knowledge and tools tab', body: 'Choose which knowledge base the agent uses; it applies from the next call.', x: 34, y: 51 },
-      { title: 'Ask it a real question', body: 'Talk now runs a browser call so you can hear the answer before callers do.', x: 83, y: 59 },
+      { title: 'Knowledge is a setup step', body: 'The checklist shows whether answers and documents are attached to the agent.', x: 59.6, y: 36.5 },
+      { title: 'Knowledge and tools tab', body: 'Choose which knowledge base the agent uses; it applies from the next call.', x: 33.6, y: 54 },
+      { title: 'Ask it a real question', body: 'Talk now runs a browser call so you can hear the answer before callers do.', x: 93.4, y: 51 },
     ],
   },
   '/product/integrations': {

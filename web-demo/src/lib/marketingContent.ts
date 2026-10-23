@@ -1116,9 +1116,8 @@ export const WORKS_WITH = ['Slack', 'Zoho CRM', 'Google Sheets', 'Zapier', 'Any 
 //
 // Mirrors LANGUAGE_NAMES in lib/api.ts exactly - that map is what the agent
 // builder actually offers, so this list must never claim a language the
-// product can't be configured to speak. Ten regional languages here, plus
-// English (supported too but doesn't get a landing page - no search wedge
-// there) = 11 supported languages in total.
+// product can't be configured to speak. Hindi, English (India) and the nine
+// other Indian languages = 11 supported languages, each with its own page.
 
 export interface LanguagePage {
   /** URL slug, e.g. "hindi" -> /languages/hindi */
@@ -1127,6 +1126,8 @@ export interface LanguagePage {
   name: string
   /** Native-script endonym, shown as the visual hook. */
   native: string
+  /** Name in the page H1 when it should differ from `name` (e.g. "Indian English"). */
+  heroName?: string
   /** BCP-47-ish code used by the agent builder. */
   code: string
   /** Where this language actually concentrates - grounds the copy. */
@@ -1225,6 +1226,72 @@ export const LANGUAGES: LanguagePage[] = [
       { title: 'Payment and EMI reminders', body: 'Polite outbound reminders across the Hindi belt, inside the permitted calling window and checked against your Do-Not-Call list.', to: '/solutions/finance', link: 'Finance and collections calls' },
       { title: 'Property enquiries', body: 'Buyers in Delhi NCR, Lucknow, Jaipur or Indore asking about budget, location and site visits, mostly in Hinglish.', to: '/solutions/real-estate/hindi-ai-calling-agent-real-estate', link: 'Hindi real estate calling' },
       { title: 'Order and delivery calls', body: 'Where-is-my-order, return and COD confirmation calls for online sellers whose customers prefer Hindi.', to: '/solutions/ecommerce', link: 'E-commerce support calls' },
+    ],
+  },
+  {
+    slug: 'english',
+    name: 'English',
+    native: 'English',
+    heroName: 'Indian English',
+    code: 'en-IN',
+    region: 'Pan-India',
+    greeting: 'Hello',
+    blurb: 'Clear Indian English for callers from every state, with Indian names and numbers, and Hindi when the caller moves into it.',
+    intro: 'An AI voice agent in Indian English for businesses whose callers come from every part of the country. It listens through Indian accents, names, phone numbers and rupee amounts, answers in clear Indian English, and follows the caller into Hindi or another Indian language mid-call. Put it on inbound lines, follow-ups and your website as an English AI calling agent; the same agent speaks more than 130 languages, including Hindi, English and 9 other Indian languages.',
+    regionalHeading: 'Where an AI voice agent in Indian English helps most.',
+    localUseCases: [
+      'Pan-India enquiry lines where callers move between English and Hindi',
+      'Software and IT services calls: demo bookings, renewals and account follow-ups',
+      'Support and order calls from customers who would rather speak English than pick a regional menu',
+    ],
+    callBehaviors: [
+      'Answers in clear Indian English and follows the caller into Hindi or another Indian language',
+      'Captures names, phone numbers, dates and amounts in CRM-ready notes',
+      'Answers from your approved information and offers a callback or transfer when it should not guess',
+    ],
+    seoFaq: {
+      q: 'Is this an English AI calling agent for Indian callers, or a voice bot built for another market?',
+      a: 'It is set up for Indian callers. The agent’s language is English (India), the voices are Indian, and it follows the Hindi words and code-mixing Indian callers use. Like every language on Vistrow Voice, it listens, answers from your approved information, books or transfers the call, and logs everything.',
+    },
+    extraFaqs: [
+      { q: 'Can the agent open in Hindi and continue in English?', a: 'Yes. Set Hindi as the agent’s default language and it greets callers in Hindi; if the caller answers in English, the agent carries on in English from its next line. The sample call on this page works that way.' },
+      { q: 'Does English work on both phone calls and the website widget?', a: 'Yes. The same agent can answer phone calls and website voice-widget conversations in English, and each conversation is saved with its transcript and summary.' },
+      { q: 'How should I test English calls before going live?', a: 'Run test calls with the accents your callers actually have, read out names, phone numbers and amounts, and include a caller who moves into Hindi halfway. Check the transcripts in the dashboard and adjust the welcome message and knowledge base before you switch your number over.' },
+    ],
+    sampleExchange: {
+      context: 'An outbound demo-booking call for a Bengaluru software company',
+      turns: [
+        { speaker: 'Agent', native: 'Hello Vikram ji, this is Artha from Kaveri Software. You had asked for a demo of our HR software. Is this a good time?', gloss: '' },
+        { speaker: 'Caller', native: 'Haan, bolo. Actually we are around sixty people, payroll is the main thing.', gloss: 'Yes, go ahead. Actually we are around sixty people; payroll is the main thing.' },
+        { speaker: 'Agent', native: 'Got it, payroll for about sixty people. Shall I book a thirty-minute online demo on Thursday at 3 PM?', gloss: '' },
+        { speaker: 'Caller', native: 'Thursday 3 PM is fine. Send the link on my email.', gloss: 'Thursday 3 PM is fine. Send the link to my email.' },
+      ],
+      outcome: 'The team size, the main need and the demo slot are saved on the call, so the sales team joins the demo already knowing what to show.',
+    },
+    codeMixing: {
+      name: 'Mixing in Hindi',
+      body: 'Indian English calls rarely stay in one language. Callers say “haan”, “theek hai” or “bolo”, give amounts in lakh, and some move into Hindi or their own language when the detail gets tricky. The agent understands those words inside an English sentence, keeps answering in English, and switches fully to Hindi or another Indian language if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Demo bookings and B2B follow-ups', body: 'Callbacks on website demo requests for software and IT services firms in Bengaluru, Pune, Hyderabad and Gurugram, with the demo slot booked on the call.', to: '/product/outbound', link: 'Outbound calling' },
+      { title: 'Renewal and payment reminders', body: 'Polite policy, subscription and payment reminders in English, inside the permitted calling window and checked against your Do-Not-Call list.', to: '/solutions/finance', link: 'Finance and collections calls' },
+      { title: 'Support and order calls', body: 'Order status, returns and first-line support for customers across India who prefer English, handed to your team with context when needed.', to: '/solutions/support', link: 'Customer support calls' },
+    ],
+    guide: [
+      { title: 'Accents and names', body: 'A caller from Chennai, Kolkata, Delhi or Guwahati speaks English differently, and Indian names trip up voice systems built for other markets. Run test calls with the accents your callers have, and add your product names and local place names to the knowledge base.' },
+      { title: 'Numbers, dates and rupees', body: 'Indian callers say “two lakh”, “fifteenth of next month” and read phone numbers in pairs. Test calls that read out amounts, dates and phone numbers, and check in the transcript that they were captured correctly before you go live.' },
+      { title: 'Pick the opening language', body: 'If most of your callers start in Hindi, open in Hindi and let the agent move to English when the caller does, as in the sample call on this page. A national line that mostly hears English can open in English instead. Either way, set a transfer or callback for anything the agent cannot answer.' },
+    ],
+    guides: [
+      'Taking English, Hindi and Punjabi calls on one number? Read our guide to [a multilingual AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english).',
+    ],
+    related: [
+      { to: '/languages/hindi', label: 'Hindi calling agent' },
+      { to: '/product/inbound', label: 'Inbound call answering' },
+      { to: '/product/outbound', label: 'Outbound calling' },
+      { to: '/product/widget', label: 'Website voice widget' },
+      { to: '/product/knowledge-base', label: 'Knowledge base' },
+      { to: '/solutions/support', label: 'Customer support calls' },
     ],
   },
   {
@@ -1760,7 +1827,7 @@ export const LANGUAGES: LanguagePage[] = [
 
 // ---- Global languages (feeds /languages) ----
 //
-// The 10 entries above are the native Indian languages, which every voice
+// The 11 entries above are Hindi, English and the nine other Indian languages, which every voice
 // speaks. These are what the Gemini multilingual voices (Mira/Arin) add on
 // top — generated from agent/voice_catalog.py's GOOGLE_TTS_LANGUAGES so the
 // marketing list cannot drift from what the agent will actually accept.

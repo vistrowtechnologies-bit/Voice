@@ -260,8 +260,8 @@ export function AiTelecaller() {
                 </span>
                 <h2 className="mt-4 font-display text-lg font-semibold text-white">Calls in the lead’s language</h2>
                 <p className="mt-2 text-sm leading-relaxed text-white/85">
-                  The agent opens in the language you set and follows the caller if they switch. It speaks English and
-                  these Indian languages:
+                  The agent opens in the language you set and follows the caller if they switch. It speaks more than
+                  130 languages, including Hindi, English and 9 other Indian languages:
                 </p>
                 <ul className="mt-4 flex flex-wrap gap-2">
                   {LANGUAGES.map((lang) => (

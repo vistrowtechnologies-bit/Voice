@@ -39,8 +39,15 @@ export function SplitRow({
 }) {
   const portrait = figure ? isPortrait(figure) : false
   const wide = wideText ?? portrait
+  // The wide track follows the text: with `flip` the text is in the second
+  // column, so the wide track moves there too.
+  const cols = !wide
+    ? 'lg:grid-cols-2'
+    : flip
+      ? 'lg:grid-cols-[minmax(0,0.65fr)_minmax(0,1.35fr)]'
+      : 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]'
   return (
-    <div className={`grid items-start gap-10 lg:gap-14 ${wide ? 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]' : 'lg:grid-cols-2'} ${className}`}>
+    <div className={`grid items-start gap-10 lg:gap-14 ${cols} ${className}`}>
       <div className={flip ? 'lg:order-2' : ''}>{children}</div>
       <Reveal className={`lg:sticky lg:top-28 ${flip ? 'lg:order-1' : ''}`}>
         {aside ?? (figure && <FigureCard figure={figure} sizes={portrait ? PORTRAIT_SIZES : LANDSCAPE_SIZES} />)}
@@ -49,10 +56,14 @@ export function SplitRow({
   )
 }
 
-/** A list of icon + title + body rows separated by hairlines. */
+/**
+ * A list of icon + title + body rows separated by hairlines. `twoCol` lists
+ * sit beside a visual, so from lg to xl (a ~450px column) they drop to one
+ * column; two columns there left ~150px of text per row.
+ */
 export function FeatureList({ items, twoCol = false }: { items: FeatureItem[]; twoCol?: boolean }) {
   return (
-    <ul className={`mt-8 grid gap-x-8 ${twoCol ? 'sm:grid-cols-2' : ''}`}>
+    <ul className={`mt-8 grid gap-x-8 ${twoCol ? 'sm:grid-cols-2 sm:grid-close-2 lg:grid-cols-1 xl:grid-cols-2' : ''}`}>
       {items.map((item, i) => (
         <li key={item.title} className="border-t border-border py-5">
           <Reveal delayMs={(i % 3) * 60} className="flex gap-4">
@@ -71,9 +82,9 @@ export function FeatureList({ items, twoCol = false }: { items: FeatureItem[]; t
 
 /** A card grid with the first card highlighted, for sections with no visual. */
 export function FeatureCards({ items }: { items: FeatureItem[] }) {
-  const cols = items.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+  const cols = items.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-close-3'
   return (
-    <div className={`grid gap-4 sm:grid-cols-2 ${cols}`}>
+    <div className={`grid gap-4 sm:grid-cols-2 sm:max-lg:grid-close-2 ${cols}`}>
       {items.map((item, i) => (
         <Reveal key={item.title} delayMs={(i % 3) * 70} className="h-full">
           <div

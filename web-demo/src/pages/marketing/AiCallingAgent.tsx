@@ -309,7 +309,7 @@ export function AiCallingAgent() {
             <SectionHead eyebrow="Languages" title="Calls in the language your customer picks." />
             <p className="mt-4 leading-relaxed text-text-muted">
               The agent opens in the language you set and follows the caller if they switch, including the Hinglish
-              and other mixed speech most Indian calls actually use. It speaks English and these Indian languages:
+              and other mixed speech most Indian calls actually use. It speaks more than 130 languages, including Hindi, English and 9 other Indian languages:
             </p>
             <ul className="mt-5 flex flex-wrap gap-2">
               {LANGUAGES.map((lang) => (

@@ -152,10 +152,11 @@ const COMPARE_FIGURES: PageFigureData[] = [
   },
 ]
 
-// Written sample calls for the ten language pages, placed after the
+// Written sample calls for the eleven language pages, placed after the
 // "Built for teams that take calls in <Language>." section.
 const LANGUAGE_FIGURES: [slug: string, name: string, greeting: string, call: string, height: number][] = [
   ['hindi', 'Hindi', 'नमस्ते', 'an outbound EMI reminder call', 1000],
+  ['english', 'English', 'Hello', 'an outbound demo-booking call for a Bengaluru software company', 1000],
   ['marathi', 'Marathi', 'नमस्कार', 'an inbound call to a Pune diagnostic lab', 1000],
   ['tamil', 'Tamil', 'வணக்கம்', 'a follow-up call to a Chennai property enquiry', 1260],
   ['telugu', 'Telugu', 'నమస్కారం', 'an inbound call to a clinic’s appointment line', 1000],
@@ -417,8 +418,14 @@ export const PAGE_FIGURES: Record<string, PageFigureData[]> = {
       [
         {
           src: `/media/pages/${slug}-ai-voice-agent-sample-call.webp`,
-          alt: `${name} greeting ${greeting} in ${name} script beside a written sample of ${call}, with Artha, the AI voice agent, replying in ${name}`,
-          caption: `Written sample of ${call} in ${name}, with the English words callers mix in. Not a recording of a customer call.`,
+          alt:
+            slug === 'english'
+              ? `Greeting ${greeting} beside a written sample of ${call} in Indian English, with Artha, the AI voice agent, replying in English`
+              : `${name} greeting ${greeting} in ${name} script beside a written sample of ${call}, with Artha, the AI voice agent, replying in ${name}`,
+          caption:
+            slug === 'english'
+              ? `Written sample of ${call} in Indian English, with the Hindi words callers mix in. Not a recording of a customer call.`
+              : `Written sample of ${call} in ${name}, with the English words callers mix in. Not a recording of a customer call.`,
           width: 1600,
           height,
           after: `Built for teams that take calls in ${name}.`,

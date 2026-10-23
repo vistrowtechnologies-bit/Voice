@@ -447,7 +447,7 @@ export function Home() {
             (2 + 1, then 3) AND puts real weight behind the industry these
             customers actually come from, instead of five interchangeable
             tiles. Same snap rail as the platform grid on phones. */}
-        <div className="vv-rail -mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
+        <div className="vv-rail -mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 sm:max-lg:grid-close-2 lg:grid-cols-3">
           {SOLUTIONS.map((s, i) => (
             <Reveal
               key={s.to}

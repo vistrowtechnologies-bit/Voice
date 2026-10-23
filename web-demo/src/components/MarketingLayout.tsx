@@ -96,7 +96,8 @@ const HOVER_OPEN_MS = 120
 const HOVER_CLOSE_MS = 180
 
 /** Where the Product panel's featured card sends people: the Tamil page's
- * hero player (a 30-second call that switches from Hindi to Tamil). */
+ * hero player (a 30-second call: the agent opens in English, the caller
+ * answers in Tamil, and the agent follows). */
 const SAMPLE_LANGUAGE = 'tamil'
 
 // One shared look for every nav icon. The unlayered .material-symbols-outlined
@@ -148,7 +149,7 @@ function ProductPanel({ group, onNavigate }: { group: NavGroup; onNavigate: () =
           </span>
           <p className="mt-3 font-display text-lg font-semibold leading-snug">Hear it first</p>
           <p className="mt-2 text-sm leading-relaxed text-white/85">
-            A 30-second sample call that switches from Hindi to Tamil, and the agent follows.
+            A 30-second sample call: the caller answers in Tamil, and the agent follows.
           </p>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -204,6 +205,17 @@ function SolutionsPanel({ group, onNavigate }: { group: NavGroup; onNavigate: ()
               </NavLink>
             </li>
           ))}
+          {/* Twelfth cell, as in the mobile menu, so the last row closes. */}
+          <li>
+            <NavLink
+              to="/languages"
+              onClick={onNavigate}
+              className="mh-item flex flex-col rounded-lg px-2 py-1.5 outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <span className="text-sm font-semibold text-primary">130+ in all</span>
+              <span className="text-xs text-text-muted">Every other language</span>
+            </NavLink>
+          </li>
         </ul>
       </div>
     </div>
@@ -490,18 +502,18 @@ function MobileNav({ onClose }: { onClose: () => void }) {
               </NavLink>
             </li>
           ))}
-          {/* The ten above are the Indian scripts; the rest of the 130+ are on
-              /languages (owner, 21 Oct). Two columns wide, it fills the last
-              row at both 2 and 3 columns. */}
-          <li className="col-span-2">
+          {/* The eleven above have their own pages; the rest of the 130+ are
+              on /languages (owner, 21 Oct). As the twelfth cell it fills the
+              last row at both 2 and 3 columns. */}
+          <li>
             <NavLink
               to="/languages"
               onClick={onClose}
               className="flex h-full items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 hover:border-primary"
             >
               <span className="flex flex-col">
-                <span className="text-sm font-semibold text-primary">120+ more</span>
-                <span className="text-xs text-text-muted">English and other languages</span>
+                <span className="text-sm font-semibold text-primary">130+ in all</span>
+                <span className="text-xs text-text-muted">Every other language</span>
               </span>
               <Icon name="arrow_forward" className="text-[18px] text-primary" />
             </NavLink>
