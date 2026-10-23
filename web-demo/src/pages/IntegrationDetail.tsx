@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
@@ -27,7 +27,7 @@ import type { IntegrationDeliveries } from '../lib/api'
 import type { AgentConfig, Integration, PhoneNumber } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import { StatusPill, hostOf, isUnavailableForNew, utcTime } from '../components/IntegrationBits'
-import { disconnectMeta, fetchMetaLeads, fetchMetaStatus, metaStartUrl, type MetaLeadEvent, type MetaStatusResult } from '../lib/metaLeads'
+import { disconnectMeta, fetchMetaLeads, fetchMetaStatus, metaStartUrl, openMetaConnectPopup, type MetaLeadEvent, type MetaStatusResult } from '../lib/metaLeads'
 import { MetaChecklist, MetaHealth, MetaReconnectBanner, MetaUnavailableNote, MetaWhatHappens } from '../components/meta/MetaOverview'
 import { MetaSettings } from '../components/meta/MetaSettings'
 import { MetaLeadsTab } from '../components/meta/MetaLeadsTab'
@@ -170,16 +170,23 @@ export function IntegrationDetail() {
 
   useEffect(() => onCopilotChange(reload), [reload])
 
-  useEffect(() => {
-    if (oauthResult === 'connected') setNotice({ tone: 'ok', text: 'Connected. Send a test to check that everything arrives.' })
-    if (oauthResult === 'failed') setNotice({ tone: 'error', text: 'The connection did not finish. Please try again.' })
-    if (oauthResult === 'pick_pages') {
+  const showOauthResult = useCallback((result: string | null) => {
+    if (result === 'connected') setNotice({ tone: 'ok', text: 'Connected. Send a test to check that everything arrives.' })
+    if (result === 'failed') setNotice({ tone: 'error', text: 'The connection did not finish. Please try again.' })
+    if (result === 'pick_pages') {
       setNotice({ tone: 'ok', text: 'Signed in with Facebook. Choose the Pages to connect on the Settings tab.' })
       setTab('settings')
     }
-    if (oauthResult === 'no_pages')
+    if (result === 'no_pages')
       setNotice({ tone: 'error', text: 'That Facebook account manages no Pages, or none were granted. Reconnect and tick the Pages that run your ads.' })
-  }, [oauthResult])
+  }, [])
+
+  useEffect(() => showOauthResult(oauthResult), [showOauthResult, oauthResult])
+
+  // Facebook sign-in runs in a pop-up; stop listening for its result when
+  // the admin leaves this page.
+  const metaPopup = useRef<(() => void) | null>(null)
+  useEffect(() => () => metaPopup.current?.(), [])
 
   if (integration === undefined || (isMeta && meta === undefined)) {
     return (
@@ -231,6 +238,15 @@ export function IntegrationDetail() {
   }
 
   const startOAuth = () => {
+    if (key === 'facebook') {
+      metaPopup.current?.()
+      metaPopup.current = openMetaConnectPopup((result) => {
+        metaPopup.current = null
+        showOauthResult(result)
+        reload()
+      })
+      if (metaPopup.current) return
+    }
     const url =
       key === 'slack'
         ? slackIntegrationStartUrl

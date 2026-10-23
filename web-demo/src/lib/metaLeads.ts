@@ -74,6 +74,44 @@ export interface MetaOptions {
 
 export const metaStartUrl = '/api/integrations/meta/start'
 
+/** Opens Facebook sign-in in a pop-up so the admin never leaves the
+ * dashboard. The server's callback page reports the result (the same values
+ * as ?facebook=...) over BroadcastChannel, because facebook.com can cut the
+ * pop-up's link to window.opener, and over postMessage as a backup. Returns
+ * a cleanup function, or null when the browser blocked the pop-up so the
+ * caller can fall back to a full-page redirect. */
+export function openMetaConnectPopup(onResult: (result: string) => void): (() => void) | null {
+  const width = 600
+  const height = 720
+  const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2)
+  const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2)
+  const popup = window.open(`${metaStartUrl}?popup=1`, 'vv-meta-connect', `popup,width=${width},height=${height},left=${left},top=${top}`)
+  if (!popup) return null
+  let channel: BroadcastChannel | null = null
+  let done = false
+  const cleanup = () => {
+    done = true
+    window.removeEventListener('message', onMessage)
+    channel?.close()
+  }
+  const finish = (data: unknown) => {
+    if (done || !data || typeof data !== 'object' || (data as { source?: unknown }).source !== 'vv-meta') return
+    cleanup()
+    onResult(String((data as { result?: unknown }).result ?? 'failed'))
+  }
+  const onMessage = (event: MessageEvent) => {
+    if (event.origin === window.location.origin) finish(event.data)
+  }
+  window.addEventListener('message', onMessage)
+  try {
+    channel = new BroadcastChannel('vv-meta')
+    channel.onmessage = (event) => finish(event.data)
+  } catch {
+    channel = null
+  }
+  return cleanup
+}
+
 function unauthorized() {
   window.dispatchEvent(new Event('vv-unauthorized'))
 }

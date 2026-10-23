@@ -1,0 +1,79 @@
+diff -ru a/web-demo/src/pages/marketing/Privacy.tsx b/web-demo/src/pages/marketing/Privacy.tsx
+--- a/web-demo/src/pages/marketing/Privacy.tsx	2026-10-23 13:10:33
++++ b/web-demo/src/pages/marketing/Privacy.tsx	2026-10-23 13:10:33
+@@ -21,6 +21,7 @@
+   { name: 'Razorpay', purpose: 'Payment processing; card details are entered with Razorpay, not with us', data: 'Name, email, amount, payment and invoice identifiers' },
+   { name: 'Resend', purpose: 'Sending service emails and receiving replies to support tickets', data: 'Email addresses, email content' },
+   { name: 'Google Analytics, Microsoft Clarity', purpose: 'Website and dashboard analytics, masked session replay', data: 'Pages viewed, clicks, scrolling, device and browser details' },
++  { name: 'Meta (Facebook and Instagram Lead Ads)', purpose: 'Receive new leads from the Customer’s own lead ad forms so an agent can call them (optional)', data: 'Lead form answers, Page, form and ad identifiers and names, the connecting person’s Facebook ID and name' },
+   { name: 'Tools a Customer connects: Google Sheets, Zoho CRM, Slack, ArthaLeads, webhooks', purpose: 'Deliver leads and notifications to the Customer’s own tools (optional)', data: 'The lead fields, summaries and, for some, transcripts and recording links the Customer chooses to send' },
+ ]
+ 
+@@ -165,7 +166,7 @@
+         </p>
+       </LegalSection>
+ 
+-      <LegalSection title="7. Google user data">
++      <LegalSection title="7. Google and Meta user data">
+         <p>We use Google in two ways, and request only these permissions:</p>
+         <ul>
+           <li>
+@@ -214,6 +215,34 @@
+           <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">Google Account permissions</a>.
+           Disconnecting does not delete the spreadsheet or rows already in your Drive; you can delete
+           them yourself.
++        </p>
++
++        <h3 className="mt-6 text-base font-semibold text-text">Facebook and Instagram Lead Ads (Meta)</h3>
++        <p>
++          If a Customer connects Facebook and Instagram Lead Ads (optional), the Customer signs in with
++          Facebook in a pop-up window and chooses which Pages, ad accounts and Pixels to share. We
++          request only these permissions:{' '}
++          <code className={code}>pages_show_list</code>, <code className={code}>business_management</code>,{' '}
++          <code className={code}>pages_manage_metadata</code>, <code className={code}>pages_read_engagement</code>,{' '}
++          <code className={code}>pages_manage_ads</code>, <code className={code}>leads_retrieval</code>,{' '}
++          <code className={code}>ads_read</code> and <code className={code}>ads_management</code>.
++        </p>
++        <ul>
++          <li><b>What we read</b> - the list of Pages you shared; each Page's lead forms and their questions; each new lead's answers (for example name, phone, email and any custom questions); the ad, ad set and campaign the lead came from, with their names; and the Facebook ID and name of the person who connected.</li>
++          <li><b>What we do with it</b> - subscribe the Pages you choose to new-lead notifications, save each lead as a contact in your workspace, and have the agent you assigned to that Page, form or ad call the lead. You see every lead and its outcome in your dashboard. We do not create, edit or pause your ads, and we do not post to your Pages.</li>
++          <li><b>Tokens</b> - the access tokens Meta gives us are stored encrypted and are never sent to your browser.</li>
++          <li><b>Who sees it</b> - only your workspace. Lead answers go to the voice and language providers in section 6 only as needed to make the call. We do not sell this data, use it for advertising, or use it to train AI models.</li>
++        </ul>
++        <p>
++          To disconnect, use the Integrations page in your dashboard: we unsubscribe your Pages and
++          delete the stored tokens. You can also remove {BRAND.name} in your Facebook settings under{' '}
++          <a href="https://www.facebook.com/settings?tab=business_tools" target="_blank" rel="noreferrer">Business Integrations</a>;
++          when you do, Meta tells us and we stop reading leads. If you ask Meta to delete your data,
++          Meta sends us a deletion request and we erase the connecting person's tokens, Facebook ID and
++          name; you get a confirmation code to check the status. Leads already saved stay in the
++          Customer's workspace as the business's own records until the Customer deletes them (section 9).
++          Our use of data from Meta follows the{' '}
++          <a href="https://developers.facebook.com/terms" target="_blank" rel="noreferrer">Meta Platform Terms</a>.
+         </p>
+       </LegalSection>
+ 
+diff -ru a/web-demo/src/pages/marketing/Terms.tsx b/web-demo/src/pages/marketing/Terms.tsx
+--- a/web-demo/src/pages/marketing/Terms.tsx	2026-10-23 13:10:33
++++ b/web-demo/src/pages/marketing/Terms.tsx	2026-10-23 13:10:33
+@@ -52,12 +52,19 @@
+ 
+       <LegalSection title="5. Third-party integrations">
+         <p>
+-          Connecting Google Sheets, Slack, Zoho CRM, a webhook, or any other integration is optional and
++          Connecting Google Sheets, Slack, Zoho CRM, Facebook and Instagram Lead Ads, a webhook, or any other integration is optional and
+           governed by that provider's own terms in addition to ours. You authorize {BRAND.name} to
+           access those services only for the purpose you connected them for (e.g. adding a lead to a
+           spreadsheet, sending a notification), as described in our{' '}
+           <Link to="/privacy">Privacy Policy</Link>. You can disconnect an integration at any time
+           from the dashboard.
++        </p>
++        <p>
++          If you connect Facebook and Instagram Lead Ads, you confirm that you run the Pages and lead
++          forms you connect, that your forms tell people they may be contacted by phone about their
++          enquiry, and that you follow Meta's terms and advertising policies and the telemarketing rules
++          that apply to you (including TRAI rules in India). {BRAND.name} calls only the leads your own
++          forms collect, with the agent you assign.
+         </p>
+       </LegalSection>
+ 
