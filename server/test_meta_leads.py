@@ -439,6 +439,58 @@ class MetaLeadsPhase1(unittest.TestCase):
         finally:
             self.ml.delete_rule(self.a, rule["id"])
 
+    def test_a_business_login_token_finds_its_ad_accounts_through_debug_token(self):
+        # Production 23 Oct: /me/adaccounts answered (#200) Missing Permissions
+        # for the system-user token; debug_token names the granted ad accounts.
+        s = self.stamp
+        urls: list[str] = []
+
+        def fetch(url: str) -> dict:
+            urls.append(url)
+            if "/debug_token?" in url:
+                return {"data": {"granular_scopes": [
+                    {"scope": "pages_show_list", "target_ids": [self.page_a]},
+                    {"scope": "ads_management", "target_ids": ["act_9001", "9002"]},
+                    {"scope": "ads_read", "target_ids": ["9001"]}]}}
+            if "/me/adaccounts?" in url:
+                raise self.ml.GraphError(200, "(#200) Missing Permissions")
+            if "/act_9001/ads?" in url:
+                return {"data": [{"id": f"DT{s}", "name": "Clinic ad", "effective_status": "PAUSED", "adset": {"name": "Set"},
+                                  "campaign": {"id": "C1", "name": "Clinics", "objective": "OUTCOME_LEADS"},
+                                  "creative": {"actor_id": self.page_a}}]}
+            if "/act_9002/ads?" in url:
+                return {"data": []}
+            raise AssertionError(url)
+
+        with mock.patch.dict(os.environ, {"META_OAUTH_CLIENT_ID": "APP"}):
+            self.assertEqual(self.ml.sync_ads(fetch, account_id=self.a), 1)
+        self.assertFalse(any("/me/adaccounts?" in u for u in urls), "not needed when debug_token names the accounts")
+        self.assertEqual(sum("/act_9001/ads?" in u for u in urls), 1, "an account granted twice is read once")
+        self.assertIn(f"DT{s}", {a["adId"] for a in self.ml.options(self.a)["ads"]})
+
+    def test_a_refused_leads_read_is_logged_with_metas_error(self):
+        form_id = f"FE{self.stamp}"
+        conn = self.db._connect()
+        with conn:
+            conn.execute("INSERT INTO meta_forms (page_id, form_id, account_id, form_name) VALUES (?, ?, ?, 'Refused') "
+                         "ON CONFLICT (page_id, form_id) DO NOTHING", (self.page_a, form_id, self.a))
+        conn.close()
+
+        def fetch(url: str) -> dict:
+            if f"/{form_id}/leads?" in url:
+                raise self.ml.GraphError(200, "(#200) Requires leads_retrieval")
+            if "/leads?" in url or "/leadgen_forms?" in url or "/me/adaccounts?" in url:
+                return {"data": []}
+            raise AssertionError(url)
+
+        with self.assertLogs("meta-leads", level="INFO") as logs:
+            out = self.ml.reconcile(fetcher=fetch)
+        self.assertGreaterEqual(out["errors"], 1)
+        text = "\n".join(logs.output)
+        self.assertIn(f"meta reconcile failed for form {form_id}", text)
+        self.assertIn("Requires leads_retrieval", text)
+        self.assertIn("meta reconcile:", text, "a one-line summary per pass")
+
     def test_the_access_log_never_prints_the_webhook_verify_token(self):
         import logging
 
