@@ -48,6 +48,13 @@ class GeminiThinkingConfig(unittest.TestCase):
 
     def test_gemini_3_uses_minimal_level(self):
         self.assertEqual(self._thinking("gemini-3.6-flash"), {"thinking_level": "MINIMAL"})
+        self.assertEqual(self._thinking("gemini-3.5-flash-lite"), {"thinking_level": "MINIMAL"})
+
+    def test_gemini_37_38_flash_use_low(self):
+        # They reject MINIMAL; Flash-Lite variants keep it.
+        for model in ("gemini-3.8-flash", "gemini-3.7-flash"):
+            self.assertEqual(self._thinking(model), {"thinking_level": "LOW"}, model)
+        self.assertEqual(self._thinking("gemini-3.8-flash-lite"), {"thinking_level": "MINIMAL"})
 
 
 if __name__ == "__main__":
