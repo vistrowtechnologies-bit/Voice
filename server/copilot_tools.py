@@ -20,6 +20,7 @@ import asyncio
 import datetime
 import logging
 import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import calls_db
 import voice_catalog
@@ -346,6 +347,188 @@ def set_integration_events(account_id: int, user: dict, integration_key: str, ev
     return f"{name} will now send: {', '.join(e.replace('_', ' ') for e in events)}."
 
 
+# ------------------------------------------------------------- follow-ups
+# The Follow-ups page's actions (owner, 22 Oct 2026). Each one runs the same
+# calls_db function as its button, so Do-Not-Call, the 90-day window, the
+# agent's phone number and "being called right now" are checked identically.
+# Times are the workspace's calling time zone (Compliance), as the dialer uses.
+
+_FOLLOW_UP_KINDS = {"callback": "Call them back", "nurture": "Check in on their interest"}
+
+
+def _follow_up_tz(account_id: int) -> ZoneInfo:
+    try:
+        return ZoneInfo(calls_db.get_compliance(account_id).get("timezone") or "Asia/Kolkata")
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        return ZoneInfo("Asia/Kolkata")
+
+
+def _when(dt: datetime.datetime, tz: ZoneInfo) -> str:
+    local = dt.astimezone(tz)
+    return f"{local:%a} {local.day} {local:%b}, {local.hour % 12 or 12}:{local:%M} {'am' if local.hour < 12 else 'pm'}"
+
+
+def _due(item: dict, tz: ZoneInfo) -> str:
+    try:
+        return _when(datetime.datetime.fromisoformat(item["dueAt"].replace("Z", "+00:00")), tz)
+    except (AttributeError, ValueError):
+        return "no time set"
+
+
+def _clean_date_time(args: dict) -> tuple[str, str]:
+    date = _text(args.get("date"), 10)
+    try:
+        datetime.date.fromisoformat(date)
+    except ValueError:
+        raise ActionError("The date must be YYYY-MM-DD.") from None
+    match = _TIME.match(_text(args.get("time"), 5))
+    if not match:
+        raise ActionError("The time must be HH:MM (24-hour).")
+    return date, f"{int(match.group(1)):02d}:{match.group(2)}"
+
+
+def _at(account_id: int, date: str, time: str) -> datetime.datetime:
+    """The local date and time as an aware moment, refused unless it is in
+    the future and within 90 days (the page's own rule)."""
+    local = datetime.datetime.fromisoformat(f"{date}T{time}").replace(tzinfo=_follow_up_tz(account_id))
+    try:
+        return calls_db._parse_follow_up_time(local.isoformat())
+    except ValueError as exc:
+        raise ActionError(f"{exc}.") from exc
+
+
+def _follow_up(account_id: int, follow_up_id: int) -> dict:
+    # list_follow_ups is account-scoped, so a foreign id is simply not found.
+    item = next((i for i in calls_db.list_follow_ups(account_id, view="all", limit=1000)["items"]
+                 if i["id"] == follow_up_id), None)
+    if item is None:
+        raise ActionError(f"Follow-up {follow_up_id} was not found in this workspace.")
+    if item["status"] == "calling":
+        raise ActionError(f"The AI is calling {item['name']} right now.")
+    if item["state"] != "upcoming":
+        raise ActionError(f"The follow-up call to {item['name']} has already finished.")
+    return item
+
+
+def _act(account_id: int, follow_up_id: int, action: str, at: str | None = None) -> dict:
+    try:
+        return calls_db.act_on_follow_up(account_id, follow_up_id, action, at)
+    except (LookupError, ValueError) as exc:
+        raise ActionError(f"{exc}.") from exc
+
+
+def _clean_schedule(args: dict) -> dict:
+    phone = _text(args.get("phone"), 40)
+    if not phone:
+        raise ActionError("A phone number is needed to schedule a follow-up.")
+    kind = _text(args.get("kind") or "callback", 20).lower()
+    if kind not in _FOLLOW_UP_KINDS:
+        raise ActionError("The follow-up type must be callback or nurture.")
+    date, time = _clean_date_time(args)
+    cleaned = {"name": _text(args.get("name"), 120), "phone": phone, "agent_id": _int(args.get("agent_id"), "agent"),
+               "kind": kind, "date": date, "time": time}
+    if args.get("note"):
+        cleaned["note"] = _whole_text(args["note"], 300, "note")  # shown in full on the card
+    return cleaned
+
+
+def _waiting_for(account_id: int, agent_id: int, phone: str) -> dict | None:
+    """The follow-up create_follow_up would move instead of adding a second:
+    a waiting one from the same agent to the same number."""
+    e164 = calls_db.account_phone(account_id, phone)
+    return next((i for i in calls_db.list_follow_ups(account_id, view="upcoming", limit=1000)["items"]
+                 if i["agentId"] == agent_id and i["status"] == "pending" and i["phone"] == e164), None)
+
+
+def _describe_schedule(account_id: int, args: dict) -> str:
+    agent = _agent(account_id, args["agent_id"])
+    tz = _follow_up_tz(account_id)
+    when = _at(account_id, args["date"], args["time"])
+    # The same refusals create_follow_up makes on Confirm, shown before the card
+    # instead of after it.
+    e164 = calls_db.account_phone(account_id, args["phone"])
+    if not e164:
+        raise ActionError("Enter a valid phone number.")
+    if calls_db.get_compliance(account_id).get("honor_dnc", True) and calls_db.is_dnc(account_id, e164):
+        raise ActionError("This number is on your Do-Not-Call list.")
+    if not any(n["agentId"] == args["agent_id"] and n["status"] == "active"
+               for n in calls_db.list_phone_numbers(account_id)):
+        raise ActionError(f"Agent '{agent['name']}' has no phone number to call from. Assign one in Phone Numbers first.")
+    who = f"{args['name']} ({args['phone']})" if args["name"] else args["phone"]
+    line = (f"Schedule a follow-up call to {who} on {_when(when, tz)} ({tz.key}) by agent '{agent['name']}': "
+            f"{_FOLLOW_UP_KINDS[args['kind']]}")
+    if args.get("note"):
+        line += f", note for the AI: \"{args['note']}\""
+    waiting = _waiting_for(account_id, args["agent_id"], args["phone"])
+    if waiting:
+        line += f". This moves the follow-up already waiting for them ({_due(waiting, tz)})"
+    return line
+
+
+def schedule_follow_up(account_id: int, user: dict, phone: str, agent_id: int, kind: str, date: str, time: str,
+                       name: str = "", note: str = "") -> str:
+    _agent(account_id, agent_id)
+    when = _at(account_id, date, time)
+    try:
+        out = calls_db.create_follow_up(
+            account_id, {"agent_id": agent_id, "phone": phone, "name": name, "kind": kind,
+                         "at": when.isoformat(), "note": note},
+            user_id=user.get("user_id"),
+        )
+    except (LookupError, ValueError) as exc:
+        raise ActionError(f"{exc}.") from exc
+    item, tz = out["item"], _follow_up_tz(account_id)
+    if out["replaced"]:
+        return f"Moved the follow-up call to {item['name']} to {_due(item, tz)}."
+    return f"Follow-up call to {item['name']} scheduled for {_due(item, tz)}."
+
+
+def _clean_follow_up_id(args: dict) -> dict:
+    return {"follow_up_id": _int(args.get("follow_up_id"), "follow-up")}
+
+
+def _clean_reschedule(args: dict) -> dict:
+    date, time = _clean_date_time(args)
+    return {**_clean_follow_up_id(args), "date": date, "time": time}
+
+
+def _describe_reschedule(account_id: int, args: dict) -> str:
+    item, tz = _follow_up(account_id, args["follow_up_id"]), _follow_up_tz(account_id)
+    when = _at(account_id, args["date"], args["time"])
+    return f"Move the follow-up call to {item['name']} ({item['label']}) from {_due(item, tz)} to {_when(when, tz)} ({tz.key})"
+
+
+def reschedule_follow_up(account_id: int, user: dict, follow_up_id: int, date: str, time: str) -> str:
+    when = _at(account_id, date, time)
+    item = _act(account_id, follow_up_id, "reschedule", when.isoformat())
+    return f"The follow-up call to {item['name']} is now at {_due(item, _follow_up_tz(account_id))}."
+
+
+def _describe_cancel(account_id: int, args: dict) -> str:
+    item = _follow_up(account_id, args["follow_up_id"])
+    return f"Cancel the follow-up call to {item['name']} ({item['label']}, due {_due(item, _follow_up_tz(account_id))})"
+
+
+def cancel_follow_up(account_id: int, user: dict, follow_up_id: int) -> str:
+    item = _act(account_id, follow_up_id, "cancel")
+    return f"Cancelled the follow-up call to {item['name']}. It will not ring."
+
+
+def _describe_call_now(account_id: int, args: dict) -> str:
+    item = _follow_up(account_id, args["follow_up_id"])
+    line = f"Call {item['name']} now ({item['label']}, was due {_due(item, _follow_up_tz(account_id))})"
+    if item["campaignPaused"]:
+        line += ". The follow-up campaign is paused, so this will not ring until it is resumed"
+    return line
+
+
+def call_follow_up_now(account_id: int, user: dict, follow_up_id: int) -> str:
+    item = _act(account_id, follow_up_id, "call_now")
+    if item["campaignPaused"]:
+        return f"Queued {item['name']}, but the follow-up campaign is paused, so it will not ring until it is resumed."
+    return f"Queued: the AI will call {item['name']} at the next chance inside your calling window."
+
+
 # ----------------------------------------------------------------- registry
 
 def _schema(name: str, description: str, properties: dict, required: list[str]) -> dict:
@@ -356,6 +539,7 @@ def _schema(name: str, description: str, properties: dict, required: list[str]) 
 
 
 _AGENT_ID = {"type": "integer", "description": "agentId from list_my_agents."}
+_FOLLOW_UP_ID = {"type": "integer", "description": "followUpId from upcoming_follow_ups."}
 _BOOKING = {
     "name": {"type": "string", "description": "Contact's name."},
     "phone": {"type": "string", "description": "Contact's phone number."},
@@ -419,6 +603,43 @@ TOOLS: dict[str, dict] = {
                           ["integration_key", "events"]),
         "clean": _clean_events, "describe": _describe_events, "fn": set_integration_events,
         "min_role": "admin", "features": (FEATURE, "crm"),
+    },
+    "schedule_follow_up": {
+        "schema": _schema("schedule_follow_up", "Propose scheduling a follow-up call the AI agent will make to someone. "
+                          "kind: callback = call them back as agreed; nurture = check in on their interest. date and "
+                          "time are in the workspace calling time zone (upcoming_follow_ups reports it). If that person "
+                          "already has one waiting from this agent, it is moved instead. The user must confirm.",
+                          {"name": {"type": "string", "description": "Their name."},
+                           "phone": {"type": "string", "description": "Their phone number."},
+                           "agent_id": {**_AGENT_ID, "description": "agentId from list_my_agents: the agent who calls."},
+                           "kind": {"type": "string", "enum": list(_FOLLOW_UP_KINDS)},
+                           "date": {"type": "string", "description": "YYYY-MM-DD."},
+                           "time": {"type": "string", "description": "HH:MM, 24-hour."},
+                           "note": {"type": "string", "description": "Optional note for the AI on what to ask, up to 300 characters."}},
+                          ["phone", "agent_id", "kind", "date", "time"]),
+        "clean": _clean_schedule, "describe": _describe_schedule, "fn": schedule_follow_up,
+        "min_role": "member", "features": (FEATURE, "campaigns"),
+    },
+    "reschedule_follow_up": {
+        "schema": _schema("reschedule_follow_up", "Propose moving a waiting follow-up call to a new date and time "
+                          "(workspace calling time zone). The user must confirm.",
+                          {"follow_up_id": _FOLLOW_UP_ID, "date": {"type": "string", "description": "YYYY-MM-DD."},
+                           "time": {"type": "string", "description": "HH:MM, 24-hour."}},
+                          ["follow_up_id", "date", "time"]),
+        "clean": _clean_reschedule, "describe": _describe_reschedule, "fn": reschedule_follow_up,
+        "min_role": "member", "features": (FEATURE,),
+    },
+    "cancel_follow_up": {
+        "schema": _schema("cancel_follow_up", "Propose cancelling a waiting follow-up call so it does not ring. The user must confirm.",
+                          {"follow_up_id": _FOLLOW_UP_ID}, ["follow_up_id"]),
+        "clean": _clean_follow_up_id, "describe": _describe_cancel, "fn": cancel_follow_up,
+        "min_role": "member", "features": (FEATURE,),
+    },
+    "call_follow_up_now": {
+        "schema": _schema("call_follow_up_now", "Propose placing a waiting follow-up call now instead of at its time. The user must confirm.",
+                          {"follow_up_id": _FOLLOW_UP_ID}, ["follow_up_id"]),
+        "clean": _clean_follow_up_id, "describe": _describe_call_now, "fn": call_follow_up_now,
+        "min_role": "member", "features": (FEATURE,),
     },
 }
 

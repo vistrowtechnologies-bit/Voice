@@ -3918,6 +3918,49 @@ def dashboard_missed_money(user: dict = Depends(current_user)) -> dict:
     return calls_db.missed_money_queue(user["account_id"])
 
 
+# Follow-ups page (owner, 22 Oct 2026): every follow-up call the AI scheduled,
+# and Call now / Reschedule / Cancel on the ones still waiting.
+@app.get("/follow-ups")
+def follow_ups_list(view: str = "upcoming", source_call_id: int | None = None,
+                    user: dict = Depends(current_user)) -> dict:
+    return calls_db.list_follow_ups(user["account_id"], view=view, source_call_id=source_call_id)
+
+
+def _act_on_follow_up(user: dict, follow_up_id: int, action: str, at: str | None = None) -> dict:
+    try:
+        return calls_db.act_on_follow_up(user["account_id"], follow_up_id, action, at)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/follow-ups")
+def follow_up_create(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    """Schedule a follow-up call by hand (from the Follow-ups page or a call)."""
+    try:
+        return calls_db.create_follow_up(user["account_id"], data, user_id=user["user_id"])
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/follow-ups/{follow_up_id}/call-now")
+def follow_up_call_now(follow_up_id: int, user: dict = Depends(require_role("member"))) -> dict:
+    return _act_on_follow_up(user, follow_up_id, "call_now")
+
+
+@app.post("/follow-ups/{follow_up_id}/reschedule")
+def follow_up_reschedule(follow_up_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    return _act_on_follow_up(user, follow_up_id, "reschedule", str(data.get("at") or ""))
+
+
+@app.post("/follow-ups/{follow_up_id}/cancel")
+def follow_up_cancel(follow_up_id: int, user: dict = Depends(require_role("member"))) -> dict:
+    return _act_on_follow_up(user, follow_up_id, "cancel")
+
+
 @app.get("/dashboard/launch-readiness")
 def dashboard_launch_readiness(user: dict = Depends(current_user)) -> dict:
     return calls_db.launch_readiness(user["account_id"])
