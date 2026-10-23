@@ -91,6 +91,26 @@ class PendingCookieTests(unittest.TestCase):
             self.assertIsNone(self.ns["_read_mfa_pending"](token))
 
 
+class MfaLoginReplyTests(unittest.TestCase):
+    def test_reply_says_the_code_was_passed(self):
+        """Owner, 23 Oct 2026: without mfaVerified in this reply the admin gate
+        showed "Sign in again with your code" right after a correct code."""
+        ns = load("auth_login_mfa",
+                  _auth_rate_limited=lambda ip: False, _client_ip=lambda r: "1.2.3.4",
+                  _read_mfa_pending=lambda c: {"uid": 7, "aid": 3, "prov": "password"},
+                  _MFA_PENDING_COOKIE="p", _login_locked=lambda k: False,
+                  _verify_mfa_code=lambda uid, code: 1, _clear_login_failures=lambda k: None,
+                  _set_session_cookie=lambda *a, **k: "sid", _note_login_failure=lambda k: None,
+                  calls_db=types.SimpleNamespace(record_login=lambda uid: None),
+                  _me_payload=lambda uid: {"id": uid, "mfaEnabled": True},
+                  time=time, HTTPException=Exception, MfaLoginRequest=object, Response=object, Request=object)
+        response = types.SimpleNamespace(delete_cookie=lambda *a, **k: None)
+        request = types.SimpleNamespace(cookies={"p": "x"}, headers={})
+        out = ns["auth_login_mfa"](types.SimpleNamespace(code="123456"), response, request)
+        self.assertTrue(out["user"]["mfaVerified"])
+        self.assertTrue(out["user"]["mfaEnabled"])
+
+
 class LockoutTests(unittest.TestCase):
     def test_ten_failures_lock_that_email(self):
         # Database down: the in-memory fallback still locks (fail open only

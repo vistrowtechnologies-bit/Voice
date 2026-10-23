@@ -1912,7 +1912,10 @@ def auth_login_mfa(req: MfaLoginRequest, response: Response, request: Request) -
     _set_session_cookie(response, pending["uid"], pending["aid"], request, pending["prov"],
                         mfa_at=int(time.time()), new_sign_in=True)
     calls_db.record_login(pending["uid"])
-    return {"ok": True, "user": _me_payload(pending["uid"])}
+    # mfaVerified is otherwise only added by /auth/me: without it the app's
+    # admin gate showed "Sign in again with your code" right after a correct
+    # code, until a reload (owner, 23 Oct 2026).
+    return {"ok": True, "user": {**_me_payload(pending["uid"]), "mfaVerified": True}}
 
 
 # Per-account sign-in failures (on top of the per-IP limit): 10 in 15 min
