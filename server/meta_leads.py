@@ -557,8 +557,9 @@ def connect_pages(account_id: int, page_ids: set[str], poster: Poster | None = N
             logger.warning("meta subscribe failed for page %s: %s", page["id"], exc)
         results.append({"pageId": page["id"], "ok": True, "subscribed": ok})
     calls_db.set_setting(_PENDING_PAGES_SETTING, "", account_id)
-    # The forms show in the rules picker straight away, not after a first lead.
+    # The forms and ads show in the rules picker straight away, not after a first lead.
     sync_forms(fetcher, account_id=account_id)
+    sync_ads(fetcher, account_id=account_id)
     pages = list_pages(account_id)
     connected = [p for p in pages if p["status"] == "active"]
     if any(r.get("ok") for r in results):
@@ -1228,14 +1229,92 @@ def sync_forms(fetcher: Fetcher | None = None, now: datetime.datetime | None = N
     return found
 
 
+_LEAD_OBJECTIVES = {"LEAD_GENERATION", "OUTCOME_LEADS"}
+_AD_FIELDS = "id,name,effective_status,adset{name},campaign{id,name,objective},creative{actor_id}"
+
+
+def sync_ads(fetcher: Fetcher | None = None, account_id: int | None = None) -> int:
+    """Learn the lead ads on each workspace's connected Pages from the ad
+    accounts its connection was granted, so the rules picker can send an ad to
+    its own agent before any lead arrives from it (until now an ad was only
+    known from a delivered lead). An ad counts when its campaign is a leads
+    campaign, its creative's Page is one of the workspace's connected Pages,
+    and it is not deleted or archived. One ad account failing does not stop
+    the others."""
+    fetcher = fetcher or _graph_get
+    conn = calls_db._connect()
+    try:
+        sql, params = "SELECT account_id, page_id FROM meta_pages WHERE status = 'active'", ()
+        if account_id is not None:
+            sql, params = sql + " AND account_id = ?", (account_id,)
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
+    pages_by_account: dict[int, set[str]] = {}
+    for row in rows:
+        pages_by_account.setdefault(int(row["account_id"]), set()).add(str(row["page_id"]))
+    found = 0
+    for acct, page_ids in pages_by_account.items():
+        link = connection(acct)
+        if not link or link.get("status") != "connected" or not link.get("user_token"):
+            continue
+        token = link["user_token"]
+        try:
+            ad_accounts = fetcher(f"{GRAPH}/me/adaccounts?" + urllib.parse.urlencode(
+                {"fields": "account_id", "limit": 50, "access_token": token})).get("data") or []
+        except GraphError as exc:
+            if exc.code in TOKEN_ERROR_CODES:
+                mark_needs_reconnect(acct, f"Graph {exc.code}: {exc.message}")
+            logger.warning("meta ad sync: no ad accounts for workspace %s: %s", acct, exc)
+            continue
+        except Exception:  # noqa: BLE001
+            logger.exception("meta ad sync: ad accounts failed for workspace %s", acct)
+            continue
+        kept = 0
+        for ad_account in ad_accounts[:20]:
+            act = str(ad_account.get("account_id") or "")
+            if not act.isdigit():
+                continue
+            url = f"{GRAPH}/act_{act}/ads?" + urllib.parse.urlencode({"fields": _AD_FIELDS, "limit": 100, "access_token": token})
+            try:
+                pages_seen = 0
+                while url and pages_seen < 10:
+                    data = fetcher(url)
+                    pages_seen += 1
+                    conn = calls_db._connect()
+                    try:
+                        with conn:
+                            for ad in data.get("data") or []:
+                                campaign = ad.get("campaign") or {}
+                                page_id = str((ad.get("creative") or {}).get("actor_id") or "")
+                                if (not ad.get("id") or campaign.get("objective") not in _LEAD_OBJECTIVES
+                                        or page_id not in page_ids or ad.get("effective_status") in ("DELETED", "ARCHIVED")):
+                                    continue
+                                _remember_ad(conn, {"page_id": page_id, "account_id": acct}, {
+                                    "ad_id": ad["id"], "ad_name": ad.get("name"), "adset_name": (ad.get("adset") or {}).get("name"),
+                                    "campaign_id": campaign.get("id"), "campaign_name": campaign.get("name")})
+                                kept += 1
+                    finally:
+                        conn.close()
+                    url = ((data.get("paging") or {}).get("next")) or ""
+            except GraphError as exc:
+                logger.warning("meta ad sync failed for ad account %s (workspace %s): %s", act, acct, exc)
+            except Exception:  # noqa: BLE001
+                logger.exception("meta ad sync failed for ad account %s (workspace %s)", act, acct)
+        logger.info("meta ad sync: workspace %s, %d ad account(s), %d lead ad(s)", acct, len(ad_accounts), kept)
+        found += kept
+    return found
+
+
 def reconcile(fetcher: Fetcher | None = None, now: datetime.datetime | None = None, lookback_hours: int = 48) -> dict:
     """Plan B8: list each active form's leads since the last check and insert
     any the webhook never delivered. They go through the same worker; the
-    24 h stale rule decides whether they are called. The Pages' forms are
-    refreshed from Meta first (sync_forms)."""
+    24 h stale rule decides whether they are called. The Pages' forms and
+    lead ads are refreshed from Meta first (sync_forms, sync_ads)."""
     fetcher = fetcher or _graph_get
     now = now or _utc_now()
     sync_forms(fetcher, now)
+    sync_ads(fetcher)
     conn = calls_db._connect()
     try:
         forms = conn.execute(

@@ -359,6 +359,7 @@ class MetaLeadsPhase1(unittest.TestCase):
         live, missed, phone = f"FL{self.stamp}", self.lid(), self.phone()
         now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
         lead_urls: list[str] = []
+        ad_urls: list[str] = []
         lead = _lead(missed, phone, form_id=live)
 
         def fetch(url: str) -> dict:
@@ -366,6 +367,9 @@ class MetaLeadsPhase1(unittest.TestCase):
                 self.assertIn("fields=id%2Cname&", url, "only fields Meta is known to return")
                 return {"data": [{"id": live, "name": "Website offer"}, {"name": "no id"}]}
             if "/leadgen_forms?" in url:
+                return {"data": []}
+            if "/me/adaccounts?" in url:
+                ad_urls.append(url)
                 return {"data": []}
             if f"/{missed}?" in url:
                 return lead
@@ -378,6 +382,7 @@ class MetaLeadsPhase1(unittest.TestCase):
 
         out = self.ml.reconcile(fetcher=fetch, now=now)
         self.assertEqual(out["inserted"], 1, out)
+        self.assertTrue(ad_urls, "the catch-up also refreshes the lead ads")
         self.assertEqual(self.event(self.page_a, missed)["via"], "reconcile")
         forms = {f["formId"]: f["formName"] for f in self.ml.options(self.a)["forms"]}
         self.assertEqual(forms.get(live), "Website offer", "the rules picker lists it before any lead")
@@ -388,6 +393,51 @@ class MetaLeadsPhase1(unittest.TestCase):
         self.assertEqual(self.ml.reconcile(fetcher=fetch, now=now + datetime.timedelta(minutes=5))["inserted"], 0)
         self.ml.process_pending(fetcher=fetch)
         self.assertEqual(self.event(self.page_a, missed)["status"], "queued")
+
+    def test_lead_ads_are_learned_from_the_ad_accounts_before_any_lead(self):
+        # 23 Oct, production: the Vistrow ad account has 13 lead-form ads and
+        # 1 messaging ad, but we knew 0 ads, so no ad could get its own agent.
+        s = self.stamp
+        urls: list[str] = []
+
+        def ad(ad_id, page, objective="OUTCOME_LEADS", status="PAUSED"):
+            return {"id": ad_id, "name": f"Ad {ad_id}", "effective_status": status, "adset": {"name": "Set 1"},
+                    "campaign": {"id": f"C{s}", "name": "Clinic leads", "objective": objective}, "creative": {"actor_id": page}}
+
+        def fetch(url: str) -> dict:
+            urls.append(url)
+            if "/me/adaccounts?" in url:
+                return {"data": [{"account_id": "111"}, {"account_id": "222"}]}
+            if "/act_111/ads?" in url and "after=2" in url:
+                return {"data": [ad(f"AD2{s}", self.page_a, objective="LEAD_GENERATION")]}
+            if "/act_111/ads?" in url:
+                return {"data": [ad(f"AD1{s}", self.page_a),
+                                 ad(f"MSG{s}", self.page_a, objective="OUTCOME_ENGAGEMENT"),
+                                 ad(f"DEL{s}", self.page_a, status="DELETED"),
+                                 ad(f"OTH{s}", self.page_b)],
+                        "paging": {"next": f"{self.ml.GRAPH}/act_111/ads?after=2"}}
+            if "/act_222/ads?" in url:
+                raise self.ml.GraphError(200, "no permission on this ad account")
+            raise AssertionError(url)
+
+        self.assertEqual(self.ml.sync_ads(fetch, account_id=self.a), 2)
+        ads = {a["adId"]: a for a in self.ml.options(self.a)["ads"]}
+        mine = {f"AD1{s}", f"AD2{s}", f"MSG{s}", f"DEL{s}", f"OTH{s}"}
+        self.assertEqual(mine & set(ads), {f"AD1{s}", f"AD2{s}"},
+                         "only lead ads on this workspace's Pages; not messaging, deleted or another workspace's")
+        self.assertEqual((ads[f"AD1{s}"]["adName"], ads[f"AD1{s}"]["campaignName"]), (f"Ad AD1{s}", "Clinic leads"))
+        self.assertTrue(any("/act_222/ads?" in u for u in urls), "a refused ad account is skipped, not fatal")
+        self.assertIn("fields=" + urllib.parse.quote(self.ml._AD_FIELDS, safe=""), next(u for u in urls if "/act_111/ads?" in u))
+        # An ad on another workspace's Page never lands in this one.
+        self.assertNotIn(f"OTH{s}", {a["adId"] for a in self.ml.options(self.a)["ads"]})
+        self.assertNotIn(f"OTH{s}", {a["adId"] for a in self.ml.options(self.b)["ads"]}, "only synced for its own workspace's connection")
+        # An ad found up front can carry its own rule straight away.
+        rule = self.rule(self.page_a, "ad", f"AD1{s}", self.agent_a2, label="Clinic ad")
+        try:
+            route, _ = self.ml.resolve_route(self.a, self.page_a, "", f"AD1{s}")
+            self.assertEqual((route["agentId"], route["matchKind"]), (self.agent_a2, "ad"))
+        finally:
+            self.ml.delete_rule(self.a, rule["id"])
 
     def test_the_access_log_never_prints_the_webhook_verify_token(self):
         import logging
@@ -710,6 +760,7 @@ class MetaLeadsPhase1(unittest.TestCase):
                                     fetcher=lambda url: asked.append(url) or {"data": [{"subscribed_fields": ["leadgen"]}]})
         self.assertTrue(out["ok"])
         self.assertTrue(any(f"/{page_c}/leadgen_forms?" in u for u in asked), "the new Page's forms are fetched at connect")
+        self.assertTrue(any("/me/adaccounts?" in u for u in asked), "and its lead ads")
         self.assertEqual({(r["pageId"], r.get("ok"), r.get("reason")) for r in out["results"]},
                          {(page_c, True, None), (self.page_a, False, "owned_elsewhere")})
         self.assertEqual(self.ml.page_owner(self.page_a)["account_id"], self.a, "the other workspace's Page stays theirs")
