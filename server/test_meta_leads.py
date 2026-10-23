@@ -353,6 +353,55 @@ class MetaLeadsPhase1(unittest.TestCase):
         self.ml.process_pending(fetcher=fetch)
         self.assertEqual(self.event(self.page_a, missed)["status"], "queued")
 
+    def test_forms_are_learned_from_meta_so_a_lead_no_webhook_delivered_still_arrives(self):
+        # 23 Oct, production: Meta pushes no real webhooks to an unpublished
+        # app, and the Page's 4 forms were unknown, so no lead could arrive.
+        live, missed, phone = f"FL{self.stamp}", self.lid(), self.phone()
+        now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+        lead_urls: list[str] = []
+        lead = _lead(missed, phone, form_id=live)
+
+        def fetch(url: str) -> dict:
+            if f"/{self.page_a}/leadgen_forms?" in url:
+                self.assertIn("fields=id%2Cname&", url, "only fields Meta is known to return")
+                return {"data": [{"id": live, "name": "Website offer"}, {"name": "no id"}]}
+            if "/leadgen_forms?" in url:
+                return {"data": []}
+            if f"/{missed}?" in url:
+                return lead
+            if f"/{live}/leads?" in url:
+                lead_urls.append(url)
+                return {"data": [{"id": missed, "created_time": now.strftime("%Y-%m-%dT%H:%M:%S+0000")}]}
+            if "/leads?" in url:
+                return {"data": []}
+            raise AssertionError(url)
+
+        out = self.ml.reconcile(fetcher=fetch, now=now)
+        self.assertEqual(out["inserted"], 1, out)
+        self.assertEqual(self.event(self.page_a, missed)["via"], "reconcile")
+        forms = {f["formId"]: f["formName"] for f in self.ml.options(self.a)["forms"]}
+        self.assertEqual(forms.get(live), "Website offer", "the rules picker lists it before any lead")
+        since = json.loads(dict(urllib.parse.parse_qsl(lead_urls[0].split("?", 1)[1]))["filtering"])[0]["value"]
+        self.assertEqual(since, int(now.timestamp()) - 60, "a newly found form is read from now on, not 48 h back")
+        # A later sync keeps the form's place: nothing is read twice or skipped.
+        self.ml.sync_forms(fetch, now + datetime.timedelta(hours=1))
+        self.assertEqual(self.ml.reconcile(fetcher=fetch, now=now + datetime.timedelta(minutes=5))["inserted"], 0)
+        self.ml.process_pending(fetcher=fetch)
+        self.assertEqual(self.event(self.page_a, missed)["status"], "queued")
+
+    def test_the_access_log_never_prints_the_webhook_verify_token(self):
+        import logging
+
+        record = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d', (
+            "1.2.3.4:5", "GET", "/webhooks/meta?hub.mode=subscribe&hub.verify_token=SECRET1&hub.challenge=9"
+                               "&hub_verify_token=SECRET2", "1.1", 200), None)
+        for log_filter in logging.getLogger("uvicorn.access").filters:
+            log_filter.filter(record)
+        line = record.getMessage()
+        self.assertNotIn("SECRET", line)
+        self.assertIn("hub.verify_token=REDACTED", line)
+        self.assertIn("hub.challenge=9", line)
+
     def test_worker_picks_up_rows_left_pending_by_a_restart(self):
         lids = [self.lid(), self.lid()]
         phones = [self.phone(), self.phone()]
@@ -656,9 +705,11 @@ class MetaLeadsPhase1(unittest.TestCase):
         self.db.set_setting(self.ml._PENDING_PAGES_SETTING, self.ml._enc(json.dumps({"connection_id": cid, "pages": [
             {"id": page_c, "name": "Chitra Homes", "access_token": "pt-c"},
             {"id": self.page_a, "name": "Khopoli Homes", "access_token": "stolen"}]})), acct)
+        asked: list[str] = []
         out = self.ml.connect_pages(acct, {page_c, self.page_a}, poster=lambda url, data: {"success": True},
-                                    fetcher=lambda url: {"data": [{"subscribed_fields": ["leadgen"]}]})
+                                    fetcher=lambda url: asked.append(url) or {"data": [{"subscribed_fields": ["leadgen"]}]})
         self.assertTrue(out["ok"])
+        self.assertTrue(any(f"/{page_c}/leadgen_forms?" in u for u in asked), "the new Page's forms are fetched at connect")
         self.assertEqual({(r["pageId"], r.get("ok"), r.get("reason")) for r in out["results"]},
                          {(page_c, True, None), (self.page_a, False, "owned_elsewhere")})
         self.assertEqual(self.ml.page_owner(self.page_a)["account_id"], self.a, "the other workspace's Page stays theirs")
