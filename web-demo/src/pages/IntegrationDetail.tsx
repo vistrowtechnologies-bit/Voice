@@ -29,6 +29,7 @@ import { hasRole, useAuth } from '../lib/auth'
 import { StatusPill, hostOf, isUnavailableForNew, utcTime } from '../components/IntegrationBits'
 import { disconnectMeta, fetchMetaLeads, fetchMetaStatus, metaStartUrl, type MetaLeadEvent, type MetaStatusResult } from '../lib/metaLeads'
 import { MetaConnectModal } from '../components/meta/MetaConnectModal'
+import { WhatsAppPanel } from '../components/meta/WhatsAppPanel'
 import { MetaChecklist, MetaHealth, MetaReconnectBanner, MetaUnavailableNote, MetaWhatHappens } from '../components/meta/MetaOverview'
 import { MetaSettings } from '../components/meta/MetaSettings'
 import { MetaLeadsTab } from '../components/meta/MetaLeadsTab'
@@ -473,6 +474,7 @@ export function IntegrationDetail() {
           (isMeta && meta?.ok ? (
             <div className="flex flex-col gap-4">
               <MetaSettings status={meta.status} canManage={canManage} agents={metaAgents} numbers={metaNumbers} onChanged={reload} onNotice={setNotice} />
+              <WhatsAppPanel canManage={canManage} onNotice={setNotice} />
               <LeadWebhookPanel />
             </div>
           ) : (
