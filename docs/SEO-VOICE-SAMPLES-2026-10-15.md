@@ -1,6 +1,6 @@
 # Language-switch voice samples and language-page redesign (2026-10-15)
 
-Every /languages page now opens with a playable two-speaker sample call in the hero. The caller starts in Hindi and switches to the page's language at turn 3, and the AI agent follows. On /languages/hindi the switch is from Hindi to English. Each sample reuses the scenario of the page's written example.
+Every /languages page now opens with a playable two-speaker sample call in the hero. The caller starts in Hindi and switches to the page's language at turn 3, and the AI agent follows. On /languages/hindi the call starts in English and switches to Hindi (changed 2026-10-23; see below). Each sample reuses the scenario of the page's written example.
 
 ## Files
 
@@ -43,7 +43,7 @@ The agent follows the caller's language, books or notes details, never quotes pr
 
 | Page | Scenario | Switch | Switch at | Duration | Size |
 |---|---|---|---|---|---|
-| /languages/hindi | Outbound EMI reminder (Saarthi Finance) | Hindi to English | 0:09 | 30.5 s | 247 KB |
+| /languages/hindi | Outbound EMI reminder (Saarthi Finance) | English to Hindi | 0:09 | 29.1 s | 231 KB |
 | /languages/marathi | Home blood-sample booking, Pune lab | Hindi to Marathi | 0:07 | 30.3 s | 245 KB |
 | /languages/tamil | OMR property enquiry follow-up | Hindi to Tamil | 0:07 | 30.1 s | 244 KB |
 | /languages/telugu | Clinic appointment | Hindi to Telugu | 0:07 | 27.7 s | 225 KB |
@@ -53,6 +53,16 @@ The agent follows the caller's language, books or notes details, never quotes pr
 | /languages/bengali | Order 5821 status | Hindi to Bengali | 0:05 | 27.1 s | 220 KB |
 | /languages/punjabi | Canada study-visa counselling | Hindi to Punjabi | 0:07 | 28.7 s | 233 KB |
 | /languages/odia | Class 10 demo class, Bhubaneswar | Hindi to Odia | 0:07 | 27.1 s | 221 KB |
+
+## 2026-10-23: Hindi sample now ends in Hindi
+
+The owner flagged that the /languages/hindi sample switched from Hindi to English, so the Hindi page's demo ended in English. It was re-scripted and re-voiced:
+- **Script:** same scenario and facts (Artha from Saarthi Finance, Rahul ji, EMI due on the 15th, salary on the 12th, paying through the app on the 13th). Turns 1-2 are in English; at turn 3 the caller asks to talk in Hindi; the agent follows in Hindi (Hinglish loanwords: payment, salary, app, note, thanks) for the rest. The agent uses feminine forms ("मैं note कर लेती हूँ"), quotes no prices and offers no transfer.
+- **Voice:** same as above (`bulbul:v4-flash`, kavya/aditya conversational, pace 1.2, temperature 0.7, loudness 1.1), `target_language_code` en-IN for lines 1-2 and hi-IN for lines 3-8. Same trimming, -20 dBFS RMS, gaps, lead-in and tail.
+- **Encode:** AAC-LC 64 kbps mono 24 kHz with faststart, using ffmpeg's libfdk_aac (no ffmpeg is on PATH; the binary from Remotion's compositor package was used).
+- **Checks:** all 8 lines round-tripped through `saarika:v2.5` with auto-detect; content intact (English loanwords came back transliterated, "Saarthi" as "Saathi") and detected language en-IN for lines 1-2 and hi-IN for lines 3-8. Decoded m4a: 29.1 s, RMS 0.096, peak 0.50, longest silence 0.55 s, correlation with the source 0.999; every `start` is within 0.05 s of the decoded line onset.
+- **Usage:** TTS 8 requests, 464 characters; STT 8 requests, about 27 s of audio.
+- **Not verified:** native-speaker review of the new Hindi lines.
 
 ## Usage (both takes)
 

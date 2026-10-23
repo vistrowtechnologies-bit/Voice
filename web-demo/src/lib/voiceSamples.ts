@@ -1,6 +1,6 @@
 // Two-speaker sample calls for the /languages pages: the caller starts in
-// Hindi and switches to the page's language at turn 3 (Hindi page: to
-// English), and the agent follows. Drafted with Sarvam
+// Hindi and switches to the page's language at turn 3 (Hindi page: starts
+// in English and switches to Hindi), and the agent follows. Drafted with Sarvam
 // sarvam-105b-conversations, then rewritten as spoken lines; voiced with
 // Sarvam bulbul:v4-flash (agent kavya_hi_conversational, caller
 // aditya_hi_conversational, pace 1.2, temperature 0.7). `start` is
@@ -100,63 +100,67 @@ export const VOICE_SAMPLES: Record<string, VoiceSample> = {
   },
   hindi: {
     "src": "/media/samples/hindi-switch.m4a",
-    "seconds": 31,
-    "from": "Hindi",
-    "to": "English",
+    "seconds": 29,
+    "from": "English",
+    "to": "Hindi",
     "languages": [
-      "hi-IN",
-      "en-IN"
+      "en-IN",
+      "hi-IN"
     ],
     "turns": [
       {
         "speaker": "Agent",
-        "lang": "hi-IN",
-        "native": "नमस्ते राहुल जी, मैं Saarthi Finance से Artha बोल रही हूँ। बस याद दिलाना था, इस महीने की EMI 15 तारीख को due है।",
-        "start": 0.2,
-        "gloss": "Hello Rahul ji, this is Artha from Saarthi Finance. Just a reminder: this month’s EMI is due on the 15th."
+        "lang": "en-IN",
+        "native": "Hello Rahul ji, this is Artha from Saarthi Finance. Just a quick reminder: this month’s EMI is due on the 15th.",
+        "start": 0.2
+      },
+      {
+        "speaker": "Caller",
+        "lang": "en-IN",
+        "native": "Yes, yes, I know. My salary comes on the 12th.",
+        "start": 6.28
       },
       {
         "speaker": "Caller",
         "lang": "hi-IN",
-        "native": "हाँ हाँ, पता है। Salary 12 को आती है।",
-        "start": 6.89,
-        "gloss": "Yes, yes, I know. My salary comes on the 12th."
-      },
-      {
-        "speaker": "Caller",
-        "lang": "en-IN",
-        "native": "Actually, can we do this in English? Easier for me.",
-        "start": 9.4
+        "native": "अच्छा, क्या हम हिंदी में बात कर सकते हैं? मुझे आसान लगेगा।",
+        "start": 8.61,
+        "gloss": "Actually, can we talk in Hindi? It’s easier for me."
       },
       {
         "speaker": "Agent",
-        "lang": "en-IN",
-        "native": "Sure, no problem! So by when can you pay?",
-        "start": 14.09
+        "lang": "hi-IN",
+        "native": "हाँ, बिल्कुल! तो आप payment कब तक कर पाएँगे?",
+        "start": 11.88,
+        "gloss": "Yes, of course! So by when can you pay?"
       },
       {
         "speaker": "Caller",
-        "lang": "en-IN",
-        "native": "By the 13th. Salary comes on the 12th, so I’ll pay on the app the next day.",
-        "start": 16.96
+        "lang": "hi-IN",
+        "native": "13 तारीख तक। Salary 12 को आती है, तो अगले दिन app से कर दूँगा।",
+        "start": 14.61,
+        "gloss": "By the 13th. Salary comes on the 12th, so I’ll pay through the app the next day."
       },
       {
         "speaker": "Agent",
-        "lang": "en-IN",
-        "native": "Perfect, I’ve noted it: the 13th, through the app. Thanks, Rahul ji.",
-        "start": 21.77
+        "lang": "hi-IN",
+        "native": "ठीक है, मैं note कर लेती हूँ: 13 तारीख, app से। Thank you, राहुल जी।",
+        "start": 19.39,
+        "gloss": "Okay, I’m noting it down: the 13th, through the app. Thank you, Rahul ji."
       },
       {
         "speaker": "Caller",
-        "lang": "en-IN",
-        "native": "Great, thanks for reminding me.",
-        "start": 26.08
+        "lang": "hi-IN",
+        "native": "बढ़िया, याद दिलाने के लिए thanks।",
+        "start": 23.75,
+        "gloss": "Great, thanks for reminding me."
       },
       {
         "speaker": "Agent",
-        "lang": "en-IN",
-        "native": "Anytime, Rahul ji. Have a good day!",
-        "start": 28.25
+        "lang": "hi-IN",
+        "native": "कोई बात नहीं, राहुल जी। आपका दिन अच्छा हो!",
+        "start": 26.56,
+        "gloss": "No problem, Rahul ji. Have a good day!"
       }
     ]
   },
