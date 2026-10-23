@@ -162,17 +162,23 @@ def _pace_dial(min_gap_seconds: float = _DIAL_STAGGER_SECONDS, pool_id: int | No
 
 
 def _line_room(from_number: str) -> tuple[int, int | None, str]:
-    """(free lines, pool id, label) for the trunk a campaign dials out on.
+    """(free lines, stagger key, label) for the trunk a campaign dials out on.
 
     Two caps (plan section 2a): the trunk's own lines (what this customer
     bought) and its pool's lines minus the inbound reserve (what the carrier
     accepts across every customer on that account). With no telephony
-    pool set up yet, the old trunk-wide _OUTBOUND_CHANNELS ceiling applies."""
+    pool set up yet, the old trunk-wide _OUTBOUND_CHANNELS ceiling applies.
+
+    The stagger key is the pool id for a customer's own carrier account and
+    None for the shared platform pool AND for the fallback, so a campaign
+    that fell back still paces with the shared pool's dials (same carrier
+    account, same CPS limit)."""
     try:
         trunk = telephony.trunk_for_number(from_number)
         if trunk is not None:
             room = telephony.trunk_room(trunk["id"])
-            return int(room["free"]), trunk["pool_id"], (
+            key = None if trunk["pool_id"] == telephony.platform_pool_id() else trunk["pool_id"]
+            return int(room["free"]), key, (
                 f"trunk {trunk['id']}: {room['trunk_free']} free of its lines, pool {room['pool_free']} free")
     except Exception:
         logger.warning("line room lookup failed for %s; using the trunk-wide ceiling", from_number, exc_info=True)

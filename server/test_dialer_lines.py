@@ -75,7 +75,7 @@ class DialerLines(unittest.TestCase):
             free, pool_id, _ = self.dialer._line_room(self.shared_num)
             old = self.dialer._OUTBOUND_CHANNELS - self.db.campaign_inflight_all()
             self.assertEqual(free, max(0, old), f"{live} live dial(s)")
-            self.assertEqual(pool_id, self.platform["pool_id"])
+            self.assertIsNone(pool_id, "the shared pool paces on the shared stagger key")
 
     def test_a_customers_own_lines_are_theirs(self):
         pool = self.tel.create_pool("enablex", 3, 0, 1, notes="lines test")["id"]  # 2 allocatable
@@ -126,6 +126,21 @@ class DialerLines(unittest.TestCase):
             self.dialer._pace_dial(0, pool_id=2)  # another carrier account: no wait
             self.assertEqual(slept, [])
             self.dialer._pace_dial(0, pool_id=1)  # same account: waits the CPS gap
+        self.assertEqual(slept, [self.dialer._DIAL_STAGGER_SECONDS])
+
+    def test_a_fallback_dial_paces_with_the_shared_pool(self):
+        # Runtime review, 23 Oct: a campaign whose lookup fell back must not
+        # INVITE in the same instant as one resolved onto the shared pool.
+        resolved = self.dialer._line_room(self.shared_num)[1]
+        with mock.patch.object(self.dialer.telephony, "trunk_for_number", side_effect=RuntimeError("db down")):
+            fallback = self.dialer._line_room(self.shared_num)[1]
+        self.assertEqual(resolved, fallback)
+        clock = [1000.0]
+        slept: list[float] = []
+        with mock.patch.object(self.dialer.time, "monotonic", side_effect=lambda: clock[0]), \
+             mock.patch.object(self.dialer.time, "sleep", side_effect=lambda s: (slept.append(s), clock.__setitem__(0, clock[0] + s))):
+            self.dialer._pace_dial(0, pool_id=resolved)
+            self.dialer._pace_dial(0, pool_id=fallback)
         self.assertEqual(slept, [self.dialer._DIAL_STAGGER_SECONDS])
 
     def test_the_shared_pool_follows_outbound_channel_limit_until_lines_are_sold(self):
