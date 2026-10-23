@@ -668,6 +668,11 @@ def handle_webhook_post(raw_body: bytes, signature: str, app_secret: str | None 
         payload = json.loads(raw_body)
     except ValueError:
         return 200, {"ok": False, "reason": "invalid_json"}
+    if isinstance(payload, dict) and payload.get("object") == "whatsapp_business_account":
+        # Click-to-WhatsApp leads share this callback and its signature check.
+        import whatsapp_leads  # here, not at the top: whatsapp_leads imports this module
+
+        return 200, {"ok": True, **whatsapp_leads.record_webhook(payload)}
     if not isinstance(payload, dict) or payload.get("object") != "page":
         return 200, {"ok": True, "reason": "ignored_object"}
     return 200, {"ok": True, **record_webhook(payload)}
@@ -976,9 +981,11 @@ def _remember_form(conn, page: dict, form_id: str, form_name: str) -> None:
     )
 
 
-def _upsert_contact(account_id: int, name: str, phone: str, email: str, fields: dict) -> int | None:
+def _upsert_contact(account_id: int, name: str, phone: str, email: str, fields: dict,
+                    tag: str = "meta-lead-ads", source: str = SOURCE, fallback_name: str = "Facebook lead") -> int | None:
     """The lead in Contacts, as ArthaLeads leads are, with the answers merged
-    over what we already knew about this number."""
+    over what we already knew about this number. whatsapp_leads passes its
+    own tag, source and fallback name."""
     contact_phone = calls_db.canonical_contact_phone(phone, account_id)
     if not contact_phone:
         return None
@@ -996,7 +1003,7 @@ def _upsert_contact(account_id: int, name: str, phone: str, email: str, fields: 
             merged = {**old, **{k: v for k, v in fields.items() if v not in (None, "")}}
             tags = calls_db._clean_tags([
                 *(str(current["tags"] or "").split(",") if current else []),
-                "meta-lead-ads",
+                tag,
                 *([f"ad:{fields['ad_name'][:60]}"] if fields.get("ad_name") else []),
                 *([f"form:{fields['form_name'][:60]}"] if fields.get("form_name") else []),
             ])
@@ -1006,8 +1013,8 @@ def _upsert_contact(account_id: int, name: str, phone: str, email: str, fields: 
                 f"name = excluded.name, email = CASE WHEN excluded.email <> '' THEN excluded.email ELSE contacts.email END, "
                 f"custom_fields = excluded.custom_fields, tags = excluded.tags, deleted_at = NULL, updated_at = {calls_db._NOW} "
                 "RETURNING id",
-                (account_id, name or (current["name"] if current else "") or "Facebook lead", contact_phone,
-                 email or "", json.dumps(merged, ensure_ascii=False), tags, SOURCE),
+                (account_id, name or (current["name"] if current else "") or fallback_name, contact_phone,
+                 email or "", json.dumps(merged, ensure_ascii=False), tags, source),
             ).fetchone()
             return row["id"]
     finally:

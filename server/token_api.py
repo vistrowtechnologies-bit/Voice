@@ -30,6 +30,7 @@ import plan_policy
 import campaign_dialer
 import meta_leads
 import telephony
+import whatsapp_leads
 import copilot
 import copilot_tools
 import db_backup
@@ -116,6 +117,9 @@ retention_worker.start_retention_worker()
 # this file, after the session helpers it needs are defined.
 meta_leads.init_tables()
 meta_leads.start_worker()
+# Click-to-WhatsApp leads (server/whatsapp_leads.py) arrive on the same
+# /webhooks/meta callback; only their tables need creating here.
+whatsapp_leads.init_tables()
 # Sends the emails behind Settings → Preferences → Notifications, which were
 # saved and never sent before 2026-09-24 (see notification_worker.py).
 notification_worker.start_notification_worker()
@@ -8188,3 +8192,4 @@ async def widget_chat_end(request: Request) -> dict:
 # webhook and Meta's callbacks). Needs _live_session/_app_base_url, hence last.
 meta_leads.configure(require_admin=None, live_session=_live_session, app_base_url=_app_base_url, cookie_secure=_COOKIE_SECURE)
 app.include_router(meta_leads.router)
+app.include_router(whatsapp_leads.router)
