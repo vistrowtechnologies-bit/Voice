@@ -23,6 +23,7 @@ import {
   type ReadingLink,
 } from '../../components/showcase'
 import { HELP_TOPICS } from '../../content/helpArticles'
+import { HELP_VIDEOS } from '../../lib/helpVideos'
 import { SEO_PAGES } from '../../lib/seoPages'
 import type { HelpArticle, HelpTopic } from '../../lib/types'
 
@@ -230,8 +231,12 @@ function HelpHome() {
                       <span className="block text-sm text-text-muted">{article.summary}</span>
                     </span>
                     {article.video && (
-                      <span className="hidden shrink-0 items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-text-muted sm:flex">
-                        <Icon name="play_arrow" className="text-[16px] text-primary" /> Video
+                      <span className="hidden shrink-0 items-center gap-2 rounded-full border border-primary/25 bg-gradient-to-r from-primary/10 to-fuchsia-500/10 py-1 pl-1 pr-3 text-xs font-bold text-primary shadow-[0_8px_20px_-14px_rgba(124,58,237,0.9)] transition duration-200 group-hover:-translate-y-0.5 group-hover:border-transparent group-hover:from-[#7c3aed] group-hover:to-[#c026d3] group-hover:text-white group-hover:shadow-[0_12px_26px_-12px_rgba(192,38,211,0.85)] sm:flex">
+                        <span className="relative flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[#7c3aed] to-[#c026d3] text-white shadow-[0_6px_14px_-6px_rgba(124,58,237,0.9)] group-hover:bg-white/20 group-hover:from-white/25 group-hover:to-white/10">
+                          <span className="absolute inset-0 rounded-full bg-primary/40 opacity-0 group-hover:animate-ping group-hover:opacity-100 motion-reduce:hidden" />
+                          <Icon name="play_arrow" className="relative text-[18px]" />
+                        </span>
+                        <span className="tabular-nums">{HELP_VIDEOS[article.video]?.length ?? 'Video'}</span>
                       </span>
                     )}
                   </Link>
