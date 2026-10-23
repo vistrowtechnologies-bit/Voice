@@ -1229,6 +1229,32 @@ def sync_forms(fetcher: Fetcher | None = None, now: datetime.datetime | None = N
     return found
 
 
+def _granted_ad_accounts(token: str, fetcher: Fetcher, account_id: int) -> list[dict]:
+    """The ad accounts this connection may read. A Business Login system-user
+    token is refused /me/adaccounts ((#200) Missing Permissions, production
+    23 Oct), but debug_token lists the exact ad accounts granted under
+    ads_read / ads_management. A personal-login token falls back to
+    /me/adaccounts. Returns [{"account_id": "<digits>"}]."""
+    env = _env()
+    if env["client_id"] and env["client_secret"]:
+        debug = fetcher(f"{GRAPH}/debug_token?" + urllib.parse.urlencode(
+            {"input_token": token, "access_token": f"{env['client_id']}|{env['client_secret']}"}))
+        scopes = (debug.get("data") or {}).get("granular_scopes") or []
+        ids: list[str] = []
+        for scope in scopes:
+            if scope.get("scope") in ("ads_read", "ads_management"):
+                for target in scope.get("target_ids") or []:
+                    digits = str(target).removeprefix("act_")
+                    if digits.isdigit() and digits not in ids:
+                        ids.append(digits)
+        logger.info("meta ad sync: workspace %s granted scopes %s, %d ad account(s) from debug_token",
+                    account_id, sorted({str(s.get("scope")) for s in scopes}), len(ids))
+        if ids:
+            return [{"account_id": i} for i in ids]
+    return fetcher(f"{GRAPH}/me/adaccounts?" + urllib.parse.urlencode(
+        {"fields": "account_id", "limit": 50, "access_token": token})).get("data") or []
+
+
 _LEAD_OBJECTIVES = {"LEAD_GENERATION", "OUTCOME_LEADS"}
 _AD_FIELDS = "id,name,effective_status,adset{name},campaign{id,name,objective},creative{actor_id}"
 
@@ -1260,8 +1286,7 @@ def sync_ads(fetcher: Fetcher | None = None, account_id: int | None = None) -> i
             continue
         token = link["user_token"]
         try:
-            ad_accounts = fetcher(f"{GRAPH}/me/adaccounts?" + urllib.parse.urlencode(
-                {"fields": "account_id", "limit": 50, "access_token": token})).get("data") or []
+            ad_accounts = _granted_ad_accounts(token, fetcher, acct)
         except GraphError as exc:
             if exc.code in TOKEN_ERROR_CODES:
                 mark_needs_reconnect(acct, f"Graph {exc.code}: {exc.message}")
@@ -1363,6 +1388,8 @@ def reconcile(fetcher: Fetcher | None = None, now: datetime.datetime | None = No
                 conn.close()
         except GraphError as exc:
             errors += 1
+            # Said out loud: a refused leads read used to be counted and dropped.
+            logger.warning("meta reconcile failed for form %s (page %s): %s", form["form_id"], form["page_id"], exc)
             if exc.code in TOKEN_ERROR_CODES:
                 mark_needs_reconnect(int(form["account_id"]), f"Graph {exc.code}: {exc.message}")
         except Exception:  # noqa: BLE001
@@ -1370,6 +1397,7 @@ def reconcile(fetcher: Fetcher | None = None, now: datetime.datetime | None = No
             logger.exception("meta reconcile failed for form %s", form["form_id"])
     if inserted:
         _wake.set()
+    logger.info("meta reconcile: %d form(s), %d lead(s) seen, %d new, %d error(s)", len(forms), checked, inserted, errors)
     return {"forms": len(forms), "checked": checked, "inserted": inserted, "errors": errors}
 
 
