@@ -30,6 +30,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
     title: 'Operations',
     items: [
       { to: '/admin/support', label: 'Support inbox', icon: 'support_agent' },
+      { to: '/admin/whatsapp', label: 'WhatsApp', icon: 'chat' },
       { to: '/admin/audit', label: 'Audit log', icon: 'manage_search' },
       { to: '/admin/privacy-requests', label: 'Privacy Requests', icon: 'policy' },
       { to: '/admin/ip-blocks', label: 'Blocked IPs', icon: 'block' },

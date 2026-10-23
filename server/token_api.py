@@ -31,6 +31,7 @@ import campaign_dialer
 import meta_leads
 import telephony
 import whatsapp_leads
+import wa_sender
 import copilot
 import copilot_tools
 import db_backup
@@ -120,6 +121,8 @@ meta_leads.start_worker()
 # Click-to-WhatsApp leads (server/whatsapp_leads.py) arrive on the same
 # /webhooks/meta callback; only their tables need creating here.
 whatsapp_leads.init_tables()
+# Vistrow's own WhatsApp sender (admin → WhatsApp; server/wa_sender.py).
+wa_sender.init_tables()
 # Sends the emails behind Settings → Preferences → Notifications, which were
 # saved and never sent before 2026-09-24 (see notification_worker.py).
 notification_worker.start_notification_worker()
@@ -7244,6 +7247,8 @@ def _epoch_to_iso(epoch: int | None) -> str | None:
 # "Clone your voice" (custom_voices.py): /voices/custom/*. Registered before
 # the routes below; none of them overlap.
 app.include_router(custom_voices.build_router(require_role))
+# Admin → WhatsApp: Vistrow's own sender (platform owner, admin login only).
+app.include_router(wa_sender.build_router(require_platform_owner))
 
 
 @app.get("/voices/catalog")

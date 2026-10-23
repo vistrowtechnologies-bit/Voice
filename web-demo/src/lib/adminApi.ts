@@ -637,3 +637,55 @@ export async function adminAssignSupportTicket(id: number, userId: number | null
 
 /** A4 PDF of one of a tenant's invoices, for support and accounting. */
 export const adminInvoicePdfUrl = (accountId: number, invoiceId: number) => `/api/admin/accounts/${accountId}/invoices/${invoiceId}/pdf`
+
+// ------------------------------------------------- WhatsApp (Vistrow's own sender)
+export interface WaSenderStatus { configured: boolean; phoneNumberId: string; wabaId: string; displayNumber: string }
+export interface WaTemplate {
+  name: string
+  language: string
+  category: string
+  status: string
+  body: string
+  param_count: number
+  has_otp_button: number
+  synced_at: string
+}
+export interface WaMessage {
+  id: number
+  to_phone: string
+  template: string
+  language: string
+  category: string
+  kind: string
+  broadcast_id: number | null
+  status: 'queued' | 'sent' | 'delivered' | 'read' | 'failed'
+  error: string
+  created_at: string
+  status_at: string | null
+}
+export interface WaBroadcast {
+  id: number
+  name: string
+  template: string
+  language: string
+  total: number
+  sent: number
+  delivered: number
+  read: number
+  failed: number
+  created_at: string
+}
+export interface WaEventTemplate { event: string; template: string; language: string; enabled: number }
+
+export const waStatus = () => aget<WaSenderStatus>('/whatsapp/status')
+export const waTemplates = () => aget<{ templates: WaTemplate[] }>('/whatsapp/templates')
+export const waSyncTemplates = () => apost<{ synced: number; templates: WaTemplate[] }>('/whatsapp/templates/sync')
+export const waSend = (p: { to: string; template: string; language: string; params: string[] }) =>
+  apost<{ id: number; status: string; error?: string }>('/whatsapp/send', p)
+export const waBroadcast = (p: { name: string; template: string; language: string; params: string[]; numbers: string; confirmOptIn: boolean }) =>
+  apost<{ broadcastId: number; queued: number; invalid: string[] }>('/whatsapp/broadcasts', p)
+export const waBroadcasts = () => aget<{ broadcasts: WaBroadcast[] }>('/whatsapp/broadcasts')
+export const waMessages = (broadcastId?: number) => aget<{ messages: WaMessage[] }>(`/whatsapp/messages${qs({ broadcastId })}`)
+export const waEvents = () => aget<{ events: WaEventTemplate[] }>('/whatsapp/events')
+export const waSetEvent = (event: string, p: { template: string; language: string; enabled: boolean }) =>
+  apost<{ events: WaEventTemplate[] }>(`/whatsapp/events/${event}`, p)

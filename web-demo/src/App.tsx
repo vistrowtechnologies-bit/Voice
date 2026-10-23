@@ -72,6 +72,7 @@ const AdminPrivacyRequests = lazy(() => import('./pages/admin/AdminPrivacyReques
 const AdminIpBlocks = lazy(() => import('./pages/admin/AdminIpBlocks').then((m) => ({ default: m.AdminIpBlocks })))
 const AdminSupport = lazy(() => import('./pages/admin/AdminSupport').then((m) => ({ default: m.AdminSupport })))
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })))
+const AdminWhatsApp = lazy(() => import('./pages/admin/AdminWhatsApp').then((m) => ({ default: m.AdminWhatsApp })))
 const AdminLogin = lazy(() => import('./pages/AdminLogin').then((m) => ({ default: m.AdminLogin })))
 
 /** admin.vistrowvoice.com serves only the panel, its sign-in, and the tenant
@@ -279,6 +280,7 @@ function App() {
         <Route path="/admin/vendor-credits" element={<RequireOwner><AdminVendorCredits /></RequireOwner>} />
         <Route path="/admin/privacy-requests" element={<RequireOwner><AdminPrivacyRequests /></RequireOwner>} />
         <Route path="/admin/ip-blocks" element={<RequireOwner><AdminIpBlocks /></RequireOwner>} />
+        <Route path="/admin/whatsapp" element={<RequireOwner><AdminWhatsApp /></RequireOwner>} />
         <Route path="/admin/support" element={<RequireOwner><AdminSupport /></RequireOwner>} />
         <Route path="/admin/settings" element={<RequireOwner><AdminSettings /></RequireOwner>} />
         <Route path="*" element={<NotFound />} />
