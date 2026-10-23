@@ -4,38 +4,123 @@
     {
       "name": "leads-dashboard-preview",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8934", "--directory", "design/leads_dashboard_preview"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8934",
+        "--directory",
+        "design/leads_dashboard_preview"
+      ],
       "port": 8934
     },
     {
       "name": "web-demo",
       "runtimeExecutable": "/Users/mac15/.local/node/bin/npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "web-demo", "--", "--port", "5199", "--strictPort"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "web-demo",
+        "--",
+        "--port",
+        "5199",
+        "--strictPort"
+      ],
       "port": 5199
     },
     {
       "name": "token-api",
       "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": ["-m", "uvicorn", "token_api:app", "--port", "8000", "--app-dir", "server"],
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "token_api:app",
+        "--port",
+        "8000",
+        "--app-dir",
+        "server"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "token-api-meta-local",
+      "runtimeExecutable": "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE--claude-worktrees-cool-chandrasekhar-cb1f04/5cab4ebe-0de3-47d8-bf86-4eaa05664c8c/scratchpad/metalocal/run-api.sh",
+      "runtimeArgs": [],
+      "port": 8000
+    },
+    {
+      "name": "token-api-main-local",
+      "runtimeExecutable": "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE--claude-worktrees-cool-chandrasekhar-cb1f04/5cab4ebe-0de3-47d8-bf86-4eaa05664c8c/scratchpad/metalocal/run-main-api.sh",
+      "runtimeArgs": [],
+      "port": 8000
+    },
+    {
+      "name": "token-api-admin-local",
+      "runtimeExecutable": "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE--claude-worktrees-cool-chandrasekhar-cb1f04/5cab4ebe-0de3-47d8-bf86-4eaa05664c8c/scratchpad/metalocal/run-admin-api.sh",
+      "runtimeArgs": [],
       "port": 8000
     },
     {
       "name": "agent",
       "runtimeExecutable": "agent/.venv/bin/python",
-      "runtimeArgs": ["agent/main.py", "dev"],
+      "runtimeArgs": [
+        "agent/main.py",
+        "dev"
+      ],
       "port": 8081
     },
     {
       "name": "widget-test",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8935", "--directory", "widget"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8935",
+        "--directory",
+        "widget"
+      ],
       "port": 8935
     },
     {
       "name": "marketing-site",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8936", "--directory", "marketing-site"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8936",
+        "--directory",
+        "marketing-site"
+      ],
       "port": 8936
+    },
+    {
+      "name": "web-demo-voices",
+      "runtimeExecutable": "/Users/mac15/.local/node/bin/npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "web-demo",
+        "--",
+        "--config",
+        "vite.chips.config.ts",
+        "--port",
+        "5207",
+        "--strictPort"
+      ],
+      "port": 5207
+    },
+    {
+      "name": "agents-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8937",
+        "--directory",
+        "."
+      ],
+      "port": 8937
     }
   ]
 }

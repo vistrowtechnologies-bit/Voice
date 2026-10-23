@@ -77,6 +77,8 @@ class ClickToWhatsAppLeads(unittest.TestCase):
         cls.pid_a, cls.pid_b = f"7{tail}01", f"7{tail}02"
         whatsapp_leads.link_number(cls.a, cls.pid_a, "+91 77131 28715", "WABA1")
         whatsapp_leads.link_number(cls.b, cls.pid_b, "+91 90000 00000", "WABA2")
+        whatsapp_leads.set_auto_call(cls.a, cls.pid_a, True)
+        whatsapp_leads.set_auto_call(cls.b, cls.pid_b, True)
         # A Page with an ad rule: the CTWA ad goes to Riya on her own number.
         cls.page_a = f"PWA{stamp}"
         conn_id = meta_leads.save_connection(cls.a, "user-token", None, f"fbu-wa-{stamp}", "Asha FB", a["user_id"])
@@ -135,6 +137,21 @@ class ClickToWhatsAppLeads(unittest.TestCase):
         self.assertEqual((fields["ad_id"], fields["ctwa_clid"], fields["first_message"]),
                          (self.ad_routed, "CLID-" + mid, "Hi, tell me more"))
 
+    def test_with_calls_off_the_chat_is_saved_but_nobody_is_called(self):
+        pid = f"89{self.stamp_digits()}1"
+        self.wa.link_number(self.a, pid, "+91 98000 22222", "WABA1")
+        mid, sender = self.mid(), self.sender()
+        self.post(_payload(pid, [_message(mid, sender, ad_id=self.ad_routed)]))
+        event = self.event(pid, mid)
+        self.assertEqual((event["status"], event["reason"]), ("captured", "calls_off"))
+        self.assertEqual(self.queued(self.a, sender), [])
+        conn = self.db._connect()
+        contact = conn.execute("SELECT source FROM contacts WHERE account_id = ? AND phone LIKE ?",
+                               (self.a, "%" + sender[-10:])).fetchone()
+        conn.close()
+        self.assertEqual(contact["source"], "whatsapp_ctwa")
+        self.assertFalse(self.wa.set_auto_call(self.b, pid, True), "another workspace cannot switch it on")
+
     def test_meta_redelivering_the_same_message_queues_one_call(self):
         mid, sender = self.mid(), self.sender()
         body = _payload(self.pid_a, [_message(mid, sender, ad_id=self.ad_routed)])
@@ -191,6 +208,80 @@ class ClickToWhatsAppLeads(unittest.TestCase):
     def test_a_number_id_must_be_metas_numeric_id(self):
         with self.assertRaises(ValueError):
             self.wa.link_number(self.a, "not-a-number")
+
+    # ------------------------------------------------------- Embedded Signup
+
+    def signup(self, account_id: int, pid: str, platform_type: str = "NOT_APPLICABLE", in_waba: bool = True):
+        """Run connect_number against a fake Graph; returns (result, graph calls)."""
+        calls: list[tuple[str, str, dict]] = []
+
+        def fetcher(url: str) -> dict:
+            calls.append(("GET", url, {}))
+            if "/oauth/access_token" in url:
+                return {"access_token": "biz-token"}
+            listed = [{"id": pid, "display_phone_number": "+91 98000 11111", "verified_name": "Khopoli Homes",
+                       "platform_type": platform_type}] if in_waba else []
+            return {"data": listed + [{"id": "1", "display_phone_number": "+1 555", "platform_type": "CLOUD_API"}]}
+
+        def poster(url: str, data: dict) -> dict:
+            calls.append(("POST", url, data))
+            return {"success": True}
+
+        result = self.wa.connect_number(account_id, "CODE", "4455", pid, "BIZ1", None, fetcher, poster)
+        return result, calls
+
+    def test_signup_proves_the_number_subscribes_registers_and_links_it(self):
+        pid = f"88{self.stamp_digits()}1"
+        result, calls = self.signup(self.a, pid)
+        self.assertEqual((result["displayPhone"], result["registered"]), ("+91 98000 11111", True))
+        posts = [(c[1].rsplit("/", 2)[-2:], c[2]) for c in calls if c[0] == "POST"]
+        self.assertEqual(posts[0][0], ["4455", "subscribed_apps"])
+        self.assertEqual(posts[1][0], [pid, "register"])
+        self.assertEqual((posts[1][1]["messaging_product"], len(posts[1][1]["pin"])), ("whatsapp", 6))
+        [row] = [n for n in self.wa.list_numbers(self.a) if n["phone_number_id"] == pid]
+        self.assertEqual((row["waba_id"], row["connected_via"]), ("4455", "embedded_signup"))
+        conn = self.db._connect()
+        stored = dict(conn.execute("SELECT access_token, pin FROM wa_numbers WHERE phone_number_id = ?", (pid,)).fetchone())
+        conn.close()
+        self.assertEqual(self.ml._dec(stored["access_token"]), "biz-token")
+        self.assertEqual(self.ml._dec(stored["pin"]), posts[1][1]["pin"])
+
+    def test_a_coexistence_number_is_not_registered_again(self):
+        pid = f"88{self.stamp_digits()}2"
+        result, calls = self.signup(self.a, pid, platform_type="CLOUD_API")
+        self.assertFalse(result["registered"])
+        self.assertFalse([c for c in calls if c[1].endswith("/register")])
+
+    def test_a_number_outside_the_signed_in_waba_is_refused(self):
+        pid = f"88{self.stamp_digits()}3"
+        with self.assertRaises(ValueError):
+            self.signup(self.a, pid, in_waba=False)
+        self.assertEqual([n for n in self.wa.list_numbers(self.a) if n["phone_number_id"] == pid], [])
+
+    def test_another_workspaces_number_cannot_be_taken(self):
+        with self.assertRaises(self.wa.NumberTaken):
+            self.signup(self.a, self.pid_b)
+        self.assertEqual(self.event_owner(self.pid_b), self.b)
+
+    def test_disconnect_stops_calls_for_that_number(self):
+        pid = f"88{self.stamp_digits()}4"
+        self.signup(self.a, pid)
+        self.assertFalse(self.wa.disconnect_number(self.b, pid), "only the owning workspace can disconnect")
+        self.assertTrue(self.wa.disconnect_number(self.a, pid))
+        mid, sender = self.mid(), self.sender()
+        self.post(_payload(pid, [_message(mid, sender, ad_id=self.ad_routed)]))
+        self.assertEqual(self.event(pid, mid)["reason"], "unknown_number")
+
+    def stamp_digits(self) -> str:
+        return str(int(self.stamp, 16))[-6:]
+
+    def event_owner(self, pid: str) -> int | None:
+        conn = self.db._connect()
+        try:
+            row = conn.execute("SELECT account_id FROM wa_numbers WHERE phone_number_id = ?", (pid,)).fetchone()
+            return row["account_id"] if row else None
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

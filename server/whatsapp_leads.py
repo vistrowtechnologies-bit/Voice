@@ -15,14 +15,20 @@ calls_db.ingest_inbound_lead with source "whatsapp_ctwa". An ordinary chat
 do-not-call list. Nothing here calls Meta, so a message is handled inside the
 webhook request.
 
-Which workspace a WhatsApp number belongs to lives in wa_numbers. Until the
-Embedded Signup connect flow exists, only the platform owner can link a
-number (it decides who receives that number's leads)."""
+Which workspace a WhatsApp number belongs to lives in wa_numbers. A workspace
+adds its own number through Meta's Embedded Signup (connect_number): the
+code Meta returns is exchanged for a business token, and the number is only
+linked if that token can see it in the WABA, so nobody can claim a number
+they do not control. The platform owner can still link a number by hand
+(our own +91 77131 28715)."""
 from __future__ import annotations
 
 import datetime
 import json
 import logging
+import os
+import secrets
+import urllib.parse
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -80,6 +86,14 @@ def init_tables() -> None:
             for statement in _SCHEMA.split(";"):
                 if statement.strip():
                     conn.execute(statement)
+            # Embedded Signup: the business token (for sending and for
+            # re-checking the number) and the two-step PIN we registered it
+            # with, both encrypted like every other Meta token.
+            for column in ("business_id", "access_token", "pin", "connected_via"):
+                conn.execute(f"ALTER TABLE wa_numbers ADD COLUMN IF NOT EXISTS {column} TEXT DEFAULT ''")
+            # Off until the workspace turns it on: a chat from an ad is saved
+            # as a contact, and only called once auto_call is 1.
+            conn.execute("ALTER TABLE wa_numbers ADD COLUMN IF NOT EXISTS auto_call INTEGER DEFAULT 0")
     finally:
         conn.close()
 
@@ -266,6 +280,9 @@ def process_message(phone_number_id: str, message_id: str, now: datetime.datetim
     if route is None and route_reason != "no_rules":
         calls_db._record_lead_event(account_id, SOURCE, message_id, name, phone)
         return _finish(phone_number_id, message_id, "skipped", route_reason, contact_id, agent_id)
+    if not _auto_call(phone_number_id):
+        calls_db._record_lead_event(account_id, SOURCE, message_id, name, phone)
+        return _finish(phone_number_id, message_id, "captured", "calls_off", contact_id, agent_id)
     kwargs = {"route": {"agentId": route["agentId"], "fromNumber": route["fromNumber"], "label": route["label"]}} if route else {}
     result = calls_db.ingest_inbound_lead(account_id, name, phone, SOURCE, external_id=message_id,
                                           custom_fields=fields, **kwargs)
@@ -281,6 +298,28 @@ def process_message(phone_number_id: str, message_id: str, now: datetime.datetim
     return "queued"
 
 
+def _auto_call(phone_number_id: str) -> bool:
+    conn = calls_db._connect()
+    try:
+        row = conn.execute("SELECT auto_call FROM wa_numbers WHERE phone_number_id = ?", (phone_number_id,)).fetchone()
+    finally:
+        conn.close()
+    return bool(row and row["auto_call"])
+
+
+def set_auto_call(account_id: int, phone_number_id: str, on: bool) -> bool:
+    conn = calls_db._connect()
+    try:
+        with conn:
+            done = conn.execute(
+                "UPDATE wa_numbers SET auto_call = ? WHERE phone_number_id = ? AND account_id = ? AND status = 'active' "
+                "RETURNING phone_number_id", (1 if on else 0, str(phone_number_id), account_id),
+            ).fetchone()
+    finally:
+        conn.close()
+    return bool(done)
+
+
 def list_events(account_id: int, limit: int = 200) -> list[dict]:
     conn = calls_db._connect()
     try:
@@ -292,6 +331,102 @@ def list_events(account_id: int, limit: int = 200) -> list[dict]:
     finally:
         conn.close()
     return [dict(r) for r in rows]
+
+
+# --------------------------------------------------------- Embedded Signup
+class NumberTaken(Exception):
+    """The number already delivers its chats to another workspace."""
+
+
+def signup_config() -> dict:
+    """What the dashboard needs to open Meta's Embedded Signup popup. Empty
+    values mean this server cannot offer it."""
+    return {"appId": os.environ.get("META_OAUTH_CLIENT_ID", ""),
+            "configId": os.environ.get("META_WA_SIGNUP_CONFIG_ID", ""),
+            "graphVersion": meta_leads.GRAPH_VERSION}
+
+
+def connect_number(account_id: int, code: str, waba_id: str, phone_number_id: str, business_id: str = "",
+                   user_id: int | None = None, fetcher: meta_leads.Fetcher | None = None,
+                   poster: meta_leads.Poster | None = None) -> dict:
+    """Finish Embedded Signup for one number, in Meta's order: exchange the
+    code (it lives 30 s) for a business token, prove the token can see the
+    number in that WABA, subscribe our app to the WABA's webhooks, register
+    the number for the Cloud API unless it already is (a WhatsApp Business
+    app number onboarded with coexistence), then link it here."""
+    fetcher = fetcher or meta_leads._graph_get
+    poster = poster or meta_leads._graph_post
+    waba_id, phone_number_id = str(waba_id or "").strip(), str(phone_number_id or "").strip()
+    if not (waba_id.isdigit() and phone_number_id.isdigit()):
+        raise ValueError("wabaId and phoneNumberId must be Meta's numeric IDs")
+    conn = calls_db._connect()
+    try:
+        owner = _owner(conn, phone_number_id)
+    finally:
+        conn.close()
+    if owner is not None and owner != int(account_id):
+        raise NumberTaken("This WhatsApp number is already connected to another workspace")
+    env = meta_leads._env()
+    token = fetcher(f"{meta_leads.GRAPH}/oauth/access_token?" + urllib.parse.urlencode(
+        {"client_id": env["client_id"], "client_secret": env["client_secret"], "code": code})).get("access_token")
+    if not token:
+        raise meta_leads.GraphError(0, "no access_token in code exchange")
+    numbers = fetcher(f"{meta_leads.GRAPH}/{waba_id}/phone_numbers?" + urllib.parse.urlencode(
+        {"fields": "id,display_phone_number,verified_name,platform_type", "access_token": token}))
+    number = next((n for n in numbers.get("data") or [] if str(n.get("id")) == phone_number_id), None)
+    if number is None:
+        raise ValueError("That number is not in the WhatsApp account you just connected")
+    poster(f"{meta_leads.GRAPH}/{waba_id}/subscribed_apps", {"access_token": token})
+    pin = ""
+    if number.get("platform_type") != "CLOUD_API":
+        pin = f"{secrets.randbelow(10**6):06d}"
+        poster(f"{meta_leads.GRAPH}/{phone_number_id}/register",
+               {"messaging_product": "whatsapp", "pin": pin, "access_token": token})
+    display = str(number.get("display_phone_number") or "")
+    link_number(account_id, phone_number_id, display, waba_id, user_id)
+    conn = calls_db._connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE wa_numbers SET business_id = ?, access_token = ?, pin = ?, connected_via = 'embedded_signup' "
+                "WHERE phone_number_id = ?",
+                (meta_leads._text(business_id, 40), meta_leads._enc(token), meta_leads._enc(pin) if pin else "",
+                 phone_number_id),
+            )
+    finally:
+        conn.close()
+    logger.info("whatsapp number connected account=%s phone_number_id=%s registered=%s",
+                account_id, phone_number_id, bool(pin))
+    return {"phoneNumberId": phone_number_id, "displayPhone": display,
+            "verifiedName": str(number.get("verified_name") or ""), "registered": bool(pin)}
+
+
+def list_numbers(account_id: int) -> list[dict]:
+    conn = calls_db._connect()
+    try:
+        rows = conn.execute(
+            "SELECT phone_number_id, waba_id, display_phone, status, connected_via, auto_call, linked_at FROM wa_numbers "
+            "WHERE account_id = ? AND status = 'active' ORDER BY linked_at", (account_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+def disconnect_number(account_id: int, phone_number_id: str) -> bool:
+    """Stop turning this number's chats into calls. The WABA stays subscribed:
+    Meta keeps it for the business, and other workspaces' numbers may share it."""
+    conn = calls_db._connect()
+    try:
+        with conn:
+            done = conn.execute(
+                "UPDATE wa_numbers SET status = 'disconnected', access_token = '' "
+                "WHERE phone_number_id = ? AND account_id = ? AND status = 'active' RETURNING phone_number_id",
+                (str(phone_number_id), account_id),
+            ).fetchone()
+    finally:
+        conn.close()
+    return bool(done)
 
 
 # ------------------------------------------------------------------ router
@@ -324,3 +459,56 @@ async def whatsapp_link_number(request: Request):
 def whatsapp_leads_list(request: Request, limit: int = 200):
     user = meta_leads._admin(request)
     return {"items": list_events(user["account_id"], limit)}
+
+
+@router.get("/integrations/whatsapp")
+def whatsapp_status(request: Request):
+    user = meta_leads._admin(request)
+    config = signup_config()
+    return {"available": bool(config["appId"] and config["configId"] and meta_leads.token_storage_ok()),
+            **config, "numbers": list_numbers(user["account_id"])}
+
+
+@router.post("/integrations/whatsapp/connect")
+async def whatsapp_connect(request: Request):
+    """{code, wabaId, phoneNumberId, businessId?} from the Embedded Signup popup."""
+    user = meta_leads._admin(request)
+    config = signup_config()
+    if not config["appId"] or not config["configId"]:
+        raise HTTPException(404, "WhatsApp signup is not configured on this server")
+    if not meta_leads.token_storage_ok():
+        raise HTTPException(503, "Token encryption is not configured; connection refused")
+    try:
+        calls_db.require_feature(user["account_id"], "meta_leads")
+    except Exception as exc:  # plan_policy.EntitlementError
+        raise HTTPException(403, str(exc)) from exc
+    body = await request.json()
+    try:
+        return connect_number(user["account_id"], str(body.get("code") or ""), str(body.get("wabaId") or ""),
+                              str(body.get("phoneNumberId") or ""), str(body.get("businessId") or ""),
+                              user["user_id"])
+    except NumberTaken as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except meta_leads.GraphError as exc:
+        logger.warning("whatsapp connect failed account=%s: %s", user["account_id"], exc)
+        raise HTTPException(502, f"Meta refused the connection: {exc}") from exc
+
+
+@router.delete("/integrations/whatsapp/numbers/{phone_number_id}")
+def whatsapp_disconnect(request: Request, phone_number_id: str):
+    user = meta_leads._admin(request)
+    if not disconnect_number(user["account_id"], phone_number_id):
+        raise HTTPException(404, "No connected WhatsApp number with that ID")
+    return {"ok": True}
+
+
+@router.patch("/integrations/whatsapp/numbers/{phone_number_id}")
+async def whatsapp_number_settings(request: Request, phone_number_id: str):
+    """{autoCall: bool}: whether chats from ads on this number are called."""
+    user = meta_leads._admin(request)
+    body = await request.json()
+    if not set_auto_call(user["account_id"], phone_number_id, bool(body.get("autoCall"))):
+        raise HTTPException(404, "No connected WhatsApp number with that ID")
+    return {"ok": True}
