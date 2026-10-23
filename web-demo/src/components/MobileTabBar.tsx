@@ -6,6 +6,7 @@ import { StorageWarning } from './StorageWarning'
 import { Icon } from './Icon'
 import { fetchAgents } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { canOpenAdmin } from '../lib/adminHost'
 import type { AgentConfig } from '../lib/types'
 
 // Phone and tablet navigation (owner, 21 Oct 2026): an app-style bottom tab
@@ -127,7 +128,7 @@ export function MobileTabBar({ moreOpen, onMoreOpenChange }: { moreOpen: boolean
                     </div>
                   </section>
                 ))}
-                {user?.isPlatformOwner && !user?.impersonating && (
+                {canOpenAdmin(user) && !user?.impersonating && (
                   <Link to="/admin" className="mt-5 flex items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive">
                     <Icon name="shield_person" className="text-[19px]" /> Admin panel
                   </Link>

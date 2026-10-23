@@ -28,6 +28,9 @@ export interface AuthUser {
   mfaVerified?: boolean
   /** Signed in through the admin host's own sign-in (admin.vistrowvoice.com). */
   adminSession?: boolean
+  /** This login may open the admin panel (server calls_db.can_open_admin).
+   * isPlatformOwner stays for the workspace's owner-only features. */
+  isPlatformAdmin?: boolean
 }
 
 export interface AuthState {

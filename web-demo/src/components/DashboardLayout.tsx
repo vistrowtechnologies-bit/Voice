@@ -13,6 +13,7 @@ import { openCommandMenu } from '../lib/commandMenu'
 import { initClarity, stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
 import { useSessionInsightsConsent } from '../lib/analyticsConsent'
 import { useAuth, hasRole, type AuthUser } from '../lib/auth'
+import { canOpenAdmin } from '../lib/adminHost'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
 import { HelpChatWidget } from './HelpChatWidget'
@@ -138,7 +139,7 @@ function HeaderAvatarMenu() {
               <Icon name="support_agent" className="text-[19px] text-text-muted" />
               <span className="flex-1">Help &amp; Support</span>
             </button>
-            {user?.isPlatformOwner && !user?.impersonating && (
+            {canOpenAdmin(user) && !user?.impersonating && (
               <button role="menuitem" onClick={() => go('/admin')} className={row}>
                 <Icon name="shield_person" className="text-[19px] text-text-muted" />
                 <span className="flex-1">Admin panel</span>
@@ -342,7 +343,7 @@ function SlimSidebar({ pinned, onTogglePin }: { pinned: boolean; onTogglePin?: (
       </nav>
       <div className={`shrink-0 ${show}`}><StorageWarning /></div>
       <div className="flex shrink-0 flex-col gap-0.5 border-t border-border pt-2">
-        {user?.isPlatformOwner && !user?.impersonating && (
+        {canOpenAdmin(user) && !user?.impersonating && (
           <NavLink to="/admin" aria-label="Admin panel" className="flex h-9 items-center gap-3 rounded-xl px-[15px] text-[14.5px] font-semibold text-destructive transition-colors hover:bg-destructive/10">
             <Icon name="shield_person" className="shrink-0 text-[21px]" />
             <span className={`whitespace-nowrap ${show}`}>Admin panel</span>

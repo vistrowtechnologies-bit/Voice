@@ -29,7 +29,14 @@ export function isAdminHost(): boolean {
 /** The admin host is live (DNS and the Vercel domain are in place). Until
  * VITE_ADMIN_HOST_LIVE=1 the app keeps serving /admin itself, so the panel
  * never points at a host that does not resolve yet. */
-export const ADMIN_HOST_LIVE = import.meta.env.VITE_ADMIN_HOST_LIVE === '1'
+export const ADMIN_HOST_LIVE = import.meta.env?.VITE_ADMIN_HOST_LIVE === '1'
+
+/** Whether this login may open the admin panel. A server from before
+ * isPlatformAdmin existed decides by isPlatformOwner, as it always did. */
+export function canOpenAdmin(user: { isPlatformAdmin?: boolean; isPlatformOwner?: boolean } | null | undefined): boolean {
+  if (!user) return false
+  return user.isPlatformAdmin ?? !!user.isPlatformOwner
+}
 
 /** Paths the admin host serves: the panel and its sign-in, plus the tenant
  * dashboard while a support ("View as") session started there is running. */
