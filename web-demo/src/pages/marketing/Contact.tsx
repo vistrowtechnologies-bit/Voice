@@ -61,14 +61,14 @@ export function Contact() {
           <div className="mt-8 flex flex-col gap-2.5">
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary"
+              className="flex min-h-11 items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary sm:min-h-0"
             >
               <Icon name="mail" className="text-[18px]" />
               Or email us directly at {CONTACT_EMAIL}
             </a>
             <a
               href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`}
-              className="flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary"
+              className="flex min-h-11 items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary sm:min-h-0"
             >
               <Icon name="call" className="text-[18px]" />
               Or call us at {CONTACT_PHONE}
@@ -77,7 +77,7 @@ export function Contact() {
               href={CONTACT_WHATSAPP_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary"
+              className="flex min-h-11 items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary sm:min-h-0"
             >
               <Icon name="chat" className="text-[18px]" />
               Or message us on WhatsApp at {CONTACT_PHONE}
@@ -190,7 +190,7 @@ export function Contact() {
                     </label>
                     <select
                       name="team_size"
-                      className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
+                      className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none focus:border-primary"
                     >
                       <option>1–10</option>
                       <option>11–50</option>
@@ -204,7 +204,7 @@ export function Contact() {
                     </label>
                     <select
                       name="call_volume"
-                      className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
+                      className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none focus:border-primary"
                     >
                       <option>Under 500</option>
                       <option>500–2,000</option>
@@ -220,7 +220,7 @@ export function Contact() {
                   </label>
                   <select
                     name="timeline"
-                    className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
+                    className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none focus:border-primary"
                   >
                     <option>Immediately</option>
                     <option>Within 30 days</option>
@@ -236,7 +236,7 @@ export function Contact() {
                     name="use_case"
                     rows={3}
                     placeholder="e.g. inbound lead qualification for real estate"
-                    className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
+                    className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none focus:border-primary"
                   />
                 </div>
                 {error && <p className="text-sm text-destructive">{error}</p>}
@@ -291,7 +291,7 @@ function Field({
         type={type}
         placeholder={placeholder}
         required={required}
-        className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none placeholder:text-text-muted focus:border-primary"
+        className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none placeholder:text-text-muted focus:border-primary"
       />
     </div>
   )

@@ -98,7 +98,7 @@ export function IntegrationsDirectory() {
                 </ol>
                 <a
                   href={slackInstallUrl}
-                  className="mt-5 inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#4c1d95] transition-transform hover:-translate-y-0.5"
+                  className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#4c1d95] transition-transform hover:-translate-y-0.5"
                   rel="noreferrer"
                 >
                   Add to Slack
@@ -106,7 +106,7 @@ export function IntegrationsDirectory() {
                 </a>
               </div>
             </div>
-            <figure className="relative flex flex-col overflow-hidden rounded-3xl border border-border bg-[#f4f1fb] lg:col-span-5">
+            <figure className="relative flex flex-col overflow-hidden rounded-3xl border border-border bg-panel lg:col-span-5">
               <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/25 blur-[90px]" />
               <div className="relative flex flex-1 items-center justify-center p-4 sm:p-6">
                 <Shot
@@ -115,7 +115,7 @@ export function IntegrationsDirectory() {
                   className="rounded-xl shadow-[0_20px_40px_-24px_rgba(76,29,149,0.6)]"
                 />
               </div>
-              <figcaption className="relative border-t border-[#e4def2] bg-white/70 px-5 py-3 text-xs leading-relaxed text-[#5d5776]">
+              <figcaption className="relative border-t border-panel-line bg-surface/70 px-5 py-3 text-xs leading-relaxed text-text-muted">
                 {INTEGRATIONS_CALLS.caption}
               </figcaption>
             </figure>
@@ -216,7 +216,7 @@ export function IntegrationsDirectory() {
               </p>
               <NavLink
                 to="https://docs.vistrowvoice.com/api-reference/introduction"
-                className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                className="mt-1 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary hover:underline sm:mt-4 sm:min-h-0"
               >
                 Read the docs
                 <Icon name="arrow_forward" className="text-[16px]" />

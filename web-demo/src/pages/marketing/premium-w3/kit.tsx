@@ -125,7 +125,7 @@ export function RelatedPills({ label, items }: { label: string; items: { to: str
             <Link
               key={r.to}
               to={r.to}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-4 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+              className="inline-flex min-h-11 items-center gap-1 rounded-full border border-border bg-surface px-4 py-1.5 sm:min-h-0 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
             >
               {r.label}
               <Icon name="arrow_forward" className="text-[14px]" />

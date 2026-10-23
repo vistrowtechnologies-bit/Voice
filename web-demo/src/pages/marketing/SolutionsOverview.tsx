@@ -134,7 +134,7 @@ export function SolutionsOverview() {
                   }`}
                 >
                   {scene && (
-                    <div className={`overflow-hidden bg-[#f4f1fb] ${lead ? 'lg:order-2 lg:h-full' : ''}`}>
+                    <div className={`overflow-hidden bg-panel ${lead ? 'lg:order-2 lg:h-full' : ''}`}>
                       <Shot
                         figure={scene}
                         sizes={lead ? '(min-width: 1024px) 420px, (min-width: 640px) 90vw, calc(100vw - 40px)' : CARD_SIZES}

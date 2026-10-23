@@ -682,7 +682,9 @@ function Header() {
 function Footer() {
   return (
     <footer className="border-t border-border bg-surface">
-      <div className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+      {/* Extra bottom room on phones so the last footer lines can scroll clear
+          of the floating call widget and its greeting bubble (bottom right). */}
+      <div className="mx-auto max-w-7xl px-5 pt-14 pb-36 sm:pb-14 md:px-8">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-7">
           <div className="col-span-2">
             <NavLink to="/" className="flex items-center gap-2">

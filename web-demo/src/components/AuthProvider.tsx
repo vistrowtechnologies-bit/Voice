@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AuthContext, apiLogin, apiLoginMfa, apiLogout, apiMe, apiSignup } from '../lib/auth'
 import type { AuthUser } from '../lib/auth'
@@ -24,9 +24,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [setUser])
 
-  // Probe the session once on load so a returning user with a valid cookie
-  // lands straight in the dashboard without re-logging-in.
-  useEffect(() => {
+  // Probe the session once, the first time anything reads auth state (useAuth
+  // calls ensureSession), so a returning user with a valid cookie lands
+  // straight in the dashboard without re-logging-in. Marketing pages never
+  // call useAuth, so they skip the request (it was a 401 on every visit);
+  // `loading` stays true until the probe has run.
+  const probed = useRef(false)
+  const ensureSession = useCallback(() => {
+    if (probed.current) return
+    probed.current = true
     refresh()
   }, [refresh])
 
@@ -80,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, verifyMfa, signup, logout, refresh, setUser }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyMfa, signup, logout, refresh, setUser, ensureSession }}>
       {children}
     </AuthContext.Provider>
   )
