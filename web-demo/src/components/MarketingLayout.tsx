@@ -96,7 +96,8 @@ const HOVER_OPEN_MS = 120
 const HOVER_CLOSE_MS = 180
 
 /** Where the Product panel's featured card sends people: the Tamil page's
- * hero player (a 30-second call that switches from Hindi to Tamil). */
+ * hero player (a 30-second call: the agent opens in English, the caller
+ * answers in Tamil, and the agent follows). */
 const SAMPLE_LANGUAGE = 'tamil'
 
 // One shared look for every nav icon. The unlayered .material-symbols-outlined
@@ -148,7 +149,7 @@ function ProductPanel({ group, onNavigate }: { group: NavGroup; onNavigate: () =
           </span>
           <p className="mt-3 font-display text-lg font-semibold leading-snug">Hear it first</p>
           <p className="mt-2 text-sm leading-relaxed text-white/85">
-            A 30-second sample call that switches from Hindi to Tamil, and the agent follows.
+            A 30-second sample call: the caller answers in Tamil, and the agent follows.
           </p>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">

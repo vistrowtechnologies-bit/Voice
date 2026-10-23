@@ -43,8 +43,8 @@ function audioJsonLd(sample: VoiceSample) {
   return {
     '@context': 'https://schema.org',
     '@type': 'AudioObject',
-    name: `Sample call: a caller switches from ${sample.from} to ${sample.to}`,
-    description: `Scripted two-speaker phone call voiced by Vistrow Voice voices. The caller starts in ${sample.from} and switches to ${sample.to}, and the AI agent follows. Not a real customer call.`,
+    name: `Sample call: the AI agent follows the caller from ${sample.from} to ${sample.to}`,
+    description: `Demo two-speaker phone call voiced by Vistrow Voice. The AI agent opens in ${sample.from}, the caller answers in ${sample.to}, and the agent continues in ${sample.to} automatically. Not a real customer.`,
     contentUrl: `${SEO_ORIGIN}${sample.src}`,
     encodingFormat: 'audio/mp4',
     duration: `PT${sample.seconds}S`,

@@ -95,7 +95,7 @@ for (const page of pages) {
   }
   // Two-speaker voice sample: lazy audio, honest label, AudioObject schema.
   assert(html.includes(`src="/media/samples/${page.slug}-switch.m4a"`) && html.includes('preload="none"'), `${page.slug}: missing lazy voice sample`)
-  assert(html.includes('Scripted sample voiced by Vistrow Voice voices. Not a real customer call.'), `${page.slug}: missing voice sample label`)
+  assert(html.includes('Demo call voiced by Vistrow Voice. Not a real customer.'), `${page.slug}: missing voice sample label`)
   assert(html.includes('"@type":"AudioObject"'), `${page.slug}: missing AudioObject schema`)
 }
 
