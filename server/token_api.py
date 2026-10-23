@@ -2080,25 +2080,32 @@ def public_contact(req: ContactRequest, request: Request) -> dict:
     # immediately" lead and a 50-calls/month "just researching" one need very
     # different follow-up speed) - phone number lets sales call back directly
     # for a calling product, rather than starting the relationship over email.
-    details = "".join(
+    fields = [
+        ("Name", name),
+        ("Email", email),
+        ("Phone", req.phone.strip() or "-"),
+        ("Company", req.company.strip() or "-"),
+        ("Team size", req.team_size.strip() or "-"),
+        ("Monthly call volume", req.call_volume.strip() or "-"),
+        ("Timeline", req.timeline.strip() or "-"),
+        ("Use case", req.use_case.strip() or "-"),
+    ]
+    # A plain one-to-one notification (no branded template, logo or footer
+    # links, with a text part and reply-to the lead) so Gmail files it in
+    # Primary instead of Promotions.
+    email_html = "".join(
         f"<p style='margin:4px 0;'><strong>{label}:</strong> {html.escape(str(value))}</p>"
-        for label, value in [
-            ("Name", name),
-            ("Email", email),
-            ("Phone", req.phone.strip() or "-"),
-            ("Company", req.company.strip() or "-"),
-            ("Team size", req.team_size.strip() or "-"),
-            ("Monthly call volume", req.call_volume.strip() or "-"),
-            ("Timeline", req.timeline.strip() or "-"),
-            ("Use case", req.use_case.strip() or "-"),
-        ]
+        for label, value in fields
     )
-    email_html = email_sender.render_email(
-        preheader=f"New demo request from {name}",
-        heading="New demo request",
-        body_html=details,
+    email_text = "\n".join(f"{label}: {value}" for label, value in fields)
+    sent = email_sender.send_email(
+        notify_to,
+        f"Demo request from {name}",
+        email_html,
+        email_sender.FROM_WEBSITE,
+        reply_to=email,
+        text=email_text,
     )
-    sent = email_sender.send_email(notify_to, f"New demo request: {name}", email_html, email_sender.FROM_WEBSITE)
     if not sent:
         # Same "never crash on email failure" contract as password reset —
         # but this lead has nowhere else to land, so log it in full rather

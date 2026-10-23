@@ -153,6 +153,7 @@ def send_email(
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
     reply_to: str | None = None,
+    text: str | None = None,
 ) -> bool:
     """Best-effort send. Returns True only on a confirmed handoff to a provider.
 
@@ -169,9 +170,9 @@ def send_email(
         subject = f"[STAGING] {subject}"
     resend_key = os.environ.get("RESEND_API_KEY")
     if resend_key:
-        return _send_resend(resend_key, to, subject, html, from_address, attachments, reply_to)
+        return _send_resend(resend_key, to, subject, html, from_address, attachments, reply_to, text)
     if os.environ.get("SMTP_HOST"):
-        return _send_smtp(to, subject, html, from_address, attachments)
+        return _send_smtp(to, subject, html, from_address, attachments, text)
     logger.warning(
         "email not configured — would have sent to %s: %r. Set RESEND_API_KEY or SMTP_* to enable.",
         to,
@@ -188,8 +189,11 @@ def _send_resend(
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
     reply_to: str | None = None,
+    text: str | None = None,
 ) -> bool:
     body = {"from": _from_address(from_address), "to": [to], "subject": subject, "html": html}
+    if text:
+        body["text"] = text
     if reply_to:
         # Support-ticket emails set a per-ticket address here so a reply from
         # Gmail lands back in the ticket (see support_inbound.py).
@@ -233,6 +237,7 @@ def _send_smtp(
     html: str,
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
+    text: str | None = None,
 ) -> bool:
     host = os.environ["SMTP_HOST"]
     port = int(os.environ.get("SMTP_PORT") or 587)
@@ -242,7 +247,7 @@ def _send_smtp(
     msg["From"] = _from_address(from_address)
     msg["To"] = to
     msg["Subject"] = subject
-    msg.set_content("This message requires an HTML-capable email client.")
+    msg.set_content(text or "This message requires an HTML-capable email client.")
     msg.add_alternative(html, subtype="html")
     for item in attachments or []:
         try:
