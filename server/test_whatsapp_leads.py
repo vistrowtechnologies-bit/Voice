@@ -192,31 +192,6 @@ class ClickToWhatsAppLeads(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.wa.link_number(self.a, "not-a-number")
 
-    def test_delivery_receipts_reach_the_platform_sender_and_its_failure_is_contained(self):
-        import sys
-        import types
-        seen = []
-        fake = types.ModuleType("wa_sender")
-
-        def record_status(message_id, status, timestamp=None, errors=None):
-            seen.append((message_id, status, timestamp))
-            if status == "failed":
-                raise RuntimeError("sender broke")
-            return True
-
-        fake.record_status = record_status
-        sys.modules["wa_sender"] = fake
-        try:
-            body = json.dumps({"object": "whatsapp_business_account", "entry": [{"id": "WABA1", "changes": [{
-                "field": "messages", "value": {"metadata": {"phone_number_id": self.pid_a}, "statuses": [
-                    {"id": "wamid.f", "status": "failed", "timestamp": "1"},
-                    {"id": "wamid.d", "status": "delivered", "timestamp": "2"}]}}]}]}).encode()
-            out = self.post(body)
-        finally:
-            del sys.modules["wa_sender"]
-        self.assertEqual(out["ignored"], 1)
-        self.assertEqual(seen, [("wamid.f", "failed", "1"), ("wamid.d", "delivered", "2")])
-
     # ------------------------------------------------------- Embedded Signup
 
     def signup(self, account_id: int, pid: str, platform_type: str = "NOT_APPLICABLE", in_waba: bool = True):

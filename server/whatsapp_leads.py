@@ -143,8 +143,6 @@ def record_webhook(payload: dict, now: datetime.datetime | None = None) -> dict:
             for entry in payload.get("entry") or []:
                 for change in entry.get("changes") or []:
                     value = change.get("value") or {}
-                    if change.get("field") == "messages":
-                        _forward_statuses(value.get("statuses") or [])
                     if change.get("field") != "messages" or not value.get("messages"):
                         ignored += 1
                         continue
@@ -187,23 +185,6 @@ def record_webhook(payload: dict, now: datetime.datetime | None = None) -> dict:
     outcomes = [process_message(pid, mid, now) for pid, mid in fresh]
     return {"received": received, "ignored": ignored, "duplicates": duplicates,
             "queued": outcomes.count("queued")}
-
-
-def _forward_statuses(statuses: list) -> None:
-    """Delivery receipts for messages Vistrow itself sent (OTP, invoices) go
-    to the platform sender (server/wa_sender.py, runtime's lane). It ignores
-    message IDs that are not its own; a failure there never fails a webhook."""
-    if not statuses:
-        return
-    try:
-        import wa_sender
-    except ImportError:
-        return
-    for s in statuses:
-        try:
-            wa_sender.record_status(s["id"], s["status"], s.get("timestamp"), s.get("errors"))
-        except Exception:
-            logger.exception("wa_sender.record_status failed for a status update")
 
 
 def _finish(phone_number_id: str, message_id: str, status: str, reason: str = "",
