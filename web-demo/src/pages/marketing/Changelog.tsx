@@ -1,7 +1,7 @@
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
-import { CHANGELOG } from '../../lib/marketingContent'
+import { ReadingLayout, slugify } from '../../components/showcase'
+import { CHANGELOG, type ChangelogEntry } from '../../lib/marketingContent'
 
 const TAG_STYLES: Record<string, string> = {
   New: 'bg-primary/15 text-primary border-primary/30',
@@ -9,7 +9,20 @@ const TAG_STYLES: Record<string, string> = {
   Fixed: 'bg-success/15 text-success border-success/30',
 }
 
+// Entries are newest first; group them by "Month YYYY" for the contents list.
+function byMonth(entries: ChangelogEntry[]) {
+  const groups: { month: string; entries: ChangelogEntry[] }[] = []
+  for (const entry of entries) {
+    const month = entry.date.replace(/^\d+\s+/, '')
+    const last = groups[groups.length - 1]
+    if (last?.month === month) last.entries.push(entry)
+    else groups.push({ month, entries: [entry] })
+  }
+  return groups
+}
+
 export function Changelog() {
+  const months = byMonth(CHANGELOG)
   return (
     <MarketingLayout>
       <Seo
@@ -18,42 +31,45 @@ export function Changelog() {
         path="/changelog"
       />
 
-      <section className="mx-auto max-w-3xl px-5 py-16 md:px-8 lg:py-20">
-        <SectionEyebrow>Changelog</SectionEyebrow>
-        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl">
-          What’s shipped.
-        </h1>
-        <p className="mt-5 max-w-xl text-lg text-text-muted">
-          Product updates as they go live. Everything here is already running on real calls - we don’t
-          list things that haven’t shipped.
-        </p>
-      </section>
-
-      <section className="mx-auto max-w-3xl px-5 pb-8 md:px-8">
-        <ol className="relative flex flex-col gap-2 border-l border-border pl-6">
-          {CHANGELOG.map((entry) => (
-            <li key={`${entry.date}-${entry.title}`} className="relative pb-8">
-              <span className="absolute -left-[27px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-bg bg-primary" />
-              <div className="flex flex-wrap items-center gap-3">
-                <time className="font-mono text-xs uppercase tracking-wider text-text-muted">
-                  {entry.date}
-                </time>
-                <span
-                  className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                    TAG_STYLES[entry.tag] ?? TAG_STYLES.New
-                  }`}
-                >
-                  {entry.tag}
-                </span>
+      <ReadingLayout
+        crumbs={[{ label: 'Home', to: '/' }, { label: 'Changelog' }]}
+        eyebrow="Changelog"
+        title="What’s shipped."
+        lede="Product updates as they go live. Everything here is already running on real calls - we don’t list things that haven’t shipped."
+        meta={<span>Last update {CHANGELOG[0].date}</span>}
+        toc={months.map((m) => ({ id: slugify(m.month), label: m.month }))}
+        tocTitle="Months"
+        mobileLabel="Jump to a month"
+        placement="changelog_aside"
+      >
+        <div className="flex flex-col gap-12">
+          {months.map((m) => (
+            <section key={m.month} id={slugify(m.month)} className="scroll-mt-28">
+              <h2 className="font-display text-2xl font-bold tracking-tight">{m.month}</h2>
+              <div className="relative mt-6 pl-8">
+                <span aria-hidden="true" className="absolute bottom-4 left-[7px] top-4 w-0.5 rounded-full bg-gradient-to-b from-primary via-magenta to-cyan" />
+                <ol className="flex flex-col gap-4">
+                {m.entries.map((entry) => (
+                  <li key={`${entry.date}-${entry.title}`} className="relative">
+                    <span aria-hidden="true" className="absolute -left-8 top-6 h-4 w-4 rounded-full bg-gradient-to-br from-primary to-magenta ring-4 ring-bg" />
+                    <article className="rounded-3xl border border-border bg-surface p-5 shadow-[0_30px_60px_-44px_rgba(76,29,149,0.55)] sm:p-6">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <time className="font-mono text-xs uppercase tracking-wider text-text-muted">{entry.date}</time>
+                        <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${TAG_STYLES[entry.tag] ?? TAG_STYLES.New}`}>
+                          {entry.tag}
+                        </span>
+                      </div>
+                      <h3 className="mt-2 font-display text-lg font-semibold">{entry.title}</h3>
+                      <p className="mt-1.5 text-base leading-[1.7] text-text">{entry.body}</p>
+                    </article>
+                  </li>
+                ))}
+                </ol>
               </div>
-              <h2 className="mt-2 font-display text-lg font-semibold">{entry.title}</h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-text-muted">{entry.body}</p>
-            </li>
+            </section>
           ))}
-        </ol>
-      </section>
-
-      <CTABand />
+        </div>
+      </ReadingLayout>
     </MarketingLayout>
   )
 }

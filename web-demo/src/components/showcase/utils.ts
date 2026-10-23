@@ -22,3 +22,10 @@ export function srcSetFor(figure: PageFigureData): string | undefined {
 export const stripStepNumber = (title: string) => title.replace(/^\d+\.\s*/, '')
 
 export const isPortrait = (figure: PageFigureData) => figure.height > figure.width
+
+/** Anchor id for a heading: "1. Who we are" -> "1-who-we-are". */
+export const slugify = (text: string) =>
+  text.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+/** Body text of a reading column: full-contrast 16px with a relaxed line. */
+export const READING_PROSE = 'text-base leading-[1.75] text-text'

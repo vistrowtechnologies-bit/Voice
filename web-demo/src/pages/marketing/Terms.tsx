@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { LegalLayout, LegalSection } from '../../components/LegalLayout'
 import { BRAND } from '../../lib/brand'
 
-const CONTACT_EMAIL = 'vistrowai@gmail.com'
+const CONTACT_EMAIL = 'support@vistrowvoice.com'
 
 export function Terms() {
   return (
@@ -11,6 +11,7 @@ export function Terms() {
       title="Terms of Service"
       updated="12 October 2026"
       path="/terms"
+      contactEmail={CONTACT_EMAIL}
       description="The terms that govern business use of Vistrow Voice, including acceptable use, billing, data, and compliance responsibilities."
       intro={`These terms govern your use of ${BRAND.name}, the AI voice-agent platform operated by Vistrow Technologies ("we", "us"). By creating an account or using the service, you agree to them.`}
     >
