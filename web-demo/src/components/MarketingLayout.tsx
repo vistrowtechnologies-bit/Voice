@@ -192,7 +192,7 @@ function SolutionsPanel({ group, onNavigate }: { group: NavGroup; onNavigate: ()
           By language
           <HeaderIcon name="arrow_forward" size={16} />
         </NavLink>
-        <ul className="mt-2 grid grid-cols-2 gap-x-2">
+        <ul className="mt-2 grid grid-cols-2 gap-x-2 grid-close-2">
           {LANGUAGES.map((lang) => (
             <li key={lang.slug}>
               <NavLink
