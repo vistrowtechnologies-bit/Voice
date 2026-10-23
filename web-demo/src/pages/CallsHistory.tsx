@@ -378,7 +378,7 @@ export function CallsHistory() {
     {
       key: 'direction',
       header: 'Direction',
-      width: 135,
+      width: 185,
       minWidth: 105,
       maxWidth: 210,
       resizable: true,
@@ -387,9 +387,17 @@ export function CallsHistory() {
       // for phone calls recorded before this field existed.
       render: (call) =>
         call.direction ? (
-          <span className="flex items-center gap-1 text-sm text-text-muted">
-            <Icon name={call.direction === 'inbound' ? 'call_received' : 'call_made'} className="text-[15px]" />
+          <span className="flex min-w-0 items-center gap-1.5 text-sm text-text-muted">
+            <Icon name={call.direction === 'inbound' ? 'call_received' : 'call_made'} className="shrink-0 text-[15px]" />
             {call.direction === 'inbound' ? 'Inbound' : 'Outbound'}
+            {/* A follow-up the AI scheduled and placed on its own (owner, 22 Oct). */}
+            {call.followUpKind != null && (
+              <Tooltip content={call.followUpLabel || 'Follow-up call'}>
+                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                  <Icon name="event_repeat" className="text-[12px]" />Follow-up
+                </span>
+              </Tooltip>
+            )}
           </span>
         ) : (
           <span className="text-sm text-text-muted">-</span>

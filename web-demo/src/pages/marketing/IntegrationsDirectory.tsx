@@ -1,5 +1,6 @@
 import { FaqSection } from '../../components/FaqSection'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand } from '../../components/MarketingBits'
@@ -192,7 +193,7 @@ export function IntegrationsDirectory() {
           <Reveal className="h-full">
             <div className="vv-lift h-full rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/[0.14] via-surface to-surface p-7 sm:p-8">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
-                <Icon name="webhook" className="text-[22px]" />
+                <Icon3D name="webhook" size={32} plate className="text-[22px]" />
               </span>
               <h3 className="mt-5 font-display text-xl font-bold">Don’t see your tool?</h3>
               <p className="mt-3 text-sm leading-relaxed text-text-muted">
@@ -205,7 +206,7 @@ export function IntegrationsDirectory() {
           <Reveal delayMs={70} className="h-full">
             <div className="vv-lift h-full rounded-3xl border border-border bg-surface p-7 sm:p-8">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                <Icon name="api" className="text-[22px]" />
+                <Icon3D name="api" className="text-[22px]" />
               </span>
               <h3 className="mt-5 font-display text-xl font-bold">Or build on the API</h3>
               <p className="mt-3 text-sm leading-relaxed text-text-muted">

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -330,7 +331,12 @@ export function CompareIvr() {
                     i === 1 ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
                   }`}
                 >
-                  <Icon name={WHEN_ICONS[i % WHEN_ICONS.length]} className="text-[22px]" />
+                  <Icon3D
+                    name={WHEN_ICONS[i % WHEN_ICONS.length]}
+                    size={i === 1 ? 32 : 36}
+                    plate={i === 1}
+                    className="text-[22px]"
+                  />
                 </span>
                 <div>
                   <h3 className="font-display text-lg font-semibold">{item.title}</h3>
@@ -373,7 +379,7 @@ export function CompareIvr() {
               <li key={item.title}>
                 <Reveal delayMs={i * 70} className="flex gap-4 rounded-2xl border border-amber/40 bg-amber/[0.06] p-5">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber/15 text-amber">
-                    <Icon name={item.icon} className="text-[20px]" />
+                    <Icon3D name={item.icon} size={32} className="text-[20px]" />
                   </span>
                   <div>
                     <h3 className="font-display text-base font-semibold">{item.title}</h3>

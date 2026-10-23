@@ -126,6 +126,27 @@ By default an agent delivers leads to every connected integration. Select specif
 ## Memory
 Turn on **Memory** and the agent remembers returning callers by phone number (a short summary of past calls) and greets them accordingly.""",
             },
+            {
+                "slug": "agent-follow-up-rules",
+                "title": "Automatic follow-up calls and nurture days",
+                "summary": "How often an agent tries to retry a lead, and when it calls people back: call backs, visit reminders and nurture calls on day 2, 5 and 10, Sundays skipped.",
+                "body": """Open the agent, go to **After the call** and find **Follow-ups**.
+
+## Retries
+**Max tries per lead** (1-10) counts every dial. After the last one the lead is reported as not reachable. This applies to leads the agent calls automatically. Bulk campaigns keep the retry settings from their own wizard.
+
+## Calls scheduled after a conversation
+- **Call back at the time the caller asked for**: when a caller asks to be rung back on a day or time, that call is placed then, inside your calling window.
+- **Site-visit reminder call**: a short confirm-or-reschedule call the day before a booked visit, at the **Reminder time**. It is 2 hours before when the visit is less than a day away.
+- **Nurture calls for interested leads**: a short sequence of check-in calls when a call ended interested, with no visit booked and no call back asked for.
+
+## Nurture days
+**Call on these days after the conversation** sets the sequence. The default is **Day 2 → 5 → 10**. Use **Add step** for up to five calls, each on a later day (up to day 60). Every call is placed at the **Call time** (11:00 by default). A day outside your calling days (Sunday by default, set under Compliance) moves to the next calling day.
+
+The sequence stops when the person says no, opts out, books a visit or calls you. With **If they don't answer, try the next step** on, a step whose retries all go unanswered still moves on to the next day. Turn it off to stop the sequence there.
+
+Every scheduled call shows on the **Follow-ups** page, where you can call it now, reschedule or cancel it.""",
+            },
         ],
     },
     {
@@ -276,6 +297,48 @@ To call new leads within seconds of them arriving, use the webhook on **Integrat
 
 ## Call details
 Click a caller to open details: the full transcript, recording playback and download, captured lead fields, CRM delivery status (with re-send), and earlier calls from the same number.""",
+            },
+        ],
+    },
+    {
+        "slug": "follow-ups",
+        "title": "Follow-ups",
+        "icon": "event_repeat",
+        "route": "/dashboard/follow-ups",
+        "articles": [
+            {
+                "slug": "follow-up-calls",
+                "title": "Follow-up calls the AI makes",
+                "summary": "Why the AI calls a lead or customer again, and how to see, move, cancel or add these calls.",
+                "body": """If the AI called a lead again a day or more after talking to them, it was a follow-up call. After a call, the agent can schedule a call back to the same person on its own:
+
+- **Call back**: the caller asked to be rung back on a day or time.
+- **Site-visit reminder**: a short call before a booked visit.
+- **Nurture**: the call ended interested, with nothing booked. The agent checks in again later.
+
+Each agent's rules are under **Agents → open the agent → After the call → Follow-ups**.
+
+## The Follow-ups page
+**Follow-ups** in the sidebar lists these calls under **Upcoming**, **Done** and **Cancelled**. On an upcoming call you can:
+- **Call now**: queue it straight away.
+- **Reschedule**: pick a new date and time.
+- **Cancel**: it will not ring.
+
+A nurture call is skipped if the person calls you or books a visit before it is due.
+
+## Schedule one yourself
+Click **Schedule follow-up** (or **Schedule a follow-up call** on a lead's page). Enter the name and phone, pick the **Agent who calls**, the time, and the type: **Call them back** or **Check in on their interest**. You can add a **Note for the AI** about what to ask. If that person already has a follow-up waiting, it is moved to the new time instead of adding a second call.
+
+The time must be in the future and within 90 days. Numbers on your Do-Not-Call list cannot be scheduled, and the agent needs a phone number to call from.
+
+## Ask the Copilot
+On the Growth plan you can also ask the Copilot, for example "move Ravi's follow-up to Friday 4 pm" or "cancel Neha's follow-up call". It shows what it will do on a card, and nothing changes until you press **Confirm**.
+
+## Where else you see them
+- **Calls**: calls the AI made as a follow-up carry a **Follow-up** tag.
+- The notification bell shows newly scheduled follow-ups and their results.
+
+Follow-up calls follow your Compliance rules: Do-Not-Call and calling window.""",
             },
         ],
     },

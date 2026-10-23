@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../Icon'
+import { Icon3D } from '../Icon3D'
 import { Reveal } from '../Reveal'
 import { SectionEyebrow } from '../MarketingBits'
 import { trackMarketingCta } from '../../lib/analytics'
@@ -175,7 +176,12 @@ export function IconTile({ name, strong = false, size = 'md', shrink = false }: 
         strong ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
       }`}
     >
-      <Icon name={name} className={size === 'sm' ? 'text-[20px]' : 'text-[22px]'} />
+      <Icon3D
+        name={name}
+        size={(size === 'sm' ? 32 : 36) - (strong ? 4 : 0)}
+        plate={strong}
+        className={size === 'sm' ? 'text-[20px]' : 'text-[22px]'}
+      />
     </span>
   )
 }

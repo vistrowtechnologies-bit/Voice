@@ -6,4 +6,7 @@ export const PAGE_GUIDES: Record<string, string[]> = {
   '/ai-receptionist': [
     'Still deciding between options? Read our guide to [comparing an AI receptionist with an answering service and an IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr).',
   ],
+  '/product/inbound': [
+    'New to the idea? Start with [what an AI receptionist does on a call](/resources/blog/what-is-an-ai-receptionist).',
+  ],
 }

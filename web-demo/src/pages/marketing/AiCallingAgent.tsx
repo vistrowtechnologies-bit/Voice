@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -358,7 +359,7 @@ export function AiCallingAgent() {
                 }`}
               >
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                  <Icon name={item.icon} className="text-[22px]" />
+                  <Icon3D name={item.icon} className="text-[22px]" />
                 </span>
                 <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>

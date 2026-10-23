@@ -175,6 +175,20 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "upcoming_follow_ups",
+            "description": "Follow-up calls the AI will make back to people (call backs, visit reminders, nurture check-ins) that are still waiting: who, when, which agent, and the followUpId to reschedule, cancel or call one now.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Optional name or phone number to find one person's follow-up."}
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "phone_numbers",
             "description": "This workspace's phone numbers with their label, status, and which agent answers each one.",
             "parameters": {"type": "object", "properties": {}, "required": []},
@@ -510,6 +524,51 @@ def upcoming_appointments(account_id: int, days: int = 7, timezone_name: str = "
     }
 
 
+def upcoming_follow_ups(account_id: int, query: str = "", **_ignored) -> dict:
+    """Waiting follow-ups, soonest first, times in the workspace calling time
+    zone (the one the dialer and the copilot's follow-up actions use)."""
+    try:
+        tz = ZoneInfo(calls_db.get_compliance(account_id).get("timezone") or "Asia/Kolkata")
+    except Exception:
+        tz = ZoneInfo("Asia/Kolkata")
+    data = calls_db.list_follow_ups(account_id, view="upcoming")
+    items = data["items"]
+    needle = _text(query, 60).casefold()
+    digits = "".join(c for c in needle if c.isdigit())
+    if needle:
+        items = [i for i in items if needle in i["name"].casefold()
+                 or (len(digits) >= 4 and digits in "".join(c for c in i["phone"] if c.isdigit()))]
+
+    def when(iso: str) -> str:
+        try:
+            local = datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(tz)
+        except (AttributeError, ValueError):
+            return ""
+        return f"{local:%a} {local.day} {local:%b} {local:%Y}, {local:%H:%M}"
+
+    return {
+        "found": bool(items),
+        "timezone": tz.key,
+        "waitingTotal": data["counts"]["upcoming"],
+        "followUps": [
+            {
+                "followUpId": i["id"],
+                "name": i["name"],
+                "phone": i["phone"],
+                "type": i["label"],
+                "due": when(i["dueAt"]),
+                "agent": i["agentName"],
+                "agentId": i["agentId"],
+                "retryingAfterNoAnswer": i["status"] != "pending",
+                "beingCalledNow": i["status"] == "calling",
+                "campaignPaused": i["campaignPaused"],
+                "summary": _text(i["summary"]),
+            }
+            for i in items[:MAX_LIST_ITEMS]
+        ],
+    }
+
+
 def phone_numbers(account_id: int, **_ignored) -> dict:
     numbers = calls_db.list_phone_numbers(account_id)
     agent_names = {a["id"]: a["name"] for a in calls_db.list_agents(account_id)}
@@ -542,5 +601,6 @@ TOOL_FUNCTIONS = {
     "contact_requirements": contact_requirements,
     "failing_integrations": failing_integrations,
     "upcoming_appointments": upcoming_appointments,
+    "upcoming_follow_ups": upcoming_follow_ups,
     "phone_numbers": phone_numbers,
 }

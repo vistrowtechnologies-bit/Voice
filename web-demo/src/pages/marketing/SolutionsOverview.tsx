@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -148,7 +149,7 @@ export function SolutionsOverview() {
                           lead ? 'bg-gradient-to-br from-primary to-magenta text-white' : 'bg-primary/12 text-primary'
                         }`}
                       >
-                        <Icon name={s.icon ?? 'circle'} className="text-[24px]" />
+                        <Icon3D name={s.icon ?? 'circle'} size={lead ? 34 : 38} plate={lead} className="text-[24px]" />
                       </span>
                       <h3 className={`mt-5 font-display font-semibold ${lead ? 'text-2xl' : 'text-xl'}`}>{s.label}</h3>
                       <p className="mt-2 text-sm leading-relaxed text-text-muted">{s.desc}</p>
