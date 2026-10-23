@@ -1739,6 +1739,16 @@ async def _publish_event(context: RunContext, payload: dict) -> None:
     await room.local_participant.publish_data(json.dumps(payload), topic="lead-events")
 
 
+def _is_test_call(context: RunContext) -> bool:
+    """A dashboard test call (room "test-agent-..." / "test-phone-...").
+
+    Owner, 23 Oct 2026: test calls booked real appointments onto the
+    workspace calendar. They still read the real calendar, so slot offers
+    are tested, but bookings, callbacks and opt-outs are not written."""
+    room = (context.userdata or {}).get("room")
+    return str(getattr(room, "name", "") or "").startswith(("test-agent-", "test-phone-"))
+
+
 def _is_demo(context: RunContext) -> bool:
     """Whether this call is one of the published marketing demos.
 
@@ -1795,8 +1805,8 @@ async def _calendar_book(
     # people trying the marketing site, sitting alongside genuine bookings
     # with no way to tell them apart. The conversation still behaves exactly
     # as if the booking succeeded; nothing is persisted.
-    if _is_demo(context):
-        logger.info("demo agent: simulating booking on %s at %s (nothing written)", date, time)
+    if _is_demo(context) or _is_test_call(context):
+        logger.info("demo/test call: simulating booking on %s at %s (nothing written)", date, time)
         return {"ok": True}
     account_id = (context.userdata or {}).get("account_id")
     agent_id = (context.userdata or {}).get("agent_id")
@@ -2123,8 +2133,8 @@ async def do_not_call(context: RunContext, reason: str = "") -> str:
             "There is no phone number on this call to add to the do-not-call list. Apologise, "
             "assure them they will not be contacted again, and close the call politely."
         )
-    if _is_demo(context):
-        logger.info("demo agent: simulating do-not-call for %s", _mask_phone(phone))
+    if _is_demo(context) or _is_test_call(context):
+        logger.info("demo/test call: simulating do-not-call for %s", _mask_phone(phone))
         added = True
     else:
         added = await asyncio.to_thread(
@@ -2196,8 +2206,8 @@ async def request_callback(
             "You do not have both a name and a phone number yet. Ask for whichever is missing — "
             "one at a time — and call this again once you have both."
         )
-    if _is_demo(context):
-        logger.info("demo agent: simulating callback request for %s", _mask_phone(phone))
+    if _is_demo(context) or _is_test_call(context):
+        logger.info("demo/test call: simulating callback request for %s", _mask_phone(phone))
         result = {"ok": True}
     else:
         result = await asyncio.to_thread(

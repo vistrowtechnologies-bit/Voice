@@ -38,5 +38,31 @@ class CallbackDoesNotWaitForWebhooks(unittest.TestCase):
         awaited_webhook.assert_not_called()
 
 
+
+class TestCallsWriteNothing(unittest.TestCase):
+    """Owner, 23 Oct 2026: dashboard test calls booked real appointments."""
+
+    def _ctx(self, room_name):
+        return SimpleNamespace(userdata={"account_id": 2, "agent_id": 26, "lead_data": {},
+                                         "room": SimpleNamespace(name=room_name)})
+
+    def test_test_rooms_are_recognised(self):
+        self.assertTrue(tools._is_test_call(self._ctx("test-agent-26-qlzml5hk")))
+        self.assertTrue(tools._is_test_call(self._ctx("test-phone-26-abc")))
+        self.assertFalse(tools._is_test_call(self._ctx("call-26-abc")))
+        self.assertFalse(tools._is_test_call(SimpleNamespace(userdata={})))
+
+    def test_a_test_call_books_and_requests_callbacks_without_writing(self):
+        ctx = self._ctx("test-agent-26-x")
+        with patch.object(tools, "_is_demo", return_value=False), \
+                patch.object(tools.db, "book_native_appointment") as book, \
+                patch.object(tools.db, "record_callback_request") as callback, \
+                patch.object(tools, "_fan_out_in_background"):
+            self.assertEqual(asyncio.run(tools._calendar_book(ctx, "2026-10-25", "14:00", 30, "A", "9800000001", "x")),
+                             {"ok": True})
+            asyncio.run(tools.request_callback.__wrapped__(ctx, name="A", phone="9800000001"))
+        book.assert_not_called()
+        callback.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
