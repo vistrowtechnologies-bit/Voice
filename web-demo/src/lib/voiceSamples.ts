@@ -4,7 +4,10 @@
 // asked. Nobody mentions language. Voiced with Sarvam bulbul:v4-flash (agent
 // aarti_hi_customer, caller aditya_hi_conversational on a phone-band line,
 // temperature 0.9). `start` is each line's offset in the file, in seconds.
-// Generated; see docs/SEO-VOICE-SAMPLES-2026-10-15.md.
+// Generated; see docs/SEO-VOICE-SAMPLES-2026-10-15.md. Waveform peaks come
+// from scripts/voice-sample-peaks.py.
+
+import { VOICE_SAMPLE_PEAKS } from './voiceSamplePeaks'
 
 export interface VoiceSampleTurn {
   speaker: 'Caller' | 'Agent'
@@ -22,10 +25,12 @@ export interface VoiceSample {
   from: string
   to: string
   languages: string[]
-  /** Index of the agent's first line in `to`, where the switch chip flips;
-   * defaults to SWITCH_TURN. */
+  /** Index of the agent's first line in `to`, where the language track
+   * flips; defaults to SWITCH_TURN. */
   switchTurn?: number
   turns: VoiceSampleTurn[]
+  /** Waveform bar heights (0-100), from voiceSamplePeaks.ts. */
+  peaks?: number[]
 }
 
 /** Index of the caller's language-switch turn in every sample. */
@@ -33,7 +38,7 @@ export const SWITCH_TURN = 2
 
 export const switchTurnOf = (sample: VoiceSample) => sample.switchTurn ?? SWITCH_TURN
 
-export const VOICE_SAMPLES: Record<string, VoiceSample> = {
+const SAMPLES: Record<string, VoiceSample> = {
   marathi: {
     "src": "/media/samples/marathi-switch.m4a",
     "seconds": 35,
@@ -803,4 +808,76 @@ export const VOICE_SAMPLES: Record<string, VoiceSample> = {
       }
     ]
   },
+  english: {
+    "src": "/media/samples/english-switch.m4a",
+    "seconds": 42,
+    "from": "Hindi",
+    "to": "English",
+    "languages": [
+      "hi-IN",
+      "en-IN"
+    ],
+    "switchTurn": 2,
+    "turns": [
+      {
+        "speaker": "Agent",
+        "lang": "hi-IN",
+        "native": "नमस्ते, Vikram जी? मैं Artha, Kaveri Software से बोल रही हूँ। आपने हमारे HR software के demo के लिए request भेजी थी।",
+        "start": 0.2,
+        "gloss": "Hello, Vikram ji? This is Artha from Kaveri Software. You had sent a request for a demo of our HR software."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "en-IN",
+        "native": "Yes, yes, tell me. Actually, we are about sixty people now, so we need something for payroll and leave.",
+        "start": 8.59
+      },
+      {
+        "speaker": "Agent",
+        "lang": "en-IN",
+        "native": "Got it, payroll and leave for around sixty people. Would a thirty-minute online demo work for you this week?",
+        "start": 14.89
+      },
+      {
+        "speaker": "Caller",
+        "lang": "en-IN",
+        "native": "Umm, Thursday is better… after lunch, maybe three o’clock?",
+        "start": 21.61
+      },
+      {
+        "speaker": "Agent",
+        "lang": "en-IN",
+        "native": "Sure, Thursday at 3 PM is free. I’ll send the meeting link to the email on your form.",
+        "start": 26.35
+      },
+      {
+        "speaker": "Caller",
+        "lang": "en-IN",
+        "native": "Okay… and my HR head will also join.",
+        "start": 31.73
+      },
+      {
+        "speaker": "Agent",
+        "lang": "en-IN",
+        "native": "No problem, you can forward the same link to her. So, Thursday, 3 PM, online demo.",
+        "start": 33.66
+      },
+      {
+        "speaker": "Caller",
+        "lang": "en-IN",
+        "native": "Great, thanks.",
+        "start": 38.38
+      },
+      {
+        "speaker": "Agent",
+        "lang": "en-IN",
+        "native": "Thank you, Vikram ji! Have a good day.",
+        "start": 39.48
+      }
+    ]
+  },
 }
+
+export const VOICE_SAMPLES: Record<string, VoiceSample> = Object.fromEntries(
+  Object.entries(SAMPLES).map(([slug, sample]) => [slug, { ...sample, peaks: VOICE_SAMPLE_PEAKS[slug] }]),
+)

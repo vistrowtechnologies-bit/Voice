@@ -12,6 +12,12 @@ const pages = [
     demo: 'hindi-real-estate-lead-qualification',
   },
   {
+    slug: 'english',
+    title: 'Indian English AI Voice Calling Agent | Vistrow Voice',
+    phrases: ['AI voice agents that speak', 'Indian English', 'Example conversation', 'Mixing in Hindi is the normal case', 'English call notes', 'Voices that speak English', 'Hindi, English and 9 other Indian languages'],
+    links: ['/languages/hindi', '/product/outbound', '/solutions/support'],
+  },
+  {
     slug: 'kannada',
     title: 'Kannada AI Voice Calling Agent for Karnataka | Vistrow Voice',
     phrases: ['Kannada AI voice calling agent', 'Bengaluru and Karnataka', 'Kannada-English code-switching', 'Example conversation', 'Kanglish is the normal case'],

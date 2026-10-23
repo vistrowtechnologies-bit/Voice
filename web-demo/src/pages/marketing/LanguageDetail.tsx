@@ -66,7 +66,7 @@ function CheckList({ items, tone }: { items: string[]; tone: 'primary' | 'cyan' 
   )
 }
 
-// One template renders all ten language pages, keyed by :slug, composed from
+// One template renders all eleven language pages, keyed by :slug, composed from
 // the premium showcase kit (components/showcase/) like /product/* and
 // /solutions/*: split hero with the native-script sample card, the scripted
 // sample-call player beside the code-mixing note, who it is for beside a
@@ -86,6 +86,10 @@ export function LanguageDetail() {
     title: `${lang.name} AI Voice Agent for Customer Calls | Vistrow Voice`,
     description: `Handle inbound, outbound, and website customer conversations with a ${lang.name} AI voice agent.`,
   }
+  // The language callers most often mix in: English on the Indian-language
+  // pages, Hindi on the English page.
+  const isEnglish = lang.slug === 'english'
+  const mixWith = isEnglish ? 'Hindi' : 'English'
   const demoCall = LANGUAGE_DEMO_CALLS[lang.slug]
   const voiceSample = VOICE_SAMPLES[lang.slug]
   const whoHeading = `Built for teams that take calls in ${lang.name}.`
@@ -97,10 +101,10 @@ export function LanguageDetail() {
     ...(lang.extraFaqs ?? []),
     {
       q: `Can the AI agent handle a full call in ${lang.name}?`,
-      a: `Yes - Artha answers, qualifies, and books entirely in ${lang.name}, including numbers, dates, and Indian names. It isn't a translation layer bolted onto an English agent.`,
+      a: `Yes - Artha answers, qualifies, and books entirely in ${lang.name}, including numbers, dates, and Indian names.${isEnglish ? '' : " It isn't a translation layer bolted onto an English agent."}`,
     },
     {
-      q: `What if the caller mixes ${lang.name} and English?`,
+      q: `What if the caller mixes ${lang.name} and ${mixWith}?`,
       a: `That's the normal case, and Artha follows it. It switches mid-call to match whichever language the caller lands on, rather than forcing them to stay in one.`,
     },
     {
@@ -124,7 +128,7 @@ export function LanguageDetail() {
   }
 
   const stats = [
-    { value: lang.native, label: 'Native script, natively spoken', native: true },
+    { value: lang.native, label: isEnglish ? 'Indian accents and names' : 'Native script, natively spoken', native: true },
     { value: lang.region, label: 'Where your callers are' },
     { value: '24/7', label: 'Answers outside office hours too' },
   ]
@@ -132,7 +136,7 @@ export function LanguageDetail() {
   // Facts that hold for every language page (languages FAQ, calls history,
   // the voices aside below).
   const trustFacts: TrustFact[] = [
-    { icon: 'translate', title: `${lang.name} and English in one call`, body: 'The agent follows the caller when they move between languages, without changing voice.' },
+    { icon: 'translate', title: `${lang.name} and ${mixWith} in one call`, body: 'The agent follows the caller when they move between languages, without changing voice.' },
     { icon: 'devices', title: 'Phone and website', body: 'The same agent can answer your number and the call button on your site.' },
     { icon: 'receipt_long', title: 'Every call logged', body: 'A transcript for every call, plus the lead fields captured and the audio if recording is on.' },
     { icon: 'verified_user', title: 'Consent and recording, your call', body: 'Require spoken consent, switch recording on or off and set how long records are kept.' },
@@ -161,7 +165,7 @@ export function LanguageDetail() {
         title={
           <>
             <span className="block">AI voice agents that speak</span>{' '}
-            <span className="block bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">{lang.name}.</span>
+            <span className="block bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">{lang.heroName ?? lang.name}.</span>
           </>
         }
         subhead={lang.intro ?? lang.blurb}
@@ -283,8 +287,9 @@ export function LanguageDetail() {
                 <figcaption className="mt-3">
                   <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{lang.sampleExchange.context}, in {lang.name}.</h2>
                   <p className="mt-3 text-sm text-text-muted">
-                    A short written sample to show the style of call, with an English gloss under each line. It is not a
-                    recording of a customer call.
+                    {isEnglish
+                      ? 'A short written sample to show the style of call, with a plain-English gloss under the lines that mix in Hindi. It is not a recording of a customer call.'
+                      : 'A short written sample to show the style of call, with an English gloss under each line. It is not a recording of a customer call.'}
                   </p>
                 </figcaption>
                 <ol className="mt-7 space-y-4 rounded-3xl border border-border bg-gradient-to-br from-primary/[0.08] via-surface-high/40 to-transparent p-4 shadow-[0_30px_60px_-44px_rgba(76,29,149,0.55)] sm:p-6">
@@ -304,7 +309,7 @@ export function LanguageDetail() {
                             {agent ? 'AI agent' : 'Caller'}
                           </p>
                           <p lang={lang.code} className={`mt-1 text-base leading-relaxed ${agent ? 'text-white' : 'text-text'}`}>{turn.native}</p>
-                          <p className={`mt-1 text-sm italic leading-relaxed ${agent ? 'text-white/80' : 'text-text-muted'}`}>{turn.gloss}</p>
+                          {turn.gloss && <p className={`mt-1 text-sm italic leading-relaxed ${agent ? 'text-white/80' : 'text-text-muted'}`}>{turn.gloss}</p>}
                         </div>
                       </li>
                     )
@@ -325,7 +330,7 @@ export function LanguageDetail() {
                 <h2 className="mt-4 font-display text-xl font-bold">Voices that speak {lang.name}</h2>
                 <p className="mt-2 text-sm leading-relaxed text-white/85">
                   These Standard voices in the agent picker speak {lang.name} and keep the same voice if the caller
-                  moves to English or another Indian language: {INDIAN_LANGUAGE_VOICES.female.join(', ')} (female) and{' '}
+                  moves to {mixWith} or another Indian language: {INDIAN_LANGUAGE_VOICES.female.join(', ')} (female) and{' '}
                   {INDIAN_LANGUAGE_VOICES.male.join(', ')} (male).
                 </p>
               </aside>

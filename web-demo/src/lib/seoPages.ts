@@ -94,6 +94,8 @@ const page = (
 
 const LANGUAGE_PAGES = [
   ['hindi', 'Hindi', 'हिन्दी'],
+  // English has no script of its own; its image alt reads "Indian English ...".
+  ['english', 'English', 'Indian'],
   ['marathi', 'Marathi', 'मराठी'],
   ['tamil', 'Tamil', 'தமிழ்'],
   ['telugu', 'Telugu', 'తెలుగు'],
@@ -110,6 +112,11 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
     title: 'Hindi AI Voice Calling Agent with Hinglish | Vistrow Voice',
     description:
       'AI voice agent in Hindi and Hinglish for inbound calls, reminders and web calls. An AI calling agent in Hindi that qualifies leads and logs every call.',
+  },
+  english: {
+    title: 'Indian English AI Voice Calling Agent | Vistrow Voice',
+    description:
+      'AI voice calling agent in Indian English for phone and web calls. Follows Indian accents, names and numbers, switches to Hindi mid-call and logs every call.',
   },
   kannada: {
     title: 'Kannada AI Voice Calling Agent for Karnataka | Vistrow Voice',
@@ -790,6 +797,7 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   'solution-support': { eyebrow: 'SUPPORT & HELPDESK', headline: 'Resolve tier-one issues on the first call.', proof: 'Troubleshoot  \u00b7  Resolve  \u00b7  Escalate with context', accent: '#0e7490', hue: '-91deg' },
   languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: '130+ languages, Hindi to Tamil.', proof: 'Mid-call language switching  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी  ·  ಕನ್ನಡ  ·  తెలుగు  ·  தமிழ்  ·  বাংলা' },
   'language-hindi': { eyebrow: 'HINDI AI VOICE AGENT', headline: 'हिन्दी calls, handled naturally.', proof: 'Hindi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी' },
+  'language-english': { eyebrow: 'INDIAN ENGLISH AI VOICE AGENT', headline: 'Indian English calls, handled naturally.', proof: 'English + Hindi  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg' },
   'language-marathi': { eyebrow: 'MARATHI AI VOICE AGENT', headline: 'मराठी calls, handled naturally.', proof: 'Marathi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'मराठी' },
   'language-tamil': { eyebrow: 'TAMIL AI VOICE AGENT', headline: 'தமிழ் calls, handled naturally.', proof: 'Tamil + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'தமிழ்' },
   'language-telugu': { eyebrow: 'TELUGU AI VOICE AGENT', headline: 'తెలుగు calls, handled naturally.', proof: 'Telugu + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'తెలుగు' },

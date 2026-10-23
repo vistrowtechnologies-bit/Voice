@@ -491,18 +491,18 @@ function MobileNav({ onClose }: { onClose: () => void }) {
               </NavLink>
             </li>
           ))}
-          {/* The ten above are the Indian scripts; the rest of the 130+ are on
-              /languages (owner, 21 Oct). Two columns wide, it fills the last
-              row at both 2 and 3 columns. */}
-          <li className="col-span-2">
+          {/* The eleven above have their own pages; the rest of the 130+ are
+              on /languages (owner, 21 Oct). As the twelfth cell it fills the
+              last row at both 2 and 3 columns. */}
+          <li>
             <NavLink
               to="/languages"
               onClick={onClose}
               className="flex h-full items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 hover:border-primary"
             >
               <span className="flex flex-col">
-                <span className="text-sm font-semibold text-primary">120+ more</span>
-                <span className="text-xs text-text-muted">English and other languages</span>
+                <span className="text-sm font-semibold text-primary">130+ in all</span>
+                <span className="text-xs text-text-muted">Every other language</span>
               </span>
               <Icon name="arrow_forward" className="text-[18px] text-primary" />
             </NavLink>
