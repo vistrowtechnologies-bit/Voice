@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
@@ -27,7 +27,8 @@ import type { IntegrationDeliveries } from '../lib/api'
 import type { AgentConfig, Integration, PhoneNumber } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import { StatusPill, hostOf, isUnavailableForNew, utcTime } from '../components/IntegrationBits'
-import { disconnectMeta, fetchMetaLeads, fetchMetaStatus, metaStartUrl, openMetaConnectPopup, type MetaLeadEvent, type MetaStatusResult } from '../lib/metaLeads'
+import { disconnectMeta, fetchMetaLeads, fetchMetaStatus, metaStartUrl, type MetaLeadEvent, type MetaStatusResult } from '../lib/metaLeads'
+import { MetaConnectModal } from '../components/meta/MetaConnectModal'
 import { MetaChecklist, MetaHealth, MetaReconnectBanner, MetaUnavailableNote, MetaWhatHappens } from '../components/meta/MetaOverview'
 import { MetaSettings } from '../components/meta/MetaSettings'
 import { MetaLeadsTab } from '../components/meta/MetaLeadsTab'
@@ -183,12 +184,8 @@ export function IntegrationDetail() {
 
   useEffect(() => showOauthResult(oauthResult), [showOauthResult, oauthResult])
 
-  // Facebook sign-in runs in a small window over this page (Facebook will not
-  // load inside it); the page dims and waits. Stop listening when the admin
-  // leaves this page.
-  const metaPopup = useRef<{ stop: () => void; focus: () => void } | null>(null)
-  const [metaConnecting, setMetaConnecting] = useState(false)
-  useEffect(() => () => metaPopup.current?.stop(), [])
+  // Connect runs in a dialog on this page (MetaConnectModal), ArthaLeads-style.
+  const [metaConnectOpen, setMetaConnectOpen] = useState(false)
 
   if (integration === undefined || (isMeta && meta === undefined)) {
     return (
@@ -241,20 +238,9 @@ export function IntegrationDetail() {
 
   const startOAuth = () => {
     if (key === 'facebook') {
-      metaPopup.current?.stop()
-      metaPopup.current = openMetaConnectPopup(
-        (result) => {
-          metaPopup.current = null
-          setMetaConnecting(false)
-          showOauthResult(result)
-          reload()
-        },
-        () => setMetaConnecting(false),
-      )
-      if (metaPopup.current) {
-        setMetaConnecting(true)
-        return
-      }
+      setNotice(null)
+      setMetaConnectOpen(true)
+      return
     }
     const url =
       key === 'slack'
@@ -267,12 +253,6 @@ export function IntegrationDetail() {
               ? googleSheetsIntegrationStartUrl
               : null
     if (url) window.location.href = url
-  }
-
-  const cancelMetaConnect = () => {
-    metaPopup.current?.stop()
-    metaPopup.current = null
-    setMetaConnecting(false)
   }
 
   const runTest = async () => {
@@ -319,24 +299,19 @@ export function IntegrationDetail() {
     <DashboardLayout>
       <PageHeader title={title} subtitle={integration.category} />
 
-      {metaConnecting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Connecting Facebook">
-          <div className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-border bg-surface p-6 text-center shadow-2xl">
-            <IntegrationLogo integrationKey="facebook" size="lg" />
-            <h2 className="mt-4 text-lg font-bold">Finish in the Facebook window</h2>
-            <p className="mt-1 text-sm text-text-muted">
-              Choose your business, Page and ad account, then press Confirm. This page updates by itself when you are done.
-            </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
-              <PrimaryButton icon="open_in_new" onClick={() => metaPopup.current?.focus()}>
-                Show Facebook window
-              </PrimaryButton>
-              <SecondaryButton icon="close" onClick={cancelMetaConnect}>
-                Cancel
-              </SecondaryButton>
-            </div>
-          </div>
-        </div>
+      {metaConnectOpen && (
+        <MetaConnectModal
+          agents={metaAgents}
+          onClose={() => {
+            setMetaConnectOpen(false)
+            reload()
+          }}
+          onFinished={(openSettings) => {
+            setMetaConnectOpen(false)
+            if (openSettings) setTab('settings')
+            reload()
+          }}
+        />
       )}
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
