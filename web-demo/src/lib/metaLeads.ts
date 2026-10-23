@@ -77,20 +77,35 @@ export const metaStartUrl = '/api/integrations/meta/start'
 /** Opens Facebook sign-in in a pop-up so the admin never leaves the
  * dashboard. The server's callback page reports the result (the same values
  * as ?facebook=...) over BroadcastChannel, because facebook.com can cut the
- * pop-up's link to window.opener, and over postMessage as a backup. Returns
- * a cleanup function, or null when the browser blocked the pop-up so the
- * caller can fall back to a full-page redirect. */
-export function openMetaConnectPopup(onResult: (result: string) => void): (() => void) | null {
-  const width = 600
-  const height = 720
+ * pop-up's link to window.opener, and over postMessage as a backup. Facebook
+ * will not load its sign-in inside another site's page, so a small window
+ * over the dashboard is as close as it gets. onClosed fires when the admin
+ * closes the window without finishing (we keep listening a little longer in
+ * case the result was already on its way). Returns stop (stop listening and
+ * close the window) and focus (bring it back to the front), or null when the
+ * browser blocked the pop-up so the caller can fall back to a redirect. */
+export function openMetaConnectPopup(
+  onResult: (result: string) => void,
+  onClosed: () => void,
+): { stop: () => void; focus: () => void } | null {
+  const width = 720
+  const height = 760
   const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2)
   const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2)
   const popup = window.open(`${metaStartUrl}?popup=1`, 'vv-meta-connect', `popup,width=${width},height=${height},left=${left},top=${top}`)
   if (!popup) return null
   let channel: BroadcastChannel | null = null
   let done = false
+  const watchdog = window.setInterval(() => {
+    if (!popup.closed) return
+    window.clearInterval(watchdog)
+    window.setTimeout(() => {
+      if (!done) onClosed()
+    }, 1500)
+  }, 600)
   const cleanup = () => {
     done = true
+    window.clearInterval(watchdog)
     window.removeEventListener('message', onMessage)
     channel?.close()
   }
@@ -109,7 +124,13 @@ export function openMetaConnectPopup(onResult: (result: string) => void): (() =>
   } catch {
     channel = null
   }
-  return cleanup
+  return {
+    stop: () => {
+      cleanup()
+      if (!popup.closed) popup.close()
+    },
+    focus: () => popup.focus(),
+  }
 }
 
 function unauthorized() {
