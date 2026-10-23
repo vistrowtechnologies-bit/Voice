@@ -2180,6 +2180,20 @@ async def send_brochure(context: RunContext, project: str = "") -> str:
     )
 
 
+def _is_business_own_number(context: RunContext, phone: str) -> bool:
+    """The number is in the agent's own instructions (the business's contact
+    number) and is not the caller's. Call 1459 (21 Oct 2026) booked a website
+    caller under +91 90670 97779 copied from the prompt; call 1479 (23 Oct)
+    did the same with request_callback."""
+    digits = re.sub(r"\D", "", phone or "")
+    caller = re.sub(r"\D", "", str((context.userdata or {}).get("visitor_phone") or ""))
+    if len(digits) < 10 or digits[-10:] == caller[-10:]:
+        return False
+    agent = getattr(getattr(context, "session", None), "current_agent", None)
+    instructions = str(getattr(agent, "instructions", "") or "")
+    return digits[-10:] in re.sub(r"\D", "", instructions)
+
+
 @function_tool
 async def request_callback(
     context: RunContext,
@@ -2205,6 +2219,11 @@ async def request_callback(
         return (
             "You do not have both a name and a phone number yet. Ask for whichever is missing — "
             "one at a time — and call this again once you have both."
+        )
+    if _is_business_own_number(context, phone):
+        return (
+            "CALLBACK NOT RECORDED — that number is this business's own contact number, not the "
+            "caller's. Ask the caller for their own phone number first."
         )
     if _is_demo(context) or _is_test_call(context):
         logger.info("demo/test call: simulating callback request for %s", _mask_phone(phone))
@@ -2284,14 +2303,7 @@ async def book_appointment(
     # Same plausibility rule log_lead uses (_looks_like_a_phone_number). The
     # old ">= 8 digits" check let a mis-heard 9-digit number ("982134567",
     # booking test calls 1296 and 1298, 2026-10-14) onto a real booking.
-    _own = context.session.current_agent
-    _caller_digits = re.sub(r"\D", "", str((context.userdata or {}).get("visitor_phone") or ""))
-    if phone_digits and len(phone_digits) >= 10 and phone_digits[-10:] != _caller_digits[-10:] and phone_digits[-10:] in re.sub(
-        r"\D", "", str(getattr(_own, "instructions", "") or "")
-    ):
-        # Call 1459 (21 Oct 2026): a website caller with no number on file was
-        # booked under the business's OWN contact number, copied from the
-        # prompt (+91 90670 97779).
+    if _is_business_own_number(context, phone_digits):
         return (
             "BOOKING REJECTED — that number is this business's own contact number, not the "
             "caller's. Ask the caller for their own phone number and do not say booked yet."

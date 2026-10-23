@@ -64,5 +64,22 @@ class TestCallsWriteNothing(unittest.TestCase):
         book.assert_not_called()
         callback.assert_not_called()
 
+
+class CallbackNeverUsesTheBusinessNumber(unittest.TestCase):
+    """Call 1479: request_callback was called with the business's own number."""
+
+    def test_number_from_the_prompt_is_rejected(self):
+        agent = SimpleNamespace(instructions="Contact +91 90670 97779, hello@vistrow.com.")
+        ctx = SimpleNamespace(userdata={"account_id": 2, "lead_data": {}}, session=SimpleNamespace(current_agent=agent))
+        with patch.object(tools.db, "record_callback_request") as write:
+            reply = asyncio.run(tools.request_callback.__wrapped__(ctx, name="Abhishek", phone="9067097779"))
+        self.assertIn("CALLBACK NOT RECORDED", reply)
+        write.assert_not_called()
+
+    def test_the_callers_own_number_is_fine_even_if_in_the_prompt(self):
+        agent = SimpleNamespace(instructions="Caller number 9067097779")
+        ctx = SimpleNamespace(userdata={"visitor_phone": "+919067097779"}, session=SimpleNamespace(current_agent=agent))
+        self.assertFalse(tools._is_business_own_number(ctx, "9067097779"))
+
 if __name__ == "__main__":
     unittest.main()
