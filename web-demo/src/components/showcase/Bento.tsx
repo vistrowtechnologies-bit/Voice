@@ -40,7 +40,7 @@ export function Bento({ visual, items, head }: { visual?: PageFigureData; items:
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
         {visual && (
           <Reveal className={`h-full sm:col-span-2 ${layout.visual}`}>
-            <figure className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-[#f4f1fb]">
+            <figure className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-panel">
               <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/25 blur-[90px]" />
               <div className={`relative flex flex-1 items-center justify-center ${portrait ? 'px-4 pt-4' : 'p-4 sm:p-6'}`}>
                 <Shot
@@ -55,7 +55,7 @@ export function Bento({ visual, items, head }: { visual?: PageFigureData; items:
                   className={portrait ? 'max-w-[400px]' : 'rounded-xl shadow-[0_20px_40px_-24px_rgba(76,29,149,0.6)]'}
                 />
               </div>
-              <figcaption className="relative border-t border-[#e4def2] bg-white/70 px-5 py-3 text-xs leading-relaxed text-[#5d5776]">
+              <figcaption className="relative border-t border-panel-line bg-surface/70 px-5 py-3 text-xs leading-relaxed text-text-muted">
                 {visual.caption}
               </figcaption>
             </figure>

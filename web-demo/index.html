@@ -1,7 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
+    <!-- Theme before first paint: the same rule as src/lib/theme.ts
+         (stored 'av-theme' of 'dark' means dark, anything else or no
+         storage means light), so prerendered pages don't flash the dark
+         default tokens until main.tsx runs. data-theme="light" on <html>
+         covers visitors without JavaScript. If this script changes, update
+         its sha256 in vercel.json's Content-Security-Policy-Report-Only. -->
+    <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('av-theme')==='dark'?'dark':'light')}catch(e){document.documentElement.setAttribute('data-theme','light')}</script>
     <!-- A single dark-badge mark (self-contained square background, not a
          transparent glyph) reads fine against both light and dark browser
          chrome, so one icon covers both - no more theme-matched variants. -->

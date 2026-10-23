@@ -268,7 +268,7 @@ export function AiTelecaller() {
                     <li key={lang.slug}>
                       <Link
                         to={`/languages/${lang.slug}`}
-                        className="inline-block rounded-full border border-white/30 bg-white/10 px-3 py-1 text-sm text-white transition-colors hover:bg-white/20"
+                        className="inline-flex min-h-11 items-center rounded-full border border-white/30 bg-white/10 px-3 py-1 sm:min-h-0 text-sm text-white transition-colors hover:bg-white/20"
                       >
                         {lang.name}
                       </Link>

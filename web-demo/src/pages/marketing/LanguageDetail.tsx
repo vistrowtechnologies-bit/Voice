@@ -394,7 +394,7 @@ export function LanguageDetail() {
                       <p className="mt-1.5 text-sm leading-relaxed text-text-muted">{call.body}</p>
                       <Link
                         to={call.to}
-                        className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                        className="mt-0 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline sm:mt-3 sm:min-h-0"
                       >
                         {call.link}
                         <Icon name="arrow_forward" className="text-[16px]" />
@@ -510,7 +510,7 @@ export function LanguageDetail() {
                 <Link
                   key={r.to}
                   to={r.to}
-                  className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+                  className="inline-flex min-h-11 items-center gap-1 rounded-full bg-primary/10 px-4 py-1.5 sm:min-h-0 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
                 >
                   {r.label}
                   <Icon name="arrow_forward" className="text-[14px]" />
@@ -526,7 +526,7 @@ export function LanguageDetail() {
               <Link
                 key={l.slug}
                 to={`/languages/${l.slug}`}
-                className="rounded-full border border-border bg-surface px-4 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+                className="inline-flex min-h-11 items-center rounded-full border border-border bg-surface px-4 py-1.5 text-sm text-text-muted sm:min-h-0 transition-colors hover:border-primary hover:text-text"
               >
                 {l.name}
               </Link>

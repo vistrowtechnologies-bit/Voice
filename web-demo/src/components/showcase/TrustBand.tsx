@@ -68,7 +68,7 @@ export function TrustBand({
             {link && (
               <Link
                 to={link.to}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-white underline-offset-4 hover:underline sm:col-span-2"
+                className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-white underline-offset-4 hover:underline sm:col-span-2 sm:min-h-0"
               >
                 {link.label}
                 <Icon name="arrow_forward" className="text-[16px]" />

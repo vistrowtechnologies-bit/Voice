@@ -57,7 +57,7 @@ export function FaqSection({
             <p className="mt-4 max-w-sm text-text-muted">{intro}</p>
             <Link
               to={contactHref}
-              className="mt-4 inline-flex items-center gap-1.5 py-2 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+              className="mt-3 inline-flex min-h-11 items-center gap-1.5 py-2 text-sm sm:mt-4 sm:min-h-0 font-semibold text-primary transition-colors hover:text-primary/80"
             >
               {contactLabel}
               <Icon name="arrow_forward" className="text-[16px]" />

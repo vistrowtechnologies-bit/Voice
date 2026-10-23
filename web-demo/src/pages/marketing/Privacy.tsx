@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { LegalLayout, LegalSection } from '../../components/LegalLayout'
 import { BRAND } from '../../lib/brand'
 
-const CONTACT_EMAIL = 'vistrowai@gmail.com'
+const CONTACT_EMAIL = 'support@vistrowvoice.com'
 
 // Every row names a provider the code actually calls (see
 // docs/PRIVACY-AUDIT-2026-10-12.md). Rows marked optional only apply when the
@@ -35,6 +35,7 @@ export function Privacy() {
       title="Privacy Policy"
       updated="14 October 2026"
       path="/privacy"
+      contactEmail={CONTACT_EMAIL}
       description="How Vistrow Voice collects, uses, shares, retains, and protects account, call, and integration data."
       intro={`${BRAND.name} (operated by Vistrow Technologies Pvt. Ltd.; "we", "us", "${BRAND.short}") builds AI voice agents that businesses use to answer and place phone calls. This policy explains what we collect, why, who else handles it, and the choices you have, whether you run a business on ${BRAND.name} or you spoke with an AI agent powered by it.`}
     >

@@ -87,7 +87,7 @@ export function LaunchFilm() {
                 lang={l}
                 aria-pressed={lang === l}
                 onClick={() => choose(l)}
-                className={`min-h-9 rounded-full px-4 transition-colors ${lang === l ? 'bg-text text-bg' : 'text-text-muted hover:text-text'}`}
+                className={`min-h-11 rounded-full px-4 sm:min-h-9 transition-colors ${lang === l ? 'bg-text text-bg' : 'text-text-muted hover:text-text'}`}
               >
                 {l === 'en' ? 'English' : 'हिंदी'}
               </button>

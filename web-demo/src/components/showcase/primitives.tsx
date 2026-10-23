@@ -101,7 +101,7 @@ export function FigureCard({ figure, sizes, className = '' }: { figure: PageFigu
   const portrait = isPortrait(figure)
   return (
     <figure className={`overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_30px_60px_-40px_rgba(76,29,149,0.55)] ${className}`}>
-      <div className={`bg-[#f4f1fb] ${portrait ? 'px-6 pt-6 sm:px-10 sm:pt-8' : 'p-3 sm:p-4'}`}>
+      <div className={`bg-panel ${portrait ? 'px-6 pt-6 sm:px-10 sm:pt-8' : 'p-3 sm:p-4'}`}>
         <Shot figure={figure} sizes={sizes} className={portrait ? 'mx-auto max-w-[420px]' : 'rounded-xl'} />
       </div>
       <figcaption className="border-t border-border px-5 py-3 text-xs leading-relaxed text-text-muted">{figure.caption}</figcaption>
@@ -149,7 +149,7 @@ export function ItemLink({ to, label }: { to?: string; label?: string }) {
   return (
     <Link
       to={to}
-      className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:underline"
+      className="mt-0 inline-flex min-h-11 items-center gap-1 text-sm sm:mt-3 sm:min-h-0 font-semibold text-primary underline-offset-4 hover:underline focus-visible:underline"
     >
       {label}
       <Icon name="arrow_forward" className="text-[16px]" />

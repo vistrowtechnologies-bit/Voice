@@ -46,6 +46,9 @@
   --color-text: #f5f3ff;
   --color-text-muted: #9089b0;
   --color-destructive: #ef4444;
+  /* Tinted backdrop behind product screenshots in marketing figure frames. */
+  --color-panel: #120e1b;
+  --color-panel-line: #2a2438;
 }
 
 /* Light mode: flip the design tokens and every bg-surface / text-cyan /
@@ -68,6 +71,8 @@
   --color-text: #1a1523;
   --color-text-muted: #5d5776;
   --color-destructive: #dc2626;
+  --color-panel: #f4f1fb;
+  --color-panel-line: #e4def2;
 }
 
 body {
