@@ -5,6 +5,7 @@ import { Icon } from './Icon'
 import { NAV_GROUPS } from './navGroups'
 import { fetchAgents, fetchAppointments, fetchCalls, fetchContacts, fetchKnowledgeBases } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { canOpenAdmin } from '../lib/adminHost'
 import {
   ALT_LABEL,
   CHORD_WINDOW_MS,
@@ -140,7 +141,7 @@ export function CommandPalette() {
       { id: 'act:shortcuts', label: 'Keyboard shortcuts', description: 'See every shortcut', keywords: 'keys hotkeys help cheat sheet', icon: 'keyboard', group: 'Actions', shortcut: ['?'], run: () => setMode('shortcuts') },
       { id: 'act:help', label: 'Help & Support', description: 'Guides, answers and contact', keywords: 'docs support', icon: 'support_agent', group: 'Actions', shortcut: chord('g', 'u'), run: () => goTo('/dashboard/support') },
     ]
-    if (user?.isPlatformOwner && !user?.impersonating) {
+    if (canOpenAdmin(user) && !user?.impersonating) {
       list.push({ id: 'act:admin', label: 'Admin panel', description: 'Platform owner tools', keywords: 'owner', icon: 'shield_person', group: 'Actions', run: () => goTo('/admin') })
     }
     list.push({

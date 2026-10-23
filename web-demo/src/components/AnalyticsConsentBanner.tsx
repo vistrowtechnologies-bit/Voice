@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { initClarity, trackPageView } from '../lib/analytics'
 import { setCookieChoices, useAnalyticsConsent } from '../lib/analyticsConsent'
+import { isAdminHost } from '../lib/adminHost'
 
 /** Cookie choices: Accept all, Necessary only, or Customize per category.
  * Owner, 21 Oct 2026: no vendor names here, like other brands; the tools are
@@ -17,7 +18,8 @@ export function AnalyticsConsentBanner() {
   const [sessions, setSessions] = useState(true)
   useEffect(() => setMounted(true), [])
 
-  if (!mounted || choice !== null || location.pathname.startsWith('/admin')) return null
+  // Never on the admin panel, including the admin host's own sign-in page.
+  if (!mounted || choice !== null || location.pathname.startsWith('/admin') || isAdminHost()) return null
 
   const answer = (choices: { analytics: boolean; sessions: boolean }) => {
     setCookieChoices(choices)
