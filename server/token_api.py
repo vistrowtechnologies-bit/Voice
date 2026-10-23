@@ -176,6 +176,7 @@ _PUBLIC_PATHS = {
     "/telephony/enablex/inbound-event",  # EnableX inbound webhook (their server calls it)
     "/telephony/enablex/outbound-test-event",  # EnableX outbound/test-call webhook (their server calls it — no session)
     "/webhooks/meta",                  # Meta's leadgen/WhatsApp webhook (GET verify + POST events — no session)
+    "/webhooks/wa-sender",             # Vistrow's own WhatsApp sender app: delivery statuses (own app secret)
     "/support/inbound-email",          # Resend email.received webhook (Svix-signed; replies to ticket emails)
     "/billing/razorpay/webhook",       # Razorpay webhook (HMAC-signed; their server calls it — no session)
 }
@@ -7249,6 +7250,7 @@ def _epoch_to_iso(epoch: int | None) -> str | None:
 app.include_router(custom_voices.build_router(require_role))
 # Admin → WhatsApp: Vistrow's own sender (platform owner, admin login only).
 app.include_router(wa_sender.build_router(require_platform_owner))
+app.include_router(wa_sender.webhook_router)
 
 
 @app.get("/voices/catalog")

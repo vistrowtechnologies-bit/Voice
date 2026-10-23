@@ -96,5 +96,25 @@ class Broadcasts(unittest.TestCase):
             self.assertTrue(any(d.call is owner for d in route.dependant.dependencies), route.path)
 
 
+
+class SenderWebhook(unittest.TestCase):
+    """Statuses come from the sender's own Meta app, signed with its own secret."""
+
+    def test_signature_uses_the_sender_app_secret_only(self):
+        import hashlib, hmac
+        body = b'{"entry": []}'
+        good = "sha256=" + hmac.new(b"sender-secret", body, hashlib.sha256).hexdigest()
+        with mock.patch.dict(os.environ, {"WA_SENDER_APP_SECRET": "sender-secret"}):
+            self.assertTrue(wa_sender.verify_signature(body, good))
+            self.assertFalse(wa_sender.verify_signature(body, "sha256=" + "0" * 64))
+        with mock.patch.dict(os.environ, {"WA_SENDER_APP_SECRET": ""}):
+            self.assertFalse(wa_sender.verify_signature(body, good))
+
+    def test_statuses_are_recorded_and_errors_never_escape(self):
+        payload = {"entry": [{"changes": [{"value": {"statuses": [
+            {"id": "wamid.A", "status": "delivered"}, {"id": "wamid.B", "status": "read"}]}}]}]}
+        with mock.patch.object(wa_sender, "record_status", side_effect=[True, RuntimeError("db down")]):
+            self.assertEqual(wa_sender.handle_webhook(payload), 1)
+
 if __name__ == "__main__":
     unittest.main()

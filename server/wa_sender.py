@@ -6,10 +6,13 @@ invoices, account updates and opted-in offers. Not a tenant feature and not
 the Click-to-WhatsApp lead flow (whatsapp_leads.py, owned by the dashboard
 lane), which only hands delivery statuses here via record_status().
 
-Meta Cloud API, own business only, so no App Review: a system-user token
-with whatsapp_business_messaging (send) and whatsapp_business_management
-(read templates) on this one WABA. The token lives only in the server env
-(WA_SENDER_TOKEN) and is never returned by any route.
+Meta Cloud API, own business only, so no App Review, through Vistrow's OWN
+Meta app (owner, 23 Oct 2026: never the tenant app "Vistrow Voice"). A
+system-user token with whatsapp_business_messaging (send) and
+whatsapp_business_management (read templates) on this one WABA lives only in
+the server env (WA_SENDER_TOKEN) and is never returned by any route.
+Delivery statuses arrive on that app's own webhook, /webhooks/wa-sender,
+checked with that app's own secret.
 
 Business-initiated messages must use an approved template; Meta bills each
 one by its category (authentication / utility / marketing), so every send
@@ -18,11 +21,15 @@ is logged with its category. Marketing broadcasts require an explicit
 
 Environment:
   WA_SENDER_TOKEN            system-user access token (secret)
+  WA_SENDER_APP_SECRET       the sender app's secret (webhook signatures)
+  WA_SENDER_VERIFY_TOKEN     webhook verify token chosen when subscribing
   WA_SENDER_PHONE_NUMBER_ID  default 1508965148958051
   WA_SENDER_WABA_ID          default 2255177115055128
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -32,7 +39,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 import admin_db
 import calls_db
@@ -489,3 +497,51 @@ def build_router(require_platform_owner) -> APIRouter:
         return {"events": event_templates()}
 
     return router
+
+
+# ----------------------------------------------------------------- webhook
+def verify_signature(raw_body: bytes, signature: str) -> bool:
+    secret = (os.environ.get("WA_SENDER_APP_SECRET") or "").strip()
+    if not secret or not signature or not signature.startswith("sha256="):
+        return False
+    expected = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def handle_webhook(payload: dict) -> int:
+    """Delivery statuses from the sender app's webhook; returns how many were
+    ours. Inbound replies to the number are not handled here (yet)."""
+    ours = 0
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            for s in (change.get("value") or {}).get("statuses") or []:
+                try:
+                    ours += bool(record_status(str(s.get("id") or ""), str(s.get("status") or ""),
+                                               s.get("timestamp"), s.get("errors")))
+                except Exception:
+                    logger.exception("could not record a WhatsApp status")
+    return ours
+
+
+webhook_router = APIRouter()
+
+
+@webhook_router.get("/webhooks/wa-sender")
+def wa_webhook_verify(request: Request):
+    params = request.query_params
+    expected = (os.environ.get("WA_SENDER_VERIFY_TOKEN") or "").strip()
+    if params.get("hub.mode") == "subscribe" and expected and hmac.compare_digest(params.get("hub.verify_token", ""), expected):
+        return JSONResponse(int(params.get("hub.challenge", "0") or 0))
+    raise HTTPException(403, "Verification failed")
+
+
+@webhook_router.post("/webhooks/wa-sender")
+async def wa_webhook_event(request: Request):
+    raw = await request.body()
+    if not verify_signature(raw, request.headers.get("x-hub-signature-256", "")):
+        raise HTTPException(403, "Bad signature")
+    try:
+        payload = json.loads(raw or b"{}")
+    except ValueError:
+        raise HTTPException(400, "Bad JSON") from None
+    return {"ok": True, "statuses": handle_webhook(payload)}
