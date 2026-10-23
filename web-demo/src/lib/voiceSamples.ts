@@ -1,6 +1,7 @@
 // Two-speaker sample calls for the /languages pages: the caller starts in
-// Hindi and switches to the page's language at turn 3 (Hindi page: starts
-// in English and switches to Hindi), and the agent follows. Drafted with Sarvam
+// Hindi and switches to the page's language at turn 3, and the agent follows.
+// Hindi page (pilot, 2026-10-23): the agent opens in English, the caller just
+// answers in Hindi, and the agent carries on in Hindi without being asked. Drafted with Sarvam
 // sarvam-105b-conversations, then rewritten as spoken lines; voiced with
 // Sarvam bulbul:v4-flash (agent aarti_hi_customer since 2026-10-23, caller
 // aditya_hi_conversational, pace 1.2, temperature 0.7). `start` is
@@ -23,11 +24,20 @@ export interface VoiceSample {
   from: string
   to: string
   languages: string[]
+  /** Index of the turn where the switch chip flips to `to`; defaults to
+   * SWITCH_TURN. On agent-led samples it is the agent's first line in `to`. */
+  switchTurn?: number
   turns: VoiceSampleTurn[]
 }
 
 /** Index of the caller's language-switch turn in every sample. */
 export const SWITCH_TURN = 2
+
+export const switchTurnOf = (sample: VoiceSample) => sample.switchTurn ?? SWITCH_TURN
+
+/** True when the agent changes language on its own after the caller answers
+ * in `to` (nobody asks to switch). */
+export const agentLedSwitch = (sample: VoiceSample) => sample.turns[switchTurnOf(sample)].speaker === 'Agent'
 
 export const VOICE_SAMPLES: Record<string, VoiceSample> = {
   marathi: {
@@ -107,60 +117,76 @@ export const VOICE_SAMPLES: Record<string, VoiceSample> = {
       "en-IN",
       "hi-IN"
     ],
+    "switchTurn": 2,
     "turns": [
       {
         "speaker": "Agent",
         "lang": "en-IN",
-        "native": "Hello Rahul ji, this is Artha from Saarthi Finance. Just a quick reminder: this month’s EMI is due on the 15th.",
+        "native": "Hi, Rahul ji? This is Artha from Saarthi Finance. Just a quick reminder, this month’s EMI is due on the 15th.",
         "start": 0.2
       },
       {
         "speaker": "Caller",
-        "lang": "en-IN",
-        "native": "Yes, yes, I know. My salary comes on the 12th.",
-        "start": 6.41
-      },
-      {
-        "speaker": "Caller",
         "lang": "hi-IN",
-        "native": "अच्छा, क्या हम हिंदी में बात कर सकते हैं? मुझे आसान लगेगा।",
-        "start": 8.74,
-        "gloss": "Actually, can we talk in Hindi? It’s easier for me."
+        "native": "हाँ जी, बोलिए… हाँ हाँ, EMI वाला याद है।",
+        "start": 7.66,
+        "gloss": "Yes, go ahead… yes, yes, I remember the EMI."
       },
       {
         "speaker": "Agent",
         "lang": "hi-IN",
-        "native": "हाँ, बिल्कुल! तो आप payment कब तक कर पाएँगे?",
-        "start": 12.01,
-        "gloss": "Yes, of course! So by when can you pay?"
+        "native": "जी, thank you! तो payment कब तक हो पाएगा?",
+        "start": 10.35,
+        "gloss": "Great, thank you! So by when can the payment be made?"
       },
       {
         "speaker": "Caller",
         "lang": "hi-IN",
-        "native": "13 तारीख तक। Salary 12 को आती है, तो अगले दिन app से कर दूँगा।",
-        "start": 15.21,
-        "gloss": "By the 13th. Salary comes on the 12th, so I’ll pay through the app the next day."
+        "native": "वो, salary 12 को… हाँ, 12 तारीख को आती है।",
+        "start": 13.37,
+        "gloss": "Well, salary on the 12th… yes, it comes on the 12th."
       },
       {
         "speaker": "Agent",
         "lang": "hi-IN",
-        "native": "ठीक है, मैं note कर लेती हूँ: 13 तारीख, app से। Thank you, राहुल जी।",
-        "start": 19.99,
-        "gloss": "Okay, I’m noting it down: the 13th, through the app. Thank you, Rahul ji."
+        "native": "जी।",
+        "start": 17.29,
+        "gloss": "Right."
       },
       {
         "speaker": "Caller",
         "lang": "hi-IN",
-        "native": "बढ़िया, याद दिलाने के लिए thanks।",
-        "start": 24.39,
-        "gloss": "Great, thanks for reminding me."
+        "native": "तो umm, 13 को कर दूँगा, app से।",
+        "start": 17.75,
+        "gloss": "So, umm, I’ll do it on the 13th, through the app."
       },
       {
         "speaker": "Agent",
         "lang": "hi-IN",
-        "native": "कोई बात नहीं, राहुल जी। आपका दिन अच्छा हो!",
-        "start": 27.21,
-        "gloss": "No problem, Rahul ji. Have a good day!"
+        "native": "ठीक है, तो मैं note कर लेती हूँ: 13 तारीख, app से payment। सही है?",
+        "start": 20.32,
+        "gloss": "Okay, so I’ll note it down: the 13th, payment through the app. Is that right?"
+      },
+      {
+        "speaker": "Caller",
+        "lang": "hi-IN",
+        "native": "हाँ हाँ, सही है।",
+        "start": 24.07,
+        "gloss": "Yes, yes, that’s right."
+      },
+      {
+        "speaker": "Agent",
+        "lang": "hi-IN",
+        "native": "Thank you, राहुल जी! आपका दिन अच्छा हो।",
+        "start": 25.8,
+        "gloss": "Thank you, Rahul ji! Have a good day."
+      },
+      {
+        "speaker": "Caller",
+        "lang": "hi-IN",
+        "native": "हाँ, thank you, bye bye.",
+        "start": 27.75,
+        "gloss": "Yes, thank you, bye bye."
       }
     ]
   },

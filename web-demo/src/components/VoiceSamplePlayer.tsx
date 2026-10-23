@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import arthaAvatar from '../assets/artha-avatar.webp'
-import { SWITCH_TURN, type VoiceSample } from '../lib/voiceSamples'
+import { agentLedSwitch, switchTurnOf, type VoiceSample } from '../lib/voiceSamples'
 
 const BARS = 24
 
@@ -44,8 +44,10 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
 
   const started = playing || time > 0
   const active = started ? sample.turns.reduce((cur, t, i) => (t.start <= time + 0.05 ? i : cur), 0) : -1
-  const switchAt = sample.turns[SWITCH_TURN].start
-  const switched = active >= SWITCH_TURN
+  const switchTurn = switchTurnOf(sample)
+  const agentLed = agentLedSwitch(sample)
+  const switchAt = sample.turns[switchTurn].start
+  const switched = active >= switchTurn
   const current = active >= 0 ? sample.turns[active] : null
 
   // Keep the current line in view inside the transcript box only (never
@@ -200,13 +202,17 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
             <Avatar agent={current.speaker === 'Agent'} size="h-7 w-7" />
             <p className="min-w-0 truncate text-sm">
               <span className="font-bold">{current.speaker === 'Agent' ? 'AI agent' : 'Caller'}</span>
-              <span className="text-text-muted"> speaking {active < SWITCH_TURN ? sample.from : sample.to}</span>
+              <span className="text-text-muted"> speaking {current.lang === sample.languages[1] ? sample.to : sample.from}</span>
               <span className="sr-only">: </span>
               <span lang={current.lang} className="sr-only">{current.native}</span>
             </p>
           </>
         ) : (
-          <p className="text-sm text-text-muted">Press play: the caller starts in {sample.from}, then switches to {sample.to}.</p>
+          <p className="text-sm text-text-muted">
+            {agentLed
+              ? `Press play: the agent opens in ${sample.from}, the caller answers in ${sample.to}, and the agent follows.`
+              : `Press play: the caller starts in ${sample.from}, then switches to ${sample.to}.`}
+          </p>
         )}
       </div>
 
@@ -216,10 +222,10 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
           const hidden = started && i > active
           return (
             <li key={i} className={`vs-line ${hidden ? 'is-hidden' : ''}`}>
-              {i === SWITCH_TURN && (
+              {i === switchTurn && (
                 <p className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-cyan">
                   <span className="h-px flex-1 bg-cyan/30" />
-                  Caller switches to {sample.to} at {clock(switchAt)}
+                  {agentLed ? 'Agent continues in' : 'Caller switches to'} {sample.to} at {clock(switchAt)}
                   <span className="h-px flex-1 bg-cyan/30" />
                 </p>
               )}

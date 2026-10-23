@@ -45,7 +45,7 @@ Current files (Aarti agent voice, 2026-10-23):
 
 | Page | Scenario | Switch | Switch at | Duration | Size |
 |---|---|---|---|---|---|
-| /languages/hindi | Outbound EMI reminder (Saarthi Finance) | English to Hindi | 0:09 | 29.6 s | 236 KB |
+| /languages/hindi | Outbound EMI reminder (Saarthi Finance) | Agent-led, English to Hindi (pilot) | 0:10 | 30.3 s | 241 KB |
 | /languages/marathi | Home blood-sample booking, Pune lab | Hindi to Marathi | 0:07 | 31.3 s | 249 KB |
 | /languages/tamil | OMR property enquiry follow-up | Hindi to Tamil | 0:08 | 29.4 s | 234 KB |
 | /languages/telugu | Clinic appointment | Hindi to Telugu | 0:07 | 28.6 s | 227 KB |
@@ -77,6 +77,21 @@ Owner decision: all demo audio uses Sarvam Bulbul v4 Flash, with "Aarti" as the 
 - **Pace comparison:** a Hindi take with the agent at pace 1.0 (caller unchanged) was made for the owner to compare. It runs 33.0 s against 29.6 s at pace 1.2. The site uses pace 1.2.
 - **Usage:** TTS 49 accepted requests, 3,188 characters (including the 4 pace-1.0 lines, 4 re-rolls and 1 speaker test), plus 3 rejected (wrong speaker name or language code). STT 84 requests, about 6 minutes of audio (including 3 checks of the old Kavya lines).
 - **Not verified:** a native-speaker listen to Aarti in the nine non-Hindi languages (the speaker is Hindi-tagged).
+
+## 2026-10-23: natural-call pilot (Hindi page only)
+
+The owner found the sample "looks scripted", and that a caller who speaks good English asking to switch language misses the point: the product follows the customer's language. Pilot on /languages/hindi only; the other nine pages are unchanged.
+- **Flow:** the AI agent opens in English, and the caller simply answers in Hindi/Hinglish. The agent carries on in Hindi without being asked, and nobody mentions language. The facts are the same (Rahul ji, EMI due on the 15th, salary on the 12th, pays through the app on the 13th). There are no prices and no transfer.
+- **Script:** spoken-phone style, with fillers ("हाँ जी, बोलिए…", "वो", "umm"), a self-correction ("salary 12 को… हाँ, 12 तारीख को आती है"), a "जी।" backchannel and a closing "सही है?" check. 10 turns.
+- **Voices:** agent `aarti_hi_customer`, caller `aditya_hi_conversational`, `bulbul:v4-flash`, temperature 0.9 (was 0.7), loudness 1.1, pace 1.1-1.25 per line.
+- **Timing:** gaps between lines vary from 100 to 550 ms. Two lines overlap the end of the previous one (agent "जी।" by 150 ms, caller "हाँ हाँ, सही है।" by 120 ms), and these are mixed rather than joined. Lead-in is 200 ms and tail 400 ms.
+- **Sound:**
+  - Caller on a phone line: band-limited to 300-3400 Hz, compressed (3:1), with faint office room tone (`ambience/office.ogg`) 38 dB under speech, present only while the caller speaks.
+  - Agent: wideband with a +2 dB low shelf at 180 Hz to sound a little closer.
+  - Every line is at -20 dBFS RMS with a soft limiter above 0.5.
+- **Player:** `VoiceSample.switchTurn` (optional, defaults to `SWITCH_TURN`) sets where the chip flips. On this sample it is the agent's first Hindi line (turn 3), so the chip changes when the agent starts speaking Hindi. The "speaking …" label now uses each line's own language, and the divider, "Press play" hint and JSON-LD say the agent follows the caller.
+- **Checks:** decoded m4a is 30.3 s, RMS 0.096, peak 0.67, longest silence 0.60 s, and each `start` is within 0.03 s of the line onset. STT round trip passed for meaning on every line. "हाँ, thank you, bye bye." was detected as English, which is expected since it is mostly English words.
+- **Usage:** TTS 15 requests, 611 characters (including the first draft where the caller asked to switch, and one re-roll); STT 31 requests, about 1.5 minutes of audio.
 
 ## Usage (both takes)
 
