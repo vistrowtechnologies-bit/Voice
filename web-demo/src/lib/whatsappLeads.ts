@@ -14,6 +14,7 @@ export interface WhatsAppNumber {
   display_phone: string
   status: string
   connected_via: string
+  auto_call: number
   linked_at: string
 }
 
@@ -68,6 +69,9 @@ export const fetchWhatsAppLeads = (limit = 50) =>
 
 export const disconnectWhatsAppNumber = (phoneNumberId: string) =>
   request<{ ok: boolean }>('DELETE', `/integrations/whatsapp/numbers/${encodeURIComponent(phoneNumberId)}`)
+
+export const setWhatsAppAutoCall = (phoneNumberId: string, autoCall: boolean) =>
+  request<{ ok: boolean }>('PATCH', `/integrations/whatsapp/numbers/${encodeURIComponent(phoneNumberId)}`, { autoCall })
 
 export interface ConnectedNumber {
   phoneNumberId: string

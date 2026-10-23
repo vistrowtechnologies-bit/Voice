@@ -77,6 +77,8 @@ class ClickToWhatsAppLeads(unittest.TestCase):
         cls.pid_a, cls.pid_b = f"7{tail}01", f"7{tail}02"
         whatsapp_leads.link_number(cls.a, cls.pid_a, "+91 77131 28715", "WABA1")
         whatsapp_leads.link_number(cls.b, cls.pid_b, "+91 90000 00000", "WABA2")
+        whatsapp_leads.set_auto_call(cls.a, cls.pid_a, True)
+        whatsapp_leads.set_auto_call(cls.b, cls.pid_b, True)
         # A Page with an ad rule: the CTWA ad goes to Riya on her own number.
         cls.page_a = f"PWA{stamp}"
         conn_id = meta_leads.save_connection(cls.a, "user-token", None, f"fbu-wa-{stamp}", "Asha FB", a["user_id"])
@@ -134,6 +136,21 @@ class ClickToWhatsAppLeads(unittest.TestCase):
         self.assertIn("whatsapp-ctwa", contact["tags"])
         self.assertEqual((fields["ad_id"], fields["ctwa_clid"], fields["first_message"]),
                          (self.ad_routed, "CLID-" + mid, "Hi, tell me more"))
+
+    def test_with_calls_off_the_chat_is_saved_but_nobody_is_called(self):
+        pid = f"89{self.stamp_digits()}1"
+        self.wa.link_number(self.a, pid, "+91 98000 22222", "WABA1")
+        mid, sender = self.mid(), self.sender()
+        self.post(_payload(pid, [_message(mid, sender, ad_id=self.ad_routed)]))
+        event = self.event(pid, mid)
+        self.assertEqual((event["status"], event["reason"]), ("captured", "calls_off"))
+        self.assertEqual(self.queued(self.a, sender), [])
+        conn = self.db._connect()
+        contact = conn.execute("SELECT source FROM contacts WHERE account_id = ? AND phone LIKE ?",
+                               (self.a, "%" + sender[-10:])).fetchone()
+        conn.close()
+        self.assertEqual(contact["source"], "whatsapp_ctwa")
+        self.assertFalse(self.wa.set_auto_call(self.b, pid, True), "another workspace cannot switch it on")
 
     def test_meta_redelivering_the_same_message_queues_one_call(self):
         mid, sender = self.mid(), self.sender()

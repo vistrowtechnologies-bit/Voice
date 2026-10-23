@@ -91,6 +91,9 @@ def init_tables() -> None:
             # with, both encrypted like every other Meta token.
             for column in ("business_id", "access_token", "pin", "connected_via"):
                 conn.execute(f"ALTER TABLE wa_numbers ADD COLUMN IF NOT EXISTS {column} TEXT DEFAULT ''")
+            # Off until the workspace turns it on: a chat from an ad is saved
+            # as a contact, and only called once auto_call is 1.
+            conn.execute("ALTER TABLE wa_numbers ADD COLUMN IF NOT EXISTS auto_call INTEGER DEFAULT 0")
     finally:
         conn.close()
 
@@ -277,6 +280,9 @@ def process_message(phone_number_id: str, message_id: str, now: datetime.datetim
     if route is None and route_reason != "no_rules":
         calls_db._record_lead_event(account_id, SOURCE, message_id, name, phone)
         return _finish(phone_number_id, message_id, "skipped", route_reason, contact_id, agent_id)
+    if not _auto_call(phone_number_id):
+        calls_db._record_lead_event(account_id, SOURCE, message_id, name, phone)
+        return _finish(phone_number_id, message_id, "captured", "calls_off", contact_id, agent_id)
     kwargs = {"route": {"agentId": route["agentId"], "fromNumber": route["fromNumber"], "label": route["label"]}} if route else {}
     result = calls_db.ingest_inbound_lead(account_id, name, phone, SOURCE, external_id=message_id,
                                           custom_fields=fields, **kwargs)
@@ -290,6 +296,28 @@ def process_message(phone_number_id: str, message_id: str, now: datetime.datetim
     else:
         campaign_dialer.notify()
     return "queued"
+
+
+def _auto_call(phone_number_id: str) -> bool:
+    conn = calls_db._connect()
+    try:
+        row = conn.execute("SELECT auto_call FROM wa_numbers WHERE phone_number_id = ?", (phone_number_id,)).fetchone()
+    finally:
+        conn.close()
+    return bool(row and row["auto_call"])
+
+
+def set_auto_call(account_id: int, phone_number_id: str, on: bool) -> bool:
+    conn = calls_db._connect()
+    try:
+        with conn:
+            done = conn.execute(
+                "UPDATE wa_numbers SET auto_call = ? WHERE phone_number_id = ? AND account_id = ? AND status = 'active' "
+                "RETURNING phone_number_id", (1 if on else 0, str(phone_number_id), account_id),
+            ).fetchone()
+    finally:
+        conn.close()
+    return bool(done)
 
 
 def list_events(account_id: int, limit: int = 200) -> list[dict]:
@@ -377,7 +405,7 @@ def list_numbers(account_id: int) -> list[dict]:
     conn = calls_db._connect()
     try:
         rows = conn.execute(
-            "SELECT phone_number_id, waba_id, display_phone, status, connected_via, linked_at FROM wa_numbers "
+            "SELECT phone_number_id, waba_id, display_phone, status, connected_via, auto_call, linked_at FROM wa_numbers "
             "WHERE account_id = ? AND status = 'active' ORDER BY linked_at", (account_id,),
         ).fetchall()
     finally:
@@ -472,5 +500,15 @@ async def whatsapp_connect(request: Request):
 def whatsapp_disconnect(request: Request, phone_number_id: str):
     user = meta_leads._admin(request)
     if not disconnect_number(user["account_id"], phone_number_id):
+        raise HTTPException(404, "No connected WhatsApp number with that ID")
+    return {"ok": True}
+
+
+@router.patch("/integrations/whatsapp/numbers/{phone_number_id}")
+async def whatsapp_number_settings(request: Request, phone_number_id: str):
+    """{autoCall: bool}: whether chats from ads on this number are called."""
+    user = meta_leads._admin(request)
+    body = await request.json()
+    if not set_auto_call(user["account_id"], phone_number_id, bool(body.get("autoCall"))):
         raise HTTPException(404, "No connected WhatsApp number with that ID")
     return {"ok": True}
