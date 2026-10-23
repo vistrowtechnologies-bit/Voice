@@ -58,6 +58,22 @@ import integration_crypto
 
 logger = logging.getLogger("meta-leads")
 
+
+class _MaskVerifyToken(logging.Filter):
+    """Meta's webhook check puts our verify token in the query string, and the
+    access log printed it (seen in Railway logs, 23 Oct). Mask it there."""
+
+    _TOKEN = re.compile(r"(hub[._]verify_token)=[^&\s]*")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str) and "verify_token=" in args[2]:
+            record.args = (*args[:2], self._TOKEN.sub(r"\1=REDACTED", args[2]), *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_MaskVerifyToken())
+
 GRAPH_VERSION = "v25.0"  # keep in step with token_api._META_GRAPH_VERSION
 GRAPH = f"https://graph.facebook.com/{GRAPH_VERSION}"
 SOURCE = "meta_lead_ads"
@@ -541,6 +557,8 @@ def connect_pages(account_id: int, page_ids: set[str], poster: Poster | None = N
             logger.warning("meta subscribe failed for page %s: %s", page["id"], exc)
         results.append({"pageId": page["id"], "ok": True, "subscribed": ok})
     calls_db.set_setting(_PENDING_PAGES_SETTING, "", account_id)
+    # The forms show in the rules picker straight away, not after a first lead.
+    sync_forms(fetcher, account_id=account_id)
     pages = list_pages(account_id)
     connected = [p for p in pages if p["status"] == "active"]
     if any(r.get("ok") for r in results):
@@ -1156,12 +1174,68 @@ def backlog() -> int:
 
 # ---------------------------------------------------------- reconciliation
 
+def sync_forms(fetcher: Fetcher | None = None, now: datetime.datetime | None = None, account_id: int | None = None) -> int:
+    """Learn each active Page's lead forms from Meta. Before this a form was
+    only known once a webhook lead arrived from it, so reconcile never checked
+    a form Meta had not pushed a lead from (every form, while the app is
+    unpublished: Meta sends unpublished apps no real webhooks) and the rules
+    picker stayed empty. A form seen for the first time is checked from now
+    on, so connecting a Page does not dial the last two days' leads."""
+    fetcher = fetcher or _graph_get
+    stamp = _stamp(now or _utc_now())
+    conn = calls_db._connect()
+    try:
+        sql, params = "SELECT page_id FROM meta_pages WHERE status = 'active'", ()
+        if account_id is not None:
+            sql, params = sql + " AND account_id = ?", (account_id,)
+        page_ids = [row["page_id"] for row in conn.execute(sql, params).fetchall()]
+    finally:
+        conn.close()
+    found = 0
+    for page_id in page_ids:
+        page = page_owner(page_id)
+        if page is None:
+            continue
+        url = f"{GRAPH}/{page_id}/leadgen_forms?" + urllib.parse.urlencode(
+            {"fields": "id,name", "limit": 100, "access_token": page["page_token"]})
+        try:
+            pages_seen = 0
+            while url and pages_seen < 10:
+                data = fetcher(url)
+                pages_seen += 1
+                conn = calls_db._connect()
+                try:
+                    with conn:
+                        for form in data.get("data") or []:
+                            if not form.get("id"):
+                                continue
+                            conn.execute(
+                                "INSERT INTO meta_forms (page_id, form_id, account_id, form_name, last_reconciled_at) "
+                                "VALUES (?, ?, ?, ?, ?) ON CONFLICT (page_id, form_id) DO UPDATE SET form_name = CASE "
+                                "WHEN excluded.form_name <> '' THEN excluded.form_name ELSE meta_forms.form_name END",
+                                (page_id, str(form["id"]), page["account_id"], _text(str(form.get("name") or ""), 200), stamp),
+                            )
+                            found += 1
+                finally:
+                    conn.close()
+                url = ((data.get("paging") or {}).get("next")) or ""
+        except GraphError as exc:
+            if exc.code in TOKEN_ERROR_CODES:
+                mark_needs_reconnect(int(page["account_id"]), f"Graph {exc.code}: {exc.message}")
+            logger.warning("meta form sync failed for page %s: %s", page_id, exc)
+        except Exception:  # noqa: BLE001
+            logger.exception("meta form sync failed for page %s", page_id)
+    return found
+
+
 def reconcile(fetcher: Fetcher | None = None, now: datetime.datetime | None = None, lookback_hours: int = 48) -> dict:
     """Plan B8: list each active form's leads since the last check and insert
     any the webhook never delivered. They go through the same worker; the
-    24 h stale rule decides whether they are called."""
+    24 h stale rule decides whether they are called. The Pages' forms are
+    refreshed from Meta first (sync_forms)."""
     fetcher = fetcher or _graph_get
     now = now or _utc_now()
+    sync_forms(fetcher, now)
     conn = calls_db._connect()
     try:
         forms = conn.execute(
