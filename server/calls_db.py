@@ -7346,6 +7346,11 @@ def _arthaleads_route_match(route: dict, fields: dict) -> bool:
     return value == match or (source == "website" and match in value)
 
 
+# Sources whose leads carry their own ad/form/Page route (meta_leads.resolve_route):
+# Lead Ads forms and Click-to-WhatsApp chats (whatsapp_leads.py).
+META_ROUTED_SOURCES = ("meta_lead_ads", "whatsapp_ctwa")
+
+
 def _meta_campaign_setting_key(route: dict) -> str:
     """One "Meta Instant Follow-up" campaign per (agent, caller number), as
     ArthaLeads routes have, so a Page/form/ad rule's agent is the one that
@@ -7580,7 +7585,7 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
         arthaleads = source == "arthaleads"
         # A Meta lead with a resolved Page/form/ad route gets that route's own
         # campaign; without one it uses the generic shared campaign below.
-        meta_routed = source == "meta_lead_ads" and bool(route)
+        meta_routed = source in META_ROUTED_SOURCES and bool(route)
         setting_key = "arthaleads_instant_campaign_id" if arthaleads else _INSTANT_LEAD_CAMPAIGN_ID_SETTING
         if arthaleads or meta_routed:
             if not route:
@@ -7708,7 +7713,7 @@ def ingest_inbound_lead(
     ) if (category := _arthaleads_source(value))), "") if source == "arthaleads" else ""
     # `route` is the caller's resolved {agentId, fromNumber, label}; only a Meta
     # lead passes one (meta_leads.resolve_route). ArthaLeads resolves its own below.
-    route = route if (source == "meta_lead_ads" and allow_call and route) else None
+    route = route if (source in META_ROUTED_SOURCES and allow_call and route) else None
     no_call_reason = "no_matching_enabled_route"
     if source == "arthaleads" and allow_call and requested_agent_id:
         # ArthaLeads routed the lead and named the agent: honour exactly that.
