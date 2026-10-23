@@ -2130,11 +2130,19 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
 _FALLBACK_LLM_MODEL = "gpt-5.4-nano"
 # reasoning_effort for GPT-5 voice turns: "none" keeps the first token fast;
 # anything higher spends hidden reasoning tokens while the caller waits.
+# Only GPT-5.x (gpt-5.4-nano, ...) accepts "none"; the original gpt-5,
+# gpt-5-mini and gpt-5-nano answer HTTP 400 to it (verified 2026-10-21), so
+# they get their lowest setting, "minimal".
 _GPT5_VOICE_REASONING = {"reasoning_effort": "none"}
+_GPT5_ORIGINAL_VOICE_REASONING = {"reasoning_effort": "minimal"}
 
 
 def _openai_voice_kwargs(model: str) -> dict:
-    return _GPT5_VOICE_REASONING if model.startswith("gpt-5") else {}
+    if model.startswith("gpt-5."):
+        return _GPT5_VOICE_REASONING
+    if model.startswith("gpt-5"):
+        return _GPT5_ORIGINAL_VOICE_REASONING
+    return {}
 
 
 def _build_llm(model: str, *, max_output_tokens: int = 220):
