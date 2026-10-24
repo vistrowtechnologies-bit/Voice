@@ -26,7 +26,12 @@ function isVisitorRoute(path: string) {
 export const config = {
   matcher: [
     '/((?!api/|assets/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|mp4|woff2?|json|txt|xml|html)$).*)',
-    ...VISITOR_ROUTES,
+    // VISITOR_ROUTES, written out: Vercel reads this config statically and
+    // fails the build on a spread or any other non-literal value.
+    '/api/token',
+    '/api/public/contact',
+    '/api/orchestrator/platform-demo-token',
+    '/api/auth/:path*',
   ],
 }
 
