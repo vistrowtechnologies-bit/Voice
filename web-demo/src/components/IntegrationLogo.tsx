@@ -8,7 +8,6 @@ const ICONS: Record<string, string> = {
   webhook: 'webhook',
   whatsapp: 'chat',
   sheets: 'table_chart',
-  facebook: 'ads_click',
 }
 
 /** The square logo tile for an integration, used on the Integrations list
@@ -18,7 +17,7 @@ export function IntegrationLogo({ integrationKey, size = 'md' }: { integrationKe
   const tone =
     integrationKey === 'arthaleads'
       ? 'overflow-hidden'
-      : integrationKey === 'slack' || integrationKey === 'zoho_crm' || integrationKey === 'sheets'
+      : ['slack', 'zoho_crm', 'sheets', 'facebook'].includes(integrationKey)
         ? 'bg-white shadow-sm ring-1 ring-border'
         : 'bg-primary/20 text-primary'
   return (
@@ -29,6 +28,8 @@ export function IntegrationLogo({ integrationKey, size = 'md' }: { integrationKe
         <SlackLogo className={size === 'lg' ? 'h-8 w-8' : 'h-6 w-6'} />
       ) : integrationKey === 'zoho_crm' ? (
         <ZohoLogo className={size === 'lg' ? 'h-7 w-8' : 'h-5 w-6'} />
+      ) : integrationKey === 'facebook' ? (
+        <FacebookInstagramLogo size={size} />
       ) : integrationKey === 'sheets' ? (
         <img src={sheetsIcon} alt="Google Sheets" className={size === 'lg' ? 'h-8 w-8' : 'h-6 w-6'} />
       ) : (
@@ -98,5 +99,36 @@ function ZohoLogo({ className = '' }: { className?: string }) {
         </g>
       </g>
     </svg>
+  )
+}
+
+// The Facebook "f" and the Instagram glyph, unaltered and in their brand
+// colours (Facebook and Instagram brand guidelines). The Meta logo is not used:
+// Meta's rules say it must not stand for Facebook and needs approval.
+function FacebookInstagramLogo({ size }: { size: 'md' | 'lg' }) {
+  const mark = size === 'lg' ? 'h-6 w-6' : 'h-[17px] w-[17px]'
+  return (
+    <div className="flex items-center gap-0.5" aria-label="Facebook and Instagram" role="img">
+      <svg viewBox="0 0 24 24" className={mark} aria-hidden="true">
+        <path
+          fill="#0866FF"
+          d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.69.24 2.69.24v2.97h-1.52c-1.49 0-1.96.93-1.96 1.89v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"
+        />
+      </svg>
+      <svg viewBox="0 0 24 24" className={mark} aria-hidden="true">
+        <defs>
+          <radialGradient id="ig-glyph" cx="0.3" cy="1.07" r="1.3">
+            <stop offset="0" stopColor="#FFDD55" />
+            <stop offset="0.1" stopColor="#FFDD55" />
+            <stop offset="0.5" stopColor="#FF543E" />
+            <stop offset="1" stopColor="#C837AB" />
+          </radialGradient>
+        </defs>
+        <rect x="1" y="1" width="22" height="22" rx="6.5" fill="url(#ig-glyph)" />
+        <rect x="5" y="5" width="14" height="14" rx="4.2" fill="none" stroke="#fff" strokeWidth="1.8" />
+        <circle cx="12" cy="12" r="3.4" fill="none" stroke="#fff" strokeWidth="1.8" />
+        <circle cx="16.4" cy="7.6" r="1.05" fill="#fff" />
+      </svg>
+    </div>
   )
 }

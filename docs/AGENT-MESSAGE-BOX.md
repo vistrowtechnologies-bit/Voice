@@ -23,6 +23,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16): branch `claude/llm-token-diet` (committed locally, NOT pushed/PR'd/deployed): LLM request harness + history window, contact notes moved to the prompt tail, warm-up sends tools, orchestrator VOICE_STYLE_PROMPT before per-call text. Needs both workers deployed after merge.
 - Claude (2026-10-16, updated 22:55 IST): branch `claude/lead-details-brochure` (local commits 6677701e + 93de8a7c, NOT pushed yet, owner checks ArthaLeads staging first): standard post-call lead facts stored and sent to ArthaLeads with summary/key_points; send_brochure tool. Function-level claim on issue #2 (comment 6220772439), overlap with prompt-cuts/tool-guardrails cleared by that session. Per [RULES] I stop at PR-ready; the SEO session is the deployer (combined release, then `lk agent deploy` on BOTH workers + Railway for one server line). Dependency: ArthaLeads side is on arthaleads staging bc0446c and should reach ArthaLeads main with or before this deploy.
 - Claude (2026-10-17): branch `claude/tool-desc-ab` (local commit, NOT pushed/PR'd/deployed): tools.py tool DESCRIPTIONS only (8 tools; log_lead cut reverted after it broke lead capture). Tool block measured by Sarvam itself = 29–33% of tenant requests; cut saves ~385 tokens/request (~₹26–47 per 1,000 call-min). A/B 2×30: tool accuracy 22/26 vs 21/26, no new wrong end_call/switch. docs/TOOL-DESC-AB-2026-10-17.md. Needs both workers deployed after merge.
+- Claude (dashboard, 2026-10-24): WhatsApp Click-to-WhatsApp leads LIVE (PR #275 webhook, PR #278 Connect WhatsApp / Embedded Signup, both merged + deployed). Real tenant connect is BLOCKED by Meta ("can't onboard customers") until owner completes Business Verification + Tech Provider. Admin WhatsApp sender (runtime, PR #277 draft) PAUSED; it gets a separate Meta app later. PR #281 (Lead Ads tile logos) open, not merged.
 
 ## Takeover checklist
 
@@ -1191,3 +1192,22 @@ Local note: the Mac restarted ~15:00 UTC and cleared /private/tmp; the test Post
 - Incident: PR #275 merged 1 min before #274; Vercel built both and #275's build (without #274) finished last (12:34:32 UTC) and became production, so the site reverted at ~18:04 IST. Main was correct. Fixed by this docs-only merge, which redeploys current main. Lesson: don't merge two PRs within a few minutes of each other; after a merge, re-check live after every later deploy finishes.
 - Also today: PR #261 (docs pricing on request, Meta legal pages), demo-request email fix shipped inside PR #265.
 - Open: US/UK accent English sample (Gemini 3.8 Flash TTS) waits for GEMINI_API_KEY in the repo .env (owner to copy it); script in scratchpad accent/accent.py.
+
+### Claude (dashboard session) — 2026-10-24 UTC — WhatsApp chat-ad leads shipped; Meta gate remains
+
+Verified facts:
+- PR #275 (merged 352417c7): `/webhooks/meta` routes `whatsapp_business_account` messages to `server/whatsapp_leads.py`. A chat from an ad becomes a contact (source `whatsapp_ctwa`). STOP adds the number to DNC; ordinary chats are recorded and never called. Deployed: startup clean, unsigned POST gets 403.
+- PR #278 (merged f6e9d9f1, Railway 48d45b6f SUCCESS, Vercel success): Connect WhatsApp (Embedded Signup) on Lead Ads → Settings.
+  - The server links a number only if the signed-in WABA contains it. It refuses numbers owned by another workspace, subscribes the app, and registers the number unless it is already on the Cloud API. The token and PIN are encrypted.
+  - Per-number "Call these chats" switch, OFF by default: status `captured`, reason `calls_off`, no call queued.
+  - Railway env `META_WA_SIGNUP_CONFIG_ID=1542176514333515`. The FLB config was made from the template: `whatsapp_business_management` + `whatsapp_business_messaging`, WhatsApp accounts only, 60-day system-user token (needed at connect only).
+- Meta app 1140705345278569 webhook: `whatsapp_business_account` field `messages` subscribed (checked via Graph `/{app}/subscriptions`); Meta verified the callback.
+- Live check (Chrome, Prophunt LLP account 1): `GET /integrations/whatsapp` returns 200 `available:true`; the panel renders; the popup opens with config 1542176514333515. Meta then shows "Vistrow can't onboard customers at the moment". Nothing was connected and no calls were made.
+- Tests: `server/test_whatsapp_leads.py` 16 pass; full server suite 1042 pass (local Postgres); guard mutations caught.
+
+Owner decisions (23 Oct): tenant app = tenant permissions only. Vistrow's own WhatsApp (+91 77131 28715, WABA 2255177115055128) is NOT linked into the tenant flow and gets a separate Meta app later. Runtime PR #277 is paused (draft); its statuses use its own `/webhooks/wa-sender`.
+
+Remaining:
+1. Owner: Business Verification, then Tech Provider (dialog left at "Continue"), then App Review/publish (pack in PR #273), then the app icon upload.
+2. Claude (after Meta approval): real end-to-end connect on Prophunt LLP with the owner's spare number, calls off; live ad-to-agent routing check.
+3. Not built: BSP (AiSensy/Wati/Interakt) webhook option.
