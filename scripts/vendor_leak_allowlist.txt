@@ -1,0 +1,21 @@
+# Regexes matched against the ~140 characters around a vendor NAME (never an
+# internal id). A match means the mention is intended. Keep each line narrow.
+
+# Privacy / sub-processor disclosure (legal; wording is the owner's call).
+sub-?processor
+purpose:`Language model
+purpose:`[^`]*(speech|voice|language model)
+
+# Competitor comparison pages (/compare/...).
+/compare/
+Vistrow (Voice )?vs\.?
+slug:`(sarvam-ai|elevenlabs|openai|gemini)`
+name:`(Sarvam AI|ElevenLabs|OpenAI|Gemini)`
+
+# Lead-source survey answers ("AI assistant (ChatGPT, Gemini, Claude...)").
+ChatGPT, Gemini, Claude
+
+# FAQ answers on those comparison pages.
+Compare Vistrow Voice with
+Is Sarvam AI a competitor or a provider
+ElevenLabs-style premium voices

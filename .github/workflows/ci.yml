@@ -107,3 +107,8 @@ jobs:
       - run: npm run test:seo
       # Added by the voice-clone work; skipped until that script is on main.
       - run: npm run --if-present test:voice-clone
+      # Report-only: lists vendor names/ids in the built bundle in the job
+      # summary and never fails the job. Add --strict once the leaks are gone.
+      - name: Vendor leak check (report only)
+        continue-on-error: true
+        run: python3 ../scripts/check_vendor_leaks.py dist
