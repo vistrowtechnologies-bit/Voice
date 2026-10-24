@@ -198,10 +198,17 @@ TOOL_SCHEMAS = [
 
 # Tenant-facing model names, mirroring MODEL_OPTIONS/RETIRED_MODELS in
 # web-demo/src/lib/agentOptions.ts — the dashboard never shows the vendor
-# model string, so the bot must not either. Unknown values fall back to the
-# raw string, same as the agent editor does.
+# model string, so the bot must not either. An id missing here says
+# "Vistrow model" rather than the raw vendor string (it used to fall back to
+# the raw id, which leaked newer models such as the realtime one).
 _MODEL_LABELS = {
     "sarvam/sarvam-105b-conversations": "Vistrow Bharat",
+    "gemini-live:gemini-3.8-live": "Vistrow Live 3.8",
+    "gemini-live:gemini-3.1-flash-live-preview": "Vistrow Live 3.1 (retired)",
+    "gemini-live": "Vistrow Live 2.5 (retired)",
+    "gpt-5-nano": "Vistrow Nano Lab",
+    "gpt-5.4-nano": "Vistrow Swift",
+    "gpt-5.4-mini": "Vistrow Prime",
     "gpt-4.1-mini": "Vistrow Swift",
     "gpt-4.1": "Vistrow Prime",
     "gpt-4o": "Vistrow Pro",
@@ -209,6 +216,7 @@ _MODEL_LABELS = {
     "gpt-4o-mini": "Vistrow Standard",
     "gemini-3.5-flash-lite": "Vistrow Lite",
 }
+_UNKNOWN_MODEL_LABEL = "Vistrow model"
 
 # Caps keeping every tool result small enough to feed back to the model.
 MAX_LIST_ITEMS = 20
@@ -341,7 +349,7 @@ def _agent_summary(agent: dict, numbers_by_agent: dict[int, list[str]]) -> dict:
         "agentId": agent["id"],
         "name": agent["name"],
         "status": agent["status"],
-        "model": _MODEL_LABELS.get(agent["model"], agent["model"]),
+        "model": _MODEL_LABELS.get(agent["model"], _UNKNOWN_MODEL_LABEL),
         "voice": agent["voiceName"],
         "language": agent["language"],
         "phoneNumbers": numbers_by_agent.get(agent["id"], []),
