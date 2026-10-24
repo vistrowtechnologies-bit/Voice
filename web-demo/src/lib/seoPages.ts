@@ -6,6 +6,13 @@
 // visitor sees after React hydrates.
 
 export const SEO_ORIGIN = 'https://www.vistrowvoice.com'
+
+/** Official Vistrow Voice profiles: the Organization schema's sameAs and the footer links. */
+export const BRAND_PROFILES = [
+  { name: 'LinkedIn', url: 'https://www.linkedin.com/company/vistrow-voice' },
+  { name: 'YouTube', url: 'https://www.youtube.com/@Vistrow-voice' },
+  { name: 'Instagram', url: 'https://www.instagram.com/vistrowvoice/' },
+] as const
 export type SeoKind =
   | 'home'
   | 'collection'
@@ -666,8 +673,12 @@ export function baseStructuredData(entry: SeoPage): object[] {
         '@type': 'Organization',
         '@id': `${SEO_ORIGIN}/#organization`,
         name: 'Vistrow Voice',
+        alternateName: ['VistrowVoice', 'Vistrow Voice AI'],
         url: `${SEO_ORIGIN}/`,
         logo: `${SEO_ORIGIN}/apple-touch-icon.png`,
+        // The brand's own profiles, so search engines tie "Vistrow Voice" to
+        // one entity instead of correcting the name to a similar word.
+        sameAs: BRAND_PROFILES.map((p) => p.url),
         email: 'info@vistrowvoice.com',
         telephone: '+91-90670-97779',
         contactPoint: [
