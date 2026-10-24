@@ -369,7 +369,7 @@ export function DemoOrbCard({
       // like a successful Sarvam measurement when it was actually a
       // different pipeline. Fail honestly and keep the A/B data clean.
       releaseCallLock()
-      setErrorMessage('The Sarvam latency lab did not pick up. Please try again.')
+      setErrorMessage('The latency lab did not pick up. Please try again.')
       setPhase('unreachable')
       return
     }
@@ -497,7 +497,7 @@ export function DemoOrbCard({
             <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
           </span>
           <span className="text-[10px] font-bold uppercase tracking-wider text-cyan">
-            {pipelineProfile ? 'Sarvam latency lab' : badgeLabel}
+            {pipelineProfile ? 'Latency lab' : badgeLabel}
           </span>
         </div>
 
