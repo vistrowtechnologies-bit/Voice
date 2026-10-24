@@ -34,6 +34,7 @@ import {
   NOISE_CANCELLATION_OPTIONS,
   STANDARD_MODEL,
   TONES,
+  usesBuiltInVoice,
   voiceLabel,
   voicePickerGroups,
   voiceWorksWithModel,
@@ -543,6 +544,23 @@ function AgentEditorForm({
                     </>
                   )}
                 </p>
+                {/* More than one realtime engine (Live 3.8, Duplex): pick which. */}
+                {isRealtimeModel(form.model) && modelOptionsFor(true).filter((m) => isRealtimeModel(m.value)).length > 1 && (
+                  <select
+                    aria-label="Realtime engine"
+                    value={form.model}
+                    onChange={(e) => changeModel(e.target.value)}
+                    className={`${inputCls} mt-2`}
+                  >
+                    {modelOptionsFor(true)
+                      .filter((m) => isRealtimeModel(m.value))
+                      .map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label} - {m.tag}
+                        </option>
+                      ))}
+                  </select>
+                )}
                 {showModels && !isRealtimeModel(form.model) && (
                   <select value={form.model} onChange={(e) => changeModel(e.target.value)} className={`${inputCls} mt-2`}>
                     {modelOptionsFor(true)
@@ -596,6 +614,14 @@ function AgentEditorForm({
           </Field>
 </TabPane>
           <TabPane tab="voice" active={tab}>
+{usesBuiltInVoice(form.model) ? (
+          <Field label="Voice">
+            <p className="text-sm text-text-muted">
+              {modelLabel(form.model).split(' · ')[0]} speaks with its own built-in voice, so the voice setting doesn’t apply.
+              Switch the engine to Standard to pick one of your voices.
+            </p>
+          </Field>
+) : (
 <Field
             label="Voice"
             hint={
@@ -698,6 +724,7 @@ function AgentEditorForm({
               })()}
             </div>
           </Field>
+)}
 </TabPane>
           <TabPane tab="voice" active={tab}>
 <Field label="Default language">
@@ -1285,7 +1312,7 @@ function AgentHero({ agent, name, description, model, voice, language, live, sta
               </span>
               {live ? 'Live' : 'Paused'}
             </button>
-            <span className="rounded-full bg-white/15 px-2.5 py-1 font-bold ring-1 ring-white/30">{isRealtimeModel(model) ? 'Vistrow Live' : modelLabel(model).split(' · ')[0]}</span>
+            <span className="rounded-full bg-white/15 px-2.5 py-1 font-bold ring-1 ring-white/30">{isRealtimeModel(model) && !usesBuiltInVoice(model) ? 'Vistrow Live' : modelLabel(model).split(' · ')[0]}</span>
             <span className="truncate text-white/80">{voice} · {language}</span>
           </div>
         </div>
