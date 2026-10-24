@@ -93,6 +93,7 @@ class CopilotActions(unittest.TestCase):
         import calls_db
         import copilot
         import copilot_tools
+        import kb_crawl
         import help_chat
         import plan_policy
         import voice_catalog
@@ -104,8 +105,9 @@ class CopilotActions(unittest.TestCase):
         ns = token_api_namespace(
             ("_guard_agent_patch", "_guard_stt_provider", "_guard_voice_tier", "_guard_realtime_voice",
              "_guard_admin_only_model", "_realtime_voice_usable", "_GEMINI_LIVE_VOICES",
-             "_ADMIN_ONLY_MODEL_PREFIXES", "_ADMIN_ONLY_MODELS", "_TENANT_REALTIME_MODELS"),
-            {"HTTPException": HTTPException, "calls_db": calls_db, "plan_policy": plan_policy, "voice_catalog": voice_catalog},
+             "_ADMIN_ONLY_MODEL_PREFIXES", "_ADMIN_ONLY_MODELS", "_guard_custom_functions"),
+            {"HTTPException": HTTPException, "calls_db": calls_db, "plan_policy": plan_policy, "voice_catalog": voice_catalog,
+             "json": json, "kb_crawl": kb_crawl},
         )
         cls._saved_guard = copilot_tools.AGENT_PATCH_GUARD
         copilot_tools.AGENT_PATCH_GUARD = ns["_guard_agent_patch"]

@@ -81,25 +81,41 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class LiveOpenToTenants(unittest.TestCase):
-    """Owner, 19 Oct 2026: Vistrow Live 3.8 opens to every plan; retired ids stay owner-only."""
+class LiveOwnerOnlyUntilComboTests(unittest.TestCase):
+    """Owner, 24 Oct 2026: Live 3.8 is owner-only again (it was opened 19 Oct);
+    an agent already saved with an owner-only model keeps it."""
 
-    def test_guard_lets_tenants_pick_live_38_only(self):
+    def _guard(self, saved_model=None, saved_account=None):
         import ast
         import os
         from fastapi import HTTPException
 
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "token_api.py"), encoding="utf-8").read()
-        names = ("_guard_admin_only_model", "_ADMIN_ONLY_MODEL_PREFIXES", "_ADMIN_ONLY_MODELS", "_TENANT_REALTIME_MODELS")
+        names = ("_guard_admin_only_model", "_ADMIN_ONLY_MODEL_PREFIXES", "_ADMIN_ONLY_MODELS")
         nodes = [n for n in ast.parse(src).body
                  if (isinstance(n, ast.FunctionDef) and n.name in names)
                  or (isinstance(n, ast.Assign) and any(getattr(t, "id", None) in names for t in n.targets))]
-        ns = {"HTTPException": HTTPException,
-              "calls_db": type("C", (), {"is_platform_owner": staticmethod(lambda account_id: account_id == 1)})}
+        db = type("C", (), {
+            "is_platform_owner": staticmethod(lambda account_id: account_id == 1),
+            "get_agent_by_id_unscoped": staticmethod(lambda agent_id: {"model": saved_model} if saved_model else None),
+            "agent_account_id": staticmethod(lambda agent_id: saved_account),
+        })
+        ns = {"HTTPException": HTTPException, "calls_db": db}
         exec(compile(ast.Module(body=nodes, type_ignores=[]), "token_api.py", "exec"), ns)
-        guard = ns["_guard_admin_only_model"]
-        guard({"model": "gemini-live:gemini-3.8-live"}, 99)  # tenant: allowed
-        for retired in ("gemini-live", "gemini-live:gemini-3.1-flash-live-preview", "gpt-5-nano", "groq/x"):
-            with self.assertRaises(HTTPException, msg=retired):
-                guard({"model": retired}, 99)
-            guard({"model": retired}, 1)  # owner: allowed
+        return ns["_guard_admin_only_model"], HTTPException
+
+    def test_tenant_cannot_pick_live_38_owner_can(self):
+        guard, HTTPException = self._guard()
+        for model in ("gemini-live:gemini-3.8-live", "gemini-live", "gemini-live:gemini-3.1-flash-live-preview", "gpt-5-nano", "groq/x"):
+            with self.assertRaises(HTTPException, msg=model):
+                guard({"model": model}, 99)
+            guard({"model": model}, 1)
+        guard({"model": "sarvam/sarvam-105b-conversations"}, 99)
+
+    def test_saved_agent_keeps_its_model(self):
+        guard, HTTPException = self._guard(saved_model="gemini-live:gemini-3.8-live", saved_account=99)
+        guard({"model": "gemini-live:gemini-3.8-live"}, 99, agent_id=7)
+        with self.assertRaises(HTTPException):
+            guard({"model": "gemini-live:gemini-3.8-live"}, 98, agent_id=7)  # another tenant's agent id
+        with self.assertRaises(HTTPException):
+            guard({"model": "gpt-5-nano"}, 99, agent_id=7)  # switching to another owner-only model
