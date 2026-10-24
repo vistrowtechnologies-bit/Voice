@@ -104,5 +104,55 @@ class Agents(unittest.TestCase):
         self.assertEqual(public_ids.agent_in({"name": "X"}), {"name": "X"})
 
 
+class Routes(unittest.TestCase):
+    """token_api translates at the route layer (never inside calls_db)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        import os
+
+        cls.source = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "token_api.py"), encoding="utf-8").read()
+        cls.tree = ast.parse(cls.source)
+        cls.ast = ast
+
+    def body(self, name):
+        node = next(n for n in self.ast.walk(self.tree) if isinstance(n, (self.ast.FunctionDef, self.ast.AsyncFunctionDef)) and n.name == name)
+        return self.ast.get_source_segment(self.source, node)
+
+    def test_every_tenant_route_translates(self):
+        for route, needle in (("list_agents", "public_ids.agent_out"), ("create_agent", "public_ids.agent_out"),
+                              ("update_agent", "public_ids.agent_out"), ("create_agent", "_agent_in("),
+                              ("_guard_agent_patch", "_agent_in("), ("draft_agent", "public_ids.voice_out"),
+                              ("draft_agent", "_agent_in("), ("draft_greeting_audio", "_voice_in("),
+                              ("voices_catalog", "public_ids.public_voice"), ("_my_voices", "public_ids.public_voice"),
+                              ("voices_add", "_voice_in("), ("voices_remove", "_voice_in("), ("voices_preview", "_voice_in(")):
+            self.assertIn(needle, self.body(route), route)
+
+    def test_agent_in_runs_before_the_guards(self):
+        for route in ("create_agent", "_guard_agent_patch"):
+            text = self.body(route)
+            self.assertLess(text.index("_agent_in("), text.index("_guard_stt_provider("), route)
+
+    def test_agent_in_uses_the_saved_agent_for_an_off_table_id(self):
+        from types import SimpleNamespace
+
+        class Refused(Exception):
+            def __init__(self, status, detail):
+                super().__init__(detail)
+                self.status = status
+
+        saved = {"model": "someone/old-model", "voice": "google:kore"}
+        db = SimpleNamespace(get_agent_by_id_unscoped=lambda agent_id: saved, agent_account_id=lambda agent_id: 3)
+        ns = {"calls_db": db, "public_ids": public_ids, "HTTPException": Refused}
+        exec(self.body("_agent_in"), ns)
+        agent_in = ns["_agent_in"]
+        back = agent_in({"model": public_ids.model_out(saved["model"]), "voice": public_ids.voice_out(saved["voice"])}, 3, 9)
+        self.assertEqual((back["model"], back["voice"]), (saved["model"], saved["voice"]))
+        with self.assertRaises(Refused) as caught:
+            agent_in({"model": public_ids.model_out(saved["model"])}, 4, 9)  # another workspace's agent
+        self.assertEqual(caught.exception.status, 400)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

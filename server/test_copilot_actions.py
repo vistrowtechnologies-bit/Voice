@@ -103,11 +103,11 @@ class CopilotActions(unittest.TestCase):
         calls_db.init_tables()
         # The real PATCH /agents guards, as token_api.py wires them up.
         ns = token_api_namespace(
-            ("_guard_agent_patch", "_guard_stt_provider", "_guard_voice_tier", "_guard_realtime_voice",
+            ("_guard_agent_patch", "_agent_in", "_guard_stt_provider", "_guard_voice_tier", "_guard_realtime_voice",
              "_guard_admin_only_model", "_realtime_voice_usable", "_GEMINI_LIVE_VOICES",
              "_ADMIN_ONLY_MODEL_PREFIXES", "_ADMIN_ONLY_MODELS", "_guard_custom_functions"),
             {"HTTPException": HTTPException, "calls_db": calls_db, "plan_policy": plan_policy, "voice_catalog": voice_catalog,
-             "json": json, "kb_crawl": kb_crawl},
+             "json": json, "kb_crawl": kb_crawl, "public_ids": __import__("public_ids")},
         )
         cls._saved_guard = copilot_tools.AGENT_PATCH_GUARD
         copilot_tools.AGENT_PATCH_GUARD = ns["_guard_agent_patch"]
