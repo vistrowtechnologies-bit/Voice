@@ -131,7 +131,7 @@ def render_invoice_html(invoice: dict, profile: dict | None, supplier: dict, acc
     )
     logo = logo_png()
     logo_html = (
-        f"<img class=\"logo\" src=\"data:image/png;base64,{base64.b64encode(logo).decode()}\" alt=\"Vistrow\">"
+        f"<img class=\"logo\" src=\"data:image/png;base64,{base64.b64encode(logo).decode()}\" alt=\"Vistrow Voice\">"
         if logo else ""
     )
     period = ""
