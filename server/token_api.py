@@ -7030,6 +7030,15 @@ def _process_razorpay_event(event: dict) -> dict:
     return {"ok": True}
 
 
+def _generic_lead_source(body: dict) -> str:
+    """The inbound_lead_events source for a lead POSTed to the generic
+    webhook. Only a Facebook Lead Ads payload (Zapier's passthrough carries
+    field_data / leadgen_id) is a Facebook lead; anything else — a website
+    form, n8n, Make, a CRM — used to be labelled "Facebook lead" too. Generic
+    sources share one instant campaign, so this changes the label only."""
+    return "facebook_lead_ads" if body.get("field_data") or body.get("leadgen_id") else "webhook"
+
+
 def _parse_facebook_field_data(field_data: list) -> tuple[str, str]:
     """(name, phone) out of Facebook Lead Ads' field_data shape — a list of
     {"name": <question label>, "values": [<answer>]} pairs. Question labels
@@ -7280,7 +7289,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         return {"ok": False, "reason": "no_phone_in_payload"}
     result = await asyncio.to_thread(
         calls_db.ingest_inbound_lead,
-        account_id, name, phone, source="facebook_lead_ads",
+        account_id, name, phone, source=_generic_lead_source(body),
         external_id=str(body.get("leadgen_id") or body.get("id") or ""),
     )
     if not result.get("ok"):

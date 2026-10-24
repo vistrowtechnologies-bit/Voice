@@ -36,7 +36,8 @@ def _token_api_namespace(calls_db, dialer):
     module would boot the whole app against whatever DATABASE_URL is set)."""
     tree = ast.parse((ROOT / "server/token_api.py").read_text())
     wanted = {"_LEAD_CONTROL_CHARS", "_FORM_IDENTITY_KEYS", "_lead_text", "_lead_form_fields",
-              "_queued_until", "_wake_dialer", "leads_inbound", "_parse_facebook_field_data"}
+              "_queued_until", "_wake_dialer", "leads_inbound", "_parse_facebook_field_data",
+              "_generic_lead_source"}
     body = []
     for node in tree.body:
         name = getattr(node, "name", None) or next(
