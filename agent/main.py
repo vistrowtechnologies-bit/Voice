@@ -2119,6 +2119,7 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         # Live API. 2.5 could not be tested.
         **({"context_window_compression": realtime_config.context_compression(instructions)}
            if name in (realtime_config.MODEL_31, realtime_config.MODEL_38) else {}),
+        **realtime_config.affective_options(name),
     )
 
 
