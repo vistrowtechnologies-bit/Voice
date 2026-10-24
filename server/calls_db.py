@@ -3101,6 +3101,24 @@ def _tenant_diagnostic_events(row: dict) -> tuple[list[dict], bool]:
     return milestones, False
 
 
+def _tenant_latency_metrics(raw) -> dict:
+    """The per-call timing block as a tenant may see it: numbers and lists of
+    numbers only. The stored block also names the speech, language-model and
+    voice vendors ("stack", provider labels, usage keyed by model), which a
+    tenant must never see; admin pages read the raw column through admin_db."""
+    if not isinstance(raw, dict):
+        return {}
+    keep: dict = {}
+    for key, value in raw.items():
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            keep[key] = value
+        elif isinstance(value, list) and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value):
+            keep[key] = value
+    return keep
+
+
 def _call_dict(
     row: dict,
     include_transcript: bool = True,
@@ -3189,7 +3207,7 @@ def _call_dict(
         "firstResponseLatencyMs": _row_get(row, "first_response_latency_ms"),
         "failureReason": _row_get(row, "failure_reason"),
         "feedbackComment": _row_get(row, "feedback_comment"),
-        "latencyMetrics": _load_json_field(_row_get(row, "latency_metrics_json"), {}),
+        "latencyMetrics": _tenant_latency_metrics(_load_json_field(_row_get(row, "latency_metrics_json"), {})),
         # Why the call ended, for every channel — unlike failureReason above,
         # which only widget calls ever set. Empty string on calls recorded
         # before the column existed.
