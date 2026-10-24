@@ -697,6 +697,51 @@ class TokenRequest(BaseModel):
     # than blocking the call.
     consentVersion: str | None = None
     consentAcceptedAt: str | None = None
+    # The homepage live demo's form (owner 24 Oct): who is calling and their
+    # agreement to be contacted. Required on the platform-demo path only; see
+    # _demo_visitor_gate.
+    name: str = ""
+    phone: str = ""
+    contactConsent: bool = False
+
+
+# A real phone number may start this many demo calls a day, and one IP this
+# many (an office shares one IP). Kept in Postgres, so a restart or a second
+# instance does not reset them the way the per-minute limit does.
+_DEMO_CALLS_PER_PHONE_PER_DAY = 10
+_DEMO_CALLS_PER_IP_PER_DAY = 25
+
+
+def _demo_visitor_gate(name: str, phone: str, contact_consent: bool, client_ip: str) -> tuple[str, str]:
+    """The homepage demo asks for a name, a phone number and consent before
+    the call, so a call costs a real-looking number and every visitor can be
+    followed up. Not verified (no OTP, owner's choice): _looks_like_real_phone
+    only drops typed junk. Returns the cleaned (name, phone)."""
+    name = " ".join(str(name or "").split())[:80]
+    phone = re.sub(r"[\s\-()]", "", str(phone or ""))
+    if len(name) < 2:
+        raise HTTPException(400, "Please enter your name to start the call.")
+    # An Indian number must be a real mobile: 10 digits starting 6-9 (owner
+    # 24 Oct: 1234567899 got through the generic junk filter).
+    if not _looks_like_real_phone(phone) or (phone.startswith("+91") and not re.fullmatch(r"\+91[6-9]\d{9}", phone)):
+        raise HTTPException(400, "Please enter a valid mobile number to start the call.")
+    if not contact_consent:
+        raise HTTPException(400, "Please tick the box so we can follow up with you.")
+    if _limited("demo-phone-day", phone, _DEMO_CALLS_PER_PHONE_PER_DAY, 86400) or _limited(
+        "demo-ip-day", client_ip, _DEMO_CALLS_PER_IP_PER_DAY, 86400
+    ):
+        logger.warning("demo call refused: daily limit (ip=%s)", client_ip)
+        raise HTTPException(429, "You've used today's free demo calls. Book a demo and we'll call you.")
+    return name, phone
+
+
+async def _save_demo_visitor(name: str, phone: str) -> None:
+    # Best effort: the call row also carries the phone, so a failed save here
+    # must not stop a visitor who already filled the form from talking.
+    try:
+        await asyncio.to_thread(calls_db.save_demo_visitor, name, phone)
+    except Exception:
+        logger.exception("could not save demo visitor as a contact")
 
 
 _BUILTIN_TEST_SCENARIOS = {
@@ -797,6 +842,12 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         raise HTTPException(400, "Invalid call room.")
 
     meta: dict = {}
+    visitor: tuple[str, str] | None = None
+    if agent_id is None:
+        # The homepage platform demo: the only path an anonymous visitor can
+        # start without a published slug or a signed-in session.
+        visitor = _demo_visitor_gate(req.name, req.phone, req.contactConsent, client_ip)
+        meta["visitor_name"], meta["visitor_phone"] = visitor
     if agent_id is not None:
         meta["agent_id"] = agent_id
     if req.consentVersion:
@@ -861,6 +912,8 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         ip_blocklist.record_visitor, req.room, client_ip, request.headers.get("user-agent", ""),
         "website demo" if agent_id is None else "dashboard test",
     )
+    if visitor:
+        await _save_demo_visitor(*visitor)
     return {"token": token, "url": livekit_url}
 
 
@@ -877,6 +930,14 @@ async def orchestrator_platform_demo_token(request: Request) -> dict:
     client_ip = _client_ip(request)
     if _token_rate_limited(client_ip):
         raise HTTPException(429, "Too many calls right now — please try again shortly.")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body if isinstance(body, dict) else {}
+    visitor = _demo_visitor_gate(str(body.get("name") or ""), str(body.get("phone") or ""),
+                                 body.get("contactConsent") is True, client_ip)
+    await _save_demo_visitor(*visitor)
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
     if not orchestrator_url:
         return {"ok": False, "error": "Orchestrator not configured."}

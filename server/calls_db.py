@@ -5946,6 +5946,50 @@ def list_contacts(account_id: int) -> list[dict]:
         conn.close()
 
 
+def save_demo_visitor(name: str, phone: str) -> int | None:
+    """A visitor who filled in the homepage live demo's form (name, phone,
+    consent to be contacted) becomes a contact in the account that owns the
+    platform demo agent, tagged website-demo. The demo call itself is kept out
+    of the contact sync (_sync_contacts_from_calls), but it is saved with this
+    phone as lead_phone, so it shows on this contact's Calls tab. Returns the
+    contact id, or None when there is no platform demo agent or the phone is
+    unusable."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT account_id FROM agents WHERE is_platform_demo = 1 AND account_id IS NOT NULL ORDER BY id LIMIT 1"
+        ).fetchone()
+        if not row:
+            return None
+        account_id = int(row["account_id"])
+        phone = canonical_contact_phone(phone, account_id)
+        if not phone:
+            return None
+        name = (name or "").strip()[:120] or "Website visitor"
+        with conn:
+            existing = conn.execute(
+                "SELECT id, name, tags FROM contacts WHERE account_id = ? AND phone = ?", (account_id, phone)
+            ).fetchone()
+            if existing:
+                # Keep what the team already knows; only add the tag and fill
+                # a missing name.
+                keep_name = (existing["name"] or "").strip().lower() not in ("", "unknown", "website visitor")
+                conn.execute(
+                    f"UPDATE contacts SET tags = ?, name = ?, deleted_at = NULL, updated_at = {_NOW} WHERE id = ?",
+                    (_clean_tags(f"{existing['tags'] or ''},website-demo"),
+                     existing["name"] if keep_name else name, existing["id"]),
+                )
+                return int(existing["id"])
+            created = conn.execute(
+                "INSERT INTO contacts (account_id, name, phone, email, company, custom_fields, status, tags, source) "
+                "VALUES (?, ?, ?, '', '', '{}', 'new', 'website-demo', 'website_demo') RETURNING id",
+                (account_id, name, phone),
+            ).fetchone()
+            return int(created["id"])
+    finally:
+        conn.close()
+
+
 def _safe_json_loads(raw: str | None) -> dict:
     if not raw:
         return {}

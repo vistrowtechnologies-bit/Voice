@@ -10,7 +10,8 @@ import {
   hasDemoCallsRemaining,
   recordDemoCall,
 } from '../lib/demoCallCap'
-import { fetchLiveKitToken, randomId, submitDemoFeedback } from '../lib/livekit'
+import { fetchLiveKitToken, randomId, submitDemoFeedback, TokenError } from '../lib/livekit'
+import { clearDemoVisitor, looksLikeRealPhone, readDemoVisitor, saveDemoVisitor, type DemoVisitor } from '../lib/demoVisitor'
 import { trackMarketingCta, trackQualifyLead } from '../lib/analytics'
 import { useOrchestratorCall } from '../lib/orchestratorCall'
 
@@ -173,6 +174,7 @@ export function DemoOrbCard({
   const PREWARM_MAX_AGE_MS = 60_000
   const prewarmRef = useRef<{ token: string; url: string; identity: string; room: string; at: number; consented: boolean } | null>(null)
   const prewarmPromiseRef = useRef<Promise<{ token: string; url: string; identity: string; room: string; at: number; consented: boolean } | null> | null>(null)
+  const prewarmErrorRef = useRef<TokenError | null>(null)
   const prewarm = useCallback(() => {
     const cached = prewarmRef.current
     if (cached && Date.now() - cached.at < PREWARM_MAX_AGE_MS) return Promise.resolve(cached)
@@ -181,15 +183,19 @@ export function DemoOrbCard({
     const identity = randomId('visitor')
     const room = randomId('voice-agent-demo')
     const consent = consentArg()
+    prewarmErrorRef.current = null
     const request = fetchLiveKitToken(identity, room, undefined, demoSlug, language, undefined, pipelineProfile, consent)
       .then(({ token: newToken, url }) => {
         const warmed = { token: newToken, url, identity, room, at: Date.now(), consented: !!consent }
         prewarmRef.current = warmed
         return warmed
       })
-      .catch(() => {
+      .catch((err) => {
         // handleStart surfaces a retry. Repeating a failed request here
         // would double the waiting time and could dispatch another room.
+        // A refusal from the server (daily limit, rejected details) keeps its
+        // own message for handleStart to show.
+        prewarmErrorRef.current = err instanceof TokenError ? err : null
         return null
       })
     prewarmPromiseRef.current = request.finally(() => {
@@ -239,7 +245,9 @@ export function DemoOrbCard({
     if (cooldownUntil !== null && Date.now() < cooldownUntil) return
     // DPDP gate - ahead of the call lock, the mic prompt and any token fetch,
     // so nothing is held or requested while the visitor is still deciding.
-    if (!readConsent()) {
+    // The homepage demo (no slug) also needs the visitor's name and phone
+    // (owner 24 Oct): the server refuses its token without them.
+    if (!readConsent() || (!demoSlug && !readDemoVisitor())) {
       setPhase('consent')
       return
     }
@@ -263,7 +271,7 @@ export function DemoOrbCard({
       const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true })
       permissionStream.getTracks().forEach((track) => track.stop())
       const warm = (await warming) ?? prewarmRef.current
-      if (!warm) throw new Error('Could not connect to Artha. Please try again.')
+      if (!warm) throw prewarmErrorRef.current ?? new Error('Could not connect to Artha. Please try again.')
       const isFresh = warm && warm.consented && Date.now() - warm.at < PREWARM_MAX_AGE_MS
       const room = isFresh ? warm.room : randomId('voice-agent-demo')
       const { token: newToken, url } =
@@ -277,19 +285,27 @@ export function DemoOrbCard({
       setPhase('active')
     } catch (err) {
       releaseCallLock()
+      // The server refused the saved details (e.g. a number it now rejects):
+      // forget them so the next tap shows the form again.
+      if (err instanceof TokenError && err.status === 400) clearDemoVisitor()
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
         setErrorMessage('Mic access is blocked. Enable it in your browser settings to continue.')
+        setPhase('denied')
       } else {
         setErrorMessage(err instanceof Error ? err.message : 'Could not connect. Please try again.')
+        setPhase('unreachable')
       }
-      setPhase('denied')
     }
   }, [cooldownUntil, prewarm, demoSlug, language, pipelineProfile])
 
-  const handleConsentAccept = useCallback(() => {
-    grantConsent()
-    void handleStart()
-  }, [handleStart])
+  const handleConsentAccept = useCallback(
+    (visitor: DemoVisitor | null) => {
+      if (visitor) saveDemoVisitor(visitor)
+      grantConsent()
+      void handleStart()
+    },
+    [handleStart],
+  )
   const handleConsentCancel = useCallback(() => setPhase('idle'), [])
 
   // Ending the call shows a brief feedback prompt in the same card (only
@@ -509,7 +525,7 @@ export function DemoOrbCard({
         ) : isCallLiveOrchestrator ? (
           <InlineOrchestratorCallBody onEnded={handleDisconnected} onFailed={handleOrchestratorFailed} onConnected={chargeDemoCall} />
         ) : phase === 'consent' ? (
-          <ConsentPrompt onAccept={handleConsentAccept} onCancel={handleConsentCancel} />
+          <ConsentPrompt askDetails={!demoSlug} onAccept={handleConsentAccept} onCancel={handleConsentCancel} />
         ) : phase === 'feedback' ? (
           <FeedbackPrompt submitted={feedbackSubmitted} onRate={handleFeedback} onDone={handleFeedbackDone} />
         ) : variant === 'call' ? (
@@ -1114,33 +1130,124 @@ function AgentStateLabel({ agentParticipant }: { agentParticipant: RemotePartici
 // The recording/processing notice a visitor must accept before the first
 // demo call. Wording kept equivalent to the widget's dialog so both public
 // surfaces make the same commitment under the same CONSENT_VERSION.
-function ConsentPrompt({ onAccept, onCancel }: { onAccept: () => void; onCancel: () => void }) {
+const COUNTRY_CODES = ['+91', '+971', '+1', '+44', '+65', '+61']
+
+// Before the first call: the recording notice, and on the homepage demo the
+// visitor's name, phone and one box covering both the notice and follow-up.
+function ConsentPrompt({
+  askDetails,
+  onAccept,
+  onCancel,
+}: {
+  askDetails: boolean
+  onAccept: (visitor: DemoVisitor | null) => void
+  onCancel: () => void
+}) {
+  const saved = readDemoVisitor()
+  const [name, setName] = useState(saved?.name ?? '')
+  const [code, setCode] = useState('+91')
+  const [number, setNumber] = useState('')
+  const [agreed, setAgreed] = useState(false)
+  const [error, setError] = useState('')
+  const box = 'rounded-xl border border-border bg-bg py-2.5 text-sm text-text outline-none transition-colors focus:border-primary'
+  const field = `${box} w-full min-w-0 px-3.5`
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!askDetails) return onAccept(null)
+    const phone = `${code}${number.replace(/^0+/, '')}`
+    if (name.trim().length < 2) return setError('Please enter your name.')
+    if (!looksLikeRealPhone(phone)) return setError('Please enter a valid mobile number.')
+    if (!agreed) return setError('Please tick the box to continue.')
+    onAccept({ name: name.trim().replace(/\s+/g, ' ').slice(0, 80), phone })
+  }
+
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="demo-consent-title" className="my-6 flex w-full max-w-sm flex-col gap-3 text-left">
+    <form
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="demo-consent-title"
+      onSubmit={submit}
+      noValidate
+      className="my-6 flex w-full max-w-sm flex-col gap-3 text-left"
+    >
       <h3 id="demo-consent-title" className="font-display text-2xl font-semibold">
-        Before we talk
+        {askDetails ? 'Talk to Artha live' : 'Before we talk'}
       </h3>
-      <p className="text-sm text-text-muted">
+      {askDetails && (
+        <>
+          <p className="text-sm text-text-muted">Tell us who’s calling, so we can follow up after your call.</p>
+          <input
+            className={field}
+            placeholder="Your name"
+            autoComplete="name"
+            autoFocus
+            maxLength={80}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Your name"
+          />
+          <div className="flex gap-2">
+            <select
+              className={`${box} w-[5.5rem] shrink-0 px-2`}
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value)
+                if (e.target.value === '+91') setNumber((n) => n.slice(0, 10))
+              }}
+              aria-label="Country code"
+            >
+              {COUNTRY_CODES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <input
+              className={field}
+              placeholder="98200 00000"
+              inputMode="tel"
+              autoComplete="tel-national"
+              maxLength={code === '+91' ? 10 : 14}
+              value={number}
+              onChange={(e) => setNumber(e.target.value.replace(/\D/g, '').slice(0, code === '+91' ? 10 : 14))}
+              aria-label="Mobile number"
+            />
+          </div>
+        </>
+      )}
+      <p className="text-xs text-text-muted">
         This voice conversation is recorded and transcribed so Artha can respond and so we can follow up with you.
-        The recording, transcript and any details you share are stored and processed by third-party service
-        providers on our behalf.
-      </p>
-      <p className="text-sm text-text-muted">
-        Please don’t share passwords, card numbers or other sensitive details. You can stop at any time by ending the
-        call. Read our{' '}
+        The recording, transcript and any details you share are stored and processed by third-party service providers
+        on our behalf. Please don’t share passwords, card numbers or other sensitive details. Read our{' '}
         <Link to="/privacy" className="text-primary underline">
           privacy policy
         </Link>
         .
       </p>
-      <div className="mt-2 flex gap-3">
+      {askDetails && (
+        <label className="flex cursor-pointer items-start gap-2.5 text-xs text-text">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-primary)]"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+          />
+          <span>I agree to the above, and to Vistrow calling or messaging me on WhatsApp about this demo.</span>
+        </label>
+      )}
+      {error && (
+        <p role="alert" className="text-xs font-semibold text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="mt-1 flex gap-3">
         <button
-          type="button"
-          onClick={onAccept}
-          autoFocus
+          type="submit"
+          autoFocus={!askDetails}
           className="rounded-full bg-primary px-5 py-2 text-xs font-bold text-bg transition-opacity hover:opacity-90"
         >
-          Accept and start
+          {askDetails ? 'Start the call' : 'Accept and start'}
         </button>
         <button
           type="button"
@@ -1150,6 +1257,6 @@ function ConsentPrompt({ onAccept, onCancel }: { onAccept: () => void; onCancel:
           Cancel
         </button>
       </div>
-    </div>
+    </form>
   )
 }
