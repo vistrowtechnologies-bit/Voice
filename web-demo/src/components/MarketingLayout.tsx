@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
 import { trackMarketingCta } from '../lib/analytics'
-import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL, LANGUAGES } from '../lib/marketingContent'
+import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL, LANGUAGES, EXTRA_LANGUAGE_PAGES } from '../lib/marketingContent'
 import type { NavGroup } from '../lib/marketingContent'
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
@@ -92,6 +92,10 @@ export function NavLink({
 
 // Hover intent: a pointer crossing the bar on its way somewhere else should
 // not flash panels open, and leaving a panel briefly should not snap it shut.
+// Every page under /languages/<slug>: the eleven Indian languages plus the
+// American and British English page, so the menus link to all twelve.
+const MENU_LANGUAGES = [...LANGUAGES, ...EXTRA_LANGUAGE_PAGES]
+
 const HOVER_OPEN_MS = 120
 const HOVER_CLOSE_MS = 180
 
@@ -193,7 +197,7 @@ function SolutionsPanel({ group, onNavigate }: { group: NavGroup; onNavigate: ()
           <HeaderIcon name="arrow_forward" size={16} />
         </NavLink>
         <ul className="mt-2 grid grid-cols-2 gap-x-2">
-          {LANGUAGES.map((lang) => (
+          {MENU_LANGUAGES.map((lang) => (
             <li key={lang.slug}>
               <NavLink
                 to={`/languages/${lang.slug}`}
@@ -205,8 +209,9 @@ function SolutionsPanel({ group, onNavigate }: { group: NavGroup; onNavigate: ()
               </NavLink>
             </li>
           ))}
-          {/* Twelfth cell, as in the mobile menu, so the last row closes. */}
-          <li>
+          {/* Twelve language cells fill six rows; this link spans the
+              last row, as in the mobile menu, so the grid closes. */}
+          <li className="col-span-2">
             <NavLink
               to="/languages"
               onClick={onNavigate}
@@ -488,7 +493,7 @@ function MobileNav({ onClose }: { onClose: () => void }) {
         </div>
         <p className="mt-6 text-xs font-bold uppercase tracking-widest text-text-muted">Languages</p>
         <ul className="mt-2 grid grid-cols-2 gap-1 min-[400px]:grid-cols-3">
-          {LANGUAGES.map((lang) => (
+          {MENU_LANGUAGES.map((lang) => (
             <li key={lang.slug}>
               <NavLink
                 to={`/languages/${lang.slug}`}
@@ -502,10 +507,10 @@ function MobileNav({ onClose }: { onClose: () => void }) {
               </NavLink>
             </li>
           ))}
-          {/* The eleven above have their own pages; the rest of the 130+ are
-              on /languages (owner, 21 Oct). As the twelfth cell it fills the
-              last row at both 2 and 3 columns. */}
-          <li>
+          {/* The twelve above have their own pages; the rest of the 130+ are
+              on /languages (owner, 21 Oct). Twelve cells close at both 2 and
+              3 columns, so this link takes a full row of its own. */}
+          <li className="col-span-full">
             <NavLink
               to="/languages"
               onClick={onClose}
@@ -572,7 +577,7 @@ function UtilityStrip() {
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-5 py-2 text-xs md:px-8">
         <nav aria-label="Languages" className="mh-scroll min-w-0 overflow-x-auto">
           <ul className="flex items-center whitespace-nowrap">
-            {LANGUAGES.map((lang, i) => (
+            {MENU_LANGUAGES.map((lang, i) => (
               <li key={lang.slug} className="flex items-center">
                 {i > 0 && <span aria-hidden="true" className="px-1.5 text-border">·</span>}
                 <NavLink

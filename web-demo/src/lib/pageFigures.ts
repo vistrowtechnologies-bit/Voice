@@ -421,13 +421,13 @@ export const PAGE_FIGURES: Record<string, PageFigureData[]> = {
           src: `/media/pages/${slug}-ai-voice-agent-sample-call.webp`,
           alt:
             slug === 'american-british-english'
-              ? `Greeting ${greeting} beside a written sample of ${call} in British English, with Artha, the AI voice agent, booking the caller in`
+              ? `Greeting ${greeting} beside a second written example, ${call} in British English, with Artha, the AI voice agent, booking the caller in`
               : slug === 'english'
               ? `Greeting ${greeting} beside a written sample of ${call} in Indian English, with Artha, the AI voice agent, replying in English`
               : `${name} greeting ${greeting} in ${name} script beside a written sample of ${call}, with Artha, the AI voice agent, replying in ${name}`,
           caption:
             slug === 'american-british-english'
-              ? `Written sample of ${call} in British English. Not a recording of a customer call.`
+              ? `A second, separate written example: ${call} in British English. Not a recording of a customer call.`
               : slug === 'english'
               ? `Written sample of ${call} in Indian English, with the Hindi words callers mix in. Not a recording of a customer call.`
               : `Written sample of ${call} in ${name}, with the English words callers mix in. Not a recording of a customer call.`,

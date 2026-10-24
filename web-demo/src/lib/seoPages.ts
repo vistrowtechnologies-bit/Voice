@@ -118,12 +118,12 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
   english: {
     title: 'Indian English AI Voice Calling Agent | Vistrow Voice',
     description:
-      'AI voice calling agent in Indian English for phone and web calls. Follows Indian accents, names and numbers, switches to Hindi mid-call and logs every call.',
+      'AI voice calling agent in Indian English for phone and web calls. Follows Indian accents, names and numbers, switches to Hindi mid-call, logs every call.',
   },
   'american-british-english': {
     title: 'American & British English AI Voice Agent | Vistrow Voice',
     description:
-      'AI voice agent that speaks natural American or British English on phone and web calls. Hear a demo where the agent matches a British caller\u2019s accent.',
+      'American and British English AI voice agent for phone and web calls. Demo: the agent answers in British English. The accent is set up per line.',
   },
   kannada: {
     title: 'Kannada AI Voice Calling Agent for Karnataka | Vistrow Voice',
@@ -144,6 +144,26 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
     title: 'Punjabi AI Voice Calling Agent for Punjab | Vistrow Voice',
     description:
       'Punjabi AI voice calling agent for Punjab, Chandigarh and Delhi NCR. Follows Punjabi, Hindi and English in one call, books appointments, logs every call.',
+  },
+  malayalam: {
+    title: 'Malayalam AI Voice Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Malayalam AI voice agent for Kochi, Thiruvananthapuram and Kerala. Follows Malayalam-English switching, books visits and logs every phone and web call.',
+  },
+  gujarati: {
+    title: 'Gujarati AI Voice Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Gujarati AI voice agent for Ahmedabad, Surat and Gujarat. Handles enquiries and payment reminders, follows Gujarati, Hindi and English, logs every call.',
+  },
+  bengali: {
+    title: 'Bengali AI Voice Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Bengali AI voice agent for Kolkata and West Bengal. Answers phone and website calls, follows Bengali, Hindi and English mid-call and logs every call.',
+  },
+  odia: {
+    title: 'Odia AI Voice Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Odia AI voice agent for Bhubaneswar, Cuttack and Odisha. Answers phone and website calls, follows Odia, English and Hindi mid-call and logs every call.',
   },
   marathi: {
     title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
@@ -299,7 +319,7 @@ const SEO_PAGE_LIST: SeoPage[] = [
       `/languages/${slug}`,
       LANGUAGE_SEO_META[slug]?.title ?? `${name} AI Voice Agent for Customer Calls | Vistrow Voice`,
       LANGUAGE_SEO_META[slug]?.description ??
-        `Handle inbound, outbound, and website customer conversations with a ${name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
+        `Handle inbound, outbound, and website customer conversations with ${/^[AEIOU]/.test(name) ? 'an' : 'a'} ${name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
       `language-${slug}`,
       native === 'US and UK'
         ? 'American and British English customer calls in the US and UK handled by the Vistrow Voice AI agent orb'

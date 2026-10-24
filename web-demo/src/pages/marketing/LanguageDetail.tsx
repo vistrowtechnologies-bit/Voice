@@ -359,7 +359,7 @@ export function LanguageDetail() {
 
       <TrustBand
         eyebrow={`${lang.name} calls you can check`}
-        title="Hear it on a real call before you decide."
+        title={`Hear the ${lang.name} agent for yourself before you decide.`}
         body={`Artha answers in ${lang.name}, works on your number and your website, and leaves a record of every call.`}
         facts={trustFacts}
         placement="language_trust_band"
@@ -460,13 +460,15 @@ export function LanguageDetail() {
                   <Icon3D name={s.icon ?? 'circle'} className="text-[22px]" />
                 </span>
                 <div>
-                  <h3 className="flex items-center gap-1 font-display text-lg font-semibold">
-                    {s.label}
+                  {/* The arrow sits beside the heading, not inside it, so the
+                      icon's ligature text never becomes part of the h3. */}
+                  <div className="flex items-center gap-1">
+                    <h3 className="font-display text-lg font-semibold">{s.label}</h3>
                     <Icon
                       name="arrow_forward"
                       className="text-[16px] text-text-muted transition-transform group-hover:translate-x-1 group-hover:text-primary"
                     />
-                  </h3>
+                  </div>
                   <p className="mt-1 text-sm leading-relaxed text-text-muted">{s.desc}</p>
                 </div>
               </Link>
@@ -500,9 +502,9 @@ export function LanguageDetail() {
         </section>
       )}
 
-      <ObjectionCards route={route} placement="language_objections" />
+      <ObjectionCards route={route} placement="language_objections" title={`What buyers ask first about a ${lang.name} AI voice agent.`} />
 
-      <FaqSection key={lang.slug} items={faqs} />
+      <FaqSection key={lang.slug} items={faqs} title={`${lang.name} AI voice agent: questions, answered.`} />
 
       {lang.guides && lang.guides.length > 0 && (
         <section className="mx-auto max-w-7xl space-y-3 px-5 pt-12 md:px-8">
@@ -545,7 +547,7 @@ export function LanguageDetail() {
         <div className="text-center">
           <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Also available in</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {LANGUAGES.filter((l) => l.slug !== lang.slug).map((l) => (
+            {[...LANGUAGES, ...EXTRA_LANGUAGE_PAGES].filter((l) => l.slug !== lang.slug).map((l) => (
               <Link
                 key={l.slug}
                 to={`/languages/${l.slug}`}

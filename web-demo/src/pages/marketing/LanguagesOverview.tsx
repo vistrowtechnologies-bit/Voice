@@ -143,13 +143,13 @@ export function LanguagesOverview() {
                 {/* The greeting is the point of the product - show it, don't
                     just name the language. */}
                 <p lang={lang.code} className="mt-2 text-sm text-text-muted">{lang.greeting}</p>
-                <h2 className="mt-4 flex items-center gap-1 font-display text-lg font-semibold">
-                  {lang.name}
+                <div className="mt-4 flex items-center gap-1">
+                  <h2 className="font-display text-lg font-semibold">{lang.name}</h2>
                   <Icon
                     name="arrow_forward"
                     className="text-[16px] text-text-muted transition-transform group-hover:translate-x-1 group-hover:text-primary"
                   />
-                </h2>
+                </div>
                 <p className="mt-1 text-xs uppercase tracking-wider text-text-muted">{lang.region}</p>
                 <p className="mt-3 text-sm leading-relaxed text-text-muted">{lang.blurb}</p>
               </Link>
@@ -171,7 +171,7 @@ export function LanguagesOverview() {
                 />
               </span>
             </span>
-            <span className="text-sm text-text-muted sm:max-w-sm sm:text-right">Hear a demo call where the agent matches a British caller’s accent.</span>
+            <span className="text-sm text-text-muted sm:max-w-sm sm:text-right">Hear a demo call in American and British English.</span>
           </Link>
         </Reveal>
       </section>

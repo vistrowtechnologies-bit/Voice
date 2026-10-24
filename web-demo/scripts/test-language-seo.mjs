@@ -78,7 +78,7 @@ const pages = [
   {
     slug: 'american-british-english',
     title: 'American & British English AI Voice Agent | Vistrow Voice',
-    phrases: ['AI voice agents that speak', 'American and British English', 'An agent that matches the caller’s accent', 'US and UK English call notes', 'Voices that speak US and UK English', 'Hindi, English and 9 other Indian languages', 'Do you provide US or UK phone numbers?', 'Will the live agent change accent mid-call like the demo?'],
+    phrases: ['AI voice agents that speak', 'American and British English', 'Hear a call in American and British English', 'US and UK English call notes', 'Voices that speak US and UK English', 'Hindi, English and 9 other Indian languages', 'Do you provide US or UK phone numbers?', 'Will the live agent change accent mid-call like the demo?'],
     links: ['/ai-receptionist', '/languages/english', '/ai-call-center'],
     accent: true,
   },
@@ -112,7 +112,10 @@ for (const page of pages) {
   assert(html.includes('Demo call voiced by Vistrow Voice. Not a real customer.'), `${page.slug}: missing voice sample label`)
   assert(html.includes('"@type":"AudioObject"'), `${page.slug}: missing AudioObject schema`)
   // Player wording: accents on the accent page, languages everywhere else.
-  assert(html.includes('switched accent automatically') === Boolean(page.accent), `${page.slug}: wrong switch wording in the sample player`)
+  // The live agent does not change accent on its own, so the accent page
+  // never says it "switched accent automatically".
+  assert(!html.includes('switched accent automatically'), `${page.slug}: sample player must not claim an automatic accent switch`)
+  assert(html.includes(page.accent ? 'Agent continues in British English' : 'Agent switched automatically'), `${page.slug}: wrong switch wording in the sample player`)
   if (page.accent) assert(html.includes('US English') && html.includes('UK English') && !html.includes('Indian names'), `${page.slug}: accent labels or international FAQs missing`)
 }
 
