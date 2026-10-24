@@ -41,6 +41,33 @@ function reducedMotion() {
   }
 }
 
+function spokenFraction(start: number, end: number, time: number) {
+  return Math.min(1, Math.max(0, (time - start) / Math.max(0.5, end - start)))
+}
+
+/** A line revealed word by word as it is spoken, like live captions. There
+ * are no word timings, so words are paced by their length across the line.
+ * Unsaid words stay in place but invisible, so the bubble never resizes. */
+function LiveWords({ text, said }: { text: string; said: number }) {
+  if (said >= 1) return <>{text}</>
+  const reached = said * text.replace(/\s+/g, '').length
+  let before = 0
+  let shown = ''
+  let rest = ''
+  // A word appears as it starts, i.e. once the letters before it are said.
+  for (const w of text.split(/(\s+)/)) {
+    if (!rest && (!w.trim() || before <= reached)) shown += w
+    else rest += w
+    if (w.trim()) before += w.length
+  }
+  return (
+    <>
+      {shown}
+      <span className="text-transparent">{rest}</span>
+    </>
+  )
+}
+
 // Waveform geometry, in viewBox units: one bar per peak, centred on y = H/2.
 const H = 40
 const BAR = 0.56
@@ -83,6 +110,9 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
   const active = started ? sample.turns.reduce((cur, t, i) => (t.start <= time + 0.05 ? i : cur), 0) : -1
   const switched = started && time + 0.05 >= switchAt
   const current = active >= 0 ? sample.turns[active] : null
+  // How much of the line being spoken has been said, 0-1. Turns run back to
+  // back, so a line's speech fills the gap to the next line's start.
+  const said = current && mounted && !ended ? spokenFraction(current.start, (sample.turns[active + 1]?.start ?? sample.seconds) - 0.25, time) : 1
   // Last transcript line on show: all of them before hydration and at the end,
   // the first before play, then everything up to the line being spoken.
   const shown = !mounted || ended ? sample.turns.length - 1 : Math.max(0, active)
@@ -349,8 +379,14 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
                   </span>
                   <span className="ml-auto pl-2 text-[10px] tabular-nums text-text-muted">{clock(turn.start)}</span>
                 </span>
-                <span lang={turn.lang} className="mt-1 block text-sm leading-relaxed text-text">{turn.native}</span>
-                {turn.gloss && <span lang="en" className="mt-0.5 block text-sm leading-relaxed text-text-muted/85">{turn.gloss}</span>}
+                <span lang={turn.lang} className="mt-1 block text-sm leading-relaxed text-text">
+                  <LiveWords text={turn.native} said={i === active ? said : 1} />
+                </span>
+                {turn.gloss && (
+                  <span lang="en" className="mt-0.5 block text-sm leading-relaxed text-text-muted/85">
+                    <LiveWords text={turn.gloss} said={i === active ? said : 1} />
+                  </span>
+                )}
               </button>
             </li>
           )
