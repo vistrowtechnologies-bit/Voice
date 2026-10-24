@@ -24,6 +24,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16, updated 22:55 IST): branch `claude/lead-details-brochure` (local commits 6677701e + 93de8a7c, NOT pushed yet, owner checks ArthaLeads staging first): standard post-call lead facts stored and sent to ArthaLeads with summary/key_points; send_brochure tool. Function-level claim on issue #2 (comment 6220772439), overlap with prompt-cuts/tool-guardrails cleared by that session. Per [RULES] I stop at PR-ready; the SEO session is the deployer (combined release, then `lk agent deploy` on BOTH workers + Railway for one server line). Dependency: ArthaLeads side is on arthaleads staging bc0446c and should reach ArthaLeads main with or before this deploy.
 - Claude (2026-10-17): branch `claude/tool-desc-ab` (local commit, NOT pushed/PR'd/deployed): tools.py tool DESCRIPTIONS only (8 tools; log_lead cut reverted after it broke lead capture). Tool block measured by Sarvam itself = 29–33% of tenant requests; cut saves ~385 tokens/request (~₹26–47 per 1,000 call-min). A/B 2×30: tool accuracy 22/26 vs 21/26, no new wrong end_call/switch. docs/TOOL-DESC-AB-2026-10-17.md. Needs both workers deployed after merge.
 - Claude (dashboard, 2026-10-24): WhatsApp Click-to-WhatsApp leads LIVE (PR #275 webhook, PR #278 Connect WhatsApp / Embedded Signup, both merged + deployed). Real tenant connect is BLOCKED by Meta ("can't onboard customers") until owner completes Business Verification + Tech Provider. Admin WhatsApp sender (runtime, PR #277 draft) PAUSED; it gets a separate Meta app later. PR #281 (Lead Ads tile logos) open, not merged.
+- Claude (runtime, 2026-10-24): Ravan comparison + vendor-leak work. PR #285 `claude/live38-affective` (Live 3.8 affective dialog, opt-in env, NOT merged/deployed) and PR #286 `claude/vendor-leak-check` (report-only CI scan, NOT merged). Audit/plan docs on `claude/ravan-audit-docs`. Waiting on Codex's cross-check before any vendor work. See message below.
 
 ## Takeover checklist
 
@@ -1211,3 +1212,29 @@ Remaining:
 1. Owner: Business Verification, then Tech Provider (dialog left at "Continue"), then App Review/publish (pack in PR #273), then the app icon upload.
 2. Claude (after Meta approval): real end-to-end connect on Prophunt LLP with the owner's spare number, calls off; live ad-to-agent routing check.
 3. Not built: BSP (AiSensy/Wati/Interakt) webhook option.
+
+### Claude — 2026-10-24 08:00 UTC — Ravan audit, vendor plan, vendor-leak layers
+
+Branches/PRs:
+- `claude/ravan-audit-docs` (this commit): `docs/RAVAN-PLATFORM-AUDIT-2026-10-24.md` (+ .pdf) and `docs/VENDOR-INTEGRATION-PLAN-2026-10-24.md`. Docs only.
+- PR #285 `claude/live38-affective`: `agent/realtime_config.affective_options()` adds `enable_affective_dialog` + `api_version="v1beta"` for `gemini-3.8-live` only, and only when `REALTIME_AFFECTIVE_DIALOG=1` (default off, so no behaviour change). 31 realtime_config tests pass. The real plugin accepts the settings. Not live-tested (Gemini prepay at ₹0). NOT merged, NOT deployed.
+- PR #286 `claude/vendor-leak-check`: `scripts/check_vendor_leaks.py` + allowlist + 5 tests; last step of `web-build`, `continue-on-error`, exit 0. The first CI run on the PR passed and reported 49 internal vendor ids in `dist/assets` (agentOptions 35, Voices 12, AgentDetail 1, index 1). `dist/llms.txt` names "Gemini Live API". NOT merged.
+
+Verified facts:
+- Ravan's Agni models are white-labelled vendor models on LiveKit: Gemini Live, OpenAI GPT-Live 1, Sarvam, Boson, Svara, Murf and Soniox. Source: their own catalog JSON (`realLlmModel`, `sttModel`, `ttsModel`, `realVoiceId`), 24 Oct. Details are in the audit, section 1.
+- Our own public JS ships vendor ids (see the counts above). The tenant call JSON `latencyMetrics` (server/calls_db.py ~3192) and the raw voice/model columns expose providers. The agent's `failureReason` codes are already neutral, so Layer 4 needs no runtime change.
+- Requests for Layers 1–3 (server redaction, id-free dashboard bundles) were posted on issue #2 (comments 6381489910, 6381504428).
+
+Hypotheses / not verified:
+- Vendor costs in the plan are list prices. Realtime context re-billing is expected to raise them, as it did for Gemini Live (₹1.7 list vs ₹4.7–5.3 measured).
+- GPT-Live voice names differ from Ravan's Duplex voices. Ravan's may be newer or custom.
+
+Live state changed (not in git):
+- Agent 26 runs a 2,874-char prompt for the combo tests. The original config is at `tmp/combo-test/backup/agent26_2026-10-23.json` in the main checkout; restore it when the owner asks.
+
+Remaining / next:
+1. Codex: cross-verify the audit and plan (prompt given to the owner).
+2. Server and dashboard lanes: Layers 1–3. Then switch the PR #286 step to `--strict`. SEO lane: remove "Gemini Live API" from `llms.txt`.
+3. After the Gemini top-up: live-test PR #285 with `REALTIME_AFFECTIVE_DIALOG=1`, and finish the combo grid.
+4. Then the plan's Steps 1–4 (GPT-Live owner-only, Soniox STT, Murf, Boson). Owner accounts are needed for Soniox, Murf and Boson.
+
