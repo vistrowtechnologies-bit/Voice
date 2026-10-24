@@ -24,7 +24,6 @@ import {
 } from '../lib/api'
 import {
   AMBIENT_NOISE_OPTIONS,
-  geminiLiveVoiceName,
   LANGUAGES,
   isRealtimeModel,
   LIVE_MODEL,
@@ -189,7 +188,7 @@ function AgentEditorForm({
     model: agent.model,
     noiseCancellation: agent.noiseCancellation ?? '',
     voice: agent.voice,
-    sttProvider: agent.sttProvider || 'sarvam',
+    sttProvider: agent.sttProvider || 'standard',
     language: agent.language,
     status: agent.status,
     systemPrompt: agent.systemPrompt,
@@ -233,13 +232,16 @@ function AgentEditorForm({
   // The realtime-capable voices the account has added to its menu, labelled
   // with gender, Google's style word and the Gemini voice a Live call uses.
   const realtimeVoices = useMemo(() => {
+    // Studio Lite voices carry the style word for each Live persona.
     const style = new Map(
-      catalog.filter((v) => v.value.startsWith('google38:')).map((v) => [v.value.slice(9), v.note.split(' · ')[0]]),
+      catalog
+        .filter((v) => v.family === 'studio-lite' && v.livePersona)
+        .map((v) => [v.livePersona!.toLowerCase(), v.note.split(' · ')[0]]),
     )
     return myVoices
-      .filter((v) => geminiLiveVoiceName(v.value))
+      .filter((v) => v.livePersona)
       .map((v) => {
-        const live = geminiLiveVoiceName(v.value)!
+        const live = v.livePersona!
         const gender = v.gender === 'female' ? 'Female' : v.gender === 'male' ? 'Male' : 'Neutral'
         const tone = style.get(live.toLowerCase())
         return { value: v.value, label: `${v.name} · ${gender}${tone ? ` · ${tone}` : ''}`, name: v.name }
@@ -279,23 +281,26 @@ function AgentEditorForm({
     myVoices.find((v) => v.value === value)?.name ??
     clonedVoiceFallbackName(value, clonedVoices) ??
     catalog.find((v) => v.value === value)?.name ??
-    voiceLabel(value)
+    voiceLabel(value, value === agent.voice ? agent.voiceName : undefined)
+  // The menu/catalog entry for a voice value: the server's facts about it
+  // (livePersona) decide whether a Live model can speak it.
+  const voiceEntry = (value: string) => myVoices.find((v) => v.value === value) ?? catalog.find((v) => v.value === value)
   // The voice a model switch replaced automatically, so the notice can name
   // both and Undo (or switching back) can restore it.
   const [voiceSwitch, setVoiceSwitch] = useState<{ from: string; fromModel: string; to: string | null } | null>(null)
   const changeModel = (model: string) => {
     const auto = voiceSwitch && form.voice === (voiceSwitch.to ?? form.voice) ? voiceSwitch : null
-    if (auto && voiceWorksWithModel(model, auto.from)) {
+    if (auto && voiceWorksWithModel(model, voiceEntry(auto.from))) {
       // Back on a model that can speak the voice we replaced: put it back.
       setForm((f) => ({ ...f, model, voice: auto.from }))
       setVoiceSwitch(null)
       return
     }
-    if (voiceWorksWithModel(model, form.voice)) {
+    if (voiceWorksWithModel(model, voiceEntry(form.voice))) {
       set('model', model)
       return
     }
-    const gender = (myVoices.find((v) => v.value === form.voice) ?? catalog.find((v) => v.value === form.voice))?.gender
+    const gender = voiceEntry(form.voice)?.gender
     const pick = nearestVoiceFor(model, form.voice, gender, myVoices)
     setForm((f) => ({ ...f, model, voice: pick?.value ?? f.voice }))
     setVoiceSwitch({ from: auto?.from ?? form.voice, fromModel: auto?.fromModel ?? form.model, to: pick?.value ?? null })
@@ -661,7 +666,7 @@ function AgentEditorForm({
                     {!realtimeVoices.some((v) => v.value === form.voice) && (
                       <option value={form.voice}>
                         {voiceName(form.voice)}
-                        {voiceWorksWithModel(form.model, form.voice) ? '' : ' (can’t be used on realtime - pick a voice below)'}
+                        {voiceWorksWithModel(form.model, voiceEntry(form.voice)) ? '' : ' (can’t be used on realtime - pick a voice below)'}
                       </option>
                     )}
                     <optgroup label={`Your voices for ${modelLabel(form.model)}`}>
@@ -683,7 +688,7 @@ function AgentEditorForm({
                   !clonedReady && (
                     <option value={form.voice}>
                       {clonedVoiceFallbackName(form.voice, clonedVoices) ??
-                        `${catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)} (not in your voices)`}
+                        `${voiceName(form.voice)} (not in your voices)`}
                     </option>
                   )}
                 <ClonedVoiceOptions voices={clonedVoices} />

@@ -35,6 +35,7 @@ import copilot
 import copilot_tools
 import db_backup
 import email_sender
+import public_ids
 import visitor_info
 import disposable_email
 import enablex_inbound
@@ -2944,7 +2945,7 @@ def request_data_export(user: dict = Depends(current_user)) -> StreamingResponse
     # receive their own profile/preferences/security data.
     if profile["role"] in ("owner", "admin"):
         export["workspaceData"] = {
-            "agents": calls_db.list_agents(user["account_id"]),
+            "agents": [public_ids.agent_out(a) for a in calls_db.list_agents(user["account_id"])],
             "calls": calls_db.list_calls(user["account_id"], limit=10000),
             "contacts": calls_db.list_contacts(user["account_id"]),
             "appointments": calls_db.list_appointments(user["account_id"]),
@@ -4222,7 +4223,29 @@ def dashboard_feedback(user: dict = Depends(current_user)) -> dict:
 
 @app.get("/agents")
 def list_agents(user: dict = Depends(current_user)) -> list[dict]:
-    return calls_db.list_agents(user["account_id"])
+    return [public_ids.agent_out(a) for a in calls_db.list_agents(user["account_id"])]
+
+
+def _agent_in(data: dict, account_id: int, agent_id: int | None = None) -> dict:
+    """A request's public model/voice/STT ids made internal again, before any
+    guard sees them (server/public_ids.py). The saved agent lets an id that
+    is only on that agent round-trip."""
+    current = None
+    if agent_id is not None:
+        row = calls_db.get_agent_by_id_unscoped(agent_id)
+        if row and calls_db.agent_account_id(agent_id) == account_id:
+            current = row
+    try:
+        return public_ids.agent_in(data, current)
+    except public_ids.UnknownId as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+def _voice_in(value: str) -> str:
+    try:
+        return public_ids.voice_in(value)
+    except public_ids.UnknownId as exc:
+        raise HTTPException(404, "Unknown voice.") from exc
 
 
 @app.get("/agents/activity")
@@ -4379,13 +4402,14 @@ def _guard_realtime_voice(data: dict, account_id: int, agent_id: int | None = No
 
 @app.post("/agents")
 def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    data = _agent_in(data, user["account_id"])
     _guard_stt_provider(data)
     _guard_voice_tier(data, user["account_id"])
     _guard_realtime_voice(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
     _guard_custom_functions(data)
     try:
-        return calls_db.create_agent(data, user["account_id"])
+        return public_ids.agent_out(calls_db.create_agent(data, user["account_id"]))
     except calls_db.AgentLimitError as e:
         raise HTTPException(status_code=400, detail=e.message) from e
 
@@ -4394,6 +4418,7 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
 def draft_greeting_audio(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> Response:
     """The drafted welcome line spoken in the chosen voice. Never cached:
     the text is the customer's own draft."""
+    data = {**data, "voice": _voice_in(data.get("voice") or "")} if isinstance(data, dict) else data
     try:
         audio, content_type = agent_builder.greeting_audio(data, user["account_id"], user["user_id"])
     except agent_builder.BuilderError as exc:
@@ -4405,16 +4430,24 @@ def draft_greeting_audio(data: dict = Body(...), user: dict = Depends(require_ro
 def draft_agent(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     """"Build with AI": questions or a validated draft. Never writes an agent;
     the dashboard saves the reviewed draft through POST/PATCH /agents."""
+    if isinstance(data, dict) and isinstance(data.get("current"), dict):
+        data = {**data, "current": _agent_in(data["current"], user["account_id"])}
     try:
-        return agent_builder.draft(data, user["account_id"], user["user_id"])
+        result = agent_builder.draft(data, user["account_id"], user["user_id"])
     except agent_builder.BuilderError as exc:
         raise HTTPException(exc.status, exc.detail) from exc
+    draft = result.get("draft") if isinstance(result, dict) else None
+    if isinstance(draft, dict):
+        result = {**result, "draft": {**draft, "model": public_ids.model_out(draft.get("model")),
+                                      "voice": public_ids.voice_out(draft.get("voice"))}}
+    return result
 
 
 def _guard_agent_patch(data: dict, account_id: int, agent_id: int) -> dict:
     """Every check an agent edit goes through, shared by PATCH /agents/{id}
     and the copilot's agent actions (copilot_tools.AGENT_PATCH_GUARD).
     Raises HTTPException; returns the data with owner-only fields dropped."""
+    data = _agent_in(data, account_id, agent_id)
     _guard_stt_provider(data)
     _guard_voice_tier(data, account_id, agent_id)
     _guard_realtime_voice(data, account_id, agent_id)
@@ -4451,7 +4484,7 @@ def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(cur
     agent = calls_db.update_agent(agent_id, data, user["account_id"])
     if agent is None:
         raise HTTPException(404, "Agent not found")
-    return agent
+    return public_ids.agent_out(agent)
 
 
 @app.delete("/agents/{agent_id}")
@@ -7442,31 +7475,36 @@ app.include_router(custom_voices.build_router(require_role))
 def voices_catalog(user: dict = Depends(current_user)) -> dict:
     """The full voice catalog annotated for this account: which voices are in
     its menu, which its plan can add, and remaining slots. Powers the Voices
-    page's add/remove grid."""
-    return calls_db.voice_catalog_for_account(user["account_id"])
+    page's add/remove grid. Voice ids are neutral (server/public_ids.py)."""
+    catalog = calls_db.voice_catalog_for_account(user["account_id"])
+    return {**catalog, "voices": [public_ids.public_voice(v) for v in catalog["voices"]]}
+
+
+def _my_voices(account_id: int) -> list[dict]:
+    return [public_ids.public_voice(v) for v in calls_db.list_account_voices(account_id)]
 
 
 @app.get("/voices/mine")
 def voices_mine(user: dict = Depends(current_user)) -> list[dict]:
     """The account's curated voice menu — the only voices the agent picker
     offers. Auto-seeds sensible defaults on an account's first read."""
-    return calls_db.list_account_voices(user["account_id"])
+    return _my_voices(user["account_id"])
 
 
 @app.post("/voices/mine")
 def voices_add(body: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
-    voice = (body or {}).get("voice", "")
+    voice = _voice_in((body or {}).get("voice", ""))
     try:
         calls_db.add_account_voice(user["account_id"], voice)
     except calls_db.VoiceMenuError as e:
         raise HTTPException(status_code=400, detail=e.message)
-    return {"ok": True, "voices": calls_db.list_account_voices(user["account_id"])}
+    return {"ok": True, "voices": _my_voices(user["account_id"])}
 
 
 @app.delete("/voices/mine/{voice:path}")
 def voices_remove(voice: str, user: dict = Depends(require_role("member"))) -> dict:
-    calls_db.remove_account_voice(user["account_id"], voice)
-    return {"ok": True, "voices": calls_db.list_account_voices(user["account_id"])}
+    calls_db.remove_account_voice(user["account_id"], _voice_in(voice))
+    return {"ok": True, "voices": _my_voices(user["account_id"])}
 
 
 @app.get("/voices/preview")
@@ -7476,6 +7514,7 @@ def voices_preview(voice: str, lang: str = "", user: dict = Depends(current_user
     cached on the first request for a given (voice, lang)."""
     import voice_catalog
 
+    voice = _voice_in(voice)  # the cache and synthesis are keyed by the internal id
     lang = lang or voice_catalog.DEFAULT_SAMPLE_LANG
     entry = voice_catalog.get_voice(voice)
     if entry is None:
