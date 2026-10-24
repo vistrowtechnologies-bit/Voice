@@ -1187,9 +1187,19 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
 .vs-track-label {
   transition: border-color 300ms ease;
 }
+/* Lines appear as they are spoken (only after hydration: .is-live). A line
+   going from display:none to shown restarts the animation, so each new line
+   eases in once; lines already on show do not replay it. */
+.vs-transcript.is-live > li {
+  animation: vs-line-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes vs-line-in {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   .vs-pair span, .vs-track-label, .vs-line { transition: none; }
-  .vs-pair.is-switched .vs-pair-to, .vs-marker.is-switched { animation: none; }
+  .vs-pair.is-switched .vs-pair-to, .vs-marker.is-switched, .vs-transcript.is-live > li { animation: none; }
 }
 
 /* ---- Marketing header (MarketingLayout.tsx) ---- */

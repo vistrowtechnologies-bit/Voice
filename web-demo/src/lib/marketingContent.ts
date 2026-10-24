@@ -1250,7 +1250,8 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Pan-India',
     greeting: 'Hello',
     blurb: 'Clear Indian English for callers from every state, with Indian names and numbers, and Hindi when the caller moves into it.',
-    intro: 'An AI voice agent in Indian English for businesses whose callers come from every part of the country. It listens through Indian accents, names, phone numbers and rupee amounts, answers in clear Indian English, and follows the caller into Hindi or another Indian language mid-call. Put it on inbound lines, follow-ups and your website as an English AI calling agent; the same agent speaks more than 130 languages, including Hindi, English and 9 other Indian languages.',
+    intro: 'An AI voice agent in Indian English for callers from every part of the country. It understands Indian accents, names, phone numbers and rupee amounts, answers in clear Indian English, and follows the caller into Hindi or another Indian language mid-call.',
+    trustFirst: { icon: 'translate', title: 'English and Hindi in one call', body: 'The agent follows the caller between languages without changing voice. It speaks more than 130 languages, including Hindi, English and 9 other Indian languages.' },
     regionalHeading: 'Where an AI voice agent in Indian English helps most.',
     localUseCases: [
       'Pan-India enquiry lines where callers move between English and Hindi',
@@ -1317,7 +1318,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Maharashtra',
     greeting: 'नमस्कार',
     blurb: 'Answer Pune and Mumbai callers in Marathi: when a caller answers in Marathi, the agent carries on in Marathi.',
-    intro: 'A Marathi AI voice agent for Pune, Mumbai and the rest of Maharashtra that answers and makes calls on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and when the caller answers in Marathi it carries on in Marathi without being asked. It shifts into Hindi or English when the caller does and saves a structured summary of every call.',
+    intro: 'A Marathi AI voice agent for Pune, Mumbai and the rest of Maharashtra, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Marathi when the caller answers in Marathi.',
     localUseCases: [
       'Pune, Mumbai, Nashik, and Nagpur property enquiries',
       'Local support calls where Marathi builds trust faster than English',
@@ -1377,7 +1378,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Tamil Nadu',
     greeting: 'வணக்கம்',
     blurb: 'Tamil callers who answer in Tamil get Tamil back, without having to ask for it.',
-    intro: 'A Tamil AI voice agent for Chennai and Tamil Nadu that answers enquiries and makes follow-up calls on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and when the caller answers in Tamil it carries on in Tamil without being asked. It follows Tamil-English switching, captures the lead details and logs every call.',
+    intro: 'A Tamil AI voice agent for Chennai and Tamil Nadu that answers enquiries and makes follow-up calls on your phone lines and website. It opens in your business’s default language, English in the sample call below, and carries on in Tamil when the caller answers in Tamil.',
     localUseCases: [
       'Chennai and Tamil Nadu property, clinic and service enquiries answered in Tamil',
       'Follow-up calls to new enquiries, placed in Tamil shortly after the form arrives',
@@ -1569,7 +1570,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'West Bengal',
     greeting: 'নমস্কার',
     blurb: 'Kolkata and West Bengal callers who answer in Bengali are answered in Bengali.',
-    intro: 'A Bengali AI voice agent for Kolkata, Howrah, Siliguri and the rest of West Bengal, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Bengali as soon as the caller answers in it. It follows the caller into English or Hindi mid-call, answers from your approved information and saves every call.',
+    intro: 'A Bengali AI voice agent for Kolkata, Howrah, Siliguri and the rest of West Bengal, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Bengali as soon as the caller answers in it.',
     localUseCases: [
       'Kolkata, Howrah, Siliguri and West Bengal enquiries answered in Bengali',
       'Order-status, delivery and support calls for sellers whose customers expect Bengali',
@@ -1628,7 +1629,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Gujarat',
     greeting: 'નમસ્તે',
     blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.',
-    intro: 'A Gujarati AI voice agent for Ahmedabad, Surat, Vadodara and Rajkot, built for Gujarat’s business-heavy calls: enquiries, follow-ups and payment reminders. It opens in your business’s default language, Hindi in the sample call below, and carries on in Gujarati when the contact answers in it. It follows calls that move between Gujarati, Hindi and English, and records the promised payment date or visit time.',
+    intro: 'A Gujarati AI voice agent for Ahmedabad, Surat, Vadodara and Rajkot, built for enquiries, follow-ups and payment reminders. It opens in your business’s default language, Hindi in the sample call below, and carries on in Gujarati when the contact answers in it.',
     localUseCases: [
       'Ahmedabad, Surat, Vadodara and Rajkot property and business enquiries',
       'Outstanding-invoice and payment reminders between traders and small businesses',
@@ -1687,7 +1688,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Kerala',
     greeting: 'നമസ്കാരം',
     blurb: 'Answer Kerala enquiries in Malayalam: callers who reply in Malayalam get Malayalam back.',
-    intro: 'A Malayalam AI voice agent for Kochi, Thiruvananthapuram and the rest of Kerala, on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and carries on in Malayalam as soon as the caller answers in it. It follows the caller back into English mid-call, captures the lead details and saves every call for your team.',
+    intro: 'A Malayalam AI voice agent for Kochi, Thiruvananthapuram and the rest of Kerala, on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and carries on in Malayalam as soon as the caller answers in it.',
     localUseCases: [
       'Kochi, Thiruvananthapuram, Kozhikode and Thrissur enquiries answered in Malayalam',
       'Calls from family members abroad who ask about property, a clinic or a service on behalf of someone in Kerala',
@@ -1750,7 +1751,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Punjab',
     greeting: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ',
     blurb: 'Punjabi-speaking customers, handled in Punjabi - including mixed Punjabi-Hindi speech.',
-    intro: 'A Punjabi AI voice agent for customers in Punjab, Chandigarh and Delhi NCR, on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and carries on in Punjabi when the caller answers in it, including mixed Punjabi-Hindi speech. It books appointments inside your bookable hours or takes a callback request, and saves every call.',
+    intro: 'A Punjabi AI voice agent for customers in Punjab, Chandigarh and Delhi NCR, on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and carries on in Punjabi when the caller answers, including mixed Punjabi-Hindi speech.',
     localUseCases: [
       'Enquiry and booking calls from Punjabi-speaking customers in Punjab, Chandigarh and Delhi NCR',
       'Study-abroad, coaching and clinic appointment lines that fill up outside office hours',
@@ -1793,7 +1794,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Odisha',
     greeting: 'ନମସ୍କାର',
     blurb: 'Odisha callers who answer in Odia get Odia back, instead of an English or Hindi menu.',
-    intro: 'An Odia AI voice agent for Bhubaneswar, Cuttack and the rest of Odisha, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Odia as soon as the caller answers in it. It follows the caller into English or Hindi mid-call, offers a callback when it should not guess, and saves every call.',
+    intro: 'An Odia AI voice agent for Bhubaneswar, Cuttack and the rest of Odisha, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Odia as soon as the caller answers in it.',
     localUseCases: [
       'Bhubaneswar, Cuttack and Odisha enquiries from callers who would rather speak Odia than navigate an English or Hindi menu',
       'Admissions, coaching and clinic lines that get calls in the evening and on weekends',
@@ -1867,7 +1868,7 @@ export const EXTRA_LANGUAGE_PAGES: LanguagePage[] = [
     statLabel: 'American and British accents',
     blurb: 'Natural American or British English for callers in the US, the UK and anywhere English is the working language.',
     intro:
-      'An AI voice agent that speaks natural American or British English on phone and website calls. It answers enquiries, qualifies leads, books demos and appointments and logs every call, for businesses in the US and UK, Indian companies with customers abroad, and outsourcing teams. In the demo call below, the agent opens in American English and continues in British English; on a live line, you set it up with the accent your callers expect. The same platform speaks more than 130 languages, including Hindi, English and 9 other Indian languages.',
+      'An American and British English AI voice agent that answers calls, qualifies leads and books meetings by phone and web. The demo opens American and continues British; on a live line, the accent is set up per line.',
     regionalHeading: 'Where an American or British English AI voice agent helps most.',
     localUseCases: [
       'Front-desk and after-hours lines for businesses in the US and UK',
@@ -1931,7 +1932,7 @@ export const EXTRA_LANGUAGE_PAGES: LanguagePage[] = [
     trustFirst: {
       icon: 'translate',
       title: 'American or British English',
-      body: 'Natural English voices in either accent, set up with you for your line, plus Hindi and other languages if the caller moves into them.',
+      body: 'Natural English voices in either accent, set up with you for your line. The same platform speaks more than 130 languages, including Hindi, English and 9 other Indian languages, if the caller moves into them.',
     },
     voicesNote:
       'The self-serve voice list is built around Indian English and Indian languages. American and British English voices, like the ones in the demo call, are set up with you on request: tell us your callers’ accent and we will help you configure and test the agent before it goes live.',
