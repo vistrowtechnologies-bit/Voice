@@ -60,6 +60,18 @@ def thinking_config(model: str) -> types.ThinkingConfig:
     raise ValueError(f"Unsupported realtime model: {model}")
 
 
+def affective_options(model: str) -> dict:
+    """Gemini affective dialog (adapts tone to the caller's emotion) for 3.8 Live.
+
+    Off unless REALTIME_AFFECTIVE_DIALOG=1: untested on our calls. Google's
+    Live guide says 3.1 Flash Live does not support it, so it is never sent
+    there, and documents it on v1beta; the LiveKit plugin would otherwise pick
+    v1alpha whenever affective dialog is on."""
+    if model != MODEL_38 or os.environ.get("REALTIME_AFFECTIVE_DIALOG", "") != "1":
+        return {}
+    return {"enable_affective_dialog": True, "api_version": "v1beta"}
+
+
 def aec_warmup_duration(*, realtime: bool, phone: bool) -> float | None:
     # LiveKit replaces mic frames with silence while warming up during speech.
     # Native realtime must receive the caller's first words and interruptions.
