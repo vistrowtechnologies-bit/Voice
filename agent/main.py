@@ -227,6 +227,35 @@ _TRANSFER_HOLD_LINE = {
     "en": "Of course, connecting you now. One moment please.",
 }
 
+# Spoken when end_call has armed the hang-up but the model's turn ended
+# without a word (it spent its tool steps on more tool calls). Calls 1505
+# and 1517, 24 Oct 2026: on "बाद में बात करते हैं" the model called end_call
+# and switch_reply_language until the step limit, returned no text, and the
+# line stayed open in silence, because the hang-up waits for a goodbye to
+# finish playing. No first-person verbs, so the agent's gender cannot be wrong.
+_FALLBACK_GOODBYE = {
+    "hi": "धन्यवाद, आपका दिन शुभ रहे।",
+    "mr": "धन्यवाद, आपला दिवस छान जावो.",
+    "en": "Thank you, have a great day.",
+}
+
+
+def _needs_fallback_goodbye(userdata: dict, old_state: str, new_state: str) -> bool:
+    """end_call armed the hang-up, and the agent's turn just ended without a
+    word (thinking -> listening) while the caller is quiet: the goodbye the
+    hang-up waits for will never play. Once per call."""
+    return bool(
+        userdata.get("ending_call")
+        and old_state == "thinking"
+        and new_state == "listening"
+        and userdata.get("user_state") != "speaking"
+        and not userdata.get("fallback_goodbye_sent")
+    )
+
+
+def _fallback_goodbye_line(reply_language: str | None) -> str:
+    return _FALLBACK_GOODBYE.get((reply_language or "").split("-")[0], _FALLBACK_GOODBYE["en"])
+
 
 # Fixed opening lines spoken verbatim (session.say(), no LLM round-trip) for
 # the Vistrow marketing site's live demo widget only — a first-time visitor
@@ -8606,6 +8635,25 @@ async def entrypoint(ctx: JobContext) -> None:
         ):
             userdata["ending_call"] = False
             asyncio.create_task(_hang_up(ctx.room.name))
+        elif _needs_fallback_goodbye(userdata, str(ev.old_state), str(ev.new_state)):
+            # The goodbye the branch above waits for will never play. Say a
+            # fixed one; its playout (speaking -> listening) ends the call.
+            userdata["fallback_goodbye_sent"] = True
+            asyncio.create_task(_say_fallback_goodbye())
+
+    async def _say_fallback_goodbye() -> None:
+        line = _fallback_goodbye_line(getattr(agent, "_reply_language", ""))
+        logger.warning("end_call armed but the turn ended silently; saying the fallback goodbye")
+        try:
+            if getattr(agent, "_is_realtime", False):
+                # A speech-to-speech model has no say() (supports_say=False).
+                session.generate_reply(instructions=f"Say only this goodbye, in this language: {line}")
+            else:
+                session.say(line)
+        except Exception:
+            logger.warning("fallback goodbye failed; ending the call", exc_info=True)
+            userdata["ending_call"] = False
+            await _hang_up(ctx.room.name)
 
     def _on_function_tools_executed(ev) -> None:
         # One row per tool the agent actually invoked, with a real measured
