@@ -4305,6 +4305,7 @@ _QUEUE_STUCK_AFTER = "15 minutes"
 _SOURCE_LABELS = {
     "facebook_lead_ads": "Facebook lead", "facebook_lead_ads_native": "Facebook lead",
     "whatsapp": "WhatsApp lead", "website": "Website lead", "api": "API lead", "arthaleads": "CRM lead",
+    "webhook": "Webhook lead",
 }
 
 
