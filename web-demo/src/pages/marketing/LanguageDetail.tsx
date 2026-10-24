@@ -502,7 +502,7 @@ export function LanguageDetail() {
         </section>
       )}
 
-      <ObjectionCards route={route} placement="language_objections" title={`What buyers ask first about a ${lang.name} AI voice agent.`} />
+      <ObjectionCards route={route} placement="language_objections" title={`What buyers ask first about ${/^[AEIOU]/.test(lang.name) ? 'an' : 'a'} ${lang.name} AI voice agent.`} />
 
       <FaqSection key={lang.slug} items={faqs} title={`${lang.name} AI voice agent: questions, answered.`} />
 
