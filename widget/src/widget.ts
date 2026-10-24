@@ -1807,6 +1807,18 @@ function init(): void {
     } catch (err) {
       console.warn('[Vistrow Voice widget] GTM dataLayer push failed:', err)
     }
+    announce(action, details)
+  }
+
+  // The same moment as a page event, for sites that use gtag.js rather than
+  // Tag Manager (vistrowvoice.com forwards these to GA4, tagged voice/chat).
+  // Nothing personal is ever in `details`.
+  function announce(action: string, details: Record<string, string | number | boolean> = {}): void {
+    try {
+      window.dispatchEvent(new CustomEvent('vistrow-widget', { detail: { action, mode: selectedExperience, ...details } }))
+    } catch {
+      // Old browsers without CustomEvent: the dataLayer push above still ran.
+    }
   }
 
   // Same event name as before, so existing GTM triggers (e.g. a Google Ads
@@ -1827,6 +1839,7 @@ function init(): void {
     } catch (err) {
       console.warn('[Vistrow Voice widget] lead event push failed:', err)
     }
+    announce('lead_submitted', { has_phone: Boolean(phone), has_email: Boolean(email) })
   }
 
   // Consent survives the page in localStorage; consentGrantedAt covers
