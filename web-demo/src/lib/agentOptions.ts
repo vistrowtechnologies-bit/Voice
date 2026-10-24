@@ -321,7 +321,7 @@ export const MODEL_OPTIONS = [
 // the TypeScript production build (tsc -b, which `tsc --noEmit` does not
 // reproduce - that difference shipped a broken Vercel build once already).
 export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = [
-  { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest OpenAI cost; measure quality before rollout' },
+  { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest cost; measure quality before rollout' },
   // Re-listed at the platform owner's request for a controlled retest. Keep
   // this owner-only: prior calls showed slower audio and turn-handling errors.
   // Owner, 18 Oct 2026: 3.8 Live is the primary realtime model (Google GA,
@@ -385,10 +385,10 @@ export const nearestVoiceFor = (
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
 // under a name instead of leaking the raw vendor string at a tenant.
 const RETIRED_ADMIN_MODELS = [
-  { value: 'groq/openai/gpt-oss-20b', label: 'Groq GPT-OSS 20B' },
-  { value: 'groq/openai/gpt-oss-120b', label: 'Groq GPT-OSS 120B' },
-  { value: 'groq/qwen/qwen3.6-27b', label: 'Groq Qwen3.6 27B' },
-  { value: 'groq/qwen/qwen3.8-27b', label: 'Groq Qwen3.8 27B' },
+  { value: 'groq/openai/gpt-oss-20b', label: 'Vistrow Lab 20B (retired)' },
+  { value: 'groq/openai/gpt-oss-120b', label: 'Vistrow Lab 120B (retired)' },
+  { value: 'groq/qwen/qwen3.6-27b', label: 'Vistrow Lab 27B (retired)' },
+  { value: 'groq/qwen/qwen3.8-27b', label: 'Vistrow Lab 27B v2 (retired)' },
 ] as const
 
 export const modelOptionsFor = (isPlatformOwner: boolean) =>
