@@ -1238,3 +1238,12 @@ Remaining / next:
 3. After the Gemini top-up: live-test PR #285 with `REALTIME_AFFECTIVE_DIALOG=1`, and finish the combo grid.
 4. Then the plan's Steps 1–4 (GPT-Live owner-only, Soniox STT, Murf, Boson). Owner accounts are needed for Soniox, Murf and Boson.
 
+### Claude — 2026-10-24 — Codex cross-check reconciled into the audit
+
+Codex's review (24 Oct, origin/main db9d1e17) was rechecked point by point before the audit changed. Section 7 of `docs/RAVAN-PLATFORM-AUDIT-2026-10-24.md` lists each point as "rechecked" or "Codex only".
+- Accepted after recheck: Ravan catalog has 11 entries, 9 visible, 3 with empty sessionMode (catalog re-read). Emotion is not Gemini-only. Bharat short names are v4 Flash. `google31:` is gemini-3.1-flash-tts-preview. Kore/Charon are owner-only. Memory needs a caller phone, not a phone call. end_call can be disabled. First clone is free. A realtime prompt warning exists. Murf bills $0.01 per 1K characters.
+- New bugs (rechecked): 5 (agent webhook ignores 4xx/5xx), 18 (custom functions have no public-URL check at save or call time), 19 (KB cache keyed by kb_id only, so text cut for one caller's limit can reach the other).
+- Mismatch for the owner: Live 3.8 is owner-only in the picker but the API accepts it from any tenant (`_TENANT_REALTIME_MODELS`), billed 2 credits/min.
+- Not rechecked (Codex only): GPT-Live voices and access tier, Boson language list and LiveKit status, Svara = Kenpath, LiveKit Ship 20-session limit.
+- No code changed. Bugs 18 and 19 are runtime-lane fixes; they wait for owner approval.
+

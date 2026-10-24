@@ -15,7 +15,7 @@ Codex cross-check: every [V] row names a file; run `git show origin/main:<file>`
 
 ## 1. Ravan's vendors (the key finding)
 
-Every "Agni" model is a renamed third-party model. [J]: each model carries `realLlmModel`; each voice carries `realVoiceId` / `realVoiceName`. Catalog fields also include `sessionMode`, `sttModel`, `pipelineLlmModel`, `ttsModel`, `realtimeModel`, `showInUi` (the per-stage fields were empty for every model; `sessionMode` was `pipeline` for all).
+Every "Agni" model is a renamed third-party model. [J]: each model carries `realLlmModel`; each voice carries `realVoiceId` / `realVoiceName`. Catalog fields also include `sessionMode`, `sttModel`, `pipelineLlmModel`, `ttsModel`, `realtimeModel`, `showInUi` (the per-stage fields were empty for every model). Re-read 24 Oct after Codex's check: 11 entries, 9 with `showInUi=true`; `sessionMode` is `pipeline` for 8 and empty for `sarvam_pipeline`, `murf` and `Soniox`. The catalog shows vendor aliases, not the hidden execution pipeline.
 
 | Agni model | Credits/min (Rs at Rs10/credit) | realLlmModel [J] | Real voices seen [J] | Author's reading [I] |
 |---|---|---|---|---|
@@ -24,29 +24,29 @@ Every "Agni" model is a renamed third-party model. [J]: each model carries `real
 | Premium Lite | 0.7 (Rs7) | `gemini_2` | same Gemini set (27) | Gemini 2.x Live |
 | Duplex | 1 (Rs10) | `gpt-live-1` | ripple, quartz, Ash, tempo, Nira, Nuri (16) | OpenAI GPT-Live 1 (listed on OpenAI's pricing page at $0.05/min) |
 | 5.0 — description: "It is the Cheapest." | 0.6 (Rs6) | `boson` | hashed ids `voice_d0753a4e…` plus Yashika, Rupali, Arjun, Ram Gujarati, Riya Hinglish, Riya Marathi, Ram Bengali, Harsh Hinglish 1/2 (14, all "No preview") | Boson AI (Higgs Audio) with custom cloned Indian voices |
-| 5.0 Lite | 0.5 (Rs5) | `svara_pipeline` | `sv_bnaqa3fy`, `sv_enhdbrj5`, Sipoto, Arjun (9) | Svara |
+| 5.0 Lite | 0.5 (Rs5) | `svara_pipeline` | `sv_bnaqa3fy`, `sv_enhdbrj5`, Sipoto, Arjun (9) | Svara by name; Kenpath's model specifically is unproven (Codex: `sv_` ids do not match Kenpath's published voice names) |
 | Lite 4.0 | 0.55 (Rs5.50) | `sarvam_pipeline` | kavya, amit, rahul, priya, ritu (8) | Sarvam Bulbul — the same vendor and voices as our "Bharat" |
 | Lite 3.0 (beta) — "Budget friendly" | 0.45 (Rs4.50) | `murf` | de-DE-björn, pa-IN-harman, fr-FR-justine … (118) | Murf AI |
-| Lite 2.0 — "Fast, low-cost multilingual voice model" | 0.45 (Rs4.50) | `Soniox` | Elise, Maya, Nina, Claire, Mina, Mateo, Meera (28) | Soniox |
+| Lite 2.0 — "Fast, low-cost multilingual voice model" | 0.45 (Rs4.50) | `Soniox` | Elise, Maya, Nina, Claire, Mina, Mateo, Meera (28) | Soniox (sells STT and TTS, so one vendor can cover both; the LLM is not shown) |
 | 4.0 (hidden, showInUi=false) | 1 | `gemini-3.1-flash-lite` | Leda, Laomedeia, Rasalgethi (14) | Gemini 3.1 Flash-Lite |
 | 3.0 (hidden, showInUi=false) | 1 | `gemini_pipeline` | Zephyr, Alnilam, Algenib (27) | STT → Gemini → Gemini TTS chain |
 
 Supporting observations:
 
-- [S] Switching the test agent to Lite 2.0 removed the Emotion and Accent controls and changed the voice to Elise; Ultra, 5.0 and Duplex kept them. The Emotion switch therefore belongs to the Gemini models (affective dialog).
+- [S] Switching the test agent to Lite 2.0 removed the Emotion and Accent controls and changed the voice to Elise; Ultra, 5.0 and Duplex kept them. 5.0 is `boson`, so Emotion is not Gemini-only; how each model implements it is not known.
 - [D] Agents have both `model` and `s2sModel` fields; example `gpt-4o` / `gpt-4o-realtime`. Post-call analysis runs on `gpt-4o-mini` [S][D].
 - [D] Customers point their SIP carrier at `sip:…sip.livekit.cloud`; the create-call API returns a LiveKit access token and room id; the error-codes page explains LiveKit error wrappers. Platform = LiveKit Cloud.
 - [S] Every dashboard API call is proxied through `app.ravan.ai/api/proxy/…`, so vendor hosts are not visible from normal browsing.
 - [S] Website tracking and media: `link.quickadpro.com`, `backend.leadconnectorhq.com`, `assets.cdn.filesafe.space` = GoHighLevel/LeadConnector. Voice previews are static MP3 files on that CDN.
 - [D] Trust Center sub-processor list names only AWS, Twilio, OpenAI, Stripe — it omits LiveKit, Google, Boson, Sarvam, Murf, Soniox, Svara.
-- [S] Their marketing claims ("in-house Thunder Emotion engine", "<300 ms") are not supported by the catalog; the engine names map to the vendors above.
+- [J] The catalog aliases and voice ids strongly indicate the vendors above. They do not rule out Ravan's own routing, prompts, fine-tuning or processing, so the "in-house engine" and "<300 ms" claims are unproven either way.
 
 Consequences for Vistrow:
 
 - Their flagship (Premium/Ultra, Rs10/min) is the model we sell as Vistrow Live (Gemini Live). We run Gemini Live 3.8; their recommended model is 3.1. Our measured cost on Live 3.8 is Rs4.7–5.3/min (call 1418 and later tests).
 - Their Indian-voice tier (Lite 4.0) is Sarvam, which we already run as Bharat.
 - Vendors we do not have: Boson/Higgs Audio (cloned Indian voices), Murf, Soniox, Svara.
-- We are not more vendor-dependent than Ravan; they have no in-house models.
+- Catalog metadata strongly indicates Ravan depends on the same kind of third-party providers we do; it does not prove they have no in-house component.
 
 ## 1b. Vistrow's own models and voices → vendor (from code on origin/main, 24 Oct 2026)
 
@@ -58,20 +58,20 @@ Our customer-facing names are vendor-neutral (owner rule 15 Oct). This table is 
 | GPT-5.4 nano / mini | `gpt-5.4-nano`, `gpt-5.4-mini` | OpenAI | Kept for existing agents; nano is the fallback LLM |
 | Vistrow Nano Lab | `gpt-5-nano` | OpenAI | Owner-only (ADMIN_ONLY_MODELS) |
 | Gemini 3.5 Flash-Lite / 3.6 Flash / 3.8 Flash | `gemini-3.5-flash-lite`, `gemini-3.6-flash`, `gemini-3.8-flash` | Google Gemini API (`google.LLM`) | Combo tests only; not in the tenant picker |
-| Vistrow Live 3.8 | `gemini-live:gemini-3.8-live` | Google Gemini Live API, speech-to-speech `RealtimeModel` | Owner-only until the combo tests finish; billed 2x. Same vendor as Ravan Ultra/Premium |
+| Vistrow Live 3.8 | `gemini-live:gemini-3.8-live` | Google Gemini Live API, speech-to-speech `RealtimeModel` | Dashboard picker: owner-only (agentOptions.ts ADMIN_ONLY_MODELS, lines 323-332). Server: any tenant may save it (token_api.py `_TENANT_REALTIME_MODELS`, owner note 19 Oct "open to every plan"). Billed 2 credits/min (agent/plan_policy.py). Same vendor as Ravan Ultra/Premium |
 | Vistrow Live 2.5 / 3.1 | `gemini-live`, `gemini-live:gemini-3.1-flash-live-preview` | Google Gemini Live | Retired 19 Oct |
 | Groq | `groq/*` | Groq | Owner-only; removed from the picker 7 Sep |
 | Speech recognition, default | `stt_provider = "sarvam"` | Sarvam saaras v3, 17 Indian codes | All |
 | Speech recognition, alternative | `stt_provider = "google-chirp3"` | Google Cloud Speech Chirp 3 | All, per agent |
-| Bharat voices (tab Bharat) | plain names `ritu`, `priya`, `rohan` (v2) and `sarvam4:<name>` (v4 Flash) | Sarvam Bulbul TTS; same vendor and names as Ravan Lite 4.0 | All; tier standard |
+| Bharat voices (tab Bharat) | stored v3 short names (`ritu`, `priya`, `rohan`) and `sarvam4:<name>` | Sarvam Bulbul **v4 Flash** for both: short names map through `voice_catalog.SARVAM_V3_TO_V4` (agent/main.py ~3290). Ravan Lite 4.0 uses the same short names | All; tier standard |
 | Vistrow HD | `google:chirp3:<Persona>` (Callirrhoe, Sana, Aoede) | Google Cloud Text-to-Speech Chirp 3 HD, service account | All; tier standard |
 | Native voices | `google:<lang>-IN-Standard-X` (Anika, Kabir) | Google Cloud Text-to-Speech Standard | All; tier lite |
-| Multilingual | `google:charon`, `google:kore` (Arin, Mira) | Google Cloud TTS multilingual | All |
+| Mira / Arin Expressive | `google:kore`, `google:charon` | Google Gemini 2.5 Flash TTS (voice_catalog `GEMINI_TTS_MODELS`) | Tier premium + `preview` → owner-only for new selection (token_api `_guard_voice_tier`); saved agents keep it |
 | Studio Lite | `google38:<voice>` (for example `en-in-csagent-3` = Anjali) | Google Gemini 3.8 Flash-Lite TTS through the Gemini Interactions API (`GEMINI_API_KEY`) | Owner-only (preview) until Gemini API Tier 2 |
 | Studio | `google38flash:<voice>` | Google Gemini 3.8 Flash TTS through the Interactions API | Owner-only (preview); tier premium 2x |
-| Vistrow Expressive | `google31:<voice>` | Google Gemini 2.5 Flash TTS on Vertex (5 RPM quota) | Hidden; owner-only |
-| Premium (tab Premium) | `elevenlabs:<voice id>` (Tara, Riya, Saavi, Bunty) | ElevenLabs | Owner-only; Scale customers get none (bug 3) |
-| Cloned voices | custom_voices table | Sarvam voice cloning, 25 credits per clone | Off for customers (`VOICE_CLONE_OPEN` unset) |
+| Mira / Arin Next (Preview) | `google31:kore`, `google31:charon` | Google `gemini-3.1-flash-tts-preview` (agent/main.py `_GOOGLE_31_MODEL`) | `preview` → owner-only |
+| Premium (tab Premium) | `elevenlabs:<voice id>` (Tara, Riya, Saavi, Bunty) | ElevenLabs | Owner-only for new selection; saved agents keep theirs. Premium tier also holds Google preview voices; customers can pick zero premium voices (bug 3) |
+| Cloned voices | custom_voices table | Sarvam voice cloning; first clone free on Growth/Scale, later clones 25 credits each (server/custom_voices.py:70-73) | Off for customers unless `VOICE_CLONE_OPEN` is set (read unset on Railway 24 Oct; Codex could not check production) |
 | Call platform | LiveKit Cloud project Artha Voice; agents CA_TGdpVhSdxDyS (phone and tenant) and CA_53d8HgBktjZ7 (website demo) | LiveKit, Ship plan $50/mo | — |
 | Telephony | EnableX SIP trunk into LiveKit SIP | EnableX, Rs0.25/min each way | Customers bring their own number |
 | Post-call analysis | `gpt-5.4-mini` (server/call_intelligence.py); KB Q&A drafting `gpt-5.4-nano` | OpenAI | — |
@@ -98,14 +98,14 @@ Ravan column = [S] unless marked. Vistrow column = [V].
 
 | Area | Feature | Ravan | Vistrow | Verdict |
 |---|---|---|---|---|
-| Agent | Model choice | 8 models in picker (see section 1) | Customers see 1 model (Vistrow Bharat); Live 3.8 and Nano Lab owner-only until combo tests finish (web-demo/src/lib/agentOptions.ts) | In progress on our side |
+| Agent | Model choice | 9 models in picker (see section 1) | Customers see 1 model (Vistrow Bharat); Live 3.8 and Nano Lab owner-only until combo tests finish (web-demo/src/lib/agentOptions.ts) | In progress on our side |
 | Agent | LLM temperature | Slider in AI Provider Settings, default 0.7 | None; "tone" preset changes the voice only (agent/main.py:349-383) | Behind |
 | Agent | Voices | 27 per Gemini model, 28 Soniox, 14 Boson, 8 Sarvam, 118 Murf | ~157 customer voices (server/voice_catalog.py) | Ahead |
-| Agent | Emotion | On/off, Gemini models only | `emotion_intensity` read at agent/main.py:4443 but no editor control (AgentDetail.tsx:197 defaults only) | Partial |
+| Agent | Emotion | On/off on Gemini models and 5.0 (Boson); absent on Lite 2.0 | `emotion_intensity` read at agent/main.py:4443 but no editor control (AgentDetail.tsx:197 defaults only) | Partial |
 | Agent | Accent | Country + 21 Indian regional accents (Indian English; Hindi, Punjabi, Haryanvi, Bhojpuri, Pahadi; Rajasthani, Gujarati, Marathi, Konkani; Bengali, Odia, Assamese; Tamil, Telugu, Kannada, Malayalam; Manipuri, Mizo, Naga, Khasi) | None | Behind |
-| Agent | Memory | Toggle; not on web calls; locked on Free; [A] not on Starter | `memory_enabled`, phone calls only, Starter and up (agent/main.py:4035) | Equal |
-| Agent | Prompt size | Word counter: 500 words on Free, 3,000 words on paid plan cards | No limit (editor, server, runtime); soft warning requested on issue #2 | Ahead |
-| Functions | End call | 3/4/5 per plan | Always on, no cap (agent/main.py:3546) | Ahead |
+| Agent | Memory | Toggle; not on web calls; locked on Free; [A] not on Starter | `memory_enabled`, Starter and up; needs a caller phone number, so phone calls plus widget calls that pass `visitor_phone` (agent/main.py:4062-4064) | Equal |
+| Agent | Prompt size | Word counter: 500 words on Free, 3,000 words on paid plan cards | No character limit. The editor shows a ~token counter and, on realtime models only, an amber/red warning above 1,000/2,000 tokens (AgentDetail.tsx:869-883). A pipeline-model warning is what was requested on issue #2 | Ahead |
+| Functions | End call | 3/4/5 per plan | On by default; can be switched off through the agent's enabled-functions list (agent/main.py:3564-3571); no per-plan cap | Ahead |
 | Functions | Transfer | [D] static or dynamic number, hold music, caller-ID option, transfer hours, GHL staff | Fixed `transfer_phone` only; colleague dialled into the same room; no hours, no summary (agent/tools.py:3657-3782) | Behind |
 | Functions | Press digit | [D] agent presses digits on another menu, 1 s pause detection | `send_dtmf`, same idea (agent/main.py:3564) | Equal; neither has caller keypad menus |
 | Functions | Custom function | [D] headers, query, JSON schema, save response to call variables, speak during/after | GET/POST/PUT/PATCH/DELETE, fixed headers, 10 s timeout, flat parameter list, first 2,000 chars to the model, no save-to-variables (agent/tools.py:3867-3923) | Behind |
@@ -116,7 +116,7 @@ Ravan column = [S] unless marked. Vistrow column = [V].
 | Speech | Reminder message | Seconds + times + custom text | `silence_reminder_ms` + max; no custom text (agent/main.py:7795-7813) | Equal minus text |
 | Call | Voicemail | Toggle | Outbound only, word pattern (English, Hindi, Telugu), fixed English line, not a setting (agent/main.py:1481-1490, 5561-5591) | Behind |
 | Call | End on silence | Toggle + 10 s default | Setting read (agent/main.py:7819) | Equal |
-| Call | Max duration | Slider, 30 min default | Up to 45 min, spoken wrap-up ~25 s before cut (agent/call_limit.py:15) | Ahead |
+| Call | Max duration | Slider, 30 min default | Up to 45 min, spoken wrap-up aimed at ~25 s before the cut (best effort) (agent/call_limit.py:15) | Ahead |
 | Call | Emergency fallback | Toggle | `emergency_fallback_number` (agent/main.py:8596) | Equal |
 | Call | Ring duration | Slider, 30 s default | Fixed 35 s (server/livekit_sip.py:189) | Behind |
 | After call | Extraction | Custom fields, copy/paste sets, GPT-4o mini | `post_call_fields` + auto summary, sentiment, outcome, QA score (server/call_intelligence.py) | Equal, ours richer by default |
@@ -125,14 +125,14 @@ Ravan column = [S] unless marked. Vistrow column = [V].
 | Calendar | Booking | GHL or Cal.com per agent; own "Agni Calendar": event types, members, clients, branded email with domain auth, Google Calendar, Outlook, Calendly, iCloud (credentials only) | Built-in calendar: availability config (slot minutes), month/week/day/list views, statuses incl. rescheduled/cancelled, agent checks availability and books (agent/tools.py:1822, 2272); no external sync, no reschedule/cancel tool, no invites | Behind on sync |
 | Knowledge | Normal KB | Text (multiple entries), URL add or Scan, files PDF/TXT/DOCX/MD, URL exclusions for auto-refresh, Refresh, Clear cache, Playground; searched as a tool during the call (`queryKnowledgeBase` seen in a transcript) | Text, URL (20 links), files, Q&A; whole text pasted into prompt, 8,000-char cap with a red warning bar (agent/db.py:513-557; KnowledgeBasePage.tsx:33,585); ~5,500 for realtime | Behind: no search, no refresh |
 | Knowledge | Quick KB | Any file up to 500 MB incl. audio/video/scans (Gemini), links, text; Playground | None | Behind |
-| Telephony | Providers | Twilio (own or managed), Telnyx (buy in-app, $1.20 US numbers, per-number concurrency + CPS), Indian (verify mobile → KYC with CIN/GSTIN docs → buy +91), WhatsApp calling, custom SIP (termination URI, CPS, user/pass) | EnableX only; Twilio/Exotel/Plivo "coming soon" (web-demo/src/pages/PhoneNumbers.tsx:51-54); numbers added one at a time on a shared trunk (server/livekit_sip.py:119,145) | Behind: biggest gap |
-| Inbound | Routes | Number → agent, timezone, max concurrent 1–5, credit budget cap, start/end dates, call window, limit calls per caller, active days | Number → agent, hours, days, per-number cap (agent/inbound_rules.py); outside hours = silent hang-up (agent/main.py:7270-7297) | Behind |
+| Telephony | Providers | Twilio (own or managed), Telnyx (buy in-app, $1.20 US numbers, per-number concurrency + CPS), Indian (verify mobile → KYC with CIN/GSTIN docs → buy +91), WhatsApp calling, custom SIP (termination URI, CPS, user/pass) | EnableX only; Twilio/Exotel/Plivo "coming soon" (web-demo/src/pages/PhoneNumbers.tsx:51-54); numbers added one at a time; outbound trunks are per number (server/livekit_sip.py:119,145) | Behind: biggest gap |
+| Inbound | Routes | Number → agent, timezone, max concurrent 1–5, credit budget cap, start/end dates, call window, limit calls per caller, active days | Number → agent, hours, days, start/end dates, per-number cap (agent/inbound_rules.py); outside hours = silent hang-up (agent/main.py:7270-7297) | Behind |
 | Outbound | Campaigns | Wizard: name, agent, caller ID; step 2 needs a number; [D] list, schedule, Fresh/Follow-up/Failed-retry | Preflight, test dial, caller-ID rotation, retry policy per outcome (server/campaign_dialer.py, agent/retry_rules.py) | Ahead on controls |
 | Calls | History + detail | Web/inbound/outbound filter, sentiment, model, credits, export; detail: credit breakdown, disconnect reason, inline tool calls, Report button | Filters search/channel/direction/feedback (client-side); recordings, transcripts, CSV (CallsHistory.tsx:97-193) | Equal |
 | Contacts | List + detail | CSV import, tags, status, variables, export; detail with Call button, stats, campaigns, activity, calls, notes | Same core + custom fields, notes | Equal |
 | Team | Orgs and users | "+ New Organization" button but plan cards say 1 max organization ([A] confirms); roles User/Admin; email invites | One workspace per login (users.email UNIQUE, calls_db.py:202); roles viewer/member/admin/owner | Equal |
 | Security | Login | Password, 2FA, sessions, Google sign-in | 2FA with recovery codes; Google and GitHub sign-in (server/mfa.py) | Equal |
-| Audit | Activity log | Org event log (logins with provider, KB changes) | Security events only | Behind |
+| Audit | Activity log | Org event log (logins with provider, KB changes) | Tenant security events; separate admin audit log; no tenant KB/agent change history | Behind |
 | Plans in UI | Upgrade prompts | Locked Analytics page shows "isn't included in your plan … Upgrade" | Inbound, Outbound, Integrations have no plan wording; save fails with 403 (server/token_api.py:375-389) | Behind |
 | Help | In-app assistant | "Ask Agni" chat; 2 of 7 answers wrong | Copilot that performs actions with confirmation, Growth+ (server/copilot_tools.py) | Ahead |
 | Billing | Plans | Stripe checkout, credits, GST shown, invoice history | Razorpay, top-ups, GST invoices, annual | Equal |
@@ -163,14 +163,14 @@ Contradictions in Ravan's own sources: the public pricing page ticks campaigns (
 
 | # | Problem | Type | Evidence | Fix |
 |---|---|---|---|---|
-| 1 | Outbound limited to 2 calls across all customers while plans sell 5/15/30 | Block | `OUTBOUND_CHANNEL_LIMIT` unset on production; default 2 in server/campaign_dialer.py:90 | Buy EnableX channels and raise it, or sell 3/5/5 |
+| 1 | Outbound ceiling of 2 while plans sell 5/15/30 | Block | Default 2 in server/campaign_dialer.py:90 and livekit_sip.py:194; read unset on Railway 24 Oct. Manual/test calls use this global ceiling; campaigns also cap by the trunk's and pool's configured lines (`_line_room`, campaign_dialer.py:164) | Buy EnableX channels and raise it, or sell 3/5/5 |
 | 2 | Website demo silent: Gemini prepay at −Rs23.37 | Block | AI Studio billing; 402 errors in agent logs | Top up with auto-reload, or move agent 4 to Bharat |
-| 3 | Scale's "premium voices" give customers none | Bug | All premium voices are ElevenLabs, owner-only (server/voice_catalog.py:619-634) | Open a premium set or drop the line |
-| 4 | Voice cloning sold on Growth/Scale but off | Block | `VOICE_CLONE_OPEN` unset on production (server/custom_voices.py) | Open it or drop the line |
-| 5 | Live-call webhook: no URL safety check, no plan check; no payload signed anywhere | Security bug (agent path) | agent/tools.py:618-646; server/integrations_dispatch.py:48-59 has the check | Sign, check URL, enforce plan |
-| 6 | Customers get one model | In progress | agentOptions.ts MODEL_OPTIONS has one entry; ADMIN_ONLY_MODELS holds Nano Lab and Live 3.8 | Open tested models after combo grid |
+| 3 | Scale's "premium voices" give customers none | Bug | Every premium entry (ElevenLabs and the Google preview voices) is owner-only for new selection (server/voice_catalog.py:107-108, 619-634; token_api.py `_guard_voice_tier`) | Open a premium set or drop the line |
+| 4 | Voice cloning sold on Growth/Scale but off | Block | `VOICE_CLONE_OPEN` read unset on Railway 24 Oct (server/custom_voices.py); first clone would be free, later ones 25 credits | Open it or drop the line |
+| 5 | Live-call webhook: no URL safety check, no plan check, no signature, and a 4xx/5xx reply is logged as "posted" | Security bug (agent path) | agent/tools.py:618-646 (status never read); server/integrations_dispatch.py:48-59 has the check | Sign, check URL and status, enforce plan |
+| 6 | Customers get one model in the picker, but the API already accepts Live 3.8 from any tenant | Mismatch | agentOptions.ts MODEL_OPTIONS has one entry, ADMIN_ONLY_MODELS holds Nano Lab and Live 3.8; token_api.py `_TENANT_REALTIME_MODELS` lets tenants save Live 3.8 | Owner decides: close the API until the combo tests finish, or open the picker |
 | 7 | Telephony EnableX only, numbers one at a time | Gap | PhoneNumbers.tsx:51-54; livekit_sip.py:119,145 | Generic SIP import, then Twilio |
-| 8 | KB pasted into prompt, 8,000-char cap (warned), not searched | Gap | agent/db.py:513-557 | Retrieval |
+| 8 | KB pasted into prompt, 8,000-char cap (warned), not searched; approved Q&A can itself exceed the cap | Gap | agent/db.py:513-557 | Retrieval |
 | 9 | Interruption sensitivity and emotion have no editor control | Bug | AgentDetail.tsx:197,205 defaults; read at agent/main.py:4443,7814 | Add controls |
 | 10 | No upgrade notice on Inbound/Outbound/Integrations; 403 on save | Bug | token_api.py:375-389 | Upgrade screen |
 | 11 | After-hours/over-cap inbound calls hang up silently | Gap | agent/main.py:7270-7297 | Message or callback |
@@ -180,6 +180,10 @@ Contradictions in Ravan's own sources: the public pricing page ticks campaigns (
 | 15 | No temperature/speech-speed; ring fixed 35 s | Gap | agent/main.py:349-383; livekit_sip.py:189 | Add with model picker |
 | 16 | No automatic brochure sending (flags CRM outcome for sales) | By design | agent/tools.py:2157-2177 | Optional WhatsApp auto-send later |
 | 17 | Old orchestrator pipeline's transfer is a stub; new accounts no longer use it (19 Oct) | Low | orchestrator/tools.py:577-599; calls_db.py:1626-1634 | Remove or fix before reuse |
+| 18 | Custom functions call any URL with no public-URL check, at save or at call time | Security bug | agent/tools.py:3910-3918 (plain aiohttp); no custom-function URL check in server/token_api.py | Same `_assert_public_url` + safe opener as integrations |
+| 19 | KB cache keyed by KB id only, but stores text already cut to the caller's limit, so realtime (~5,500) and pipeline (8,000) can get each other's length | Bug | agent/db.py:534 (get), 557 (cut), 567 (`_kb_cache[kb_id]`) | Key by (kb_id, max_chars) |
+| 20 | Chirp 3 STT runs in the US region by default (Asia regions 403 for hi-IN) | Latency | agent/main.py:2491-2493 | Measure before promising Asia latency |
+| 21 | Concurrency sold up to 30, LiveKit Ship lists 20 concurrent agent sessions | Unverified | livekit.com/pricing (Codex); our subscription limits not checked | Check the LiveKit project's limit |
 
 ## 6. Corrections made during the audit (earlier drafts were wrong)
 
@@ -190,6 +194,37 @@ Contradictions in Ravan's own sources: the public pricing page ticks campaigns (
 - Our KB cap is not silent; the KB page shows a red warning bar.
 - Our brochure tool is by design, not a bug.
 - Our server-side integration deliveries do run the URL safety check; only the agent path lacks it.
-- Ravan's calendar syncs Google, Outlook and Calendly, not only GHL/Cal.com.
-- Ravan paid plans allow 1 organization; "200 Kb Source Link Limit" is 200 KB of data.
-- Ravan's models are not in-house; see section 1.
+- Ravan's calendar syncs Google, Outlook and Calendly, not only GHL/Cal.com. ([S] on the Agni Calendar screen; Codex could not reload it, so treat as unconfirmed.)
+- Ravan paid plans allow 1 organization; "200 Kb Source Link Limit" is 200 KB of data. ([A] only: unconfirmed.)
+- Ravan's models map to third-party vendors by catalog alias; in-house processing is not ruled out (see section 1).
+
+## 7. Codex cross-check, reconciled (24 Oct 2026)
+
+Codex reviewed this audit against `origin/main` db9d1e17 (newer than 9ef663cf). Each disputed point was rechecked by Claude before changing the text above. "Rechecked" = Claude read the code at db9d1e17, re-read Ravan's catalog, or read the vendor's own page. "Codex only" = accepted as Codex's finding but not rechecked by Claude.
+
+| Point | Result | How it was checked |
+|---|---|---|
+| Ravan catalog: 11 entries, 9 visible, 3 with empty `sessionMode` | Original wrong (said 8 visible, all `pipeline`) | Rechecked: same read-only GET of the catalog, 24 Oct |
+| Emotion is Gemini-only | Original wrong (own [S] note showed 5.0 keeps it) | Rechecked: catalog says 5.0 = `boson` |
+| "Ravan has no in-house models" | Overstated; narrowed | Catalog shows aliases only |
+| Bharat short names are Bulbul v2 | Original wrong: v4 Flash | Rechecked agent/main.py ~3290 |
+| `google31:` is Gemini 2.5 TTS on Vertex | Original wrong: `gemini-3.1-flash-tts-preview`. `google:kore/charon` are the 2.5 voices | Rechecked agent/main.py `_GOOGLE_31_MODEL`, voice_catalog `GEMINI_TTS_MODELS` |
+| Kore/Charon open to all | Original wrong: premium + preview, owner-only | Rechecked voice_catalog.py:107-108, token_api `_guard_voice_tier` |
+| Live 3.8 owner-only | Half right: picker yes, API no; billed 2 credits/min | Rechecked agentOptions.ts:323-332, token_api `_TENANT_REALTIME_MODELS`, agent/plan_policy.py |
+| Memory phone-only | Original wrong: any call with a caller phone, incl. widget `visitor_phone` | Rechecked agent/main.py:4062-4064 |
+| End call always on | Original wrong: default on, can be disabled | Rechecked agent/main.py:3564-3571 |
+| Outbound 2 calls everywhere | Qualified: global ceiling for manual/test; campaigns also by trunk/pool lines | Rechecked campaign_dialer.py:86-90, 164; livekit_sip.py:194 |
+| Every clone costs 25 credits | Original wrong: first clone free on Growth/Scale | Rechecked custom_voices.py:26-30, 70-73 |
+| Prompt has no warning | Original wrong: realtime-only token warning exists | Rechecked AgentDetail.tsx:855-883 |
+| Webhook status not checked; custom functions no URL check; KB cache key | New bugs 5, 18, 19 | Rechecked agent/tools.py:630-646, 3910-3918; agent/db.py:534-567; no URL check in token_api.py |
+| Chirp STT US region | New item 20 | Rechecked agent/main.py:2491-2493 |
+| Murf Falcon price unit | Original wrong: $0.01 per 1,000 characters (marketing says per minute) | Rechecked murf.ai Falcon docs page |
+| Soniox sells TTS | Correct; Lite 2.0 can be Soniox end to end | Already in the vendor plan; Codex's voice-name match is Codex only |
+| Svara = Kenpath | Unproven | Codex only (`sv_` id convention) |
+| GPT-Live voices, paid-tier access, Hindi voice `nira` | Codex only | Not rechecked |
+| Boson TTS Indian languages; LiveKit integration "coming soon"; open weights non-commercial | Codex only (licence point matches the plan) | Not rechecked |
+| LiveKit Ship 20 concurrent sessions | Codex only; item 21 | Not rechecked |
+| Gemini balance −Rs23.37 / 402s; Railway variables unset | Claude saw these on 24 Oct (AI Studio billing, agent logs, Railway variables); Codex could not | Production state; recheck before acting |
+| Measured Rs/min, 8x, 68% prompt share | Claude's measurements (tmp/combo-test, agent/scripts/measure_prompt_tokens.py); not independently reproduced | Rs96/$ is an assumed rate |
+
+Still open (not verified by anyone): Ravan's exact backend model versions and stage combinations, Ravan paid-plan entitlements beyond the cards, comparable latency/quality/cost on equal test calls.
