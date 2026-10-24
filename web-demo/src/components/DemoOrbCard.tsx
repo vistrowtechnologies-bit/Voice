@@ -9,7 +9,7 @@ import {
 } from '../lib/demoCallCap'
 import { fetchLiveKitToken, randomId, submitDemoFeedback, TokenError } from '../lib/livekit'
 import { clearDemoVisitor, looksLikeRealPhone, readDemoVisitor, saveDemoVisitor, type DemoVisitor } from '../lib/demoVisitor'
-import { trackMarketingCta, trackQualifyLead } from '../lib/analytics'
+import { trackDemoCallStarted, trackMarketingCta, trackQualifyLead } from '../lib/analytics'
 import { useOrchestratorCall } from '../lib/orchestratorCall'
 
 // The LiveKit client (about 500 KB) loads only when a visitor starts a call,
@@ -283,7 +283,7 @@ export function DemoOrbCard({
       prewarmRef.current = null
       lastRoomNameRef.current = room
       setFeedbackSubmitted(false)
-      trackQualifyLead('demo_call')
+      trackDemoCallStarted()
       setToken(newToken)
       setServerUrl(url)
       setPhase('active')
@@ -304,7 +304,10 @@ export function DemoOrbCard({
 
   const handleConsentAccept = useCallback(
     (visitor: DemoVisitor | null) => {
-      if (visitor) saveDemoVisitor(visitor)
+      if (visitor) {
+        saveDemoVisitor(visitor)
+        trackQualifyLead('demo_form')
+      }
       grantConsent()
       void handleStart()
     },
@@ -373,7 +376,7 @@ export function DemoOrbCard({
       // like a successful Sarvam measurement when it was actually a
       // different pipeline. Fail honestly and keep the A/B data clean.
       releaseCallLock()
-      setErrorMessage('The Sarvam latency lab did not pick up. Please try again.')
+      setErrorMessage('The latency lab did not pick up. Please try again.')
       setPhase('unreachable')
       return
     }
@@ -501,7 +504,7 @@ export function DemoOrbCard({
             <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
           </span>
           <span className="text-[10px] font-bold uppercase tracking-wider text-cyan">
-            {pipelineProfile ? 'Sarvam latency lab' : badgeLabel}
+            {pipelineProfile ? 'Latency lab' : badgeLabel}
           </span>
         </div>
 

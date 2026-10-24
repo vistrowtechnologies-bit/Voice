@@ -35,6 +35,7 @@ import copilot
 import copilot_tools
 import db_backup
 import email_sender
+import visitor_info
 import disposable_email
 import enablex_inbound
 import google_sheets
@@ -590,6 +591,36 @@ def _client_ip(request: Request) -> str:
         return forwarded.split(",")[0].strip()
     return (request.client.host if request.client else "") or "unknown"
 
+
+def _visitor_context(request: Request) -> dict:
+    """Where and when a website lead arrived: exact time in IST, IP, and the
+    country/region/city Vercel's edge adds to requests it proxies to /api
+    (x-vercel-ip-*; absent on direct calls such as the embeddable widget on a
+    customer's site). Informational only — never used for access decisions."""
+    headers = request.headers
+    return {
+        "time_ist": visitor_info.ist(),
+        "ip": _client_ip(request),
+        "country": headers.get("x-vercel-ip-country", "")[:8],
+        "region": headers.get("x-vercel-ip-country-region", "")[:16],
+        "city": urllib.parse.unquote(headers.get("x-vercel-ip-city", ""))[:80],
+        "browser": visitor_info.browser_family(headers.get("user-agent", "")),
+    }
+
+
+def _attribution_fields(page: str, attribution: dict | None) -> dict:
+    """The page a lead was on plus the browser's first-touch attribution
+    (web-demo/src/lib/attribution.ts: utm_*, click ids, referrer, landing
+    page), trimmed — it is visitor-supplied."""
+    allowed = ("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid",
+               "msclkid", "referrer", "landing_page", "first_seen_at")
+    out = {"page": str(page or "")[:300]}
+    for key in allowed:
+        value = (attribution or {}).get(key) if isinstance(attribution, dict) else None
+        if value:
+            out[key] = str(value)[:300]
+    return out
+
 # Name of the dedicated LiveKit Cloud Agent that serves ONLY the marketing
 # site's own demo (the "try it live" widget and DemoOrbCard) — deployed
 # separately from the shared agent every tenant's calls run through (see
@@ -703,6 +734,9 @@ class TokenRequest(BaseModel):
     name: str = ""
     phone: str = ""
     contactConsent: bool = False
+    # Where the visitor started the demo, and their first-touch attribution.
+    page: str = ""
+    attribution: dict = {}
 
 
 # A real phone number may start this many demo calls a day, and one IP this
@@ -735,13 +769,19 @@ def _demo_visitor_gate(name: str, phone: str, contact_consent: bool, client_ip: 
     return name, phone
 
 
-async def _save_demo_visitor(name: str, phone: str) -> None:
+async def _save_demo_visitor(name: str, phone: str, fields: dict | None = None) -> None:
     # Best effort: the call row also carries the phone, so a failed save here
     # must not stop a visitor who already filled the form from talking.
     try:
-        await asyncio.to_thread(calls_db.save_demo_visitor, name, phone)
+        await asyncio.to_thread(calls_db.save_demo_visitor, name, phone, fields=fields)
     except Exception:
         logger.exception("could not save demo visitor as a contact")
+
+
+def _demo_lead_fields(request: Request, page: str, attribution: dict | None, channel: str) -> dict:
+    context = _visitor_context(request)
+    return {"lead_channel": channel, "last_visit_at": context.pop("time_ist"),
+            **{f"visitor_{k}": v for k, v in context.items()}, **_attribution_fields(page, attribution)}
 
 
 _BUILTIN_TEST_SCENARIOS = {
@@ -848,6 +888,8 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         # start without a published slug or a signed-in session.
         visitor = _demo_visitor_gate(req.name, req.phone, req.contactConsent, client_ip)
         meta["visitor_name"], meta["visitor_phone"] = visitor
+        if req.page:
+            meta["visitor_path"] = str(req.page)[:300]
     if agent_id is not None:
         meta["agent_id"] = agent_id
     if req.consentVersion:
@@ -913,7 +955,7 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         "website demo" if agent_id is None else "dashboard test",
     )
     if visitor:
-        await _save_demo_visitor(*visitor)
+        await _save_demo_visitor(*visitor, _demo_lead_fields(request, req.page, req.attribution, "Website live demo"))
     return {"token": token, "url": livekit_url}
 
 
@@ -937,7 +979,8 @@ async def orchestrator_platform_demo_token(request: Request) -> dict:
     body = body if isinstance(body, dict) else {}
     visitor = _demo_visitor_gate(str(body.get("name") or ""), str(body.get("phone") or ""),
                                  body.get("contactConsent") is True, client_ip)
-    await _save_demo_visitor(*visitor)
+    await _save_demo_visitor(*visitor, _demo_lead_fields(request, str(body.get("page") or ""),
+                                                         body.get("attribution"), "Website live demo (fallback)"))
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
     if not orchestrator_url:
         return {"ok": False, "error": "Orchestrator not configured."}
@@ -2169,6 +2212,11 @@ class ContactRequest(BaseModel):
     call_volume: str = ""
     timeline: str = ""
     use_case: str = ""
+    # Which page/button sent the visitor here (e.g. "pricing_plan_growth")
+    # and the browser's first-touch attribution (utm_*, referrer, landing).
+    page: str = ""
+    cta: str = ""
+    attribution: dict = {}
     # Honeypot: a field real visitors never see or fill (hidden off-screen in
     # the form, not just display:none — some bots skip display:none fields).
     # Any value here means a bot filled every input blindly. Silently accept
@@ -2176,37 +2224,87 @@ class ContactRequest(BaseModel):
     hp: str = ""
 
 
+def _lead_phone(phone: str) -> str:
+    """E.164 for a form's phone, or "" if it is not a real-looking number. A
+    bare 10-digit number is Indian; an Indian number must be a mobile (6-9)."""
+    phone = re.sub(r"[\s\-().]", "", str(phone or ""))
+    if re.fullmatch(r"0?[6-9]\d{9}", phone):
+        phone = "+91" + phone[-10:]
+    if not _looks_like_real_phone(phone) or (phone.startswith("+91") and not re.fullmatch(r"\+91[6-9]\d{9}", phone)):
+        return ""
+    return phone
+
+
+def _one_line(value: str, limit: int) -> str:
+    # Form text goes into an email subject and table; no header injection.
+    return " ".join(str(value or "").split())[:limit]
+
+
 @app.post("/public/contact")
 def public_contact(req: ContactRequest, request: Request) -> dict:
     """The marketing site's "Book a Demo" form (web-demo/src/pages/marketing/
-    Contact.tsx) — unauthenticated, no per-tenant account involved, just a
-    prospective customer reaching the Vistrow Voice team directly. Notifies
-    the team by email rather than writing to any per-tenant table (this isn't
-    a lead for an account's own CRM, it's a lead for Vistrow itself)."""
+    Contact.tsx) — a prospect reaching Vistrow itself. The lead is saved as a
+    contact in Vistrow's own workspace (source contact_form) BEFORE the sales
+    email, so an email outage no longer loses it, and the email says exactly
+    when and from where it arrived."""
     if req.hp.strip():
         return {"ok": True}
-    # The honeypot stops dumb bots only; each submission emails the sales inbox.
-    if _auth_rate_limited(_client_ip(request)):
-        raise HTTPException(429, "Too many requests. Please wait a minute and try again.")
-    name = req.name.strip()
-    email = req.email.strip().lower()
-    if not name or "@" not in email or "." not in email.split("@")[-1]:
-        raise HTTPException(400, "Enter a valid name and email address")
+    client_ip = _client_ip(request)
+    # Its own buckets: contact spam must not lock an IP out of signing in.
+    if _limited("contact-ip", client_ip, 6, 3600):
+        raise HTTPException(429, "Too many requests. Please wait a few minutes or WhatsApp us.")
+    name = _one_line(req.name, 80)
+    email = _one_line(req.email, 200).lower()
+    phone = _lead_phone(req.phone)
+    if len(name) < 2:
+        raise HTTPException(400, "Please enter your name.")
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", email):
+        raise HTTPException(400, "Please enter a valid email address.")
+    if not phone:
+        raise HTTPException(400, "Please enter a valid mobile number so we can call you back.")
+    if _limited("contact-email", email, 3, 86400):
+        raise HTTPException(429, "We already have your request and will be in touch soon.")
+    context = _visitor_context(request)
+    source = _attribution_fields(req.page, req.attribution)
+    answers = {
+        "company": _one_line(req.company, 200),
+        "team_size": _one_line(req.team_size, 40),
+        "call_volume": _one_line(req.call_volume, 40),
+        "timeline": _one_line(req.timeline, 40),
+        "use_case": str(req.use_case or "").strip()[:2000],
+    }
+    saved = None
+    try:
+        saved = calls_db.save_demo_visitor(
+            name, phone, email, answers["company"], source="contact_form", tag="contact-form",
+            fields={"lead_channel": "Contact form", "submitted_at": context["time_ist"], "cta": _one_line(req.cta, 80),
+                    **{k: v for k, v in answers.items() if k != "company"},
+                    **{f"visitor_{k}": v for k, v in context.items() if k != "time_ist"}, **source},
+        )
+    except Exception:
+        logger.exception("contact form: could not save lead")
     notify_to = os.environ.get("SALES_NOTIFY_EMAIL") or "vistrowai@gmail.com"
-    # Call volume and timeline are the two fields that actually let sales
-    # prioritize a queue of inbound leads (a 10k-calls/month "start
-    # immediately" lead and a 50-calls/month "just researching" one need very
-    # different follow-up speed) - phone number lets sales call back directly
-    # for a calling product, rather than starting the relationship over email.
+    where = ", ".join(p for p in (context["city"], context["region"], context["country"]) if p) or "Unknown"
+    utm = " / ".join(source[k] for k in ("utm_source", "utm_medium", "utm_campaign") if source.get(k))
+    # Call volume and timeline let sales prioritise; phone lets them call back.
     fields = [
         ("Name", name),
+        ("Phone", phone),
         ("Email", email),
-        ("Phone", req.phone.strip() or "-"),
-        ("Company", req.company.strip() or "-"),
-        ("Team size", req.team_size.strip() or "-"),
-        ("Monthly call volume", req.call_volume.strip() or "-"),
-        ("Timeline", req.timeline.strip() or "-"),
-        ("Use case", req.use_case.strip() or "-"),
+        ("Company", answers["company"] or "-"),
+        ("Team size", answers["team_size"] or "-"),
+        ("Monthly call volume", answers["call_volume"] or "-"),
+        ("Timeline", answers["timeline"] or "-"),
+        ("Use case", answers["use_case"] or "-"),
+        ("Received", context["time_ist"]),
+        ("Source", "Contact form" + (f" (button: {_one_line(req.cta, 80)})" if req.cta else "")),
+        ("Page", source["page"] or "/contact"),
+        ("First visit", " · ".join(p for p in (source.get("landing_page", ""), source.get("referrer", "")) if p) or "-"),
+        ("Campaign", utm or ("Google Ads click" if source.get("gclid") else "Meta ad click" if source.get("fbclid") else "-")),
+        ("Location", where),
+        ("IP", context["ip"]),
+        ("Browser", context["browser"] or "-"),
+        ("Saved in dashboard", f"Contact #{saved}" if saved else "NOT SAVED - add it by hand"),
     ]
     # A plain one-to-one notification (no branded template, logo or footer
     # links, with a text part and reply-to the lead) so Gmail files it in
@@ -2225,10 +2323,11 @@ def public_contact(req: ContactRequest, request: Request) -> dict:
         text=email_text,
     )
     if not sent:
-        # Same "never crash on email failure" contract as password reset —
-        # but this lead has nowhere else to land, so log it in full rather
-        # than just the fact that sending failed.
-        logger.info("demo request (email not configured/failed): %r", req.model_dump())
+        logger.warning("contact form email failed (contact saved=%s): %s %s", saved, name, phone)
+        if not saved:
+            # Neither stored nor emailed: tell the visitor instead of
+            # showing a success screen for a lead nobody will ever see.
+            raise HTTPException(503, "We couldn't send your request. Please WhatsApp or call us instead.")
     return {"ok": True}
 
 

@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { getAttribution } from '../../lib/attribution'
+import { looksLikeRealPhone } from '../../lib/demoVisitor'
 import { trackQualifyLead } from '../../lib/analytics'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -26,6 +29,11 @@ export function Contact() {
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Move focus to the confirmation so screen readers announce it.
+  const doneRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (sent) doneRef.current?.focus()
+  }, [sent])
 
   return (
     <MarketingLayout>
@@ -104,51 +112,86 @@ export function Contact() {
             end-justified item sizes to its content, so the form column
             narrowed to whatever the fields happened to measure instead of
             filling its half of the grid. */}
-        <div className="w-full lg:pl-6">
+        <div className="order-first w-full lg:order-none lg:pl-6">
           {sent ? (
             // The live tap-to-talk demo is homepage-only (owner, 2026-10-24),
             // so the form is replaced by the confirmation alone.
             <div className="flex flex-col gap-5">
-              <div className="flex items-center gap-3 rounded-2xl border border-success/30 bg-success/5 px-5 py-3.5 text-left">
+              <div
+                ref={doneRef}
+                tabIndex={-1}
+                role="status"
+                className="flex items-center gap-3 rounded-2xl border border-success/30 bg-success/5 px-5 py-3.5 text-left outline-none"
+              >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
                   <Icon name="check" className="text-[18px]" />
                 </span>
                 <div>
                   <p className="text-sm font-semibold">Thanks - we’ll be in touch.</p>
-                  <p className="text-xs text-text-muted">Our team will reach out shortly to set up your walkthrough.</p>
+                  <p className="text-xs text-text-muted">
+                    A person from our team will call or WhatsApp you on the number you gave to set up your walkthrough.
+                  </p>
                 </div>
               </div>
             </div>
           ) : (
             <div className="w-full rounded-[2rem] border border-border bg-surface p-7 shadow-[0_40px_80px_-48px_rgba(76,29,149,0.7)] sm:p-9">
               <form
+                noValidate
                 onSubmit={async (e) => {
                   e.preventDefault()
                   setError(null)
                   const form = new FormData(e.currentTarget)
+                  const value = (key: string) => String(form.get(key) ?? '').trim()
+                  const phone = `${value('code')}${value('phone').replace(/\D/g, '').replace(/^0+/, '')}`
+                  if (value('name').length < 2) return setError('Please enter your name.')
+                  if (!/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(value('email'))) return setError('Please enter a valid email address.')
+                  if (!looksLikeRealPhone(phone)) return setError('Please enter a valid mobile number so we can call you back.')
                   setBusy(true)
+                  const controller = new AbortController()
+                  const timer = window.setTimeout(() => controller.abort(), 15_000)
                   try {
+                    const query = new URLSearchParams(window.location.search)
                     const res = await fetch('/api/public/contact', {
                       method: 'POST',
+                      signal: controller.signal,
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        name: form.get('name'),
-                        email: form.get('email'),
-                        phone: form.get('phone'),
-                        company: form.get('company'),
-                        team_size: form.get('team_size'),
-                        call_volume: form.get('call_volume'),
-                        timeline: form.get('timeline'),
-                        use_case: form.get('use_case'),
-                        hp: form.get('hp'),
+                        name: value('name'),
+                        email: value('email'),
+                        phone,
+                        company: value('company'),
+                        team_size: value('team_size'),
+                        call_volume: value('call_volume'),
+                        timeline: value('timeline'),
+                        use_case: value('use_case'),
+                        hp: value('hp'),
+                        // Which page and button sent them here, plus how they
+                        // first reached the site, so sales can see the source.
+                        page: window.location.pathname,
+                        cta: query.get('from') || query.get('plan') || '',
+                        attribution: getAttribution(),
                       }),
                     })
-                    if (!res.ok) throw new Error('Could not send your request')
+                    if (!res.ok) {
+                      const detail = await res
+                        .json()
+                        .then((j) => (typeof j?.detail === 'string' ? j.detail : ''))
+                        .catch(() => '')
+                      throw new Error(detail || 'Something went wrong - please try again, or WhatsApp us.')
+                    }
                     trackQualifyLead('contact_form')
                     setSent(true)
-                  } catch {
-                    setError('Something went wrong - please try again, or email us directly.')
+                  } catch (err) {
+                    setError(
+                      controller.signal.aborted
+                        ? 'This is taking too long - please try again, or WhatsApp us.'
+                        : err instanceof Error
+                          ? err.message
+                          : 'Something went wrong - please try again, or WhatsApp us.',
+                    )
                   } finally {
+                    window.clearTimeout(timer)
                     setBusy(false)
                   }
                 }}
@@ -167,70 +210,66 @@ export function Contact() {
                   className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden"
                 />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Full name" name="name" placeholder="Your name" required />
-                  <Field label="Work email" name="email" type="email" placeholder="you@company.com" required />
-                </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Phone number" name="phone" type="tel" placeholder="+91 98765 43210" />
-                  <Field label="Company" name="company" placeholder="Company name" />
+                  <Field label="Full name" name="name" placeholder="Your name" autoComplete="name" required />
+                  <Field label="Work email" name="email" type="email" placeholder="you@company.com" autoComplete="email" required />
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
-                      Team size
+                    <label htmlFor="phone" className={LABEL}>
+                      Mobile number <span className="text-destructive">*</span>
                     </label>
-                    <select
-                      name="team_size"
-                      className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none focus:border-primary"
-                    >
-                      <option>1–10</option>
-                      <option>11–50</option>
-                      <option>51–200</option>
-                      <option>200+</option>
-                    </select>
+                    <div className="flex gap-2">
+                      <select name="code" aria-label="Country code" defaultValue="+91" className={`${INPUT} w-[5.5rem] shrink-0 px-2`}>
+                        {COUNTRY_CODES.map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                      <input
+                        id="phone"
+                        name="phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel-national"
+                        placeholder="98765 43210"
+                        maxLength={14}
+                        required
+                        className={`${INPUT} w-full min-w-0 px-4`}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
-                      Monthly call volume
-                    </label>
-                    <select
-                      name="call_volume"
-                      className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none focus:border-primary"
-                    >
-                      <option>Under 500</option>
-                      <option>500–2,000</option>
-                      <option>2,000–10,000</option>
-                      <option>10,000+</option>
-                      <option>Not sure yet</option>
-                    </select>
-                  </div>
+                  <Field label="Company" name="company" placeholder="Company name" autoComplete="organization" />
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
-                    When do you want to go live?
-                  </label>
-                  <select
-                    name="timeline"
-                    className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none focus:border-primary"
-                  >
-                    <option>Immediately</option>
-                    <option>Within 30 days</option>
-                    <option>1–3 months</option>
-                    <option>Just researching</option>
-                  </select>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Choice label="Team size" name="team_size" options={['1–10', '11–50', '51–200', '200+']} />
+                  <Choice
+                    label="Monthly call volume"
+                    name="call_volume"
+                    options={['Under 500', '500–2,000', '2,000–10,000', '10,000+', 'Not sure yet']}
+                  />
                 </div>
+                <Choice
+                  label="When do you want to go live?"
+                  name="timeline"
+                  options={['Immediately', 'Within 30 days', '1–3 months', 'Just researching']}
+                />
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
+                  <label htmlFor="use_case" className={LABEL}>
                     What do you want to use Artha for?
                   </label>
                   <textarea
+                    id="use_case"
                     name="use_case"
                     rows={3}
+                    maxLength={2000}
                     placeholder="e.g. inbound lead qualification for real estate"
-                    className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none focus:border-primary"
+                    className={`${INPUT} w-full px-4`}
                   />
                 </div>
-                {error && <p className="text-sm text-destructive">{error}</p>}
+                {error && (
+                  <p role="alert" className="text-sm font-semibold text-destructive">
+                    {error}
+                  </p>
+                )}
                 <button
                   type="submit"
                   disabled={busy}
@@ -238,6 +277,13 @@ export function Contact() {
                 >
                   {busy ? 'Sending…' : 'Book my demo'}
                 </button>
+                <p className="text-xs leading-relaxed text-text-muted">
+                  By booking, you agree that Vistrow may call, WhatsApp or email you about your demo. Read our{' '}
+                  <Link to="/privacy" className="text-primary underline">
+                    privacy policy
+                  </Link>
+                  .
+                </p>
               </form>
             </div>
           )}
@@ -258,23 +304,30 @@ export function Contact() {
   )
 }
 
+const LABEL = 'mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted'
+const INPUT =
+  'min-h-11 rounded-xl border border-border bg-bg py-2.5 text-sm text-text outline-none placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/20 sm:min-h-0'
+const COUNTRY_CODES = ['+91', '+971', '+1', '+44', '+65', '+61']
+
 function Field({
   label,
   name,
   type = 'text',
   placeholder,
   required,
+  autoComplete,
 }: {
   label: string
   name: string
   type?: string
   placeholder?: string
   required?: boolean
+  autoComplete?: string
 }) {
   return (
     <div>
-      <label htmlFor={name} className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
-        {label}
+      <label htmlFor={name} className={LABEL}>
+        {label} {required && <span className="text-destructive">*</span>}
       </label>
       <input
         id={name}
@@ -282,8 +335,28 @@ function Field({
         type={type}
         placeholder={placeholder}
         required={required}
-        className="w-full min-h-11 rounded-xl border border-border bg-bg px-4 py-2.5 sm:min-h-0 text-sm text-text outline-none placeholder:text-text-muted focus:border-primary"
+        autoComplete={autoComplete}
+        maxLength={200}
+        className={`${INPUT} w-full px-4`}
       />
+    </div>
+  )
+}
+
+// Starts empty, so a visitor who skips it is not reported as "1–10" or
+// "Immediately" (the first option used to be the silent default).
+function Choice({ label, name, options }: { label: string; name: string; options: string[] }) {
+  return (
+    <div>
+      <label htmlFor={name} className={LABEL}>
+        {label}
+      </label>
+      <select id={name} name={name} defaultValue="" className={`${INPUT} w-full px-4`}>
+        <option value="">Select…</option>
+        {options.map((o) => (
+          <option key={o}>{o}</option>
+        ))}
+      </select>
     </div>
   )
 }

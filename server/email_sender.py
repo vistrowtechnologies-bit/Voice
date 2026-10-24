@@ -172,7 +172,7 @@ def send_email(
     if resend_key:
         return _send_resend(resend_key, to, subject, html, from_address, attachments, reply_to, text)
     if os.environ.get("SMTP_HOST"):
-        return _send_smtp(to, subject, html, from_address, attachments, text)
+        return _send_smtp(to, subject, html, from_address, attachments, text, reply_to)
     logger.warning(
         "email not configured — would have sent to %s: %r. Set RESEND_API_KEY or SMTP_* to enable.",
         to,
@@ -238,6 +238,7 @@ def _send_smtp(
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
     text: str | None = None,
+    reply_to: str | None = None,
 ) -> bool:
     host = os.environ["SMTP_HOST"]
     port = int(os.environ.get("SMTP_PORT") or 587)
@@ -247,6 +248,10 @@ def _send_smtp(
     msg["From"] = _from_address(from_address)
     msg["To"] = to
     msg["Subject"] = subject
+    if reply_to:
+        # Was only passed to Resend: on SMTP a reply to a contact-form email
+        # went to our own address instead of the prospect.
+        msg["Reply-To"] = reply_to
     msg.set_content(text or "This message requires an HTML-capable email client.")
     msg.add_alternative(html, subtype="html")
     for item in attachments or []:

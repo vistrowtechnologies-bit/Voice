@@ -5964,13 +5964,17 @@ def list_contacts(account_id: int) -> list[dict]:
         conn.close()
 
 
-def save_demo_visitor(name: str, phone: str) -> int | None:
-    """A visitor who filled in the homepage live demo's form (name, phone,
-    consent to be contacted) becomes a contact in the account that owns the
-    platform demo agent, tagged website-demo. The demo call itself is kept out
-    of the contact sync (_sync_contacts_from_calls), but it is saved with this
-    phone as lead_phone, so it shows on this contact's Calls tab. Returns the
-    contact id, or None when there is no platform demo agent or the phone is
+def save_demo_visitor(name: str, phone: str, email: str = "", company: str = "", *, source: str = "website_demo",
+                      tag: str = "website-demo", fields: dict | None = None) -> int | None:
+    """A website visitor who left their details with Vistrow itself — the
+    homepage live demo's form (source website_demo) or the Contact Us form
+    (source contact_form) — becomes a contact in the account that owns the
+    platform demo agent, i.e. Vistrow's own workspace. `fields` (page, time,
+    IP, country, UTM, form answers) land in custom_fields so the team can see
+    where the lead came from. The demo call itself is kept out of the contact
+    sync (_sync_contacts_from_calls), but it is saved with this phone as
+    lead_phone, so it shows on this contact's Calls tab. Returns the contact
+    id, or None when there is no platform demo agent or the phone is
     unusable."""
     conn = _connect()
     try:
@@ -5984,24 +5988,32 @@ def save_demo_visitor(name: str, phone: str) -> int | None:
         if not phone:
             return None
         name = (name or "").strip()[:120] or "Website visitor"
+        email = (email or "").strip()[:200]
+        company = (company or "").strip()[:200]
+        extra = {k: v for k, v in (fields or {}).items() if v not in (None, "", {}, [])}
         with conn:
             existing = conn.execute(
-                "SELECT id, name, tags FROM contacts WHERE account_id = ? AND phone = ?", (account_id, phone)
+                "SELECT id, name, tags, email, company, custom_fields FROM contacts WHERE account_id = ? AND phone = ?",
+                (account_id, phone),
             ).fetchone()
             if existing:
-                # Keep what the team already knows; only add the tag and fill
-                # a missing name.
+                # Keep what the team already knows; only add the tag, fill
+                # missing name/email/company and record the latest visit.
                 keep_name = (existing["name"] or "").strip().lower() not in ("", "unknown", "website visitor")
+                merged = {**_safe_json_loads(existing["custom_fields"]), **extra}
                 conn.execute(
-                    f"UPDATE contacts SET tags = ?, name = ?, deleted_at = NULL, updated_at = {_NOW} WHERE id = ?",
-                    (_clean_tags(f"{existing['tags'] or ''},website-demo"),
-                     existing["name"] if keep_name else name, existing["id"]),
+                    "UPDATE contacts SET tags = ?, name = ?, email = ?, company = ?, custom_fields = ?, "
+                    f"deleted_at = NULL, updated_at = {_NOW} WHERE id = ?",
+                    (_clean_tags(f"{existing['tags'] or ''},{tag}"),
+                     existing["name"] if keep_name else name,
+                     existing["email"] or email, existing["company"] or company,
+                     json.dumps(merged), existing["id"]),
                 )
                 return int(existing["id"])
             created = conn.execute(
                 "INSERT INTO contacts (account_id, name, phone, email, company, custom_fields, status, tags, source) "
-                "VALUES (?, ?, ?, '', '', '{}', 'new', 'website-demo', 'website_demo') RETURNING id",
-                (account_id, name, phone),
+                "VALUES (?, ?, ?, ?, ?, ?, 'new', ?, ?) RETURNING id",
+                (account_id, name, phone, email, company, json.dumps(extra), _clean_tags(tag), source),
             ).fetchone()
             return int(created["id"])
     finally:

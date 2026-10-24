@@ -4,6 +4,8 @@
 // visitor as a contact; this browser remembers them so later calls start
 // straight away.
 
+import { getAttribution, type Attribution } from './attribution'
+
 export interface DemoVisitor {
   name: string
   /** E.164, e.g. +919820134567 */
@@ -44,10 +46,21 @@ export function clearDemoVisitor(): void {
   }
 }
 
-/** The body fields the demo token routes expect. */
-export function demoVisitorFields(): { name: string; phone: string; contactConsent: boolean } | Record<string, never> {
+/** The body fields the demo token routes expect: who is calling, from which
+ * page, and how they first reached the site (utm, referrer, landing page). */
+export function demoVisitorFields():
+  | { name: string; phone: string; contactConsent: boolean; page: string; attribution: Attribution }
+  | Record<string, never> {
   const visitor = readDemoVisitor()
-  return visitor ? { name: visitor.name, phone: visitor.phone, contactConsent: true } : {}
+  return visitor
+    ? {
+        name: visitor.name,
+        phone: visitor.phone,
+        contactConsent: true,
+        page: window.location.pathname,
+        attribution: getAttribution(),
+      }
+    : {}
 }
 
 /** Same junk filter as the server (token_api._looks_like_real_phone), so a

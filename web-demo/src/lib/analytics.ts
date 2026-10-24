@@ -49,7 +49,9 @@ export function initClarity(path: string, signedInCustomer = false): void {
 
 type PageArea = 'marketing' | 'app' | 'auth' | 'admin'
 
-type LeadSource = 'signup' | 'contact_form' | 'demo_call'
+// demo_form: the homepage demo's name/phone form (24 Oct) is where a visitor
+// becomes a lead; the call itself then fires demo_call_start below.
+type LeadSource = 'signup' | 'contact_form' | 'demo_form'
 
 export type MarketingCta =
   | 'book_demo'
@@ -165,6 +167,13 @@ export function trackQualifyLead(source: LeadSource): void {
   // preserves the existing Key Event, while generate_lead makes Google Ads
   // and GA4 recommendations easier to connect later.
   window.gtag('event', 'generate_lead', params)
+}
+
+/** A homepage demo call actually connecting (not a key event: the lead was
+ * already counted when the form was submitted). */
+export function trackDemoCallStarted(): void {
+  if (typeof window === 'undefined' || typeof window.gtag !== 'function' || !analyticsAllowed()) return
+  window.gtag('event', 'demo_call_start', commonPageParams(window.location.pathname + window.location.search))
 }
 
 export function trackMarketingCta(cta: MarketingCta, placement: string): void {
