@@ -57,6 +57,60 @@ class ContactPhoneRule(unittest.TestCase):
         self.assertEqual(self.one_line("Asha\r\nBcc: x@y.z", 80), "Asha Bcc: x@y.z")
 
 
+class EdgeVisitorIp(unittest.TestCase):
+    """Website requests reach the API from Vercel's servers, so X-Forwarded-For
+    names Vercel (lead emails showed 3.108.223.212 / 13.235.27.61, and every
+    per-IP limit was shared by all visitors). The site's middleware passes the
+    real visitor; trusted only with the shared VV_EDGE_SECRET."""
+
+    @classmethod
+    def setUpClass(cls):
+        import hmac
+        import types
+        import urllib.parse
+
+        source = open(os.path.join(HERE, "token_api.py"), encoding="utf-8").read()
+        tree = ast.parse(source)
+        ns = {"os": os, "hmac": hmac, "urllib": urllib, "visitor_info": visitor_info, "Request": object}
+        for name in ("_edge_visitor", "_client_ip", "_visitor_context"):
+            node = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
+            exec(ast.get_source_segment(source, node), ns)
+        cls.ns, cls.types = ns, types
+
+    def request(self, **headers):
+        return self.types.SimpleNamespace(headers={k.replace("_", "-"): v for k, v in headers.items()},
+                                          client=self.types.SimpleNamespace(host="10.0.0.1"))
+
+    def setUp(self):
+        self._old = os.environ.get("VV_EDGE_SECRET")
+        os.environ["VV_EDGE_SECRET"] = "s3cret"
+
+    def tearDown(self):
+        if self._old is None:
+            os.environ.pop("VV_EDGE_SECRET", None)
+        else:
+            os.environ["VV_EDGE_SECRET"] = self._old
+
+    def test_trusted_edge_gives_the_real_visitor(self):
+        req = self.request(x_forwarded_for="3.108.223.212", x_vv_edge="s3cret", x_visitor_ip="49.36.10.7",
+                           x_visitor_country="IN", x_visitor_region="MH", x_visitor_city="Pune")
+        self.assertEqual(self.ns["_client_ip"](req), "49.36.10.7")
+        ctx = self.ns["_visitor_context"](req)
+        self.assertEqual((ctx["ip"], ctx["city"], ctx["region"], ctx["country"]), ("49.36.10.7", "Pune", "MH", "IN"))
+
+    def test_wrong_or_missing_secret_is_ignored(self):
+        for edge in ("nope", ""):
+            req = self.request(x_forwarded_for="13.235.27.61", x_vv_edge=edge, x_visitor_ip="1.2.3.4",
+                               x_visitor_country="US")
+            self.assertEqual(self.ns["_client_ip"](req), "13.235.27.61", edge)
+            self.assertEqual(self.ns["_visitor_context"](req)["country"], "", edge)
+
+    def test_no_secret_configured_keeps_todays_behaviour(self):
+        os.environ.pop("VV_EDGE_SECRET", None)
+        req = self.request(x_forwarded_for="13.235.27.61", x_vv_edge="", x_visitor_ip="1.2.3.4")
+        self.assertEqual(self.ns["_client_ip"](req), "13.235.27.61")
+
+
 @unittest.skipUnless(TEST_DB, "set TEST_DATABASE_URL to a throwaway Postgres database")
 class LeadEmail(unittest.TestCase):
     @classmethod
