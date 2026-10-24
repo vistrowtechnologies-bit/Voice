@@ -344,7 +344,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
                   <span className="ml-auto pl-2 text-[10px] tabular-nums text-text-muted">{clock(turn.start)}</span>
                 </span>
                 <span lang={turn.lang} className="mt-1 block text-sm leading-relaxed text-text">{turn.native}</span>
-                {turn.gloss && <span lang="en" className="mt-0.5 block text-xs leading-relaxed text-text-muted/85">{turn.gloss}</span>}
+                {turn.gloss && <span lang="en" className="mt-0.5 block text-sm leading-relaxed text-text-muted/85">{turn.gloss}</span>}
               </button>
             </li>
           )

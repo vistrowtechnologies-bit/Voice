@@ -8,14 +8,13 @@ import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { ScriptMarquee } from '../../components/BharatBits'
 import { VoiceSamplePlayer } from '../../components/VoiceSamplePlayer'
 import { pageFigures } from '../../lib/pageFigures'
-import arthaAvatar from '../../assets/artha-avatar.webp'
 import { EXTRA_LANGUAGE_PAGES, INDIAN_LANGUAGE_VOICES, LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
 import { SEO_ORIGIN, seoForPath } from '../../lib/seoPages'
 import { VOICE_SAMPLES, type VoiceSample } from '../../lib/voiceSamples'
 import {
-  ObjectionCards,
+  DEFAULT_OBJECTIONS,
+  FigureCard,
   Reveal,
-  RiskReducers,
   SectionHead,
   SplitHero,
   SplitRow,
@@ -95,14 +94,15 @@ function CheckList({ items, tone }: { items: string[]; tone: 'primary' | 'cyan' 
   )
 }
 
-// One template renders all eleven language pages, keyed by :slug, composed from
+// One template renders all twelve language pages, keyed by :slug, composed from
 // the premium showcase kit (components/showcase/) like /product/* and
-// /solutions/*: split hero with the scripted sample-call player, the
-// native-script sample card beside the code-mixing note, who it is for beside a
-// call record, the written example in chat bubbles, the violet trust band,
-// regional calls, go-live notes as a timeline, objections, then FAQ. These
-// pages exist for long-tail search ("AI voice agent in Tamil"), which is why
-// each one carries its own FAQPage JSON-LD rather than sharing the overview's.
+// /solutions/*: split hero with the scripted sample-call player (which holds
+// the full transcript), the written-sample figure beside the code-mixing note
+// and voices, who it is for, the violet trust band, regional calls, go-live
+// notes as a timeline, solutions, then FAQ and link rows. Each call is told
+// once: the hero player, plus one figure. These pages exist for long-tail
+// search ("AI voice agent in Tamil"), which is why each one carries its own
+// FAQPage JSON-LD rather than sharing the overview's.
 export function LanguageDetail() {
   const { slug } = useParams()
   const { heroCtaRef, endRef } = useStickyRefs()
@@ -125,6 +125,7 @@ export function LanguageDetail() {
   // The native-script sample card (pageFigures.ts): the hero visual when a
   // page has no recording, otherwise the figure beside the code-mixing note.
   const heroVisual = pageFigures(route, whoHeading)[0]
+  const whoFigure = W4_CALL_SUMMARY(whoHeading)
 
   const faqs = [
     ...(lang.seoFaq ? [lang.seoFaq] : []),
@@ -206,7 +207,7 @@ export function LanguageDetail() {
                 >
                   {s.value}
                 </p>
-                <p className="mt-1 text-[10px] uppercase tracking-wider text-text-muted sm:text-xs">{s.label}</p>
+                <p className="mt-1 text-xs uppercase tracking-wider text-text-muted">{s.label}</p>
               </div>
             ))}
           </div>
@@ -215,35 +216,59 @@ export function LanguageDetail() {
 
       {!lang.international && <ScriptMarquee />}
 
-      {/* ---------- Written sample card beside the code-mixing note ---------- */}
-      {/* The recording plays in the hero; the written transcript card that
-          used to be the hero figure sits here, so the page keeps its image. */}
-      {(voiceSample || lang.codeMixing) && (
-        <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
-          <SplitRow className="" figure={voiceSample ? heroVisual : undefined}>
-            <Reveal>
-              <SectionEyebrow>{lang.codeMixing ? 'How callers really talk' : 'A written sample'}</SectionEyebrow>
-              {lang.codeMixing ? (
-                <>
-                  <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl">
-                    {lang.mixHeading ?? `${lang.codeMixing.name} is the normal case`}
-                  </h2>
-                  <div className="relative mt-6 rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.12] via-surface to-cyan/[0.06] p-6 sm:p-8">
-                    <span aria-hidden="true" className="absolute left-5 top-2 font-display text-6xl leading-none text-primary/30">&ldquo;</span>
-                    <p className="relative text-lg leading-relaxed text-text">{lang.codeMixing.body}</p>
-                  </div>
-                </>
-              ) : null}
-              <RiskReducers className="mt-6" />
-            </Reveal>
-          </SplitRow>
-        </section>
-      )}
+      {/* ---------- How callers really talk: the one written-sample figure ---------- */}
+      {/* The hero player already carries the full call and its transcript, so
+          this section shows the written-sample figure once, beside the
+          code-mixing note, what the call leaves for the team and the voices
+          that speak the language. The chat-bubble copy of the same call that
+          used to follow is gone: it was the third telling of one call. */}
+      <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-16">
+        <SplitRow className="" figure={voiceSample ? heroVisual : undefined}>
+          <Reveal>
+            <SectionEyebrow>How callers really talk</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl">
+              {lang.mixHeading ?? (lang.codeMixing ? `${lang.codeMixing.name} is the normal case` : `How ${lang.name} calls really sound`)}
+            </h2>
+            {lang.codeMixing && (
+              <div className="relative mt-6 rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.12] via-surface to-cyan/[0.06] p-5 sm:p-8">
+                <span aria-hidden="true" className="absolute left-4 top-1 font-display text-5xl leading-none text-primary/30 sm:left-5 sm:top-2 sm:text-6xl">&ldquo;</span>
+                <p className="relative text-base leading-relaxed text-text sm:text-lg">{lang.codeMixing.body}</p>
+              </div>
+            )}
+            {lang.sampleExchange && (
+              <p className="mt-5 flex gap-2 text-base leading-relaxed text-text-muted">
+                <Icon name="task_alt" className="mt-1 shrink-0 text-[18px] text-cyan" />
+                <span>
+                  <strong className="font-semibold text-text">After the call: </strong>
+                  {lang.sampleExchange.outcome}
+                </span>
+              </p>
+            )}
+            <div className="mt-5 flex gap-3 rounded-2xl border border-border bg-surface p-4 sm:p-5">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                <Icon3D name="record_voice_over" className="text-[20px]" />
+              </span>
+              <div>
+                <h3 className="font-display text-base font-semibold">Voices that speak {lang.name}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                  {lang.voicesNote ?? (<>
+                  These Standard voices in the agent picker speak {lang.name} and keep the same voice if the caller
+                  moves to {mixWith} or another Indian language: {INDIAN_LANGUAGE_VOICES.female.join(', ')} (female) and{' '}
+                  {INDIAN_LANGUAGE_VOICES.male.join(', ')} (male).
+                  </>)}
+                </p>
+              </div>
+            </div>
+          </Reveal>
+        </SplitRow>
+      </section>
 
       {/* ---------- Who it's for, beside a saved call record ---------- */}
       <div className="bg-surface-high/40">
-        <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
-          <SplitRow figure={W4_CALL_SUMMARY(whoHeading)} className="">
+        <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-16">
+          {/* The saved-call-record image is the same on every page, so phones
+              skip it (the language's own figure sits in the section above). */}
+          <SplitRow aside={<div className="hidden lg:block"><FigureCard figure={whoFigure} sizes="(min-width: 1024px) 560px, 1px" /></div>} className="max-lg:gap-y-0">
             <Reveal>
               <SectionHead
                 eyebrow="Who it’s for"
@@ -251,9 +276,9 @@ export function LanguageDetail() {
                 intro={`This page is for teams that need a real ${lang.name} AI voice calling agent that answers live calls at any hour, rather than a translated chatbot or a recorded IVR menu.`}
               />
             </Reveal>
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="mt-6 grid gap-4 sm:mt-8 sm:grid-cols-2">
               <Reveal className="h-full">
-                <div className="vv-lift h-full rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/[0.12] via-surface to-surface p-6">
+                <div className="vv-lift h-full rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/[0.12] via-surface to-surface p-5 sm:p-6">
                   <h3 className="flex items-center gap-2 font-display text-lg font-semibold">
                     <span className="h-5 w-1 rounded-full bg-primary" aria-hidden="true" />
                     Best-fit call types
@@ -271,7 +296,7 @@ export function LanguageDetail() {
                 </div>
               </Reveal>
               <Reveal delayMs={70} className="h-full">
-                <div className="vv-lift h-full rounded-3xl border border-border bg-surface p-6">
+                <div className="vv-lift h-full rounded-3xl border border-border bg-surface p-5 sm:p-6">
                   <h3 className="flex items-center gap-2 font-display text-lg font-semibold">
                     <span className="h-5 w-1 rounded-full bg-cyan" aria-hidden="true" />
                     What the agent does
@@ -293,81 +318,22 @@ export function LanguageDetail() {
         </section>
       </div>
 
-      {/* ---------- Written example as chat bubbles, voices beside it ---------- */}
-      {lang.sampleExchange && (
-        <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start">
-            <Reveal>
-              <figure>
-                <SectionEyebrow>Example conversation</SectionEyebrow>
-                <figcaption className="mt-3">
-                  <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{lang.sampleExchange.context}, in {lang.name}.</h2>
-                  <p className="mt-3 text-sm text-text-muted">
-                    {lang.exampleNote ?? (isEnglish
-                      ? 'A short written sample to show the style of call, with a plain-English gloss under the lines that mix in Hindi. It is not a recording of a customer call.'
-                      : 'A short written sample to show the style of call, with an English gloss under each line. It is not a recording of a customer call.')}
-                  </p>
-                </figcaption>
-                <ol className="mt-7 space-y-4 rounded-3xl border border-border bg-gradient-to-br from-primary/[0.08] via-surface-high/40 to-transparent p-4 shadow-[0_30px_60px_-44px_rgba(76,29,149,0.55)] sm:p-6">
-                  {lang.sampleExchange.turns.map((turn, i) => {
-                    const agent = turn.speaker === 'Agent'
-                    return (
-                      <li key={i} className={`flex items-end gap-2.5 ${agent ? 'flex-row-reverse' : ''}`}>
-                        {agent ? (
-                          <img src={arthaAvatar} alt="" aria-hidden="true" loading="lazy" decoding="async" className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-primary/25" />
-                        ) : (
-                          <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-high text-text-muted">
-                            <Icon name="person" className="text-[18px]" />
-                          </span>
-                        )}
-                        <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${agent ? 'rounded-br-sm bg-gradient-to-br from-primary to-primary-dark text-white' : 'rounded-bl-sm bg-surface shadow-sm'}`}>
-                          <p className={`text-[11px] font-bold uppercase tracking-widest ${agent ? 'text-white/75' : 'text-text-muted'}`}>
-                            {agent ? 'AI agent' : 'Caller'}
-                          </p>
-                          <p lang={lang.code} className={`mt-1 text-base leading-relaxed ${agent ? 'text-white' : 'text-text'}`}>{turn.native}</p>
-                          {turn.gloss && <p className={`mt-1 text-sm italic leading-relaxed ${agent ? 'text-white/80' : 'text-text-muted'}`}>{turn.gloss}</p>}
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ol>
-                <p className="mt-5 flex gap-2 text-sm leading-relaxed text-text-muted">
-                  <Icon name="task_alt" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
-                  <span>{lang.sampleExchange.outcome}</span>
-                </p>
-              </figure>
-            </Reveal>
-
-            <Reveal delayMs={80} className="lg:sticky lg:top-28 lg:mt-24">
-              <aside className="bento-hero relative overflow-hidden rounded-3xl p-7 shadow-[0_24px_50px_-30px_rgba(76,29,149,0.9)]">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
-                  <Icon3D name="record_voice_over" size={32} plate className="text-[22px]" />
-                </span>
-                <h2 className="mt-4 font-display text-xl font-bold">Voices that speak {lang.name}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-white/85">
-                  {lang.voicesNote ?? (<>
-                  These Standard voices in the agent picker speak {lang.name} and keep the same voice if the caller
-                  moves to {mixWith} or another Indian language: {INDIAN_LANGUAGE_VOICES.female.join(', ')} (female) and{' '}
-                  {INDIAN_LANGUAGE_VOICES.male.join(', ')} (male).
-                  </>)}
-                </p>
-              </aside>
-            </Reveal>
-          </div>
-        </section>
-      )}
-
-      <TrustBand
-        eyebrow={`${lang.name} calls you can check`}
-        title={`Hear the ${lang.name} agent for yourself before you decide.`}
-        body={`Artha answers in ${lang.name}, works on your number and your website, and leaves a record of every call.`}
-        facts={trustFacts}
-        placement="language_trust_band"
-      />
+      {/* The violet trust band repeats site-wide facts and CTAs that phones
+          already get from the sticky bar and the closing band, so it only
+          shows from lg up. */}
+      <div className="hidden lg:block">
+        <TrustBand
+          eyebrow={`${lang.name} calls you can check`}
+          title={`Hear the ${lang.name} agent for yourself before you decide.`}
+          body={`Artha answers in ${lang.name}, works on your number and your website, and leaves a record of every call.`}
+          facts={trustFacts}
+          placement="language_trust_band"
+        />
+      </div>
 
       {/* ---------- Sample lines: horizontal strip ---------- */}
       {lang.sampleLines && (
-        <section className="mx-auto max-w-7xl px-5 pt-14 md:px-8 lg:pt-16">
+        <section className="mx-auto max-w-7xl px-5 pt-10 md:px-8 lg:pt-16">
           <Reveal>
             <SectionHead
               eyebrow="Short sample lines"
@@ -395,21 +361,21 @@ export function LanguageDetail() {
 
       {/* ---------- Regional calls: numbered rows ---------- */}
       {lang.regionalCalls && (
-        <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+        <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-16">
+          <div className="grid gap-6 sm:gap-8 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
             <Reveal>
               <SectionEyebrow>{`${lang.region} calls`}</SectionEyebrow>
               <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl">{lang.regionalHeading ?? `Where ${lang.name} calls matter most.`}</h2>
-              <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+              <p className="mt-4 hidden items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary sm:inline-flex">
                 <Icon name="public" className="text-[16px]" />
                 {lang.region}
               </p>
             </Reveal>
-            <ul className="grid gap-4">
+            <ul className="grid gap-3 sm:gap-4">
               {lang.regionalCalls.map((call, i) => (
                 <li key={call.title}>
-                  <Reveal delayMs={i * 60} className="vv-lift flex gap-4 rounded-3xl border border-border bg-surface p-6">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-magenta font-display text-sm font-bold text-white">
+                  <Reveal delayMs={i * 60} className="vv-lift flex gap-4 rounded-3xl border border-border bg-surface p-5 sm:p-6">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-magenta font-display text-sm font-bold text-white sm:h-11 sm:w-11 sm:rounded-2xl">
                       {`0${i + 1}`}
                     </span>
                     <div>
@@ -442,17 +408,19 @@ export function LanguageDetail() {
         </div>
       )}
 
-      {/* ---------- Solutions ---------- */}
-      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
+      <FaqSection key={lang.slug} items={faqs} title={`${lang.name} AI voice agent: questions, answered.`} />
+
+      {/* ---------- Solutions: compact link rows on phones, cards from sm ---------- */}
+      <section className="mx-auto max-w-7xl px-5 py-10 md:px-8 lg:py-16">
         <Reveal>
-          <SectionHead center eyebrow="Where teams use it" title={`${lang.name} calls, handled end to end.`} className="mb-10" />
+          <SectionHead center eyebrow="Where teams use it" title={`${lang.name} calls, handled end to end.`} className="mb-6 sm:mb-10" />
         </Reveal>
-        <div className="grid gap-4 sm:grid-cols-2 sm:max-lg:grid-close-2 lg:grid-close-3">
+        <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-4 sm:max-lg:grid-close-2 lg:grid-close-3">
           {SOLUTIONS.map((s, i) => (
             <Reveal key={s.to} delayMs={(i % 3) * 60} className="h-full">
               <Link
                 to={s.to}
-                className={`vv-lift group flex h-full gap-4 rounded-3xl border p-6 ${
+                className={`vv-lift group flex h-full items-center gap-4 rounded-2xl border px-4 py-3 sm:items-start sm:rounded-3xl sm:p-6 ${
                   i === 0 ? 'border-primary/40 bg-gradient-to-br from-primary/[0.12] via-surface to-surface' : 'border-border bg-surface'
                 }`}
               >
@@ -469,7 +437,7 @@ export function LanguageDetail() {
                       className="text-[16px] text-text-muted transition-transform group-hover:translate-x-1 group-hover:text-primary"
                     />
                   </div>
-                  <p className="mt-1 text-sm leading-relaxed text-text-muted">{s.desc}</p>
+                  <p className="mt-1 hidden text-sm leading-relaxed text-text-muted sm:block">{s.desc}</p>
                 </div>
               </Link>
             </Reveal>
@@ -501,10 +469,6 @@ export function LanguageDetail() {
           </Reveal>
         </section>
       )}
-
-      <ObjectionCards route={route} placement="language_objections" title={`What buyers ask first about ${/^[AEIOU]/.test(lang.name) ? 'an' : 'a'} ${lang.name} AI voice agent.`} />
-
-      <FaqSection key={lang.slug} items={faqs} title={`${lang.name} AI voice agent: questions, answered.`} />
 
       {lang.guides && lang.guides.length > 0 && (
         <section className="mx-auto max-w-7xl space-y-3 px-5 pt-12 md:px-8">
@@ -544,6 +508,24 @@ export function LanguageDetail() {
             </div>
           </div>
         )}
+        {/* The site-wide buyer questions (cost, setup, handover, unknown
+            answers) are answered on their own pages; the language pages
+            link to them here instead of repeating the cards. */}
+        <div className="text-center">
+          <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Before you decide</p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {DEFAULT_OBJECTIONS.map((o) => (
+              <Link
+                key={o.to}
+                to={o.to}
+                className="inline-flex min-h-11 items-center gap-1 rounded-full bg-primary/10 px-4 py-1.5 sm:min-h-0 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+              >
+                {o.link}
+                <Icon name="arrow_forward" className="text-[14px]" />
+              </Link>
+            ))}
+          </div>
+        </div>
         <div className="text-center">
           <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Also available in</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">

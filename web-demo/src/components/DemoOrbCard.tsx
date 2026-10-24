@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant, useParticipantAttribute, useRemoteParticipants, useRoomContext, useTrackVolume, useTracks } from '@livekit/components-react'
-import { Track } from 'livekit-client'
-import type { RemoteParticipant } from 'livekit-client'
 import { Icon } from './Icon'
 import {
   DEMO_CALL_CAP,
@@ -15,6 +12,12 @@ import { clearDemoVisitor, looksLikeRealPhone, readDemoVisitor, saveDemoVisitor,
 import { trackMarketingCta, trackQualifyLead } from '../lib/analytics'
 import { useOrchestratorCall } from '../lib/orchestratorCall'
 
+// The LiveKit client (about 500 KB) loads only when a visitor starts a call,
+// not with every marketing page. handleStart begins the download alongside the
+// microphone prompt and token request, so it is normally ready first.
+const loadLiveRoom = () => import('./DemoOrbLiveRoom')
+const DemoOrbLiveRoom = lazy(() => loadLiveRoom().then((m) => ({ default: m.DemoOrbLiveRoom })))
+
 type Phase = 'idle' | 'consent' | 'connecting' | 'active' | 'active-orchestrator' | 'denied' | 'capped' | 'unreachable' | 'feedback'
 
 // How long the visitor's browser waits for the AI agent to actually join the
@@ -22,17 +25,17 @@ type Phase = 'idle' | 'consent' | 'connecting' | 'active' | 'active-orchestrator
 // seconds; if no agent joins within this window the demo worker is genuinely
 // unavailable (restarting/crashed/no capacity), so we surface a clean retry
 // instead of leaving the visitor staring at a ticking timer over dead air.
-const AGENT_JOIN_TIMEOUT_MS = 20_000
+export const AGENT_JOIN_TIMEOUT_MS = 20_000
 // The agent can join the room and still never start (its job crashed loading
 // its configuration). It reports lk.agent.state once it is really running.
-const AGENT_READY_TIMEOUT_MS = 25_000
+export const AGENT_READY_TIMEOUT_MS = 25_000
 
 // Same hard cap the embeddable widget enforces (widget/src/widget.ts) - every
 // minute of every call costs real STT/LLM/TTS spend. The marketing demo cuts
 // it silently instead of showing a countdown: this card is a first
 // impression, not a tool a visitor is relying on, so a visible timer just
 // makes an unlimited-feeling product look metered.
-const MAX_CALL_MS = 5 * 60 * 1000
+export const MAX_CALL_MS = 5 * 60 * 1000
 
 // Cross-component call lock, shared with the embeddable widget
 // (widget/src/widget.ts's own CALL_LOCK_KEY) via a plain window global -
@@ -265,6 +268,7 @@ export function DemoOrbCard({
     // seconds of useful head start; on repeat visits this still overlaps
     // with getUserMedia and WebRTC setup.
     const warming = prewarm()
+    void loadLiveRoom().catch(() => {})
     try {
       // This stream only asks permission. LiveKit owns the actual call
       // stream; retaining both keeps an unused microphone capture alive.
@@ -502,26 +506,16 @@ export function DemoOrbCard({
         </div>
 
         {isCallLive && token && serverUrl ? (
-          // className="contents" - LiveKitRoom renders its own wrapping div
-          // with no flex styling, which broke the card's `flex flex-col
-          // items-center` centering for InlineCallBody's fixed-width w-48
-          // orb (w-full children like the footer/button row still looked
-          // fine since they just stretch to fill it). display:contents
-          // removes that wrapper from layout entirely so InlineCallBody's
-          // children are centered as if they were direct children of the
-          // card again.
-          <LiveKitRoom
-            className="contents"
-            serverUrl={serverUrl}
-            token={token}
-            connect
-            audio
-            onDisconnected={handleLiveKitDisconnected}
-            onError={handleConnectionError}
-          >
-            <RoomAudioRenderer />
-            <InlineCallBody onAgentUnavailable={handleAgentUnavailable} onConnected={chargeDemoCall} />
-          </LiveKitRoom>
+          <Suspense fallback={<LiveRoomLoading />}>
+            <DemoOrbLiveRoom
+              serverUrl={serverUrl}
+              token={token}
+              onDisconnected={handleLiveKitDisconnected}
+              onError={handleConnectionError}
+              onAgentUnavailable={handleAgentUnavailable}
+              onConnected={chargeDemoCall}
+            />
+          </Suspense>
         ) : isCallLiveOrchestrator ? (
           <InlineOrchestratorCallBody onEnded={handleDisconnected} onFailed={handleOrchestratorFailed} onConnected={chargeDemoCall} />
         ) : phase === 'consent' ? (
@@ -857,7 +851,7 @@ function FeedbackPrompt({
 
 // Shared with the idle state so the card is the same height and never looks
 // half-empty once a call is live - see InlineCallBody/InlineOrchestratorCallBody.
-function DemoCardFooter() {
+export function DemoCardFooter() {
   return (
     <div className="mt-6 grid w-full grid-cols-2 gap-4 border-t border-border pt-5 text-left">
       <div>
@@ -876,10 +870,30 @@ function DemoCardFooter() {
   )
 }
 
+// Shown only if the call module is still downloading when the token arrives.
+function LiveRoomLoading() {
+  return (
+    <>
+      <div className="relative my-6 flex h-48 w-48 items-center justify-center">
+        <span className="absolute inset-0 rounded-full border border-primary/20" />
+        <span className="absolute inset-5 rounded-full border border-primary/10" />
+        <span className="relative h-32 w-32 overflow-hidden rounded-full opacity-45 shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)]">
+          <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-bg/40">
+            <span className="h-7 w-7 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
+          </span>
+        </span>
+      </div>
+      <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
+      <DemoCardFooter />
+    </>
+  )
+}
+
 // Agent's live turn state, mirrors ActiveCallUI.tsx's STATE_STYLES labels -
 // fills what used to be the empty gap below the orb during an active call,
 // and doubles as the same "is it stuck?" signal the dashboard test call has.
-const STATE_LABELS: Record<string, string> = {
+export const STATE_LABELS: Record<string, string> = {
   listening: 'Listening…',
   thinking: 'Thinking…',
   speaking: 'Agent is speaking…',
@@ -889,109 +903,7 @@ const STATE_LABELS: Record<string, string> = {
 // start/greeting synthesis). Defaulting this to 'Listening…' read as "the
 // agent skipped its greeting and is waiting on the caller", which isn't
 // what's happening — it just hasn't started yet.
-const WAITING_LABEL = 'Connecting…'
-
-// Rendered inside <LiveKitRoom> once connected - same card, same footprint,
-// swapped from the idle "Tap to talk" content to live call state: a running
-// timer and mute/end-call controls. No "Listening…/Thinking…/Speaking…"
-// status text - it read as distracting chatter rather than useful signal.
-// Joined-but-never-ready watchdog: without it a call whose agent crashed after
-// joining sat on "Connecting..." until the visitor gave up (5 Oct 2026).
-function AgentReadyWatchdog({ agentParticipant, onUnavailable }: { agentParticipant: RemoteParticipant; onUnavailable: () => void }) {
-  const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
-  useEffect(() => {
-    if (agentState) return
-    const timer = setTimeout(onUnavailable, AGENT_READY_TIMEOUT_MS)
-    return () => clearTimeout(timer)
-  }, [agentState, onUnavailable])
-  return null
-}
-
-function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailable: () => void; onConnected: () => void }) {
-  const room = useRoomContext()
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant()
-  const remoteParticipants = useRemoteParticipants()
-  const agentParticipant = remoteParticipants[0]
-  const agentJoined = !!agentParticipant
-
-  useEffect(() => {
-    if (agentJoined) onConnected()
-  }, [agentJoined, onConnected])
-  // Timer starts when the AGENT joins, not when the browser connects to the
-  // room - otherwise a call that never got an agent still showed a ticking
-  // "live" timer against silence, which read as a broken/dead agent.
-  const [startedAt, setStartedAt] = useState<number | null>(null)
-  const [elapsedMs, setElapsedMs] = useState(0)
-
-  useEffect(() => {
-    if (agentJoined && startedAt === null) setStartedAt(Date.now())
-  }, [agentJoined, startedAt])
-
-  useEffect(() => {
-    if (startedAt === null) return
-    const interval = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000)
-    return () => clearInterval(interval)
-  }, [startedAt])
-
-  // If no agent joins within the timeout, the demo worker is unavailable -
-  // bail out to an explicit retry instead of holding the visitor on a silent
-  // dead call.
-  useEffect(() => {
-    if (agentJoined) return
-    const timer = setTimeout(onAgentUnavailable, AGENT_JOIN_TIMEOUT_MS)
-    return () => clearTimeout(timer)
-  }, [agentJoined, onAgentUnavailable])
-
-  // Hard cap enforced silently - no visible countdown, see MAX_CALL_MS.
-  useEffect(() => {
-    if (elapsedMs >= MAX_CALL_MS) room.disconnect()
-  }, [elapsedMs, room])
-
-  return (
-    <>
-      <div className="relative my-6 flex h-48 w-48 items-center justify-center">
-        <span className="absolute inset-0 rounded-full border border-primary/20" />
-        <span className="absolute inset-5 rounded-full border border-primary/10" />
-        {agentParticipant ? (
-          <AgentVisual agentParticipant={agentParticipant} />
-        ) : (
-          <span className="relative h-32 w-32 overflow-hidden rounded-full opacity-45 shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)]">
-            <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
-            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-bg/40">
-              <span className="h-7 w-7 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
-            </span>
-          </span>
-        )}
-      </div>
-
-      {agentJoined && <AgentReadyWatchdog agentParticipant={agentParticipant} onUnavailable={onAgentUnavailable} />}
-      {agentJoined ? (
-        <AgentStateLabel agentParticipant={agentParticipant} />
-      ) : (
-        <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
-      )}
-
-      <div className="mt-6 flex w-full items-center justify-center gap-4">
-        <button
-          aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
-          onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface-high text-text-muted transition-colors hover:text-text"
-        >
-          <Icon name={isMicrophoneEnabled ? 'mic' : 'mic_off'} />
-        </button>
-        <button
-          aria-label="End call"
-          onClick={() => room.disconnect()}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive text-white transition-opacity hover:opacity-90"
-        >
-          <Icon name="call_end" className="text-[24px]" />
-        </button>
-      </div>
-
-      <DemoCardFooter />
-    </>
-  )
-}
+export const WAITING_LABEL = 'Connecting…'
 
 // Same card, same footprint as InlineCallBody, but driven by
 // useOrchestratorCall's local state instead of LiveKit's room hooks - used
@@ -1088,44 +1000,10 @@ function InlineOrchestratorVisual({ volume, speaking }: { volume: number; speaki
   )
 }
 
-// useParticipantAttribute throws if called before an agent participant
-// exists, so these only ever mount once InlineCallBody has confirmed
-// agentParticipant is defined - mirrors ActiveCallUI's AgentOrb pattern.
 // Video's ring animation spins at this rate while the agent is actively
 // speaking (vs. 1x its authored speed the rest of the time) - matches
 // ActiveCallUI.tsx's SPEAKING_PLAYBACK_RATE.
-const SPEAKING_PLAYBACK_RATE = 2.2
-
-function AgentVisual({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
-  const agentTracks = useTracks([Track.Source.Microphone]).filter(
-    (t) => t.participant.identity === agentParticipant.identity,
-  )
-  const volume = useTrackVolume(agentTracks[0])
-  const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
-  const scale = 1 + Math.min(volume, 1) * 0.14
-  const videoRef = useRef<HTMLVideoElement>(null)
-
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = agentState === 'speaking' ? SPEAKING_PLAYBACK_RATE : 1
-  }, [agentState])
-
-  return (
-    <span
-      className="relative h-32 w-32 overflow-hidden rounded-full shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)] transition-transform duration-150 ease-out"
-      style={{ transform: `scale(${scale})` }}
-    >
-      <video ref={videoRef} src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
-    </span>
-  )
-}
-
-// Separate component (not folded into AgentVisual) purely so InlineCallBody
-// can place it below the mic/end-call row's divider instead of right under
-// the orb - same gating rule applies: only mount once agentParticipant exists.
-function AgentStateLabel({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
-  const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
-  return <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? WAITING_LABEL}</p>
-}
+export const SPEAKING_PLAYBACK_RATE = 2.2
 
 // The recording/processing notice a visitor must accept before the first
 // demo call. Wording kept equivalent to the widget's dialog so both public

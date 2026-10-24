@@ -38,24 +38,26 @@ import { DemoCall } from './pages/marketing/DemoCall'
 import { Privacy } from './pages/marketing/Privacy'
 import { Terms } from './pages/marketing/Terms'
 import { NotFound } from './pages/marketing/NotFound'
-import { Login } from './pages/Login'
 import { adminHostServes, isAdminHost } from './lib/adminHost'
 import { useAuth } from './lib/auth'
-import { Signup } from './pages/Signup'
-import { ForgotPassword } from './pages/ForgotPassword'
-import { ResetPassword } from './pages/ResetPassword'
-import { ConfirmEmailChange } from './pages/ConfirmEmailChange'
-import { VerifyEmail } from './pages/VerifyEmail'
-import { Onboarding } from './pages/Onboarding'
-import { InviteAccept } from './pages/InviteAccept'
-import { SidebarPreview } from './pages/SidebarPreview'
 import { useEffect } from 'react'
 import { StagingBadge } from './components/StagingBadge'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { initClarity, trackPageView } from './lib/analytics'
 import { AnalyticsConsentBanner } from './components/AnalyticsConsentBanner'
 
-// Dashboard and admin screens load on demand: the marketing pages must not ship them.
+// Dashboard, admin and sign-in screens load on demand: the marketing pages must
+// not ship them. None of these routes is prerendered (they get app-shell.html),
+// so React.lazy is safe here; marketing routes stay eager for renderToString.
+const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })))
+const Signup = lazy(() => import('./pages/Signup').then((m) => ({ default: m.Signup })))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then((m) => ({ default: m.ForgotPassword })))
+const ResetPassword = lazy(() => import('./pages/ResetPassword').then((m) => ({ default: m.ResetPassword })))
+const ConfirmEmailChange = lazy(() => import('./pages/ConfirmEmailChange').then((m) => ({ default: m.ConfirmEmailChange })))
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then((m) => ({ default: m.VerifyEmail })))
+const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })))
+const InviteAccept = lazy(() => import('./pages/InviteAccept').then((m) => ({ default: m.InviteAccept })))
+const SidebarPreview = lazy(() => import('./pages/SidebarPreview').then((m) => ({ default: m.SidebarPreview })))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
 const AdminAccounts = lazy(() => import('./pages/admin/AdminAccounts').then((m) => ({ default: m.AdminAccounts })))
 const AdminAccountDetail = lazy(() => import('./pages/admin/AdminAccountDetail').then((m) => ({ default: m.AdminAccountDetail })))
