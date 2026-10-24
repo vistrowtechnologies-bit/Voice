@@ -1,5 +1,16 @@
-import { next } from '@vercel/functions'
+import { geolocation, ipAddress, next } from '@vercel/functions'
 import { pathBucket, hostBucket, BUCKET_HOST } from './src/lib/hostBuckets'
+
+// API routes with per-visitor rate limits or lead records. vercel.json
+// rewrites /api to Railway, which then sees Vercel's servers, not the
+// visitor, so these pass the visitor's IP and location on as x-visitor-*.
+// x-vv-edge proves to the API that they came from here (token_api
+// _edge_visitor); without VV_EDGE_SECRET the API ignores them.
+const VISITOR_ROUTES = ['/api/token', '/api/public/contact', '/api/orchestrator/platform-demo-token', '/api/auth/:path*']
+
+function isVisitorRoute(path: string) {
+  return VISITOR_ROUTES.some((r) => (r.endsWith('/:path*') ? path.startsWith(r.slice(0, -6)) : path === r))
+}
 
 // Splits one SPA build across the authenticated app and public marketing
 // hosts. The former docs subdomain is retained only as a permanent redirect.
@@ -15,11 +26,27 @@ import { pathBucket, hostBucket, BUCKET_HOST } from './src/lib/hostBuckets'
 export const config = {
   matcher: [
     '/((?!api/|assets/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|mp4|woff2?|json|txt|xml|html)$).*)',
+    // VISITOR_ROUTES, written out: Vercel reads this config statically and
+    // fails the build on a spread or any other non-literal value.
+    '/api/token',
+    '/api/public/contact',
+    '/api/orchestrator/platform-demo-token',
+    '/api/auth/:path*',
   ],
 }
 
 export default function middleware(request: Request) {
   const url = new URL(request.url)
+  if (isVisitorRoute(url.pathname)) {
+    const headers = new Headers(request.headers)
+    const geo = geolocation(request)
+    headers.set('x-visitor-ip', ipAddress(request) ?? '')
+    headers.set('x-visitor-country', geo.country ?? '')
+    headers.set('x-visitor-region', geo.countryRegion ?? '')
+    headers.set('x-visitor-city', geo.city ?? '')
+    headers.set('x-vv-edge', process.env.VV_EDGE_SECRET ?? '')
+    return next({ request: { headers } })
+  }
   const host = request.headers.get('host') || ''
   const current = hostBucket(host)
 
