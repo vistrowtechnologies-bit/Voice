@@ -1,0 +1,136 @@
+{
+  "n": 17,
+  "publishOn": "2026-11-06",
+  "primaryKeyword": "ai receptionist immigration consultant",
+  "audience": "UK, CA, India",
+  "slug": "ai-receptionist-for-immigration-consultants-and-travel-agencies",
+  "title": "AI receptionist for immigration consultants and travel agencies",
+  "seoTitle": "AI Receptionist for Immigration Consultants and Travel Firms",
+  "metaDescription": "How an AI receptionist for immigration consultants and travel agencies takes enquiries in Punjabi, Hindi and English and books consultations.",
+  "shortAnswer": "An AI receptionist for immigration consultants and travel agencies answers enquiry calls in Punjabi, Hindi or English, collects the caller's details and the service they want, shares your approved office information and books a consultation with a licensed adviser. It never gives immigration advice or judges eligibility; those questions always go to your advisers.",
+  "excerpt": "Visa and travel offices take dozens of near-identical calls a day, often in Punjabi and Hindi. Here is what an AI receptionist can safely handle, what it must never do, and how to set it up.",
+  "category": "Industries",
+  "related": [
+    "multilingual-ai-receptionist-hindi-punjabi-english",
+    "what-is-an-ai-receptionist",
+    "ai-call-recordings-and-transcripts"
+  ],
+  "sections": [
+    {
+      "heading": "What can an AI receptionist do for an immigration or travel office?",
+      "paragraphs": [
+        "Immigration consultancies and travel agencies take the same calls all day: are you open on Saturday, what documents do I bring to the first meeting, how do I book a consultation, can you call my father back in Punjabi. While advisers sit with clients, those calls ring out or go to voicemail. An [AI receptionist that answers every call](/ai-receptionist) takes them in parallel and books the next step.",
+        "Vistrow Voice is an AI receptionist that answers enquiries on the phone and on your website, in the language the caller prefers. Our guide to a [multilingual AI receptionist for Hindi and Punjabi callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english) explains how one agent handles mixed-language calls."
+      ],
+      "points": [
+        "Office information: hours, branches, fees policy wording you approve, what to bring.",
+        "New enquiries: name, phone, the service they are asking about and their preferred language.",
+        "Consultation bookings with a named adviser, inside the hours you set.",
+        "Callback requests for existing clients who want to speak to their case handler."
+      ]
+    },
+    {
+      "heading": "What must an AI receptionist never do for an immigration consultant?",
+      "paragraphs": [
+        "It must never give immigration advice. In the UK, GOV.UK states that all immigration advisers must be registered with the Immigration Advice Authority or be a member of an approved professional body. In Canada, IRCC says a representative who is paid in any form must be authorised. An AI receptionist is neither, so it cannot tell a caller which visa to apply for, whether they qualify or what their chances are.",
+        "Write this as a fixed rule with the exact words the agent uses instead, for example: \"I can't advise on your case, but I can book you a consultation with one of our licensed advisers.\" Put that wording in a [knowledge base with strict mode](/product/knowledge-base), so the agent quotes your approved answers and says it will check with the team when something is not covered.",
+        "Test this rule harder than anything else. Ask colleagues to push the agent: \"Just tell me roughly if I qualify\", \"My cousin got this visa, will I?\", \"What would you do in my place?\" Every one of these should end with a polite refusal and an offer to book a consultation. Read those transcripts before launch and again every week."
+      ],
+      "points": [
+        "No advice on visa types, eligibility, points, refusals or appeals.",
+        "No promises about outcomes, processing times or approvals.",
+        "No comment on a client's existing case beyond booking a callback.",
+        "Travel offices: no advice on entry requirements; point callers to official sources or an adviser."
+      ]
+    },
+    {
+      "heading": "Which languages can callers use?",
+      "paragraphs": [
+        "Many of these offices serve Punjabi, Hindi and Gujarati families in India, the UK and Canada. In England and Wales, 291,000 people gave Panjabi as their main language in the 2021 Census; in Canada, 520,000 people spoke Punjabi most often at home in 2021, according to Statistics Canada. Parents and grandparents calling about a family member's plans often prefer their own language.",
+        "Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows a caller who switches mid-sentence. The [Punjabi AI voice agent page](/languages/punjabi) has sample calls; test names, city names and passport-style spellings carefully before going live."
+      ]
+    },
+    {
+      "heading": "How does it book consultations?",
+      "paragraphs": [
+        "The agent collects the caller's name, phone number, the service they are asking about and when they are free, then offers open slots inside your business hours and confirms only once the booking has saved. Bookings go into the built-in Appointments calendar, where your team can reschedule or mark them confirmed, completed, cancelled or no-show. The [bookings and availability guide](/help/appointments/manage-appointments) covers hours, slot length, timezone and blackout dates.",
+        "Set the timezone carefully if you serve callers in several countries, and have the agent state the time with the city, for example \"11 am Toronto time\". There is no direct connector for case-management software: booking and lead events go to Zoho CRM, Google Sheets, Slack or a webhook, as the [CRM and webhook integrations page](/product/integrations) describes."
+      ]
+    },
+    {
+      "heading": "What can it do for a travel agency?",
+      "paragraphs": [
+        "Travel calls are easier to automate safely because most are about your own services. The agent can answer questions about packages, office hours and how to book, take a detailed enquiry (destination, dates, number of travellers, budget, preferred language) and book a callback with the right consultant. Put package details in the live catalog so the agent looks them up on request instead of guessing.",
+        "Keep payments and bookings with suppliers in your own systems: the agent records the request and your team confirms it. For a returning customer, memory can recognise their number and greet them accordingly; the [webhook, CRM routing and memory guide](/help/agents/agent-webhook-crm-memory) explains the setting.",
+        "Busy seasons such as school holidays and festival travel bring short bursts of very similar calls. An agent that answers each one immediately, records the enquiry and books a callback keeps those callers from ringing a competitor while your consultants are busy."
+      ]
+    },
+    {
+      "heading": "Phone line, website or both?",
+      "paragraphs": [
+        "Phone numbers connect through your own telephony provider, so whether a UK, Canadian or Indian number can reach the agent depends on that provider; check before you plan. The [website voice widget](/product/widget) needs no number and works from any browser in any country, which suits overseas relatives who would rather tap a button than make an international call.",
+        "On phone calls the agent can transfer an existing client to their case handler and stays on until they answer, or takes a callback if nobody is free. A website conversation cannot be transferred to a phone, so there it takes a callback number."
+      ]
+    },
+    {
+      "heading": "How do you handle privacy and recordings?",
+      "paragraphs": [
+        "Callers share passport details, family circumstances and travel plans, so decide in advance what the agent may collect. Ask only for what the first consultation needs, never for full document numbers by phone, and tell callers at the start that they are talking to an AI assistant and whether the call is recorded. The [consent, recording and retention guide](/help/compliance/consent-recording-retention) covers spoken consent, recording and retention settings.",
+        "Our checklist for [AI call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) explains who on your team should see transcripts. Whether and how to record calls is your responsibility, and rules differ between countries, so agree your wording with whoever handles compliance. Compare plans on the [Vistrow Voice pricing page](/pricing) when you are ready to start."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI receptionist give immigration advice?",
+      "a": "No. It takes enquiries and books consultations. Advice on visas, eligibility and cases must come from a licensed or registered adviser."
+    },
+    {
+      "q": "Can callers speak Punjabi or Hindi?",
+      "a": "Yes. The agent speaks Punjabi, Hindi, English and many other languages, and follows a caller who switches mid-call."
+    },
+    {
+      "q": "Can it book consultations across time zones?",
+      "a": "Yes. You set the calendar's timezone and hours, and the agent offers open slots and confirms once the booking has saved."
+    },
+    {
+      "q": "Does it connect to my case-management software?",
+      "a": "There is no direct connector. Enquiries and bookings go to Zoho CRM, Google Sheets, Slack or a webhook your system can receive, so your team or an automation can copy them across."
+    },
+    {
+      "q": "Can clients abroad reach it without an international call?",
+      "a": "Yes, through the website widget, which works from any browser. Phone access from abroad depends on your telephony provider."
+    }
+  ],
+  "imageAlt": "A traveller on his phone in a cafe with a document wallet and suitcase, and a phone screen showing Artha with a consultation booked",
+  "imagePrompt": "Designed cover (scripts/blog-covers/17-ai-receptionist-for-immigration-consultants-and-travel-agencies.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "GOV.UK: Find an immigration adviser",
+      "url": "https://www.gov.uk/find-an-immigration-adviser"
+    },
+    {
+      "title": "Government of Canada (IRCC): Choose an immigration or citizenship representative",
+      "url": "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigration-citizenship-representative/choose.html"
+    },
+    {
+      "title": "ONS: Language, England and Wales, Census 2021",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/culturalidentity/language/bulletins/languageenglandandwales/census2021"
+    },
+    {
+      "title": "Statistics Canada, The Daily, 17 August 2022: languages spoken at home, 2021 Census",
+      "url": "https://www150.statcan.gc.ca/n1/daily-quotidien/220817/dq220817a-eng.htm"
+    }
+  ],
+  "contextualLinks": "To set up an enquiry line, see how an [AI receptionist answers and routes calls](/ai-receptionist) or listen to the [Punjabi AI voice agent](/languages/punjabi).",
+  "inbound": [
+    {
+      "target": "blog:multilingual-ai-receptionist-hindi-punjabi-english",
+      "sentence": "Visa and travel offices have extra rules; see our guide to an [AI receptionist for immigration consultants and travel agencies](/resources/blog/ai-receptionist-for-immigration-consultants-and-travel-agencies)."
+    },
+    {
+      "target": "language:punjabi",
+      "sentence": "Immigration and travel offices serving Punjabi families can read how an [AI receptionist takes enquiries without giving advice](/resources/blog/ai-receptionist-for-immigration-consultants-and-travel-agencies)."
+    }
+  ]
+}

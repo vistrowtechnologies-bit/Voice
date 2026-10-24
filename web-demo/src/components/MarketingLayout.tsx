@@ -4,13 +4,25 @@ import { Link, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
 import { trackMarketingCta } from '../lib/analytics'
-import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL, LANGUAGES } from '../lib/marketingContent'
+import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL, LANGUAGES, EXTRA_LANGUAGE_PAGES } from '../lib/marketingContent'
 import type { NavGroup } from '../lib/marketingContent'
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { Tooltip } from './ui/Tooltip'
 import { SeoRelatedLinks } from './SeoRelatedLinks'
 import { PageGuides } from './PageGuides'
+import { BRAND_PROFILES } from '../lib/seoPages'
+
+// Single-path 24px brand glyphs for the footer profile links (Material
+// Symbols has no brand logos).
+const SOCIAL_ICON_PATHS: Record<(typeof BRAND_PROFILES)[number]['name'], string> = {
+  LinkedIn:
+    'M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z',
+  YouTube:
+    'M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.5A3.02 3.02 0 0 0 .5 6.19C0 8.08 0 12 0 12s0 3.92.5 5.81a3.02 3.02 0 0 0 2.12 2.14c1.88.5 9.38.5 9.38.5s7.5 0 9.38-.5a3.02 3.02 0 0 0 2.12-2.14C24 15.92 24 12 24 12s0-3.92-.5-5.81zM9.55 15.57V8.43L15.82 12l-6.27 3.57z',
+  Instagram:
+    'M12 2.16c3.2 0 3.58.01 4.85.07 3.25.15 4.77 1.69 4.92 4.92.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.15 3.23-1.66 4.77-4.92 4.92-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85s.01-3.58.07-4.85C2.38 3.92 3.9 2.38 7.15 2.23 8.42 2.17 8.8 2.16 12 2.16zM12 0C8.74 0 8.33.01 7.05.07 2.7.27.27 2.69.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.2 4.36 2.62 6.78 6.98 6.98C8.33 23.99 8.74 24 12 24s3.67-.01 4.95-.07c4.35-.2 6.78-2.62 6.98-6.98.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.2-4.35-2.62-6.78-6.98-6.98C15.67.01 15.26 0 12 0zm0 5.84a6.16 6.16 0 1 0 0 12.32 6.16 6.16 0 0 0 0-12.32zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.41-11.85a1.44 1.44 0 1 0 0 2.88 1.44 1.44 0 0 0 0-2.88z',
+}
 
 // The official logo mark - used everywhere the brand appears (marketing
 // site, dashboard, auth pages) for one consistent visual identity. Marketing
@@ -92,11 +104,16 @@ export function NavLink({
 
 // Hover intent: a pointer crossing the bar on its way somewhere else should
 // not flash panels open, and leaving a panel briefly should not snap it shut.
+// Every page under /languages/<slug>: the eleven Indian languages plus the
+// American and British English page, so the menus link to all twelve.
+const MENU_LANGUAGES = [...LANGUAGES, ...EXTRA_LANGUAGE_PAGES]
+
 const HOVER_OPEN_MS = 120
 const HOVER_CLOSE_MS = 180
 
 /** Where the Product panel's featured card sends people: the Tamil page's
- * hero player (a 30-second call that switches from Hindi to Tamil). */
+ * hero player (a 30-second call: the agent opens in English, the caller
+ * answers in Tamil, and the agent follows). */
 const SAMPLE_LANGUAGE = 'tamil'
 
 // One shared look for every nav icon. The unlayered .material-symbols-outlined
@@ -148,7 +165,7 @@ function ProductPanel({ group, onNavigate }: { group: NavGroup; onNavigate: () =
           </span>
           <p className="mt-3 font-display text-lg font-semibold leading-snug">Hear it first</p>
           <p className="mt-2 text-sm leading-relaxed text-white/85">
-            A 30-second sample call that switches from Hindi to Tamil, and the agent follows.
+            A 30-second sample call: the caller answers in Tamil, and the agent follows.
           </p>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -192,7 +209,7 @@ function SolutionsPanel({ group, onNavigate }: { group: NavGroup; onNavigate: ()
           <HeaderIcon name="arrow_forward" size={16} />
         </NavLink>
         <ul className="mt-2 grid grid-cols-2 gap-x-2">
-          {LANGUAGES.map((lang) => (
+          {MENU_LANGUAGES.map((lang) => (
             <li key={lang.slug}>
               <NavLink
                 to={`/languages/${lang.slug}`}
@@ -204,6 +221,18 @@ function SolutionsPanel({ group, onNavigate }: { group: NavGroup; onNavigate: ()
               </NavLink>
             </li>
           ))}
+          {/* Twelve language cells fill six rows; this link spans the
+              last row, as in the mobile menu, so the grid closes. */}
+          <li className="col-span-2">
+            <NavLink
+              to="/languages"
+              onClick={onNavigate}
+              className="mh-item flex flex-col rounded-lg px-2 py-1.5 outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <span className="text-sm font-semibold text-primary">130+ in all</span>
+              <span className="text-xs text-text-muted">Every other language</span>
+            </NavLink>
+          </li>
         </ul>
       </div>
     </div>
@@ -476,7 +505,7 @@ function MobileNav({ onClose }: { onClose: () => void }) {
         </div>
         <p className="mt-6 text-xs font-bold uppercase tracking-widest text-text-muted">Languages</p>
         <ul className="mt-2 grid grid-cols-2 gap-1 min-[400px]:grid-cols-3">
-          {LANGUAGES.map((lang) => (
+          {MENU_LANGUAGES.map((lang) => (
             <li key={lang.slug}>
               <NavLink
                 to={`/languages/${lang.slug}`}
@@ -490,6 +519,22 @@ function MobileNav({ onClose }: { onClose: () => void }) {
               </NavLink>
             </li>
           ))}
+          {/* The twelve above have their own pages; the rest of the 130+ are
+              on /languages (owner, 21 Oct). Twelve cells close at both 2 and
+              3 columns, so this link takes a full row of its own. */}
+          <li className="col-span-full">
+            <NavLink
+              to="/languages"
+              onClick={onClose}
+              className="flex h-full items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 hover:border-primary"
+            >
+              <span className="flex flex-col">
+                <span className="text-sm font-semibold text-primary">130+ in all</span>
+                <span className="text-xs text-text-muted">Every other language</span>
+              </span>
+              <Icon name="arrow_forward" className="text-[18px] text-primary" />
+            </NavLink>
+          </li>
         </ul>
         <div className="mt-8 flex flex-col gap-3">
           <NavLink
@@ -544,7 +589,7 @@ function UtilityStrip() {
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-5 py-2 text-xs md:px-8">
         <nav aria-label="Languages" className="mh-scroll min-w-0 overflow-x-auto">
           <ul className="flex items-center whitespace-nowrap">
-            {LANGUAGES.map((lang, i) => (
+            {MENU_LANGUAGES.map((lang, i) => (
               <li key={lang.slug} className="flex items-center">
                 {i > 0 && <span aria-hidden="true" className="px-1.5 text-border">·</span>}
                 <NavLink
@@ -666,7 +711,9 @@ function Header() {
 function Footer() {
   return (
     <footer className="border-t border-border bg-surface">
-      <div className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+      {/* Extra bottom room on phones so the last footer lines can scroll clear
+          of the floating call widget and its greeting bubble (bottom right). */}
+      <div className="mx-auto max-w-7xl px-5 pt-14 pb-36 sm:pb-14 md:px-8">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-7">
           <div className="col-span-2">
             <NavLink to="/" className="flex items-center gap-2">
@@ -678,6 +725,11 @@ function Footer() {
               <a href={`mailto:${CONTACT_EMAIL}`} aria-label={`Email us at ${CONTACT_EMAIL}`} className="-ml-2 flex h-11 w-11 items-center justify-center hover:text-text"><Icon name="mail" className="text-[20px]" /></a>
               <a href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`} aria-label={`Call us on ${CONTACT_PHONE}`} className="flex h-11 w-11 items-center justify-center hover:text-text"><Icon name="call" className="text-[20px]" /></a>
               <a href={CONTACT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" aria-label={`Message us on WhatsApp at ${CONTACT_PHONE}`} className="flex h-11 w-11 items-center justify-center hover:text-text"><Icon name="chat" className="text-[20px]" /></a>
+              {BRAND_PROFILES.map((p) => (
+                <a key={p.name} href={p.url} target="_blank" rel="me noopener noreferrer" aria-label={`Vistrow Voice on ${p.name}`} className="flex h-11 w-11 items-center justify-center hover:text-text">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px] fill-current"><path d={SOCIAL_ICON_PATHS[p.name]} /></svg>
+                </a>
+              ))}
             </div>
           </div>
           {FOOTER_COLUMNS.map((col) => (

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { LegalLayout, LegalSection } from '../../components/LegalLayout'
 import { BRAND } from '../../lib/brand'
 
-const CONTACT_EMAIL = 'vistrowai@gmail.com'
+const CONTACT_EMAIL = 'support@vistrowvoice.com'
 
 export function Terms() {
   return (
@@ -11,6 +11,7 @@ export function Terms() {
       title="Terms of Service"
       updated="12 October 2026"
       path="/terms"
+      contactEmail={CONTACT_EMAIL}
       description="The terms that govern business use of Vistrow Voice, including acceptable use, billing, data, and compliance responsibilities."
       intro={`These terms govern your use of ${BRAND.name}, the AI voice-agent platform operated by Vistrow Technologies ("we", "us"). By creating an account or using the service, you agree to them.`}
     >
@@ -51,12 +52,19 @@ export function Terms() {
 
       <LegalSection title="5. Third-party integrations">
         <p>
-          Connecting Google Sheets, Slack, Zoho CRM, a webhook, or any other integration is optional and
+          Connecting Google Sheets, Slack, Zoho CRM, Facebook and Instagram Lead Ads, a webhook, or any other integration is optional and
           governed by that provider's own terms in addition to ours. You authorize {BRAND.name} to
           access those services only for the purpose you connected them for (e.g. adding a lead to a
           spreadsheet, sending a notification), as described in our{' '}
           <Link to="/privacy">Privacy Policy</Link>. You can disconnect an integration at any time
           from the dashboard.
+        </p>
+        <p>
+          If you connect Facebook and Instagram Lead Ads, you confirm that you run the Pages and lead
+          forms you connect, that your forms tell people they may be contacted by phone about their
+          enquiry, and that you follow Meta's terms and advertising policies and the telemarketing rules
+          that apply to you (including TRAI rules in India). {BRAND.name} calls only the leads your own
+          forms collect, with the agent you assign.
         </p>
       </LegalSection>
 

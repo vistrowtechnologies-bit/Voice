@@ -1,0 +1,119 @@
+{
+  "n": 15,
+  "publishOn": "2026-11-04",
+  "primaryKeyword": "voice bot for call center",
+  "audience": "India + global",
+  "slug": "voice-bot-for-call-centres",
+  "title": "Voice bot for call centres: where it helps and where it does not",
+  "seoTitle": "Voice Bot for Call Center: Where It Helps, Where It Doesn't",
+  "metaDescription": "Where a voice bot for call centres helps (routine, repeat and after-hours calls), where people should stay, and how to pilot one safely.",
+  "shortAnswer": "A voice bot for a call centre helps most with routine, high-volume calls: status checks, timings, simple bookings, enquiry qualification, overflow and after-hours calls. It helps least with complaints, negotiations, sensitive accounts and anything needing judgement. The best setup lets the bot take the first conversation and hand the rest to people with a transcript.",
+  "excerpt": "A voice bot will not replace a call centre, but it can take the calls your team should not have to answer. Here is where it earns its place, where it does not, and how to test it safely.",
+  "category": "Industries",
+  "related": [
+    "ivr-vs-ai-voice-agent-india",
+    "voice-ai-latency-how-to-measure-it",
+    "ai-call-recordings-and-transcripts"
+  ],
+  "sections": [
+    {
+      "heading": "What is a voice bot in a call centre?",
+      "paragraphs": [
+        "A voice bot is software that answers or places phone calls and talks with the caller in natural speech. Unlike a phone menu, it understands what the caller says, answers from approved information and completes simple tasks such as booking a slot or recording a request. The [guide to what an AI voice bot is](/voice-bot) explains how a single call works from greeting to summary.",
+        "In a call centre, the bot is one more member of the team: the one that never tires of the same question. The [AI call center software page](/ai-call-center) shows how it takes first-line calls and follow-ups and passes the rest to people. Vistrow Voice helps call centres put that first line on both inbound and outbound calls, in the languages their callers use."
+      ]
+    },
+    {
+      "heading": "Which calls should a call centre voice bot take?",
+      "paragraphs": [
+        "Start with calls that are frequent, predictable and low-risk. If your agents could answer a call type from a script without thinking, a voice bot can probably answer it too, and your people get their time back for the calls that need them. Our comparison of [IVR and AI voice agents for Indian businesses](/resources/blog/ivr-vs-ai-voice-agent-india) covers which of these calls a menu still handles well.",
+        "Look at your own data before choosing. Pull a week of call reasons from your ticketing or call-logging system and sort them by volume. The top three or four reasons usually account for a large share of calls, and those are where a voice bot pays back fastest. Anything rare or complicated can wait."
+      ],
+      "points": [
+        "Status checks: order, application, ticket or service request status read from your system.",
+        "Information: timings, locations, documents needed, eligibility rules you have approved.",
+        "Simple bookings, rescheduling and callback requests.",
+        "Enquiry qualification: name, need, budget and preferred time before a person calls back.",
+        "Overflow and after-hours calls that would otherwise ring out or wait in a queue."
+      ]
+    },
+    {
+      "heading": "Where does a voice bot not help?",
+      "paragraphs": [
+        "Some calls need a person, and forcing them through a bot costs you more than it saves. Complaints, cancellations a customer is unhappy about, negotiations, bereavement and anything involving a vulnerable caller belong with your team. So does anything where a wrong answer has real consequences, such as legal, medical or financial advice.",
+        "Banking and lending calls need a firm rule: the bot never asks for or handles PINs, OTPs, card numbers or passwords. The [AI voice agents for banking and finance page](/solutions/finance) describes the secure steps that stay with the bank. Set these limits as fixed instructions, and test that the bot hands over every time, not just most of the time.",
+        "Watch for emotion as well as topic. A routine status call becomes a complaint the moment the caller says the delivery was promised twice already. Tell the bot to recognise frustration, apologise briefly and offer a person rather than repeating its script. Callers forgive a bot that hands over quickly; they do not forgive one that traps them."
+      ]
+    },
+    {
+      "heading": "How does the handoff from bot to agent work?",
+      "paragraphs": [
+        "A good handoff is the difference between a bot that helps and one that annoys. On Vistrow Voice phone calls, set a transfer number and the agent dials your colleague into the call and stays on until they answer; if nobody picks up, it takes a callback request. The [functions and transfer guide](/help/agents/agent-functions-and-transfer) explains the settings.",
+        "Every call is saved with a recording if you choose, a transcript, a summary and the fields the bot collected, so the person who picks up does not start from zero. Our checklist for [AI call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) covers what to keep and who should see it."
+      ]
+    },
+    {
+      "heading": "Can a voice bot handle outbound calls for a call centre?",
+      "paragraphs": [
+        "Yes, for structured calls such as reminders, confirmations, feedback and new-lead callbacks. You import or select the contacts, personalise the greeting and launch a campaign; the [outbound calling campaigns page](/product/outbound) shows the setup. Each completed call lands with its outcome, so your team calls back only the people who need it.",
+        "In India, outbound calling has rules. Commercial calls fall under TRAI's customer preference regulations, which give subscribers control over the commercial calls they agree to receive. On Vistrow Voice every dial is checked against your Do-Not-Call list and calling window first; the [calling window and Do-Not-Call guide](/help/compliance/calling-rules) explains those settings. Confirm your own obligations with whoever handles compliance."
+      ]
+    },
+    {
+      "heading": "What languages and accents should you test?",
+      "paragraphs": [
+        "Call centres in India rarely hear one language. A single queue can get Hindi, English, Hinglish and a regional language within the hour. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows a caller who switches mid-call. The [supported languages page](/languages) has a page for each Indian language.",
+        "Test with real audio, not just a quiet office. Ask colleagues to call from a moving vehicle, a noisy shop and a weak signal, and to read out names, numbers and addresses. Also check response speed: our guide to [measuring voice AI latency](/resources/blog/voice-ai-latency-how-to-measure-it) explains what callers notice and how to measure it."
+      ]
+    },
+    {
+      "heading": "How should a call centre pilot a voice bot?",
+      "paragraphs": [
+        "Pick one call type that consumes agent time but needs little judgement, and leave everything else untouched. Build that single agent with a clear handoff rule and point the transfer number at your existing team. Run it on overflow or after-hours calls first, so your main queue is never at risk. For inbound numbers you can set a daily window, active days and a concurrent-call limit; the [inbound call routing guide](/help/inbound/route-inbound-calls) covers these.",
+        "Compare the pilot with the same period before it: calls resolved without a person, handoffs that arrived with useful context, repeat calls and caller complaints. Read transcripts every day in the first week. Widen the scope only when the numbers and the transcripts both look right, and check the [Vistrow Voice pricing page](/pricing) before you scale.",
+        "Brief your human team before launch. Tell them which calls the bot will take, what a handoff looks like and where to report a bad call. Agents who see the bot as a colleague that clears the routine queue will flag problems early; agents who are surprised by it will not."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Will a voice bot replace my call centre agents?",
+      "a": "Usually not. It takes repetitive, high-volume calls so your people can spend their time on complaints, exceptions and calls that need judgement, which also makes their work more interesting."
+    },
+    {
+      "q": "Can callers ask to speak to a person?",
+      "a": "Yes. On phone calls the bot transfers to the number you set, or takes a callback request if nobody answers."
+    },
+    {
+      "q": "What does my agent see after a handoff?",
+      "a": "The call's transcript, a summary and the details collected so far, so the caller does not have to repeat themselves."
+    },
+    {
+      "q": "Can a voice bot run outbound campaigns in India?",
+      "a": "Yes. Campaigns check every number against your Do-Not-Call list and calling window before dialling."
+    },
+    {
+      "q": "Which calls should stay with people?",
+      "a": "Complaints, negotiations, vulnerable callers and anything needing legal, medical or financial judgement should go to your team."
+    }
+  ],
+  "imageAlt": "Two call centre agents with headsets in a bright office, an Artha badge reading that she takes the routine calls, and a white headline card",
+  "imagePrompt": "Designed cover (scripts/blog-covers/15-voice-bot-for-call-centres.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "TRAI: The Telecom Commercial Communications Customer Preference (Amendment) Regulations, 2018",
+      "url": "https://trai.gov.in/telecom-commercial-communications-customer-preference-amendment-regulations-2018-0"
+    }
+  ],
+  "contextualLinks": "To plan a first line for your team, read about [AI call center software](/ai-call-center) or see [how an AI voice bot handles a call](/voice-bot).",
+  "inbound": [
+    {
+      "target": "blog:ivr-vs-ai-voice-agent-india",
+      "sentence": "Running a large support team? Read where a [voice bot for call centres helps and where it does not](/resources/blog/voice-bot-for-call-centres)."
+    },
+    {
+      "target": "page:/ai-call-center",
+      "sentence": "For a practical view of which calls to automate first, see our guide to a [voice bot for call centres](/resources/blog/voice-bot-for-call-centres)."
+    }
+  ]
+}

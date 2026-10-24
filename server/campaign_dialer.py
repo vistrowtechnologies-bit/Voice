@@ -32,6 +32,7 @@ import urllib.request
 
 import call_intelligence
 import calls_db
+import telephony
 import campaign_window
 import integrations_dispatch
 import plan_policy
@@ -74,11 +75,11 @@ _TICK_SECONDS = 15
 # together for most of their duration); this only staggers the moment each
 # one is FIRST placed.
 _DIAL_STAGGER_SECONDS = 2.0
-# EnableX enforces CPS across the whole SIP trunk, not per campaign (their
-# reply, 2026-09-17: 5-6 running campaigns each dialing on the same tick is
-# 5-6 INVITEs at once). So the stagger is global: every dial from every
-# campaign waits until _DIAL_STAGGER_SECONDS after the previous one.
-_last_dial_at = 0.0
+# EnableX enforces CPS across the whole carrier account, not per campaign
+# (their reply, 2026-09-17: 5-6 running campaigns each dialing on the same
+# tick is 5-6 INVITEs at once). So every dial on a telephony pool waits until
+# _DIAL_STAGGER_SECONDS after the previous one on that pool (see _pace_dial).
+_last_dial_at: dict = {}
 
 # Outbound channels available on the SIP trunk. EnableX sells "dedicated
 # capacity" per channel and REJECTS any call past it (their reply,
@@ -143,19 +144,47 @@ def _trip_breaker(reason: str) -> None:
             logger.exception("could not pause campaign %s", campaign.get("id"))
 
 
-def _pace_dial(min_gap_seconds: float = _DIAL_STAGGER_SECONDS) -> None:
-    """Hold until the trunk may carry another INVITE.
+def _pace_dial(min_gap_seconds: float = _DIAL_STAGGER_SECONDS, pool_id: int | None = None) -> None:
+    """Hold until the carrier account may carry another INVITE.
 
     min_gap_seconds is the campaign's own, slower rate when it set one — it can
-    only ever be larger than the trunk-wide stagger, because that stagger is
-    what keeps us inside the carrier's CPS limit.
+    only ever be larger than the stagger, because that stagger is what keeps
+    us inside the carrier's CPS limit. The carrier counts CPS per ACCOUNT
+    (EnableX, 2026-09-17), i.e. per telephony pool, so the stagger is kept per
+    pool: today every number is on the one platform pool, so this is exactly
+    the old single trunk-wide stagger.
     """
-    global _last_dial_at
+    key = pool_id if pool_id is not None else "legacy"
     gap = max(_DIAL_STAGGER_SECONDS, float(min_gap_seconds or 0))
-    wait = _last_dial_at + gap - time.monotonic()
+    wait = _last_dial_at.get(key, 0.0) + gap - time.monotonic()
     if wait > 0:
         time.sleep(wait)
-    _last_dial_at = time.monotonic()
+    _last_dial_at[key] = time.monotonic()
+
+
+def _line_room(from_number: str) -> tuple[int, int | None, str]:
+    """(free lines, stagger key, label) for the trunk a campaign dials out on.
+
+    Two caps (plan section 2a): the trunk's own lines (what this customer
+    bought) and its pool's lines minus the inbound reserve (what the carrier
+    accepts across every customer on that account). With no telephony
+    pool set up yet, the old trunk-wide _OUTBOUND_CHANNELS ceiling applies.
+
+    The stagger key is the pool id for a customer's own carrier account and
+    None for the shared platform pool AND for the fallback, so a campaign
+    that fell back still paces with the shared pool's dials (same carrier
+    account, same CPS limit)."""
+    try:
+        trunk = telephony.trunk_for_number(from_number)
+        if trunk is not None:
+            room = telephony.trunk_room(trunk["id"])
+            key = None if trunk["pool_id"] == telephony.platform_pool_id() else trunk["pool_id"]
+            return int(room["free"]), key, (
+                f"trunk {trunk['id']}: {room['trunk_free']} free of its lines, pool {room['pool_free']} free")
+    except Exception:
+        logger.warning("line room lookup failed for %s; using the trunk-wide ceiling", from_number, exc_info=True)
+    free = _OUTBOUND_CHANNELS - calls_db.campaign_inflight_all()
+    return free, None, f"trunk has {_OUTBOUND_CHANNELS} outbound channel(s)"
 
 
 def _campaign_gap_seconds(campaign: dict) -> float:
@@ -184,7 +213,7 @@ _wake = threading.Event()
 # Instant-lead campaigns (see calls_db.get_or_create_instant_campaign) go
 # first in a pass, so a fresh lead is not dialled after a long list's batch
 # has used the trunk's channels.
-_INSTANT_CAMPAIGN_NAMES = ("ArthaLeads Instant Follow-up", "Instant Lead Follow-up")
+_INSTANT_CAMPAIGN_NAMES = ("ArthaLeads Instant Follow-up", "Instant Lead Follow-up", "Meta Instant Follow-up")
 
 
 def notify() -> None:
@@ -258,6 +287,18 @@ def _handle_failed_dial(contact_id: int, campaign_id: int, error: str) -> bool:
     return True
 
 
+def _is_nurture_follow_up(contact: dict) -> bool:
+    """A scheduled nurture follow-up (custom_fields.follow_up_kind)."""
+    raw = contact.get("custom_fields")
+    if not isinstance(raw, str) or "nurture" not in raw:
+        return False
+    try:
+        fields = json.loads(raw)
+    except ValueError:
+        return False
+    return isinstance(fields, dict) and fields.get("follow_up_kind") == "nurture"
+
+
 def _dial_one(campaign: dict) -> None:
     account_id = campaign["account_id"]
     cid = campaign["id"]
@@ -311,15 +352,13 @@ def _dial_one(campaign: dict) -> None:
     inflight = calls_db.campaign_inflight(cid)
     slots = max(0, int(campaign.get("concurrency", 1) or 1) - inflight)
 
-    # Trunk-wide channel ceiling, shared by every campaign and tenant. A
-    # campaign set to 3 on a 2-channel trunk dials 2, then one more each time
-    # a live call ends — the carrier would reject the third outright.
-    trunk_free = _OUTBOUND_CHANNELS - calls_db.campaign_inflight_all()
+    # Line ceiling: the campaign's trunk and its carrier pool. A campaign set
+    # to 3 on a 2-line trunk dials 2, then one more each time a live call
+    # ends — the carrier would reject the third outright. One customer's
+    # lines are theirs; another customer's burst cannot use them.
+    trunk_free, pool_id, room_label = _line_room(from_number)
     if trunk_free < slots:
-        logger.info(
-            "campaign %s: %s slot(s) held back, trunk has %s outbound channel(s)",
-            cid, slots - max(0, trunk_free), _OUTBOUND_CHANNELS,
-        )
+        logger.info("campaign %s: %s slot(s) held back, %s", cid, slots - max(0, trunk_free), room_label)
     slots = min(slots, max(0, trunk_free))
 
     # Account-wide plan cap, separate from (and often tighter than) the
@@ -335,7 +374,21 @@ def _dial_one(campaign: dict) -> None:
         contact = calls_db.claim_next_campaign_contact(cid)
         if contact is None:
             break
-        _pace_dial(_campaign_gap_seconds(campaign))
+        # A nurture follow-up to someone who has since called us or booked is
+        # not rung (owner, 22 Oct 2026). Decided from the contact's own fields
+        # first, so only nurture rows touch the database here; if the check
+        # itself fails, the call goes out as it always did.
+        if _is_nurture_follow_up(contact):
+            try:
+                reason = calls_db.follow_up_skip_reason(contact)
+            except Exception:
+                logger.warning("follow-up skip check failed for contact %s; dialling", contact["id"], exc_info=True)
+                reason = None
+            if reason:
+                calls_db.skip_claimed_follow_up(contact["id"], reason)
+                logger.info("campaign %s: follow-up contact %s not dialled (%s)", cid, contact["id"], reason)
+                continue
+        _pace_dial(_campaign_gap_seconds(campaign), pool_id)
         # claim_next_campaign_contact returns the row as it was BEFORE the
         # attempt counter was incremented, so contact["attempts"] is how many
         # times this person has already been rung — which is exactly the

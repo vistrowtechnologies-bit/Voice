@@ -20,6 +20,7 @@ depends on which process happened to resolve it. test_retry_rules.py in each
 suite fails if the two copies drift apart.
 """
 
+import datetime
 import json
 
 # Outcomes a policy can carry a rule for. 'short_call' is not a dial result:
@@ -131,7 +132,15 @@ FOLLOW_UP_DEFAULTS = {
     "visitReminderEnabled": True,
     "visitReminderTime": "11:00",
     "nurtureEnabled": True,
-    "nurtureDays": 3,
+    "nurtureDays": 2,
+    "nurtureTime": "11:00",
+    # A nurture sequence (owner, 22 Oct 2026): calls on these days after the
+    # first interested call, at nurtureTime, moved off non-calling days.
+    # nurtureDays is kept for readers that predate it and equals step 1.
+    "nurtureSteps": [2, 5, 10],
+    # When a step's retries run out with no answer, move on to the next step
+    # rather than ending the sequence.
+    "nurtureAdvanceOnNoAnswer": True,
     # How long a brand-new lead waits before its first automatic call.
     # 0 = as soon as it arrives. A "Call now" request is never delayed.
     "firstCallDelaySeconds": 0,
@@ -139,6 +148,13 @@ FOLLOW_UP_DEFAULTS = {
 FIRST_CALL_DELAY_CHOICES = (0, 30, 60, 120, 300, 600)
 FOLLOW_UP_MAX_ATTEMPTS_CEILING = 10
 FOLLOW_UP_MAX_NURTURE_DAYS = 30
+NURTURE_MAX_STEPS = 5
+NURTURE_MAX_STEP_DAY = 60
+# compliance active_days names, Monday first (datetime.weekday order).
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+# MUST match server/calls_db.py _COMPLIANCE_DEFAULTS["active_days"]: an
+# account that never saved its calling days dials Monday to Saturday.
+DEFAULT_CALLING_DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
 
 # Which follow-up setting supplies the gap for each dial outcome. 'failed'
 # (dial rejected, or a stale call the reaper gave up on) has no setting of
@@ -162,6 +178,19 @@ def _hhmm(value, fallback: str) -> str:
     return f"{hour:02d}:{minute:02d}"
 
 
+def _nurture_steps(value) -> list[int] | None:
+    """A valid nurture sequence (days after the first interested call,
+    strictly increasing, 1..NURTURE_MAX_STEP_DAY, at most NURTURE_MAX_STEPS),
+    or None for anything else."""
+    if not isinstance(value, list) or not 1 <= len(value) <= NURTURE_MAX_STEPS:
+        return None
+    if not all(isinstance(d, int) and not isinstance(d, bool) for d in value):
+        return None
+    if value[0] < 1 or value[-1] > NURTURE_MAX_STEP_DAY or any(b <= a for a, b in zip(value, value[1:])):
+        return None
+    return list(value)
+
+
 def follow_up_policy(raw) -> dict:
     """agents.follow_up_policy as a complete, validated dict.
 
@@ -173,11 +202,13 @@ def follow_up_policy(raw) -> dict:
     out["maxAttempts"] = _positive_int(stored.get("maxAttempts"), out["maxAttempts"], FOLLOW_UP_MAX_ATTEMPTS_CEILING)
     for key in ("busyMinutes", "switchedOffMinutes", "noAnswerMinutes", "voicemailMinutes"):
         out[key] = _positive_int(stored.get(key), out[key], MAX_GAP_MINUTES)
-    out["nurtureDays"] = _positive_int(stored.get("nurtureDays"), out["nurtureDays"], FOLLOW_UP_MAX_NURTURE_DAYS)
-    for key in ("callbackEnabled", "visitReminderEnabled", "nurtureEnabled"):
+    for key in ("callbackEnabled", "visitReminderEnabled", "nurtureEnabled", "nurtureAdvanceOnNoAnswer"):
         if isinstance(stored.get(key), bool):
             out[key] = stored[key]
+    out["nurtureSteps"] = _nurture_steps(stored.get("nurtureSteps")) or list(FOLLOW_UP_DEFAULTS["nurtureSteps"])
+    out["nurtureDays"] = out["nurtureSteps"][0]
     out["visitReminderTime"] = _hhmm(stored.get("visitReminderTime"), out["visitReminderTime"])
+    out["nurtureTime"] = _hhmm(stored.get("nurtureTime"), out["nurtureTime"])
     delay = stored.get("firstCallDelaySeconds")
     if isinstance(delay, int) and not isinstance(delay, bool) and delay in FIRST_CALL_DELAY_CHOICES:
         out["firstCallDelaySeconds"] = delay
@@ -202,3 +233,57 @@ def effective_policy(campaign_name, campaign_policy, agent_follow_up_raw):
     if campaign_name in AGENT_POLICY_CAMPAIGNS:
         return follow_up_retry_policy(agent_follow_up_raw)
     return campaign_policy
+
+
+def _next_calling_day(day: datetime.date, active_days) -> datetime.date:
+    """day, or the first day after it that is a calling day. active_days is
+    compliance's list ('Mon'..'Sun'); missing means the default calling days
+    (no Sunday), and a list with no valid day leaves day as is."""
+    if not active_days:
+        active_days = DEFAULT_CALLING_DAYS
+    allowed = {d for d in active_days if d in _WEEKDAYS}
+    if not allowed:
+        return day
+    for _ in range(7):
+        if _WEEKDAYS[day.weekday()] in allowed:
+            return day
+        day += datetime.timedelta(days=1)
+    return day
+
+
+def nurture_step_at(policy: dict, origin: datetime.date, step: int, now: datetime.datetime, active_days=None):
+    """When nurture step `step` (1-based) falls: origin + its day, at
+    nurtureTime in now's timezone, moved to the next calling day. A step
+    whose moment has already passed (a long retry run, a late sequence) goes
+    to the next day instead. None when the sequence has no such step."""
+    steps = policy.get("nurtureSteps") or []
+    if not 1 <= step <= len(steps):
+        return None
+    hour, minute = (int(x) for x in _hhmm(policy.get("nurtureTime"), "11:00").split(":"))
+    day = origin + datetime.timedelta(days=steps[step - 1])
+    if datetime.datetime.combine(day, datetime.time(hour, minute), tzinfo=now.tzinfo) <= now:
+        day = now.date() + datetime.timedelta(days=1)
+    day = _next_calling_day(day, active_days)
+    return datetime.datetime.combine(day, datetime.time(hour, minute), tzinfo=now.tzinfo)
+
+
+def next_nurture_step(fields: dict, policy: dict, now: datetime.datetime, active_days=None) -> dict | None:
+    """The step after the one a nurture follow-up's custom_fields record, as
+    {"at", "fields"} (fields to merge: follow_up_step, nurture_origin), or
+    None when the sequence is off or finished. A row from before sequences
+    (no step or origin) counts as step 1 that began step-1-days ago."""
+    if not policy.get("nurtureEnabled"):
+        return None
+    steps = policy.get("nurtureSteps") or []
+    try:
+        current = max(1, int(fields.get("follow_up_step") or 1))
+    except (TypeError, ValueError):
+        current = 1
+    try:
+        origin = datetime.date.fromisoformat(str(fields.get("nurture_origin") or ""))
+    except ValueError:
+        origin = now.date() - datetime.timedelta(days=steps[min(current, len(steps)) - 1] if steps else 0)
+    at = nurture_step_at(policy, origin, current + 1, now, active_days)
+    if at is None:
+        return None
+    return {"at": at, "fields": {"follow_up_step": current + 1, "nurture_origin": origin.isoformat()}}

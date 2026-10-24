@@ -1,3 +1,5 @@
+import { demoVisitorFields } from './demoVisitor'
+
 export interface TokenResponse {
   token: string
   url: string
@@ -41,10 +43,18 @@ export async function fetchLiveKitToken(
         testScenarioId: testContext?.scenarioId,
         testScenarioKey: testContext?.scenarioKey,
         pipelineProfile,
+        // The homepage demo's name/phone/consent form; the server requires it
+        // only on that path (no agent, no slug).
+        ...(agentId === undefined && !demoSlug ? demoVisitorFields() : {}),
       }),
     })
     if (!res.ok) {
-      throw new Error(`token request failed with status ${res.status}`)
+      // 400/429 from the demo gate carry a sentence meant for the visitor.
+      const detail = await res
+        .json()
+        .then((j) => (typeof j?.detail === 'string' ? j.detail : ''))
+        .catch(() => '')
+      throw new TokenError(detail || `token request failed with status ${res.status}`, res.status)
     }
     const data = await res.json()
     if (typeof data?.token !== 'string' || !data.token || typeof data?.url !== 'string' || !data.url) {
@@ -58,6 +68,14 @@ export async function fetchLiveKitToken(
     throw error
   } finally {
     window.clearTimeout(timeout)
+  }
+}
+
+export class TokenError extends Error {
+  readonly status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
   }
 }
 

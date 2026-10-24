@@ -28,10 +28,14 @@ import call_intelligence
 import calls_db
 import plan_policy
 import campaign_dialer
+import meta_leads
+import telephony
+import whatsapp_leads
 import copilot
 import copilot_tools
 import db_backup
 import email_sender
+import visitor_info
 import disposable_email
 import enablex_inbound
 import google_sheets
@@ -92,6 +96,15 @@ try:
     calls_db.encrypt_legacy_integration_configs()
 except Exception:
     logger.exception("could not encrypt existing integration configs")
+# Telephony lines (server/telephony/): the shared platform pool and trunk the
+# dialer reads its line ceiling from. Idempotent; with no customer lines sold
+# it reproduces OUTBOUND_CHANNEL_LIMIT exactly. Must run before the dialer
+# starts; if it fails the dialer falls back to the old trunk-wide ceiling.
+try:
+    telephony.init_tables()
+    telephony.ensure_platform_pool()
+except Exception:
+    logger.exception("could not set up telephony pools; dialer uses OUTBOUND_CHANNEL_LIMIT")
 # Background worker that places due campaign calls (compliance-gated). Daemon
 # thread, idempotent start — no-op until a campaign is set 'running'.
 campaign_dialer.start_dialer()
@@ -100,6 +113,14 @@ db_backup.start_backup_scheduler()
 # Applies each tenant's retention window daily. Before this, retention ran
 # only while somebody had the Compliance page open (see retention_worker.py).
 retention_worker.start_retention_worker()
+# Facebook / Instagram Lead Ads (server/meta_leads.py): tables, the lead
+# worker and the hourly reconciliation. The router is mounted at the end of
+# this file, after the session helpers it needs are defined.
+meta_leads.init_tables()
+meta_leads.start_worker()
+# Click-to-WhatsApp leads (server/whatsapp_leads.py) arrive on the same
+# /webhooks/meta callback; only their tables need creating here.
+whatsapp_leads.init_tables()
 # Sends the emails behind Settings → Preferences → Notifications, which were
 # saved and never sent before 2026-09-24 (see notification_worker.py).
 notification_worker.start_notification_worker()
@@ -166,6 +187,9 @@ _PUBLIC_PREFIXES = (
     # itself checks the ?token= query param via
     # calls_db.account_id_for_lead_webhook_token instead.
     "/leads/inbound/",
+    # Meta deauthorize / data-deletion callbacks and the deletion status page
+    # (meta_leads.router); Meta calls them with no session.
+    "/webhooks/meta/",
 )  # signup/login/logout/me + invite-preview/accept handle their own logic; avatar images run on third-party sites, no session
 
 
@@ -310,6 +334,8 @@ async def require_session(request: Request, call_next):
         request.state.impersonator_id = session.get("imp")
         # When two-step login was passed (the admin's, in a support session).
         request.state.mfa = session.get("imfa") if session.get("imp") else session.get("mfa")
+        # Signed in through the admin sign-in (admin.vistrowvoice.com).
+        request.state.admin_session = session.get("iadm") if session.get("imp") else session.get("adm")
         return await call_next(request)
     # No session cookie — accept a programmatic API key instead. The key maps
     # to a tenant account; we give the request that account's owner user so
@@ -406,20 +432,31 @@ def require_platform_owner(request: Request) -> dict:
     user = calls_db.get_user_by_id(acting_uid)
     # The flag is on the workspace, so only its owner (not a teammate) is
     # the platform admin (security audit 2026-10-12).
-    if user is None or not user["is_platform_owner"] or user["role"] != "owner":
+    if not calls_db.can_open_admin(user):
         raise HTTPException(404, "Not found")
     if not user.get("mfa_enabled_at"):
         raise HTTPException(403, ADMIN_MFA_SETUP_REQUIRED)
     if not getattr(request.state, "mfa", None):
         raise HTTPException(403, ADMIN_MFA_SIGNIN_REQUIRED)
+    if _ADMIN_SEPARATE_LOGIN and not getattr(request.state, "admin_session", None):
+        raise HTTPException(403, ADMIN_SEPARATE_LOGIN_REQUIRED)
     return {"user_id": acting_uid, "email": user["email"]}
 
 
+# Owner, 23 Oct 2026: the admin panel lives on admin.vistrowvoice.com with its
+# own sign-in (/auth/admin/login: password + code, owner only, 8 h). Session
+# cookies are host-only, so a dashboard session on app.vistrowvoice.com never
+# reaches it. Off until the admin host and its login page are live, so the
+# owner is never locked out mid-rollout.
+_ADMIN_SEPARATE_LOGIN = os.environ.get("ADMIN_SEPARATE_LOGIN", "").strip() == "1"
+ADMIN_HOST_URL = "https://admin.vistrowvoice.com"
+ADMIN_SEPARATE_LOGIN_REQUIRED = f"The admin panel has its own sign-in. Open {ADMIN_HOST_URL} and sign in there."
 ADMIN_MFA_SETUP_REQUIRED = "Two-step login is required for the admin panel. Turn it on in Settings, then sign in again."
 ADMIN_MFA_SIGNIN_REQUIRED = "Sign out and sign back in with your two-step code to open the admin panel."
 
 
-_STATIC_DASHBOARD_ORIGINS = {"https://app.vistrowvoice.com", "https://www.vistrowvoice.com", "https://vistrowvoice.com"}
+_STATIC_DASHBOARD_ORIGINS = {"https://app.vistrowvoice.com", "https://admin.vistrowvoice.com",
+                             "https://www.vistrowvoice.com", "https://vistrowvoice.com"}
 
 
 def _dashboard_origins() -> set[str]:
@@ -483,7 +520,8 @@ def _live_session(request: Request) -> dict | None:
 # A blocked visitor can still reach sign-in and the admin panel, so the
 # platform owner can never lock themselves out (adding a block that covers
 # the admin's own IP is refused too); everything else answers 403.
-_IP_BLOCK_EXEMPT_PATHS = {"/healthz", "/auth/config", "/auth/login", "/auth/login/mfa", "/auth/me", "/auth/logout"}
+_IP_BLOCK_EXEMPT_PATHS = {"/healthz", "/auth/config", "/auth/login", "/auth/login/mfa", "/auth/admin/login", "/auth/me",
+                          "/auth/logout"}
 _IP_BLOCK_EXEMPT_PREFIXES = ("/admin/", "/auth/oauth/")
 IP_BLOCKED_MESSAGE = "Access from your network has been blocked."
 
@@ -552,6 +590,36 @@ def _client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return (request.client.host if request.client else "") or "unknown"
+
+
+def _visitor_context(request: Request) -> dict:
+    """Where and when a website lead arrived: exact time in IST, IP, and the
+    country/region/city Vercel's edge adds to requests it proxies to /api
+    (x-vercel-ip-*; absent on direct calls such as the embeddable widget on a
+    customer's site). Informational only — never used for access decisions."""
+    headers = request.headers
+    return {
+        "time_ist": visitor_info.ist(),
+        "ip": _client_ip(request),
+        "country": headers.get("x-vercel-ip-country", "")[:8],
+        "region": headers.get("x-vercel-ip-country-region", "")[:16],
+        "city": urllib.parse.unquote(headers.get("x-vercel-ip-city", ""))[:80],
+        "browser": visitor_info.browser_family(headers.get("user-agent", "")),
+    }
+
+
+def _attribution_fields(page: str, attribution: dict | None) -> dict:
+    """The page a lead was on plus the browser's first-touch attribution
+    (web-demo/src/lib/attribution.ts: utm_*, click ids, referrer, landing
+    page), trimmed — it is visitor-supplied."""
+    allowed = ("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid",
+               "msclkid", "referrer", "landing_page", "first_seen_at")
+    out = {"page": str(page or "")[:300]}
+    for key in allowed:
+        value = (attribution or {}).get(key) if isinstance(attribution, dict) else None
+        if value:
+            out[key] = str(value)[:300]
+    return out
 
 # Name of the dedicated LiveKit Cloud Agent that serves ONLY the marketing
 # site's own demo (the "try it live" widget and DemoOrbCard) — deployed
@@ -660,6 +728,60 @@ class TokenRequest(BaseModel):
     # than blocking the call.
     consentVersion: str | None = None
     consentAcceptedAt: str | None = None
+    # The homepage live demo's form (owner 24 Oct): who is calling and their
+    # agreement to be contacted. Required on the platform-demo path only; see
+    # _demo_visitor_gate.
+    name: str = ""
+    phone: str = ""
+    contactConsent: bool = False
+    # Where the visitor started the demo, and their first-touch attribution.
+    page: str = ""
+    attribution: dict = {}
+
+
+# A real phone number may start this many demo calls a day, and one IP this
+# many (an office shares one IP). Kept in Postgres, so a restart or a second
+# instance does not reset them the way the per-minute limit does.
+_DEMO_CALLS_PER_PHONE_PER_DAY = 10
+_DEMO_CALLS_PER_IP_PER_DAY = 25
+
+
+def _demo_visitor_gate(name: str, phone: str, contact_consent: bool, client_ip: str) -> tuple[str, str]:
+    """The homepage demo asks for a name, a phone number and consent before
+    the call, so a call costs a real-looking number and every visitor can be
+    followed up. Not verified (no OTP, owner's choice): _looks_like_real_phone
+    only drops typed junk. Returns the cleaned (name, phone)."""
+    name = " ".join(str(name or "").split())[:80]
+    phone = re.sub(r"[\s\-()]", "", str(phone or ""))
+    if len(name) < 2:
+        raise HTTPException(400, "Please enter your name to start the call.")
+    # An Indian number must be a real mobile: 10 digits starting 6-9 (owner
+    # 24 Oct: 1234567899 got through the generic junk filter).
+    if not _looks_like_real_phone(phone) or (phone.startswith("+91") and not re.fullmatch(r"\+91[6-9]\d{9}", phone)):
+        raise HTTPException(400, "Please enter a valid mobile number to start the call.")
+    if not contact_consent:
+        raise HTTPException(400, "Please tick the box so we can follow up with you.")
+    if _limited("demo-phone-day", phone, _DEMO_CALLS_PER_PHONE_PER_DAY, 86400) or _limited(
+        "demo-ip-day", client_ip, _DEMO_CALLS_PER_IP_PER_DAY, 86400
+    ):
+        logger.warning("demo call refused: daily limit (ip=%s)", client_ip)
+        raise HTTPException(429, "You've used today's free demo calls. Book a demo and we'll call you.")
+    return name, phone
+
+
+async def _save_demo_visitor(name: str, phone: str, fields: dict | None = None) -> None:
+    # Best effort: the call row also carries the phone, so a failed save here
+    # must not stop a visitor who already filled the form from talking.
+    try:
+        await asyncio.to_thread(calls_db.save_demo_visitor, name, phone, fields=fields)
+    except Exception:
+        logger.exception("could not save demo visitor as a contact")
+
+
+def _demo_lead_fields(request: Request, page: str, attribution: dict | None, channel: str) -> dict:
+    context = _visitor_context(request)
+    return {"lead_channel": channel, "last_visit_at": context.pop("time_ist"),
+            **{f"visitor_{k}": v for k, v in context.items()}, **_attribution_fields(page, attribution)}
 
 
 _BUILTIN_TEST_SCENARIOS = {
@@ -760,6 +882,14 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         raise HTTPException(400, "Invalid call room.")
 
     meta: dict = {}
+    visitor: tuple[str, str] | None = None
+    if agent_id is None:
+        # The homepage platform demo: the only path an anonymous visitor can
+        # start without a published slug or a signed-in session.
+        visitor = _demo_visitor_gate(req.name, req.phone, req.contactConsent, client_ip)
+        meta["visitor_name"], meta["visitor_phone"] = visitor
+        if req.page:
+            meta["visitor_path"] = str(req.page)[:300]
     if agent_id is not None:
         meta["agent_id"] = agent_id
     if req.consentVersion:
@@ -824,6 +954,8 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         ip_blocklist.record_visitor, req.room, client_ip, request.headers.get("user-agent", ""),
         "website demo" if agent_id is None else "dashboard test",
     )
+    if visitor:
+        await _save_demo_visitor(*visitor, _demo_lead_fields(request, req.page, req.attribution, "Website live demo"))
     return {"token": token, "url": livekit_url}
 
 
@@ -840,6 +972,15 @@ async def orchestrator_platform_demo_token(request: Request) -> dict:
     client_ip = _client_ip(request)
     if _token_rate_limited(client_ip):
         raise HTTPException(429, "Too many calls right now — please try again shortly.")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body if isinstance(body, dict) else {}
+    visitor = _demo_visitor_gate(str(body.get("name") or ""), str(body.get("phone") or ""),
+                                 body.get("contactConsent") is True, client_ip)
+    await _save_demo_visitor(*visitor, _demo_lead_fields(request, str(body.get("page") or ""),
+                                                         body.get("attribution"), "Website live demo (fallback)"))
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
     if not orchestrator_url:
         return {"ok": False, "error": "Orchestrator not configured."}
@@ -896,10 +1037,13 @@ def _set_session_cookie(
     provider: str = "",
     mfa_at: int | None = None,
     new_sign_in: bool = False,
+    admin: bool = False,
 ) -> str:
     """mfa_at: when two-step login was passed for this session (carried over
     when a session is re-issued). new_sign_in: a real sign-in, so a new
-    device gets a security email."""
+    device gets a security email. admin: a session from the admin sign-in,
+    marked "adm" and limited to ADMIN_SESSION_TTL_SECONDS."""
+    ttl = auth.ADMIN_SESSION_TTL_SECONDS if admin else auth.SESSION_TTL_SECONDS
     profile = calls_db.get_user_by_id(user_id)
     # Every sign-in path (password, two-step, Google, GitHub, reset, invite)
     # and every session re-issue goes through here.
@@ -920,7 +1064,7 @@ def _set_session_cookie(
         device_id,
         request.headers.get("user-agent", "") if request is not None else "",
         provider or str((profile or {}).get("auth_provider") or ""),
-        auth.SESSION_TTL_SECONDS,
+        ttl,
     )
     response.set_cookie(
         auth.COOKIE_NAME,
@@ -929,9 +1073,10 @@ def _set_session_cookie(
             account_id,
             session_version=int((profile or {}).get("session_version") or 1),
             session_id=session_id,
-            claims={"mfa": mfa_at},
+            ttl_seconds=ttl,
+            claims={"mfa": mfa_at, "adm": 1 if admin else None},
         ),
-        max_age=auth.SESSION_TTL_SECONDS,
+        max_age=ttl,
         httponly=True,
         secure=_COOKIE_SECURE,
         samesite="lax",
@@ -967,6 +1112,9 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         "accountCountry": calls_db.get_account_country(user["account_id"]),
         "plan": user["account_plan"],
         "isPlatformOwner": bool(user["is_platform_owner"]),
+        # Admin-panel access for this login (calls_db.can_open_admin); the
+        # workspace's owner-only features stay on isPlatformOwner.
+        "isPlatformAdmin": calls_db.can_open_admin(user),
         "onboarded": user["onboarded_at"] is not None,
         "consent": calls_db.get_consent(user["account_id"]),
         "tourCompleted": user["tour_completed_at"] is not None,
@@ -984,6 +1132,7 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         # sidebar admin link stays available so the owner can exit.
         payload["impersonating"] = True
         payload["isPlatformOwner"] = True
+        payload["isPlatformAdmin"] = True
     return payload
 
 
@@ -1517,7 +1666,7 @@ def _require_integration_connectable(account_id: int, key: str) -> None:
         raise HTTPException(400, f"{label} is not available yet. New connections are turned off for now.")
 
 
-@app.get("/integrations/facebook/start")
+@app.get("/integrations/facebook/legacy-start", include_in_schema=False)
 def integration_facebook_start(user: dict = Depends(require_role("admin"))) -> RedirectResponse:
     _require_integration_connectable(user["account_id"], "facebook")
     """Same shape as Slack's start route: redirect to the provider's own
@@ -1549,7 +1698,7 @@ def integration_facebook_start(user: dict = Depends(require_role("admin"))) -> R
     return redirect
 
 
-@app.get("/integrations/facebook/callback")
+@app.get("/integrations/facebook/legacy-callback", include_in_schema=False)
 def integration_facebook_callback(
     request: Request,
     code: str | None = None,
@@ -1868,6 +2017,36 @@ def auth_login(req: LoginRequest, response: Response, request: Request) -> dict:
     return {"ok": True, "user": _me_payload(user["id"])}
 
 
+@app.post("/auth/admin/login")
+def auth_admin_login(req: LoginRequest, response: Response, request: Request) -> dict:
+    """admin.vistrowvoice.com's own sign-in: password, then ALWAYS the
+    authenticator code (/auth/login/mfa), platform owner only, no Google or
+    GitHub. Its session is marked "adm" (what /admin/* requires once
+    ADMIN_SEPARATE_LOGIN is on) and lasts 8 hours. Anyone else gets the same
+    answer as a wrong password, so the panel's existence is not disclosed."""
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many attempts — please wait a minute and try again.")
+    email = req.email.strip().lower()
+    if _login_locked(email):
+        raise HTTPException(429, "Too many failed sign-ins for this account. Wait 15 minutes or reset your password.")
+    user = calls_db.get_user_by_email(email)
+    if user is None:
+        auth.verify_password(req.password, _DUMMY_PASSWORD_HASH)  # same time as a real check
+        _note_login_failure(email)
+        raise HTTPException(401, "Incorrect email or password")
+    profile = calls_db.get_user_by_id(user["id"]) or {}
+    if (not auth.verify_password(req.password, user["password_hash"])
+            or not calls_db.can_open_admin(profile)):
+        _note_login_failure(email)
+        calls_db.record_security_event(user["id"], "admin_login_failed", "password", request.headers.get("user-agent", ""))
+        raise HTTPException(401, "Incorrect email or password")
+    if not user.get("mfa_enabled_at"):
+        raise HTTPException(403, ADMIN_MFA_SETUP_REQUIRED)
+    _clear_login_failures(email)
+    _set_mfa_pending(response, user["id"], user["account_id"], "admin")
+    return {"ok": True, "mfaRequired": True}
+
+
 class MfaLoginRequest(BaseModel):
     code: str
 
@@ -1890,10 +2069,14 @@ def auth_login_mfa(req: MfaLoginRequest, response: Response, request: Request) -
         raise HTTPException(401, "That code didn't work. Check your authenticator app and try again.")
     _clear_login_failures(lock_key)
     response.delete_cookie(_MFA_PENDING_COOKIE, path="/")
+    admin = pending["prov"] == "admin"
     _set_session_cookie(response, pending["uid"], pending["aid"], request, pending["prov"],
-                        mfa_at=int(time.time()), new_sign_in=True)
+                        mfa_at=int(time.time()), new_sign_in=True, admin=admin)
     calls_db.record_login(pending["uid"])
-    return {"ok": True, "user": _me_payload(pending["uid"])}
+    # mfaVerified is otherwise only added by /auth/me: without it the app's
+    # admin gate showed "Sign in again with your code" right after a correct
+    # code, until a reload (owner, 23 Oct 2026).
+    return {"ok": True, "user": {**_me_payload(pending["uid"]), "mfaVerified": True, "adminSession": admin}}
 
 
 # Per-account sign-in failures (on top of the per-IP limit): 10 in 15 min
@@ -2029,6 +2212,11 @@ class ContactRequest(BaseModel):
     call_volume: str = ""
     timeline: str = ""
     use_case: str = ""
+    # Which page/button sent the visitor here (e.g. "pricing_plan_growth")
+    # and the browser's first-touch attribution (utm_*, referrer, landing).
+    page: str = ""
+    cta: str = ""
+    attribution: dict = {}
     # Honeypot: a field real visitors never see or fill (hidden off-screen in
     # the form, not just display:none — some bots skip display:none fields).
     # Any value here means a bot filled every input blindly. Silently accept
@@ -2036,52 +2224,107 @@ class ContactRequest(BaseModel):
     hp: str = ""
 
 
+def _lead_phone(phone: str) -> str:
+    """E.164 for a form's phone, or "" if it is not a real-looking number. A
+    bare 10-digit number is Indian; an Indian number must be a mobile (6-9)."""
+    phone = re.sub(r"[\s\-().]", "", str(phone or ""))
+    if re.fullmatch(r"0?[6-9]\d{9}", phone):
+        phone = "+91" + phone[-10:]
+    if not _looks_like_real_phone(phone) or (phone.startswith("+91") and not re.fullmatch(r"\+91[6-9]\d{9}", phone)):
+        return ""
+    return phone
+
+
+def _one_line(value: str, limit: int) -> str:
+    # Form text goes into an email subject and table; no header injection.
+    return " ".join(str(value or "").split())[:limit]
+
+
 @app.post("/public/contact")
 def public_contact(req: ContactRequest, request: Request) -> dict:
     """The marketing site's "Book a Demo" form (web-demo/src/pages/marketing/
-    Contact.tsx) — unauthenticated, no per-tenant account involved, just a
-    prospective customer reaching the Vistrow Voice team directly. Notifies
-    the team by email rather than writing to any per-tenant table (this isn't
-    a lead for an account's own CRM, it's a lead for Vistrow itself)."""
+    Contact.tsx) — a prospect reaching Vistrow itself. The lead is saved as a
+    contact in Vistrow's own workspace (source contact_form) BEFORE the sales
+    email, so an email outage no longer loses it, and the email says exactly
+    when and from where it arrived."""
     if req.hp.strip():
         return {"ok": True}
-    # The honeypot stops dumb bots only; each submission emails the sales inbox.
-    if _auth_rate_limited(_client_ip(request)):
-        raise HTTPException(429, "Too many requests. Please wait a minute and try again.")
-    name = req.name.strip()
-    email = req.email.strip().lower()
-    if not name or "@" not in email or "." not in email.split("@")[-1]:
-        raise HTTPException(400, "Enter a valid name and email address")
-    notify_to = os.environ.get("SALES_NOTIFY_EMAIL") or "vistrowai@gmail.com"
-    # Call volume and timeline are the two fields that actually let sales
-    # prioritize a queue of inbound leads (a 10k-calls/month "start
-    # immediately" lead and a 50-calls/month "just researching" one need very
-    # different follow-up speed) - phone number lets sales call back directly
-    # for a calling product, rather than starting the relationship over email.
-    details = "".join(
+    client_ip = _client_ip(request)
+    # Its own buckets: contact spam must not lock an IP out of signing in.
+    if _limited("contact-ip", client_ip, 6, 3600):
+        raise HTTPException(429, "Too many requests. Please wait a few minutes or WhatsApp us.")
+    name = _one_line(req.name, 80)
+    email = _one_line(req.email, 200).lower()
+    phone = _lead_phone(req.phone)
+    if len(name) < 2:
+        raise HTTPException(400, "Please enter your name.")
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", email):
+        raise HTTPException(400, "Please enter a valid email address.")
+    if not phone:
+        raise HTTPException(400, "Please enter a valid mobile number so we can call you back.")
+    if _limited("contact-email", email, 3, 86400):
+        raise HTTPException(429, "We already have your request and will be in touch soon.")
+    context = _visitor_context(request)
+    source = _attribution_fields(req.page, req.attribution)
+    answers = {
+        "company": _one_line(req.company, 200),
+        "team_size": _one_line(req.team_size, 40),
+        "call_volume": _one_line(req.call_volume, 40),
+        "timeline": _one_line(req.timeline, 40),
+        "use_case": str(req.use_case or "").strip()[:2000],
+    }
+    saved = None
+    try:
+        saved = calls_db.save_demo_visitor(
+            name, phone, email, answers["company"], source="contact_form", tag="contact-form",
+            fields={"lead_channel": "Contact form", "submitted_at": context["time_ist"], "cta": _one_line(req.cta, 80),
+                    **{k: v for k, v in answers.items() if k != "company"},
+                    **{f"visitor_{k}": v for k, v in context.items() if k != "time_ist"}, **source},
+        )
+    except Exception:
+        logger.exception("contact form: could not save lead")
+    where =", ".join(p for p in (context["city"], context["region"], context["country"]) if p) or "Unknown"
+    utm = " / ".join(source[k] for k in ("utm_source", "utm_medium", "utm_campaign") if source.get(k))
+    # Call volume and timeline let sales prioritise; phone lets them call back.
+    fields = [
+        ("Name", name),
+        ("Phone", phone),
+        ("Email", email),
+        ("Company", answers["company"] or "-"),
+        ("Team size", answers["team_size"] or "-"),
+        ("Monthly call volume", answers["call_volume"] or "-"),
+        ("Timeline", answers["timeline"] or "-"),
+        ("Use case", answers["use_case"] or "-"),
+        ("Received", context["time_ist"]),
+        ("Source", "Contact form" + (f" (button: {_one_line(req.cta, 80)})" if req.cta else "")),
+        ("Page", source["page"] or "/contact"),
+        ("First visit", " · ".join(p for p in (source.get("landing_page", ""), source.get("referrer", "")) if p) or "-"),
+        ("Campaign", utm or ("Google Ads click" if source.get("gclid") else "Meta ad click" if source.get("fbclid") else "-")),
+        ("Location", where),
+        ("IP", context["ip"]),
+        ("Browser", context["browser"] or "-"),
+        ("Saved in dashboard", f"Contact #{saved}" if saved else "NOT SAVED - add it by hand"),
+    ]
+    # A plain one-to-one notification (no branded template, logo or footer
+    # links, with a text part and reply-to the lead) so Gmail files it in
+    # Primary instead of Promotions.
+    email_html = "".join(
         f"<p style='margin:4px 0;'><strong>{label}:</strong> {html.escape(str(value))}</p>"
-        for label, value in [
-            ("Name", name),
-            ("Email", email),
-            ("Phone", req.phone.strip() or "-"),
-            ("Company", req.company.strip() or "-"),
-            ("Team size", req.team_size.strip() or "-"),
-            ("Monthly call volume", req.call_volume.strip() or "-"),
-            ("Timeline", req.timeline.strip() or "-"),
-            ("Use case", req.use_case.strip() or "-"),
-        ]
+        for label, value in fields
     )
-    email_html = email_sender.render_email(
-        preheader=f"New demo request from {name}",
-        heading="New demo request",
-        body_html=details,
+    email_text = "\n".join(f"{label}: {value}" for label, value in fields)
+    # Every sales inbox gets it; any one arriving counts as sent.
+    sent = sum(
+        bool(email_sender.send_email(to, f"Demo request from {name}", email_html, email_sender.FROM_WEBSITE,
+                                     reply_to=email, text=email_text))
+        for to in email_sender.sales_inboxes()
     )
-    sent = email_sender.send_email(notify_to, f"New demo request: {name}", email_html, email_sender.FROM_WEBSITE)
     if not sent:
-        # Same "never crash on email failure" contract as password reset —
-        # but this lead has nowhere else to land, so log it in full rather
-        # than just the fact that sending failed.
-        logger.info("demo request (email not configured/failed): %r", req.model_dump())
+        logger.warning("contact form email failed (contact saved=%s): %s %s", saved, name, phone)
+        if not saved:
+            # Neither stored nor emailed: tell the visitor instead of
+            # showing a success screen for a lead nobody will ever see.
+            raise HTTPException(503, "We couldn't send your request. Please WhatsApp or call us instead.")
     return {"ok": True}
 
 
@@ -2222,6 +2465,7 @@ def auth_me(request: Request, response: Response) -> dict:
     payload = _me_payload(session["uid"], session.get("imp"))
     # This browser passed two-step login (the admin's, in a support session).
     payload["mfaVerified"] = bool(session.get("imfa") if session.get("imp") else session.get("mfa"))
+    payload["adminSession"] = bool(session.get("iadm") if session.get("imp") else session.get("adm"))
     if session.get("imp"):
         admin = calls_db.get_user_by_id(session["imp"]) or {}
         payload["impersonating"] = {
@@ -2593,7 +2837,7 @@ def profile_mfa(user: dict = Depends(current_user)) -> dict:
         "enabledAt": state.get("enabled_at"),
         "recoveryCodesLeft": len(state.get("recovery") or []),
         # The platform owner can't open the admin panel without it.
-        "required": bool(profile.get("is_platform_owner")) and profile.get("role") == "owner",
+        "required": calls_db.can_open_admin(profile),
     }
 
 
@@ -3525,7 +3769,8 @@ def admin_impersonate(account_id: int, request: Request, response: Response, adm
             session_version=int(owner.get("session_version") or 1), session_id=session_id,
             ttl_seconds=auth.IMPERSONATION_TTL_SECONDS,
             claims={"isv": int((calls_db.get_user_by_id(admin["user_id"]) or {}).get("session_version") or 1),
-                    "imfa": getattr(request.state, "mfa", None)},
+                    "imfa": getattr(request.state, "mfa", None),
+                    "iadm": 1 if getattr(request.state, "admin_session", None) else None},
         ),
         max_age=auth.IMPERSONATION_TTL_SECONDS, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/",
     )
@@ -3540,7 +3785,7 @@ def admin_impersonate_exit(request: Request, response: Response) -> dict:
     if session is None or not session.get("imp"):
         raise HTTPException(400, "Not in a support session")
     owner = calls_db.get_user_by_id(session["imp"])
-    if owner is None or not owner["is_platform_owner"] or owner["role"] != "owner":
+    if not calls_db.can_open_admin(owner):
         raise HTTPException(403, "Not permitted")
     # A stolen support cookie must not become a fresh admin session after
     # the admin signed out everywhere.
@@ -3551,7 +3796,8 @@ def admin_impersonate_exit(request: Request, response: Response) -> dict:
         raise HTTPException(401, "Support session expired — please sign in again")
     if session.get("sid"):
         calls_db.revoke_user_session(session["sid"], session["uid"])
-    _set_session_cookie(response, owner["id"], owner["account_id"], request, mfa_at=session.get("imfa"))
+    _set_session_cookie(response, owner["id"], owner["account_id"], request, mfa_at=session.get("imfa"),
+                        admin=bool(session.get("iadm")))
     admin_db.write_audit(owner["id"], owner["email"], "impersonate_exit", session["aid"], session["uid"], detail="ended support session")
     return {"ok": True}
 
@@ -3864,14 +4110,24 @@ def dashboard_summary(user: dict = Depends(current_user)) -> dict:
     return calls_db.summary(user["account_id"])
 
 
+# The Overview's date filter: ``days`` is the rolling window; ``start``/``end``
+# (YYYY-MM-DD, inclusive, local days in ``tz``) pick an exact range instead.
 @app.get("/dashboard/usage-trends")
-def dashboard_usage_trends(days: int = 14, user: dict = Depends(current_user)) -> dict:
-    return calls_db.usage_trends(user["account_id"], days=days)
+def dashboard_usage_trends(days: int = 14, start: str | None = None, end: str | None = None, tz: str = "Asia/Kolkata",
+                           user: dict = Depends(current_user)) -> dict:
+    try:
+        return calls_db.usage_trends(user["account_id"], days=days, start=start, end=end, tz=tz)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/dashboard/period-comparison")
-def dashboard_period_comparison(days: int = 14, user: dict = Depends(current_user)) -> dict:
-    return calls_db.period_comparison(user["account_id"], days=days)
+def dashboard_period_comparison(days: int = 14, start: str | None = None, end: str | None = None, tz: str = "Asia/Kolkata",
+                                user: dict = Depends(current_user)) -> dict:
+    try:
+        return calls_db.period_comparison(user["account_id"], days=days, start=start, end=end, tz=tz)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 # Breakdowns only the Analytics tab shows (Growth and Scale). The Overview's
@@ -3888,8 +4144,12 @@ def dashboard_analytics(user: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/dashboard/speed-to-lead")
-def dashboard_speed_to_lead(days: int = 14, user: dict = Depends(current_user)) -> dict:
-    return calls_db.speed_to_lead(user["account_id"], days=days)
+def dashboard_speed_to_lead(days: int = 14, start: str | None = None, end: str | None = None, tz: str = "Asia/Kolkata",
+                            user: dict = Depends(current_user)) -> dict:
+    try:
+        return calls_db.speed_to_lead(user["account_id"], days=days, start=start, end=end, tz=tz)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/dashboard/insights")
@@ -3902,6 +4162,49 @@ def dashboard_insights(days: int = 30, user: dict = Depends(current_user)) -> di
 @app.get("/dashboard/missed-money")
 def dashboard_missed_money(user: dict = Depends(current_user)) -> dict:
     return calls_db.missed_money_queue(user["account_id"])
+
+
+# Follow-ups page (owner, 22 Oct 2026): every follow-up call the AI scheduled,
+# and Call now / Reschedule / Cancel on the ones still waiting.
+@app.get("/follow-ups")
+def follow_ups_list(view: str = "upcoming", source_call_id: int | None = None,
+                    user: dict = Depends(current_user)) -> dict:
+    return calls_db.list_follow_ups(user["account_id"], view=view, source_call_id=source_call_id)
+
+
+def _act_on_follow_up(user: dict, follow_up_id: int, action: str, at: str | None = None) -> dict:
+    try:
+        return calls_db.act_on_follow_up(user["account_id"], follow_up_id, action, at)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/follow-ups")
+def follow_up_create(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    """Schedule a follow-up call by hand (from the Follow-ups page or a call)."""
+    try:
+        return calls_db.create_follow_up(user["account_id"], data, user_id=user["user_id"])
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/follow-ups/{follow_up_id}/call-now")
+def follow_up_call_now(follow_up_id: int, user: dict = Depends(require_role("member"))) -> dict:
+    return _act_on_follow_up(user, follow_up_id, "call_now")
+
+
+@app.post("/follow-ups/{follow_up_id}/reschedule")
+def follow_up_reschedule(follow_up_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    return _act_on_follow_up(user, follow_up_id, "reschedule", str(data.get("at") or ""))
+
+
+@app.post("/follow-ups/{follow_up_id}/cancel")
+def follow_up_cancel(follow_up_id: int, user: dict = Depends(require_role("member"))) -> dict:
+    return _act_on_follow_up(user, follow_up_id, "cancel")
 
 
 @app.get("/dashboard/launch-readiness")
@@ -3942,22 +4245,46 @@ def agents_activity(user: dict = Depends(current_user)) -> list[dict]:
 # the recommended default. It matches gpt-4.1-mini on the grounding benchmark
 # (9/12 each) and is roughly twice as fast on live calls — llmTtft 450-500ms
 # median against 1,058ms over eight comparable calls.
-_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live")
+# duplex: "Vistrow Duplex" (OpenAI GPT-Live 1, id kept vendor-neutral because
+# it ships in the dashboard bundle), owner-only until tested (24 Oct 2026).
+_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live", "duplex")
 _ADMIN_ONLY_MODELS = {"gpt-5-nano"}
-# Owner, 19 Oct 2026: Vistrow Live 3.8 opens to every plan, billed 2 credits
-# per call minute (plan_policy). Measured on real calls that day: ~Rs 3.3-3.7
-# per minute on the website and ~Rs 3.7-4.1 on a phone line at a normal pace,
-# with prompts held to ~1,000 tokens and the realtime KB capped. The retired
-# 3.1 and 2.5 ids stay owner-only.
-_TENANT_REALTIME_MODELS = {"gemini-live:gemini-3.8-live"}
+# Vistrow Live 3.8 was opened to every plan on 19 Oct 2026 (billed 2 credits
+# per call minute, plan_policy) but the dashboard picker kept it owner-only.
+# Owner, 24 Oct 2026: owner-only again until the combo tests pick the model
+# line-up; the API now matches the picker. Only the platform demo agent used
+# it that day. An agent already saved with an owner-only model keeps it.
 
 
-def _guard_admin_only_model(data: dict | None, account_id: int) -> None:
+def _guard_admin_only_model(data: dict | None, account_id: int, agent_id: int | None = None) -> None:
     model = str((data or {}).get("model") or "")
-    if model in _TENANT_REALTIME_MODELS:
-        return
+    if model and agent_id is not None:
+        saved = calls_db.get_agent_by_id_unscoped(agent_id)
+        if saved and saved.get("model") == model and calls_db.agent_account_id(agent_id) == account_id:
+            return
     if (model.startswith(_ADMIN_ONLY_MODEL_PREFIXES) or model in _ADMIN_ONLY_MODELS) and not calls_db.is_platform_owner(account_id):
         raise HTTPException(400, "That model is available only to the Vistrow admin account.")
+
+
+def _guard_custom_functions(data: dict | None) -> None:
+    """Custom-function URLs must be http(s) to a hostname or public IP. The
+    agent re-checks the resolved address on every call (agent/safe_http.py);
+    this rejects the obvious cases at save time with a readable message."""
+    specs = (data or {}).get("customFunctions", (data or {}).get("custom_functions"))
+    if isinstance(specs, str):
+        try:
+            specs = json.loads(specs or "[]")
+        except ValueError:
+            raise HTTPException(400, "Custom functions must be a list.") from None
+    for spec in specs or []:
+        url = str((spec or {}).get("url") or "").strip() if isinstance(spec, dict) else ""
+        if not url:
+            continue
+        try:
+            kb_crawl._assert_public_url(url)
+        except ValueError as exc:
+            name = spec.get("name") or "custom function"
+            raise HTTPException(400, f"{name}: {exc}") from None
 
 
 def _guard_stt_provider(data: dict | None) -> None:
@@ -4056,6 +4383,7 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
     _guard_voice_tier(data, user["account_id"])
     _guard_realtime_voice(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
+    _guard_custom_functions(data)
     try:
         return calls_db.create_agent(data, user["account_id"])
     except calls_db.AgentLimitError as e:
@@ -4090,7 +4418,8 @@ def _guard_agent_patch(data: dict, account_id: int, agent_id: int) -> dict:
     _guard_stt_provider(data)
     _guard_voice_tier(data, account_id, agent_id)
     _guard_realtime_voice(data, account_id, agent_id)
-    _guard_admin_only_model(data, account_id)
+    _guard_admin_only_model(data, account_id, agent_id)
+    _guard_custom_functions(data)
     for fields, feature in ((('kbId', 'kb_id'), 'knowledge'),
                             (('liveCatalogEnabled', 'live_catalog_enabled'), 'live_catalog')):
         if any(data.get(field) for field in fields):
@@ -6701,6 +7030,15 @@ def _process_razorpay_event(event: dict) -> dict:
     return {"ok": True}
 
 
+def _generic_lead_source(body: dict) -> str:
+    """The inbound_lead_events source for a lead POSTed to the generic
+    webhook. Only a Facebook Lead Ads payload (Zapier's passthrough carries
+    field_data / leadgen_id) is a Facebook lead; anything else — a website
+    form, n8n, Make, a CRM — used to be labelled "Facebook lead" too. Generic
+    sources share one instant campaign, so this changes the label only."""
+    return "facebook_lead_ads" if body.get("field_data") or body.get("leadgen_id") else "webhook"
+
+
 def _parse_facebook_field_data(field_data: list) -> tuple[str, str]:
     """(name, phone) out of Facebook Lead Ads' field_data shape — a list of
     {"name": <question label>, "values": [<answer>]} pairs. Question labels
@@ -6951,7 +7289,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         return {"ok": False, "reason": "no_phone_in_payload"}
     result = await asyncio.to_thread(
         calls_db.ingest_inbound_lead,
-        account_id, name, phone, source="facebook_lead_ads",
+        account_id, name, phone, source=_generic_lead_source(body),
         external_id=str(body.get("leadgen_id") or body.get("id") or ""),
     )
     if not result.get("ok"):
@@ -6960,7 +7298,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
     return await asyncio.to_thread(_queued_until, account_id, result)
 
 
-@app.get("/webhooks/meta")
+@app.get("/webhooks/meta-legacy", include_in_schema=False)
 def webhooks_meta_verify(request: Request) -> PlainTextResponse:
     """Meta's one-time webhook verification handshake, run once when the
     URL is registered in the Meta App dashboard (or re-verified): it GETs
@@ -6989,7 +7327,7 @@ def _fetch_facebook_lead_fields(leadgen_id: str, page_access_token: str) -> list
         return json.loads(resp.read()).get("field_data") or []
 
 
-@app.post("/webhooks/meta")
+@app.post("/webhooks/meta-legacy", include_in_schema=False)
 async def webhooks_meta_event(request: Request) -> dict:
     """The real-time receiver for every Meta product this app is subscribed
     to — today just Facebook Lead Ads ('page' object, 'leadgen' field);
@@ -8040,3 +8378,10 @@ async def widget_chat_end(request: Request) -> dict:
         target=integrations_dispatch.deliver_widget_chat, args=(chat,), name="widget-chat-end", daemon=True,
     ).start()
     return {"ok": True}
+
+
+# Meta Lead Ads routes (OAuth start/callback, Page picker, rules, leads,
+# webhook and Meta's callbacks). Needs _live_session/_app_base_url, hence last.
+meta_leads.configure(require_admin=None, live_session=_live_session, app_base_url=_app_base_url, cookie_secure=_COOKIE_SECURE)
+app.include_router(meta_leads.router)
+app.include_router(whatsapp_leads.router)

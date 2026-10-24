@@ -6,6 +6,13 @@
 // visitor sees after React hydrates.
 
 export const SEO_ORIGIN = 'https://www.vistrowvoice.com'
+
+/** Official Vistrow Voice profiles: the Organization schema's sameAs and the footer links. */
+export const BRAND_PROFILES = [
+  { name: 'LinkedIn', url: 'https://www.linkedin.com/company/vistrow-voice' },
+  { name: 'YouTube', url: 'https://www.youtube.com/@Vistrow-voice' },
+  { name: 'Instagram', url: 'https://www.instagram.com/vistrowvoice/' },
+] as const
 export type SeoKind =
   | 'home'
   | 'collection'
@@ -52,6 +59,7 @@ import { BUYER_GUIDES, COMPARE_VENDORS, DEMO_CALLS, LOCAL_REAL_ESTATE_PAGES } fr
 import { HELP_TOPICS } from '../content/helpArticles'
 import { BLOG_PAGE_COUNT, VOICE_BLOG_POSTS, blogPagePath } from '../content/voiceBlog'
 import { HELP_VIDEOS, helpVideoPoster, helpVideoSrc } from './helpVideos'
+import { PAGE_FIGURES } from './pageFigures'
 
 // The English launch film on the homepage (components/LaunchFilm.tsx FILMS.en;
 // keep the two in sync). It went live on 21 Oct 2026 (PR #212).
@@ -93,6 +101,8 @@ const page = (
 
 const LANGUAGE_PAGES = [
   ['hindi', 'Hindi', 'हिन्दी'],
+  // English has no script of its own; its image alt reads "Indian English ...".
+  ['english', 'English', 'Indian'],
   ['marathi', 'Marathi', 'मराठी'],
   ['tamil', 'Tamil', 'தமிழ்'],
   ['telugu', 'Telugu', 'తెలుగు'],
@@ -102,6 +112,8 @@ const LANGUAGE_PAGES = [
   ['malayalam', 'Malayalam', 'മലയാളം'],
   ['punjabi', 'Punjabi', 'ਪੰਜਾਬੀ'],
   ['odia', 'Odia', 'ଓଡ଼ିଆ'],
+  // Not a call language: an accent page (EXTRA_LANGUAGE_PAGES in marketingContent.ts).
+  ['american-british-english', 'American and British English', 'US and UK'],
 ] as const
 
 const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { title: string; description: string }>> = {
@@ -109,6 +121,16 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
     title: 'Hindi AI Voice Calling Agent with Hinglish | Vistrow Voice',
     description:
       'AI voice agent in Hindi and Hinglish for inbound calls, reminders and web calls. An AI calling agent in Hindi that qualifies leads and logs every call.',
+  },
+  english: {
+    title: 'Indian English AI Voice Calling Agent | Vistrow Voice',
+    description:
+      'AI voice calling agent in Indian English for phone and web calls. Follows Indian accents, names and numbers, switches to Hindi mid-call, logs every call.',
+  },
+  'american-british-english': {
+    title: 'American & British English AI Voice Agent | Vistrow Voice',
+    description:
+      'American and British English AI voice agent for phone and web calls. Demo: the agent answers in British English. The accent is set up per line.',
   },
   kannada: {
     title: 'Kannada AI Voice Calling Agent for Karnataka | Vistrow Voice',
@@ -130,6 +152,26 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
     description:
       'Punjabi AI voice calling agent for Punjab, Chandigarh and Delhi NCR. Follows Punjabi, Hindi and English in one call, books appointments, logs every call.',
   },
+  malayalam: {
+    title: 'Malayalam AI Voice Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Malayalam AI voice agent for Kochi, Thiruvananthapuram and Kerala. Follows Malayalam-English switching, books visits and logs every phone and web call.',
+  },
+  gujarati: {
+    title: 'Gujarati AI Voice Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Gujarati AI voice agent for Ahmedabad, Surat and Gujarat. Handles enquiries and payment reminders, follows Gujarati, Hindi and English, logs every call.',
+  },
+  bengali: {
+    title: 'Bengali AI Voice Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Bengali AI voice agent for Kolkata and West Bengal. Answers phone and website calls, follows Bengali, Hindi and English mid-call and logs every call.',
+  },
+  odia: {
+    title: 'Odia AI Voice Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Odia AI voice agent for Bhubaneswar, Cuttack and Odisha. Answers phone and website calls, follows Odia, English and Hindi mid-call and logs every call.',
+  },
   marathi: {
     title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
     description:
@@ -137,7 +179,7 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
   },
 }
 
-export const SEO_PAGES: SeoPage[] = [
+const SEO_PAGE_LIST: SeoPage[] = [
   {
     ...page(
       '/',
@@ -284,9 +326,11 @@ export const SEO_PAGES: SeoPage[] = [
       `/languages/${slug}`,
       LANGUAGE_SEO_META[slug]?.title ?? `${name} AI Voice Agent for Customer Calls | Vistrow Voice`,
       LANGUAGE_SEO_META[slug]?.description ??
-        `Handle inbound, outbound, and website customer conversations with a ${name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
+        `Handle inbound, outbound, and website customer conversations with ${/^[AEIOU]/.test(name) ? 'an' : 'a'} ${name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
       `language-${slug}`,
-      `${native} ${name} customer calls handled by the Vistrow Voice AI agent orb`,
+      native === 'US and UK'
+        ? 'American and British English customer calls in the US and UK handled by the Vistrow Voice AI agent orb'
+        : `${native} ${name} customer calls handled by the Vistrow Voice AI agent orb`,
       'language',
       name,
     ),
@@ -585,6 +629,14 @@ export const SEO_PAGES: SeoPage[] = [
   },
 ]
 
+// In-content figures (lib/pageFigures.ts) join each route's image sitemap list.
+export const SEO_PAGES: SeoPage[] = SEO_PAGE_LIST.map((entry) => {
+  const figures = PAGE_FIGURES[entry.path]
+  if (!figures?.length) return entry
+  const images = [...(entry.images ?? []), ...figures.map((figure) => `${SEO_ORIGIN}${figure.src}`)]
+  return { ...entry, images: [...new Set(images)] }
+})
+
 export const SEO_BY_PATH = new Map(SEO_PAGES.map((entry) => [entry.path, entry]))
 
 export function seoForPath(path: string): SeoPage | undefined {
@@ -621,8 +673,12 @@ export function baseStructuredData(entry: SeoPage): object[] {
         '@type': 'Organization',
         '@id': `${SEO_ORIGIN}/#organization`,
         name: 'Vistrow Voice',
+        alternateName: ['VistrowVoice', 'Vistrow Voice AI'],
         url: `${SEO_ORIGIN}/`,
         logo: `${SEO_ORIGIN}/apple-touch-icon.png`,
+        // The brand's own profiles, so search engines tie "Vistrow Voice" to
+        // one entity instead of correcting the name to a similar word.
+        sameAs: BRAND_PROFILES.map((p) => p.url),
         email: 'info@vistrowvoice.com',
         telephone: '+91-90670-97779',
         contactPoint: [
@@ -781,6 +837,8 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   'solution-support': { eyebrow: 'SUPPORT & HELPDESK', headline: 'Resolve tier-one issues on the first call.', proof: 'Troubleshoot  \u00b7  Resolve  \u00b7  Escalate with context', accent: '#0e7490', hue: '-91deg' },
   languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: '130+ languages, Hindi to Tamil.', proof: 'Mid-call language switching  \u00b7  Phone + Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी  ·  ಕನ್ನಡ  ·  తెలుగు  ·  தமிழ்  ·  বাংলা' },
   'language-hindi': { eyebrow: 'HINDI AI VOICE AGENT', headline: 'हिन्दी calls, handled naturally.', proof: 'Hindi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी' },
+  'language-english': { eyebrow: 'INDIAN ENGLISH AI VOICE AGENT', headline: 'Indian English calls, handled naturally.', proof: 'English + Hindi  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg' },
+  'language-american-british-english': { eyebrow: 'AMERICAN & BRITISH ENGLISH AI VOICE AGENT', headline: 'American and British English calls, handled naturally.', proof: 'US  \u00b7  UK  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg' },
   'language-marathi': { eyebrow: 'MARATHI AI VOICE AGENT', headline: 'मराठी calls, handled naturally.', proof: 'Marathi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'मराठी' },
   'language-tamil': { eyebrow: 'TAMIL AI VOICE AGENT', headline: 'தமிழ் calls, handled naturally.', proof: 'Tamil + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'தமிழ்' },
   'language-telugu': { eyebrow: 'TELUGU AI VOICE AGENT', headline: 'తెలుగు calls, handled naturally.', proof: 'Telugu + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'తెలుగు' },

@@ -34,6 +34,7 @@ import {
   NOISE_CANCELLATION_OPTIONS,
   STANDARD_MODEL,
   TONES,
+  usesBuiltInVoice,
   voiceLabel,
   voicePickerGroups,
   voiceWorksWithModel,
@@ -543,6 +544,23 @@ function AgentEditorForm({
                     </>
                   )}
                 </p>
+                {/* More than one realtime engine (Live 3.8, Duplex): pick which. */}
+                {isRealtimeModel(form.model) && modelOptionsFor(true).filter((m) => isRealtimeModel(m.value)).length > 1 && (
+                  <select
+                    aria-label="Realtime engine"
+                    value={form.model}
+                    onChange={(e) => changeModel(e.target.value)}
+                    className={`${inputCls} mt-2`}
+                  >
+                    {modelOptionsFor(true)
+                      .filter((m) => isRealtimeModel(m.value))
+                      .map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label} - {m.tag}
+                        </option>
+                      ))}
+                  </select>
+                )}
                 {showModels && !isRealtimeModel(form.model) && (
                   <select value={form.model} onChange={(e) => changeModel(e.target.value)} className={`${inputCls} mt-2`}>
                     {modelOptionsFor(true)
@@ -596,6 +614,14 @@ function AgentEditorForm({
           </Field>
 </TabPane>
           <TabPane tab="voice" active={tab}>
+{usesBuiltInVoice(form.model) ? (
+          <Field label="Voice">
+            <p className="text-sm text-text-muted">
+              {modelLabel(form.model).split(' · ')[0]} speaks with its own built-in voice, so the voice setting doesn’t apply.
+              Switch the engine to Standard to pick one of your voices.
+            </p>
+          </Field>
+) : (
 <Field
             label="Voice"
             hint={
@@ -698,6 +724,7 @@ function AgentEditorForm({
               })()}
             </div>
           </Field>
+)}
 </TabPane>
           <TabPane tab="voice" active={tab}>
 <Field label="Default language">
@@ -1285,7 +1312,7 @@ function AgentHero({ agent, name, description, model, voice, language, live, sta
               </span>
               {live ? 'Live' : 'Paused'}
             </button>
-            <span className="rounded-full bg-white/15 px-2.5 py-1 font-bold ring-1 ring-white/30">{isRealtimeModel(model) ? 'Vistrow Live' : modelLabel(model).split(' · ')[0]}</span>
+            <span className="rounded-full bg-white/15 px-2.5 py-1 font-bold ring-1 ring-white/30">{isRealtimeModel(model) && !usesBuiltInVoice(model) ? 'Vistrow Live' : modelLabel(model).split(' · ')[0]}</span>
             <span className="truncate text-white/80">{voice} · {language}</span>
           </div>
         </div>
@@ -1775,7 +1802,6 @@ export function PostCallFieldsEditor({
 // Ranges match server/retry_rules.py follow_up_policy, which clamps on save.
 const FOLLOW_UP_MAX_ATTEMPTS = 10
 const FOLLOW_UP_MAX_GAP_MINUTES = 7 * 24 * 60
-const FOLLOW_UP_MAX_NURTURE_DAYS = 30
 
 function FollowUpEditor({
   value,
@@ -1858,21 +1884,96 @@ function FollowUpEditor({
         <Toggle
           checked={value.nurtureEnabled}
           onChange={(v) => patch({ nurtureEnabled: v })}
-          label="Nurture call for interested leads"
-          hint="One follow-up call at 11:00 when a call ended interested with no visit booked and no call-back asked for."
+          label="Nurture calls for interested leads"
+          hint="A short sequence of check-in calls when a call ended interested with no visit booked and no call-back asked for. It stops when they say no, opt out, book, or call us."
         />
         {value.nurtureEnabled && (
-          <div className="sm:w-40">
-            <NumberField
-              label="Days after the call"
-              value={value.nurtureDays}
-              onChange={(n) => patch({ nurtureDays: bounded(n, 1, FOLLOW_UP_MAX_NURTURE_DAYS) })}
+          <div className="flex flex-col gap-3">
+            <NurtureStepsEditor
+              steps={value.nurtureSteps ?? FOLLOW_UP_DEFAULTS.nurtureSteps}
+              onChange={(nurtureSteps) => patch({ nurtureSteps, nurtureDays: nurtureSteps[0] })}
               inputCls={inputCls}
             />
+            <Toggle
+              checked={value.nurtureAdvanceOnNoAnswer ?? FOLLOW_UP_DEFAULTS.nurtureAdvanceOnNoAnswer}
+              onChange={(v) => patch({ nurtureAdvanceOnNoAnswer: v })}
+              label="If they don't answer, try the next step"
+              hint="When a step's retries run out with no answer, the next step is still called. Off: the sequence stops there."
+            />
+            <Field label="Call time">
+              <input
+                type="time"
+                value={value.nurtureTime ?? FOLLOW_UP_DEFAULTS.nurtureTime}
+                onChange={(e) => patch({ nurtureTime: e.target.value || FOLLOW_UP_DEFAULTS.nurtureTime })}
+                className={`${inputCls} sm:w-40`}
+              />
+            </Field>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+/** Days after the first interested call, e.g. 2, 5, 10. Each must be later
+ * than the one before; at most five steps, up to day 60 (server rule). */
+function NurtureStepsEditor({ steps, onChange, inputCls }: { steps: number[]; onChange: (s: number[]) => void; inputCls: string }) {
+  const [draft, setDraft] = useState(steps.map(String))
+  useEffect(() => setDraft(steps.map(String)), [steps])
+  const parsed = draft.map((d) => Number(d))
+  const error = parsed.some((d) => !Number.isInteger(d) || d < 1 || d > 60)
+    ? 'Each step is a day from 1 to 60.'
+    : parsed.some((d, i) => i > 0 && d <= parsed[i - 1])
+      ? 'Each step must come after the one before.'
+      : ''
+  const commit = (next: string[]) => {
+    setDraft(next)
+    const nums = next.map(Number)
+    if (nums.length && nums.every((d, i) => Number.isInteger(d) && d >= 1 && d <= 60 && (i === 0 || d > nums[i - 1]))) onChange(nums)
+  }
+  return (
+    <Field label="Call on these days after the conversation">
+      <div className="flex flex-wrap items-center gap-2">
+        {draft.map((d, i) => (
+          <span key={i} className="flex items-center gap-1.5">
+            {i > 0 && <Icon name="arrow_forward" className="text-[14px] text-text-muted" />}
+            <span className="flex items-center gap-1 rounded-xl border border-border bg-surface px-2 py-1">
+              <span className="text-xs font-semibold text-text-muted">Day</span>
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={d}
+                aria-label={`Step ${i + 1} day`}
+                onChange={(e) => commit(draft.map((x, j) => (j === i ? e.target.value : x)))}
+                className={`${inputCls} h-8 w-14 px-1.5 text-center`}
+              />
+              {draft.length > 1 && (
+                <button type="button" onClick={() => commit(draft.filter((_, j) => j !== i))} aria-label={`Remove step ${i + 1}`} className="flex h-6 w-6 items-center justify-center rounded-full bg-transparent text-text-muted hover:text-destructive">
+                  <Icon name="close" className="text-[14px]" />
+                </button>
+              )}
+            </span>
+          </span>
+        ))}
+        {draft.length < 5 && (
+          <button
+            type="button"
+            onClick={() => commit([...draft, String(Math.min(60, (parsed[parsed.length - 1] || 0) + 5))])}
+            className="flex items-center gap-1 rounded-xl border border-dashed border-primary/40 bg-transparent px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5"
+          >
+            <Icon name="add" className="text-[15px]" /> Add step
+          </button>
+        )}
+      </div>
+      {error ? (
+        <span className="text-[11px] font-semibold text-destructive">{error}</span>
+      ) : (
+        <span className="text-[11px] text-text-muted">
+          {parsed.length} {parsed.length === 1 ? 'call' : 'calls'}. A step on a day outside your calling days (Sunday by default) moves to the next calling day.
+        </span>
+      )}
+    </Field>
   )
 }
 

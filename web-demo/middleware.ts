@@ -27,6 +27,25 @@ export default function middleware(request: Request) {
     return Response.redirect(`https://${BUCKET_HOST.marketing}/resources/docs`, 308)
   }
 
+  // admin.vistrowvoice.com serves the panel, its own sign-in, and the tenant
+  // dashboard during a support ("View as") session (the app then sends
+  // /dashboard back to /admin when no session is running). Other app pages
+  // (sign-up, password reset) belong to the customer app; marketing pages to
+  // www.
+  if (current === 'admin') {
+    const under = (prefix: string) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`)
+    if (under('/admin') || under('/login') || under('/dashboard')) return next()
+    if (url.pathname === '/' || pathBucket(url.pathname) === 'app') return Response.redirect(`https://${host}/admin`, 308)
+    return Response.redirect(`https://${BUCKET_HOST.marketing}${url.pathname}${url.search}`, 308)
+  }
+
+  // Once the admin host is live (VITE_ADMIN_HOST_LIVE=1 on Vercel), the
+  // customer app no longer serves /admin. Off until DNS and the domain are in
+  // place, so the panel never points at a host that does not resolve.
+  if (current === 'app' && process.env.VITE_ADMIN_HOST_LIVE === '1' && (url.pathname === '/admin' || url.pathname.startsWith('/admin/'))) {
+    return Response.redirect(`https://${BUCKET_HOST.admin}${url.pathname}${url.search}`, 307)
+  }
+
   // Root of the app subdomain has no marketing-bucket landing page of its
   // own, so send it straight to the dashboard.
   if (url.pathname === '/' && current === 'app') {

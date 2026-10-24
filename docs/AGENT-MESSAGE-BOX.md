@@ -23,6 +23,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 - Claude (2026-10-16): branch `claude/llm-token-diet` (committed locally, NOT pushed/PR'd/deployed): LLM request harness + history window, contact notes moved to the prompt tail, warm-up sends tools, orchestrator VOICE_STYLE_PROMPT before per-call text. Needs both workers deployed after merge.
 - Claude (2026-10-16, updated 22:55 IST): branch `claude/lead-details-brochure` (local commits 6677701e + 93de8a7c, NOT pushed yet, owner checks ArthaLeads staging first): standard post-call lead facts stored and sent to ArthaLeads with summary/key_points; send_brochure tool. Function-level claim on issue #2 (comment 6220772439), overlap with prompt-cuts/tool-guardrails cleared by that session. Per [RULES] I stop at PR-ready; the SEO session is the deployer (combined release, then `lk agent deploy` on BOTH workers + Railway for one server line). Dependency: ArthaLeads side is on arthaleads staging bc0446c and should reach ArthaLeads main with or before this deploy.
 - Claude (2026-10-17): branch `claude/tool-desc-ab` (local commit, NOT pushed/PR'd/deployed): tools.py tool DESCRIPTIONS only (8 tools; log_lead cut reverted after it broke lead capture). Tool block measured by Sarvam itself = 29–33% of tenant requests; cut saves ~385 tokens/request (~₹26–47 per 1,000 call-min). A/B 2×30: tool accuracy 22/26 vs 21/26, no new wrong end_call/switch. docs/TOOL-DESC-AB-2026-10-17.md. Needs both workers deployed after merge.
+- Claude (dashboard, 2026-10-24): WhatsApp Click-to-WhatsApp leads LIVE (PR #275 webhook, PR #278 Connect WhatsApp / Embedded Signup, both merged + deployed). Real tenant connect is BLOCKED by Meta ("can't onboard customers") until owner completes Business Verification + Tech Provider. Admin WhatsApp sender (runtime, PR #277 draft) PAUSED; it gets a separate Meta app later. PR #281 (Lead Ads tile logos) open, not merged.
 
 ## Takeover checklist
 
@@ -1151,3 +1152,62 @@ Owner decision: Starter ₹2,999 = 400 min, Growth ₹5,999 = 1,100, Scale ₹12
 - Branch claude/realtime-voice-picker, PR #192 (ready, not merged). Files: web-demo/src/pages/AgentDetail.tsx, web-demo/src/lib/agentOptions.ts.
 - Verified locally: picker on Live 3.8 lists only Live voices; Shubh→Live switches to Kiara HD with notice/Undo; switch back restores Shubh; server PATCH realtime+shubh → 400; npm run build passes.
 - Open: runtime lane asked to make the _guard_realtime_voice 400 text vendor-neutral (says "Gemini"). Next step: owner says "ship #192".
+
+### Claude (dashboard session) — 2026-10-22 11:40 UTC — Meta Lead Ads Phase 1 (branch `claude/meta-leads-phase1`, PR open, NOT merged)
+
+Owner-directed ("start building phase 1"); plan is docs/META-LEAD-ADS-PLAN-2026-10-22.md (PR #254). Built in NEW files only, because the edit guard blocks calls_db.py/token_api.py while my own #244/#253 are open:
+- `server/meta_leads.py`: meta_connections/meta_pages/meta_forms/meta_lead_rules/meta_lead_events/meta_deletion_requests tables; webhook logic (HMAC, 2 MB cap, durable rows, 200 fast, dedupe on (page_id, leadgen_id)); worker that fetches each lead with the Page token and keeps EVERY form answer + ad/adset/campaign/form/platform/organic/submission time; test-lead detection; 24 h stale rule; contacts upsert; hourly reconciliation; real deauthorize + data-deletion callbacks; OAuth helpers (long-lived token, Page picker incl. New Pages Experience fallback, subscribe + verify); FastAPI router `/webhooks/meta*`, `/auth/oauth/meta/callback`, `/integrations/meta*`.
+- `server/test_meta_leads.py`: 16 real-Postgres tests. `agent/plan_policy.py`: feature `meta_leads` = growth.
+Verified: 16/16 twice on a reused DB; full server suite 953 passed; six mutation checks (signature off, tenant lookup wrong, test-lead off, stale off, token-error off, recording stubbed) each fail 2–11 tests; local HTTP end to end in the scratch server (webhook 200 in 11 ms, worker queued the lead with all fields, contact tagged, deauthorize/deletion/status routes correct, admin routes via real session).
+NOT done / waits for #253 to merge (token_api.py, calls_db.py): mount `meta_leads.router`, call `init_tables()`, `configure(...)`, `start_worker()`; add `"/webhooks/meta/"` to `_PUBLIC_PREFIXES`; retire the old facebook start/callback and `/webhooks/meta` routes; `ingest_inbound_lead(route=...)` for per-Page/form/ad agent (Phase 2); drop `facebook` from `NEW_CONNECTIONS_UNAVAILABLE` behind the feature. Production gate B10: `INTEGRATION_ENCRYPTION_KEY` + `INTEGRATION_ENCRYPTION_WRITE=on` must be set or the connect route refuses (503). Phase 0 (Meta app, Business Verification) is with the owner. Next step: Phase 2 routing + dialler capacity (runtime lane, requested on #2).
+
+### Claude (dashboard session) — 2026-10-22 16:00 UTC — Meta Phases 2-3 merged into `claude/meta-leads-phase1` (PR #256, draft, NOT merged)
+
+Owner named this session for Meta Phases 2-3 including dialler capacity (decision 22 Oct ~12:00 UTC, acked by runtime). Built by three parallel sub-agents, merged here:
+- Routing (4d8be0bf): `resolve_route` ad > form > Page default with reasons (agent_paused/missing/demo, number_inactive, no_number); rules + options API; `meta_ads`; route stored on events; leads list with call_id/name/phone; integrations row 'facebook' set on connect/disconnect. 26 Meta tests.
+- Dashboard (dcb4db68): Facebook & Instagram Lead Ads page: health tiles, live checklist, Page picker, per-Page default agent/number, lead rules, Leads tab, reconnect banner, disconnect.
+- Capacity (54c1a854): new `server/telephony/` (providers, pools, trunks, lines; oversell refused in Python and by DB triggers; `ensure_platform_pool()` keeps today's 2 outbound + 1 inbound reserve). 9 tests.
+Verified on the merged branch: full server suite 972 passed on a fresh UTF-8 DB; tsc, icon check, build + SEO audit pass; rules/options/leads exercised over HTTP with a real session (create 200, duplicate 409, foreign agent 400, delete 200); dashboard page renders live data.
+Prepared, NOT applied (wait for #253): docs/patches/token_api-meta-wiring.diff, docs/patches/calls_db-meta-route.patch, docs/patches/campaign_dialer-per-trunk.md (sent to runtime for review). Railway still posts no deployment status for server merges since this morning (#248/#250/#251/#255): builds limited to Pro/Enterprise per its status page.
+Local note: the Mac restarted ~15:00 UTC and cleared /private/tmp; the test Postgres (pgserver, port 55432) was rebuilt.
+### 2026-10-21 · claude (runtime) · gpt-5-nano reasoning_effort 400
+- Branch `claude/gpt5-nano-reasoning`. Files: `agent/main.py` (`_openai_voice_kwargs` only), new `agent/test_gpt5_reasoning.py`.
+- Bug (verified 21 Oct by a real OpenAI call from the prod Railway server): gpt-5-nano + reasoning_effort "none" → HTTP 400; "minimal" → 200 (~1.9 s); gpt-5.4-nano + "none" → 200 (~0.9 s). `_openai_voice_kwargs` sent "none" to every `gpt-5*` model, so an agent on the admin-only "Vistrow Nano Lab" (gpt-5-nano) failed every LLM turn.
+- Fix: `gpt-5.` (gpt-5.x) keeps "none"; any other `gpt-5*` (gpt-5, gpt-5-mini, gpt-5-nano, dated snapshots) gets "minimal". Other reasoning_effort sites (lead_facts, post-call analysis, orchestrator/session.py, server/*) use hardcoded gpt-5.4-* and are unchanged.
+- Verified: agent suite 1033 passed / 0 failed (livekit 1.8.6 venv from requirements.txt, placeholder DATABASE_URL); new test fails on origin/main.
+- Not verified: a live call on a gpt-5-nano agent after deploy. `server/help_chat.py` ACTION_MODEL can be overridden by the COPILOT_ACTION_MODEL env — if someone sets it to an undotted gpt-5 model it would hit the same 400 (not set as far as known).
+- Next: deployer merges, then `lk agent deploy` with BOTH livekit.tenant.toml and livekit.platform-demo.toml (agent-only change: Railway skips it).
+
+### Claude (dashboard/seo lane) — 2026-10-23 — marketing layout fixes (branch `claude/layout-fixes-1023`, LOCAL commit, NOT pushed)
+
+- Owner report: healthcare Bento left "Repetitive FAQs" alone on a third row; improve responsiveness. Measured 52 marketing pages x 5 widths (390/768/1024/1280/1440) on the built site with headless Chrome.
+- Verified: unclosed grid rows 87 -> 0; horizontal overflow 0, broken images 0, JS errors 0 before and after. Gates: build, check-blog-seo, test:seo, check-blog-queue all pass.
+- Changes (web-demo only, Vercel deploy only): Bento spans per item count/visual shape; new `grid-close-2` / `grid-close-3` utilities in index.css used by FeatureCards, LanguageDetail, Integrations, Home, BuyerGuide, CompareIvr, Pricing, SolutionDetail; SplitRow flip now keeps the wide track on the text side; FeatureList twoCol is one column lg->xl; W2Kit 6-step timeline 3x2 until xl; DashboardCallouts markers moved off the text they point at.
+- Unverified: not checked on a real tenant page or in dark mode; marker positions judged from screenshots at 1440/390.
+- Next step: owner previews, then a deployer merges.
+
+### Claude (SEO session) — 2026-10-23 12:40 UTC — language samples, player v2, /languages/english shipped (PR #274)
+- Shipped in PR #274 (merge 5c65d896): layout fixes (above), all 10 /languages samples re-voiced as natural agent-led calls (Sarvam bulbul:v4-flash, agent `aarti_hi_customer`, caller unchanged; agent opens in the business default, caller answers in the page language, agent follows; closing greeting), VoiceSamplePlayer v2 (real waveform peaks from `web-demo/scripts/voice-sample-peaks.py`, language track with "Agent switched automatically", per-sample `switchTurn`), new /languages/english (Indian English, Hindi -> English sample), 11-language grids/menus close.
+- Verified live 18:03 IST: pages 200, all 11 m4a byte-identical to the repo, live player seeks and flips to Hindi in a browser.
+- Incident: PR #275 merged 1 min before #274; Vercel built both and #275's build (without #274) finished last (12:34:32 UTC) and became production, so the site reverted at ~18:04 IST. Main was correct. Fixed by this docs-only merge, which redeploys current main. Lesson: don't merge two PRs within a few minutes of each other; after a merge, re-check live after every later deploy finishes.
+- Also today: PR #261 (docs pricing on request, Meta legal pages), demo-request email fix shipped inside PR #265.
+- Open: US/UK accent English sample (Gemini 3.8 Flash TTS) waits for GEMINI_API_KEY in the repo .env (owner to copy it); script in scratchpad accent/accent.py.
+
+### Claude (dashboard session) — 2026-10-24 UTC — WhatsApp chat-ad leads shipped; Meta gate remains
+
+Verified facts:
+- PR #275 (merged 352417c7): `/webhooks/meta` routes `whatsapp_business_account` messages to `server/whatsapp_leads.py`. A chat from an ad becomes a contact (source `whatsapp_ctwa`). STOP adds the number to DNC; ordinary chats are recorded and never called. Deployed: startup clean, unsigned POST gets 403.
+- PR #278 (merged f6e9d9f1, Railway 48d45b6f SUCCESS, Vercel success): Connect WhatsApp (Embedded Signup) on Lead Ads → Settings.
+  - The server links a number only if the signed-in WABA contains it. It refuses numbers owned by another workspace, subscribes the app, and registers the number unless it is already on the Cloud API. The token and PIN are encrypted.
+  - Per-number "Call these chats" switch, OFF by default: status `captured`, reason `calls_off`, no call queued.
+  - Railway env `META_WA_SIGNUP_CONFIG_ID=1542176514333515`. The FLB config was made from the template: `whatsapp_business_management` + `whatsapp_business_messaging`, WhatsApp accounts only, 60-day system-user token (needed at connect only).
+- Meta app 1140705345278569 webhook: `whatsapp_business_account` field `messages` subscribed (checked via Graph `/{app}/subscriptions`); Meta verified the callback.
+- Live check (Chrome, Prophunt LLP account 1): `GET /integrations/whatsapp` returns 200 `available:true`; the panel renders; the popup opens with config 1542176514333515. Meta then shows "Vistrow can't onboard customers at the moment". Nothing was connected and no calls were made.
+- Tests: `server/test_whatsapp_leads.py` 16 pass; full server suite 1042 pass (local Postgres); guard mutations caught.
+
+Owner decisions (23 Oct): tenant app = tenant permissions only. Vistrow's own WhatsApp (+91 77131 28715, WABA 2255177115055128) is NOT linked into the tenant flow and gets a separate Meta app later. Runtime PR #277 is paused (draft); its statuses use its own `/webhooks/wa-sender`.
+
+Remaining:
+1. Owner: Business Verification, then Tech Provider (dialog left at "Continue"), then App Review/publish (pack in PR #273), then the app icon upload.
+2. Claude (after Meta approval): real end-to-end connect on Prophunt LLP with the owner's spare number, calls off; live ad-to-agent routing check.
+3. Not built: BSP (AiSensy/Wati/Interakt) webhook option.

@@ -5,7 +5,9 @@
 // real cross-host navigation instead of silently rendering the wrong
 // page under the wrong hostname).
 
-export type Bucket = 'app' | 'docs' | 'marketing'
+// 'admin' is a host only (admin.vistrowvoice.com, the platform owner's panel);
+// no path maps to it, middleware.ts decides what that host serves.
+export type Bucket = 'app' | 'docs' | 'marketing' | 'admin'
 
 export const APP_PREFIXES = [
   '/dashboard',
@@ -30,6 +32,7 @@ export function pathBucket(pathname: string): Bucket {
 }
 
 export function hostBucket(hostname: string): Bucket {
+  if (hostname.startsWith('admin.')) return 'admin'
   if (hostname.startsWith('app.')) return 'app'
   if (hostname.startsWith('docs.')) return 'docs'
   return 'marketing'
@@ -39,4 +42,5 @@ export const BUCKET_HOST: Record<Bucket, string> = {
   app: 'app.vistrowvoice.com',
   docs: 'www.vistrowvoice.com',
   marketing: 'www.vistrowvoice.com',
+  admin: 'admin.vistrowvoice.com',
 }

@@ -1,0 +1,134 @@
+{
+  "n": 28,
+  "publishOn": "2026-11-17",
+  "primaryKeyword": "gujarati ai voice agent",
+  "audience": "India, UK",
+  "slug": "gujarati-ai-voice-agent",
+  "title": "Gujarati AI voice agent for India and the UK",
+  "seoTitle": "Gujarati AI Voice Agent for Businesses in India and the UK",
+  "metaDescription": "What a Gujarati AI voice agent can handle for businesses in Gujarat and the UK, how it follows Gujarati, Hindi and English, and what to test before launch.",
+  "shortAnswer": "A Gujarati AI voice agent answers and places calls in Gujarati, follows callers into Hindi or English, and answers from your approved information. In Gujarat it suits property enquiries, payment reminders and bookings. In the UK it helps businesses whose customers prefer Gujarati, usually through the website widget or a number from your own telephony provider.",
+  "excerpt": "Gujarati is spoken by millions in Gujarat and by a large community in Britain. Here is how a Gujarati AI voice agent works for both, and what to check before your customers hear it.",
+  "category": "Languages & speech",
+  "related": [
+    "multilingual-ai-receptionist-hindi-punjabi-english",
+    "how-to-choose-a-multilingual-voice-agent",
+    "marathi-ai-voice-agent"
+  ],
+  "sections": [
+    {
+      "heading": "What is a Gujarati AI voice agent?",
+      "paragraphs": [
+        "A Gujarati AI voice agent holds a spoken conversation in Gujarati on a phone line or a website. It understands what the caller wants, answers from information you have approved, and books, records or hands over the call. It is a conversation, not a recorded Gujarati menu. Our [Gujarati AI calling agent page](/languages/gujarati) shows sample calls and the use cases it suits.",
+        "Vistrow Voice answers and places calls in Gujarati, opens with a greeting such as \"નમસ્તે\", and sends every captured lead, booking and transcript to your team. It is built for two kinds of buyer: businesses in Gujarat, and businesses abroad, especially in the UK, whose customers are more comfortable in Gujarati. The [website voice widget](/product/widget) lets either kind of customer talk to the agent from a browser."
+      ]
+    },
+    {
+      "heading": "Where does a Gujarati voice agent help in India?",
+      "paragraphs": [
+        "The 2011 Census of India counted about 5.5 crore people (55 million) whose mother tongue is Gujarati. Many Gujarat calls are short and business-like: a property enquiry in Ahmedabad, an invoice reminder between traders in Surat, a slot request at a Vadodara clinic. The [Gujarati real estate calling agent for Ahmedabad](/solutions/real-estate/gujarati-ai-calling-agent-ahmedabad-real-estate) page shows the property flow from first enquiry to site visit.",
+        "Payment and invoice reminders are a strong second use. An outbound campaign can remind each contact of a due date and record the date they promise, which the [collections and EMI reminder calls page](/solutions/finance) covers in more detail.",
+        "Whatever the call type, keep the agent to your approved facts. Store project details, timings, fees and policies in the [Vistrow Voice knowledge base](/product/knowledge-base), review the extracted answers, and switch on strict mode so the agent quotes them instead of improvising. When a caller asks something outside them, the agent says it will check with the team and takes a callback."
+      ],
+      "points": [
+        "Property enquiries and site-visit booking.",
+        "Invoice, renewal and EMI reminders with the promised date captured as a field.",
+        "Clinic, school and service bookings that arrive in a mix of Gujarati, Hindi and English."
+      ]
+    },
+    {
+      "heading": "Who needs a Gujarati AI voice agent in the UK?",
+      "paragraphs": [
+        "Gujarati is one of the most common main languages in England and Wales. The 2021 Census recorded about 189,000 residents aged three and over whose main language is Gujarati, and in Leicester it was the main language of 12.6% of residents. Pharmacies, accountants, travel agents, solicitors, estate agents and shops in those communities often serve older customers who would rather explain their request in Gujarati.",
+        "Our guide to a [multilingual AI receptionist for Hindi and Punjabi callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english) covers the same situation for other South Asian languages. The pattern is the same: one agent, several languages, and the caller never has to pick from a menu."
+      ]
+    },
+    {
+      "heading": "How does it handle Gujarati, Hindi and English in one call?",
+      "paragraphs": [
+        "Gujarati callers often move between Gujarati, Hindi and English in a single call. Words such as \"invoice\", \"payment\" and \"booking\", and most numbers, arrive in English. The agent keeps replying in Gujarati while the caller mixes words, and switches fully to Hindi or English when the caller does. In the UK, younger family members may start in English and hand the phone to a parent who continues in Gujarati; the agent follows that too.",
+        "Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia). Our page on [Hindi and Hinglish calling](/languages/hindi) explains the Hindi side of the same behaviour."
+      ]
+    },
+    {
+      "heading": "How do UK customers reach a Gujarati agent?",
+      "paragraphs": [
+        "The simplest route is the website. The widget works from any browser in any country, so a customer in Leicester or Wembley can press the button and speak Gujarati without dialling. With [page rules for the website widget](/help/website-widget/page-rules), you can route a Gujarati page of your site to a Gujarati-first agent with its own greeting.",
+        "Phone numbers connect through your own telephony provider and are routed to the agent, as the [phone number connection guide](/help/phone-numbers/connect-a-number) explains. Whether a UK caller can reach a number, and at what cost, depends on that provider, so confirm it before you print a number for UK customers."
+      ]
+    },
+    {
+      "heading": "What should you test before launching a Gujarati agent?",
+      "paragraphs": [
+        "Politeness matters in Gujarati business calls. Address forms such as \"ભાઈ\", \"બેન\" and \"સાહેબ\" after a name are normal, and a greeting copied from Hindi sounds wrong. Write the welcome message and key lines in Gujarati, and have a native speaker listen to them. Then run the scenarios in the [Testing Lab guide](/help/testing-lab/run-a-test) with real Gujarati speakers from your customer base.",
+        "Business calls in Gujarat are numbers-heavy, so check how the agent reads back invoice numbers, dates and amounts, and capture outcomes such as a promised payment date as a post-call field."
+      ],
+      "points": [
+        "A caller who switches between Gujarati, Hindi and English.",
+        "An older caller who speaks slowly, and one on a noisy line.",
+        "Names, invoice numbers, dates and phone numbers read back correctly.",
+        "A question outside your approved answers, to check the agent hands over or takes a callback."
+      ]
+    },
+    {
+      "heading": "Which rules apply to outbound Gujarati calls?",
+      "paragraphs": [
+        "In India, outbound calling must respect DND preferences and permitted calling windows. Every dial on Vistrow Voice is checked against your Do-Not-Call list and calling window first, as the [calling window and Do-Not-Call guide](/help/compliance/calling-rules) explains. The [outbound calling campaigns page](/product/outbound) shows how reminders and follow-ups are set up.",
+        "In the UK, the ICO says businesses making live marketing calls should screen numbers against the Telephone Preference Service unless the person has specifically consented, and must say who is calling. Check with your adviser how these rules apply to AI calls. Our [Marathi AI voice agent guide](/resources/blog/marathi-ai-voice-agent) covers the same testing approach for another Indian language, and the [Vistrow Voice pricing page](/pricing) lists plans when you are ready."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI voice agent speak natural Gujarati?",
+      "a": "Yes, for everyday business calls. Write the greeting and key lines in Gujarati rather than copying Hindi ones, and test with callers who speak the way your customers do."
+    },
+    {
+      "q": "Can UK customers talk to a Gujarati AI agent?",
+      "a": "Yes. The website voice widget works from any browser in any country. Phone access from the UK depends on the telephony provider you connect."
+    },
+    {
+      "q": "Does it follow a caller who switches to Hindi or English?",
+      "a": "Yes. It keeps replying in Gujarati while the caller mixes in a few words, and switches fully to Hindi or English when the caller does."
+    },
+    {
+      "q": "Can it send Gujarati payment reminders?",
+      "a": "Yes. An outbound campaign can remind each contact of a due date and capture the date they promise, inside your calling window and Do-Not-Call rules."
+    },
+    {
+      "q": "Can one agent serve Gujarat and the UK?",
+      "a": "It can, but most businesses set up separate agents or page rules so each one has the right greeting, hours, timezone and approved answers for its market."
+    },
+    {
+      "q": "Where do Gujarati call results go?",
+      "a": "Each call is saved with its recording, transcript and summary, and captured details such as a promised payment date can be sent to Zoho CRM, Google Sheets, Slack or a webhook."
+    }
+  ],
+  "imageAlt": "Large Gujarati greeting નમસ્તે beside a smiling shop owner on his phone in a rainy UK high-street shop, with an Artha badge answering in Gujarati",
+  "imagePrompt": "Designed cover (scripts/blog-covers/28-gujarati-ai-voice-agent.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Census of India 2011, Table C-16: Population by mother tongue, India",
+      "url": "https://censusindia.gov.in/nada/index.php/catalog/10191"
+    },
+    {
+      "title": "ONS Census 2021, TS024 Main language (detailed), England and Wales and Leicester (Nomis)",
+      "url": "https://www.nomisweb.co.uk/datasets/c2021ts024"
+    },
+    {
+      "title": "ICO: Telephone marketing (guide to PECR)",
+      "url": "https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/guide-to-pecr/electronic-and-telephone-marketing/telephone-marketing/"
+    }
+  ],
+  "contextualLinks": "To plan a Gujarati line, start with the [Gujarati AI calling agent overview](/languages/gujarati) and the [website voice widget for any browser](/product/widget).",
+  "inbound": [
+    {
+      "target": "language:gujarati",
+      "sentence": "For businesses in Gujarat and the UK, read our guide to choosing a [Gujarati AI voice agent](/resources/blog/gujarati-ai-voice-agent)."
+    },
+    {
+      "target": "blog:multilingual-ai-receptionist-hindi-punjabi-english",
+      "sentence": "If many of your UK customers speak Gujarati, our [Gujarati AI voice agent guide](/resources/blog/gujarati-ai-voice-agent) covers greetings, testing and calling rules."
+    }
+  ]
+}

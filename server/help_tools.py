@@ -175,6 +175,20 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "upcoming_follow_ups",
+            "description": "Follow-up calls the AI will make back to people (call backs, visit reminders, nurture check-ins) that are still waiting: who, when, which agent, and the followUpId to reschedule, cancel or call one now.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Optional name or phone number to find one person's follow-up."}
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "phone_numbers",
             "description": "This workspace's phone numbers with their label, status, and which agent answers each one.",
             "parameters": {"type": "object", "properties": {}, "required": []},
@@ -184,10 +198,17 @@ TOOL_SCHEMAS = [
 
 # Tenant-facing model names, mirroring MODEL_OPTIONS/RETIRED_MODELS in
 # web-demo/src/lib/agentOptions.ts — the dashboard never shows the vendor
-# model string, so the bot must not either. Unknown values fall back to the
-# raw string, same as the agent editor does.
+# model string, so the bot must not either. An id missing here says
+# "Vistrow model" rather than the raw vendor string (it used to fall back to
+# the raw id, which leaked newer models such as the realtime one).
 _MODEL_LABELS = {
     "sarvam/sarvam-105b-conversations": "Vistrow Bharat",
+    "gemini-live:gemini-3.8-live": "Vistrow Live 3.8",
+    "gemini-live:gemini-3.1-flash-live-preview": "Vistrow Live 3.1 (retired)",
+    "gemini-live": "Vistrow Live 2.5 (retired)",
+    "gpt-5-nano": "Vistrow Nano Lab",
+    "gpt-5.4-nano": "Vistrow Swift",
+    "gpt-5.4-mini": "Vistrow Prime",
     "gpt-4.1-mini": "Vistrow Swift",
     "gpt-4.1": "Vistrow Prime",
     "gpt-4o": "Vistrow Pro",
@@ -195,6 +216,7 @@ _MODEL_LABELS = {
     "gpt-4o-mini": "Vistrow Standard",
     "gemini-3.5-flash-lite": "Vistrow Lite",
 }
+_UNKNOWN_MODEL_LABEL = "Vistrow model"
 
 # Caps keeping every tool result small enough to feed back to the model.
 MAX_LIST_ITEMS = 20
@@ -327,7 +349,7 @@ def _agent_summary(agent: dict, numbers_by_agent: dict[int, list[str]]) -> dict:
         "agentId": agent["id"],
         "name": agent["name"],
         "status": agent["status"],
-        "model": _MODEL_LABELS.get(agent["model"], agent["model"]),
+        "model": _MODEL_LABELS.get(agent["model"], _UNKNOWN_MODEL_LABEL),
         "voice": agent["voiceName"],
         "language": agent["language"],
         "phoneNumbers": numbers_by_agent.get(agent["id"], []),
@@ -510,6 +532,51 @@ def upcoming_appointments(account_id: int, days: int = 7, timezone_name: str = "
     }
 
 
+def upcoming_follow_ups(account_id: int, query: str = "", **_ignored) -> dict:
+    """Waiting follow-ups, soonest first, times in the workspace calling time
+    zone (the one the dialer and the copilot's follow-up actions use)."""
+    try:
+        tz = ZoneInfo(calls_db.get_compliance(account_id).get("timezone") or "Asia/Kolkata")
+    except Exception:
+        tz = ZoneInfo("Asia/Kolkata")
+    data = calls_db.list_follow_ups(account_id, view="upcoming")
+    items = data["items"]
+    needle = _text(query, 60).casefold()
+    digits = "".join(c for c in needle if c.isdigit())
+    if needle:
+        items = [i for i in items if needle in i["name"].casefold()
+                 or (len(digits) >= 4 and digits in "".join(c for c in i["phone"] if c.isdigit()))]
+
+    def when(iso: str) -> str:
+        try:
+            local = datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(tz)
+        except (AttributeError, ValueError):
+            return ""
+        return f"{local:%a} {local.day} {local:%b} {local:%Y}, {local:%H:%M}"
+
+    return {
+        "found": bool(items),
+        "timezone": tz.key,
+        "waitingTotal": data["counts"]["upcoming"],
+        "followUps": [
+            {
+                "followUpId": i["id"],
+                "name": i["name"],
+                "phone": i["phone"],
+                "type": i["label"],
+                "due": when(i["dueAt"]),
+                "agent": i["agentName"],
+                "agentId": i["agentId"],
+                "retryingAfterNoAnswer": i["status"] != "pending",
+                "beingCalledNow": i["status"] == "calling",
+                "campaignPaused": i["campaignPaused"],
+                "summary": _text(i["summary"]),
+            }
+            for i in items[:MAX_LIST_ITEMS]
+        ],
+    }
+
+
 def phone_numbers(account_id: int, **_ignored) -> dict:
     numbers = calls_db.list_phone_numbers(account_id)
     agent_names = {a["id"]: a["name"] for a in calls_db.list_agents(account_id)}
@@ -542,5 +609,6 @@ TOOL_FUNCTIONS = {
     "contact_requirements": contact_requirements,
     "failing_integrations": failing_integrations,
     "upcoming_appointments": upcoming_appointments,
+    "upcoming_follow_ups": upcoming_follow_ups,
     "phone_numbers": phone_numbers,
 }

@@ -38,22 +38,26 @@ import { DemoCall } from './pages/marketing/DemoCall'
 import { Privacy } from './pages/marketing/Privacy'
 import { Terms } from './pages/marketing/Terms'
 import { NotFound } from './pages/marketing/NotFound'
-import { Login } from './pages/Login'
-import { Signup } from './pages/Signup'
-import { ForgotPassword } from './pages/ForgotPassword'
-import { ResetPassword } from './pages/ResetPassword'
-import { ConfirmEmailChange } from './pages/ConfirmEmailChange'
-import { VerifyEmail } from './pages/VerifyEmail'
-import { Onboarding } from './pages/Onboarding'
-import { InviteAccept } from './pages/InviteAccept'
-import { SidebarPreview } from './pages/SidebarPreview'
+import { adminHostServes, isAdminHost } from './lib/adminHost'
+import { useAuth } from './lib/auth'
 import { useEffect } from 'react'
 import { StagingBadge } from './components/StagingBadge'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { initClarity, trackPageView } from './lib/analytics'
 import { AnalyticsConsentBanner } from './components/AnalyticsConsentBanner'
 
-// Dashboard and admin screens load on demand: the marketing pages must not ship them.
+// Dashboard, admin and sign-in screens load on demand: the marketing pages must
+// not ship them. None of these routes is prerendered (they get app-shell.html),
+// so React.lazy is safe here; marketing routes stay eager for renderToString.
+const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })))
+const Signup = lazy(() => import('./pages/Signup').then((m) => ({ default: m.Signup })))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then((m) => ({ default: m.ForgotPassword })))
+const ResetPassword = lazy(() => import('./pages/ResetPassword').then((m) => ({ default: m.ResetPassword })))
+const ConfirmEmailChange = lazy(() => import('./pages/ConfirmEmailChange').then((m) => ({ default: m.ConfirmEmailChange })))
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then((m) => ({ default: m.VerifyEmail })))
+const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })))
+const InviteAccept = lazy(() => import('./pages/InviteAccept').then((m) => ({ default: m.InviteAccept })))
+const SidebarPreview = lazy(() => import('./pages/SidebarPreview').then((m) => ({ default: m.SidebarPreview })))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
 const AdminAccounts = lazy(() => import('./pages/admin/AdminAccounts').then((m) => ({ default: m.AdminAccounts })))
 const AdminAccountDetail = lazy(() => import('./pages/admin/AdminAccountDetail').then((m) => ({ default: m.AdminAccountDetail })))
@@ -70,6 +74,20 @@ const AdminPrivacyRequests = lazy(() => import('./pages/admin/AdminPrivacyReques
 const AdminIpBlocks = lazy(() => import('./pages/admin/AdminIpBlocks').then((m) => ({ default: m.AdminIpBlocks })))
 const AdminSupport = lazy(() => import('./pages/admin/AdminSupport').then((m) => ({ default: m.AdminSupport })))
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })))
+const AdminLogin = lazy(() => import('./pages/AdminLogin').then((m) => ({ default: m.AdminLogin })))
+
+/** admin.vistrowvoice.com serves only the panel, its sign-in, and the tenant
+ * dashboard during a support ("View as") session started there; anything
+ * else (a marketing link, /dashboard after Exit) goes to /admin. The edge
+ * middleware does the same for full page loads. Rendered only on the admin
+ * host, so marketing pages never probe the session. */
+function AdminHostGate() {
+  const { pathname } = useLocation()
+  const { user, loading } = useAuth()
+  if (loading && pathname.startsWith('/dashboard')) return null
+  if (adminHostServes(pathname, !!user?.impersonating)) return null
+  return <Navigate to="/admin" replace />
+}
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
 const Agents = lazy(() => import('./pages/Agents').then((m) => ({ default: m.Agents })))
 const TestingLab = lazy(() => import('./pages/TestingLab').then((m) => ({ default: m.TestingLab })))
@@ -84,6 +102,7 @@ const Usage = lazy(() => import('./pages/Usage').then((m) => ({ default: m.Usage
 const Contacts = lazy(() => import('./pages/Contacts').then((m) => ({ default: m.Contacts })))
 const ContactDetail = lazy(() => import('./pages/ContactDetail').then((m) => ({ default: m.ContactDetail })))
 const Appointments = lazy(() => import('./pages/Appointments').then((m) => ({ default: m.Appointments })))
+const FollowUps = lazy(() => import('./pages/FollowUps').then((m) => ({ default: m.FollowUps })))
 const PhoneNumbers = lazy(() => import('./pages/PhoneNumbers').then((m) => ({ default: m.PhoneNumbers })))
 const Support = lazy(() => import('./pages/Support').then((m) => ({ default: m.Support })))
 const LeadDetail = lazy(() => import('./pages/LeadDetail').then((m) => ({ default: m.LeadDetail })))
@@ -163,6 +182,7 @@ function App() {
       <AnalyticsListener />
       <AnalyticsConsentBanner />
       <StagingBadge />
+      {isAdminHost() && <AdminHostGate />}
       <Suspense fallback={<AppLoadingScreen />}>
       <Routes location={backgroundLocation ?? location}>
         {import.meta.env.DEV && <Route path="/__preview/sidebar" element={<SidebarPreview />} />}
@@ -203,7 +223,7 @@ function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
 
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={isAdminHost() ? <AdminLogin /> : <Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -232,6 +252,7 @@ function App() {
         <Route path="/dashboard/contacts" element={guard(<Contacts />)} />
         <Route path="/dashboard/contacts/:id" element={guard(<ContactDetail />)} />
         <Route path="/dashboard/appointments" element={guard(<Appointments />)} />
+        <Route path="/dashboard/follow-ups" element={guard(<FollowUps />)} />
         <Route path="/dashboard/integrations" element={guard(<Integrations />)} />
         <Route path="/dashboard/integrations/:key" element={guard(<IntegrationDetail />)} />
         <Route path="/dashboard/channels" element={guard(<Navigate to="/dashboard/numbers" replace />)} />

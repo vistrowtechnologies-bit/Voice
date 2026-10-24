@@ -285,6 +285,7 @@ export function BrowserTestModal({
         <RoomAudioRenderer />
         <ActiveCallUI
           agentLabel={`${agent.name} · ${testContext?.scenarioName ?? 'Test Call'}`}
+          agentName={agent.name.split(/\s[-–·]\s/)[0] || agent.name}
           onLeadUpdate={() => {}}
           onTranscriptUpdate={() => {}}
         />

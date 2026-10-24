@@ -3,4 +3,13 @@
 // path; each entry is one sentence with [anchor](/resources/blog/slug) links.
 // Rendered by components/PageGuides.tsx inside MarketingLayout's <main>.
 export const PAGE_GUIDES: Record<string, string[]> = {
+  '/ai-receptionist': [
+    'Still deciding between options? Read our guide to [comparing an AI receptionist with an answering service and an IVR](/resources/blog/ai-receptionist-vs-answering-service-vs-ivr).',
+  ],
+  '/product/inbound': [
+    'New to the idea? Start with [what an AI receptionist does on a call](/resources/blog/what-is-an-ai-receptionist).',
+  ],
+  '/ai-ivr': [
+    'Our guide to [turning an IVR tree into a conversation](/resources/blog/ai-ivr-replacing-phone-menus-with-conversation) shows how to rewrite each menu option before you switch.',
+  ],
 }

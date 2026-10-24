@@ -86,6 +86,7 @@ class CreditAdmissionTests(unittest.TestCase):
             ("sarvam/sarvam-105b-conversations", "standard"), ("gpt-4.1-mini", "premium"),
             ("gemini-live", "realtime"), ("gemini-live:gemini-3.8-live", "realtime_plus"),
             ("gemini-live:gemini-3.1-flash-live-preview", "realtime_plus"), ("gpt-4o", "premium_plus"),
+            ("duplex:live-1", "realtime_plus"), ("duplex", "realtime_plus"),
         ):
             self.assertEqual(db._model_tier(model), tier, model)
 

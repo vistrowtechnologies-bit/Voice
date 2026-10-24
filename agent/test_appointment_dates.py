@@ -59,6 +59,18 @@ class Availability(unittest.TestCase):
         slots = db.check_appointment_availability(1, "2026-10-12", 30)  # Monday
         self.assertEqual(slots[0], "10:00")
 
+    def test_one_bookings_query_for_the_whole_day(self):
+        # Call 1459: one query per slot cost 6.0 s over the database proxy.
+        slots = db.check_appointment_availability(1, "2026-10-12", 30)
+        self.assertGreater(len(slots), 10)
+        self.assertEqual(self.conn.execute.call_count, 1)
+
+    def test_a_booked_slot_is_still_excluded(self):
+        self.conn.execute.return_value.fetchall.return_value = [{"start_time": "11:00", "duration_minutes": 30}]
+        slots = db.check_appointment_availability(1, "2026-10-12", 30)
+        self.assertNotIn("11:00", slots)
+        self.assertIn("11:30", slots)
+
     def test_booking_a_past_time_is_refused_without_an_insert(self):
         result = db.book_native_appointment(1, 2, "2026-10-10", "13:00", 30, "A", "+911", "visit")
         self.assertFalse(result["ok"])
@@ -117,3 +129,30 @@ class PromptToday(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AvailabilityConfigCache(unittest.TestCase):
+    """Call 1459: the availability config was read twice per booking, each a
+    round-trip over the DB proxy. Cached 60 s; a failed read is not cached."""
+
+    def setUp(self):
+        db._availability_cache.clear()
+        self.addCleanup(db._availability_cache.clear)
+
+    def test_second_read_is_served_from_the_cache(self):
+        conn = mock.MagicMock()
+        conn.execute.return_value.fetchone.return_value = None
+        with mock.patch.object(db.dbconn, "connect", return_value=conn) as connect:
+            db.get_availability_config(7)
+            db.get_availability_config(7)
+        self.assertEqual(connect.call_count, 1)
+
+    def test_a_failed_read_is_not_cached(self):
+        bad = mock.MagicMock()
+        bad.execute.side_effect = db.psycopg.OperationalError("down")
+        good = mock.MagicMock()
+        good.execute.return_value.fetchone.return_value = None
+        with mock.patch.object(db.dbconn, "connect", side_effect=[bad, good]) as connect:
+            self.assertEqual(db.get_availability_config(7), dict(db._AVAILABILITY_DEFAULTS))
+            db.get_availability_config(7)
+        self.assertEqual(connect.call_count, 2)

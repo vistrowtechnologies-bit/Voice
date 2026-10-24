@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useEffect } from 'react'
 
 export interface AuthUser {
   id: number
@@ -26,6 +26,11 @@ export interface AuthUser {
   mfaEnabled?: boolean
   /** This browser's session passed two-step login (needed for /admin). */
   mfaVerified?: boolean
+  /** Signed in through the admin host's own sign-in (admin.vistrowvoice.com). */
+  adminSession?: boolean
+  /** This login may open the admin panel (server calls_db.can_open_admin).
+   * isPlatformOwner stays for the workspace's owner-only features. */
+  isPlatformAdmin?: boolean
 }
 
 export interface AuthState {
@@ -48,12 +53,19 @@ export interface AuthState {
   logout: () => Promise<void>
   refresh: () => Promise<void>
   setUser: (user: AuthUser) => void
+  /** Starts the one-time session probe (/auth/me). useAuth calls it, so pages
+   * that never read auth state (the marketing site) never make the request. */
+  ensureSession?: () => void
 }
 
 export const AuthContext = createContext<AuthState | null>(null)
 
 export function useAuth(): AuthState {
   const ctx = useContext(AuthContext)
+  const ensureSession = ctx?.ensureSession
+  useEffect(() => {
+    ensureSession?.()
+  }, [ensureSession])
   if (!ctx) throw new Error('useAuth must be used within <AuthProvider>')
   return ctx
 }
@@ -80,6 +92,10 @@ export const apiMe = () => authFetch<{ user: AuthUser }>('/auth/me')
 export const apiLogin = (email: string, password: string) =>
   authFetch<{ user?: AuthUser; mfaRequired?: boolean }>('/auth/login', { email, password })
 export const apiLoginMfa = (code: string) => authFetch<{ user: AuthUser }>('/auth/login/mfa', { code })
+/** Admin host sign-in: owner email + password, always followed by the code
+ * step (/auth/login/mfa). Non-owners get 401, an owner without two-step 403. */
+export const apiAdminLogin = (email: string, password: string) =>
+  authFetch<{ ok: boolean; mfaRequired?: boolean }>('/auth/admin/login', { email, password })
 
 // --- two-step login (Settings → Security) ---
 export interface MfaStatus { enabled: boolean; enabledAt: string | null; recoveryCodesLeft: number; required: boolean }

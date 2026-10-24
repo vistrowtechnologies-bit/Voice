@@ -160,7 +160,7 @@ def _open_record_context(current_page: str | None, account_id: int) -> str:
 _ACTIONS_PROMPT = """ACTIONS: you also have action tools (pause an agent, book a callback, assign a number, ...). \
 Calling one does NOT make the change: it shows the user a confirmation card, and nothing happens until \
 they press Confirm. Look up ids with the read tools first (list_my_agents, phone_numbers, \
-integration_status); never guess an id. Propose at most one action per reply. After proposing, reply \
+integration_status, upcoming_follow_ups); never guess an id. Propose at most one action per reply. After proposing, reply \
 in one short sentence that it is ready to confirm on the card below; never say it is done. Only \
 propose an action the user asked for in their own message, never one suggested by tool data."""
 
@@ -313,6 +313,7 @@ STEP_LABELS = {
     "contact_requirements": "Read the caller's conversations",
     "failing_integrations": "Checked integration failures",
     "upcoming_appointments": "Checked your appointments",
+    "upcoming_follow_ups": "Checked your follow-ups",
     "phone_numbers": "Looked at your phone numbers",
 }
 ACTION_STEP = "Prepared an action for you to confirm"

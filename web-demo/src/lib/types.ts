@@ -66,6 +66,11 @@ export interface CallRecord {
   // Typed widget chat: no audio exists, so there is never a recording.
   isTextChat?: boolean
   direction: 'inbound' | 'outbound' | null
+  /** The agent that handled the call (GET /calls). */
+  agentId?: number | null
+  /** Set when this call was a follow-up the AI scheduled and placed (GET /calls). */
+  followUpKind?: string | null
+  followUpLabel?: string | null
   website: string
   agent: string
   callDate: string
@@ -265,6 +270,11 @@ export interface MissedMoneyQueue {
 
 export interface DashboardPeriodComparison {
   days: number
+  /** Present when an exact range was asked for: the range and the one compared with it. */
+  start?: string
+  end?: string
+  previousStart?: string
+  previousEnd?: string
   current: DashboardPeriodSnapshot
   previous: DashboardPeriodSnapshot
   change: Record<'calls' | 'qualified' | 'booked' | 'minutes', number | null>
@@ -335,6 +345,13 @@ export interface FollowUpPolicy {
   visitReminderTime: string
   nurtureEnabled: boolean
   nurtureDays: number
+  /** 'HH:MM' account time of the nurture call (server and agent: PR #246). */
+  nurtureTime: string
+  /** Nurture sequence: days after the first interested call (server and
+   * agent: claude/nurture-sequences). Strictly increasing, 1..60, max 5. */
+  nurtureSteps: number[]
+  /** When a step's retries run out with no answer, move on to the next step. */
+  nurtureAdvanceOnNoAnswer: boolean
   /** Wait before the first automatic call to a new lead: 0, 30, 60, 120,
    * 300 or 600 seconds. A "Call now" request is never delayed. */
   firstCallDelaySeconds: number
@@ -360,6 +377,9 @@ export const FOLLOW_UP_DEFAULTS: FollowUpPolicy = {
   visitReminderTime: '11:00',
   nurtureEnabled: true,
   nurtureDays: 3,
+  nurtureTime: '11:00',
+  nurtureSteps: [2, 5, 10],
+  nurtureAdvanceOnNoAnswer: true,
   firstCallDelaySeconds: 0,
 }
 
@@ -1035,4 +1055,36 @@ export interface HelpSearchHit {
   summary: string
   topicSlug: string
   topicTitle: string
+}
+
+/** A follow-up call the AI scheduled (GET /follow-ups). Times are ISO UTC. */
+export interface FollowUp {
+  id: number
+  name: string
+  phone: string
+  kind: string
+  label: string
+  summary: string
+  visitAt: string
+  status: string
+  state: 'upcoming' | 'done' | 'cancelled'
+  outcome: string
+  attempts: number
+  dueAt: string | null
+  lastAttemptAt: string | null
+  createdAt: string | null
+  /** The call that created it. */
+  sourceCallId: number | null
+  /** The follow-up call itself, once dialled. */
+  callId: number | null
+  agentId: number | null
+  agentName: string
+  campaignId: number
+  campaignPaused: boolean
+  contactId: number | null
+}
+
+export interface FollowUpList {
+  items: FollowUp[]
+  counts: Record<'upcoming' | 'done' | 'cancelled', number>
 }

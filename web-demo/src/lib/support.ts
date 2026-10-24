@@ -98,6 +98,7 @@ export const HELP_TOPIC_BY_ROUTE: Record<string, string> = {
   '/dashboard/inbound': 'inbound',
   '/dashboard/outbound': 'outbound',
   '/dashboard/calls': 'calls',
+  '/dashboard/follow-ups': 'follow-ups',
   '/dashboard/contacts': 'contacts',
   '/dashboard/appointments': 'appointments',
   '/dashboard/integrations': 'integrations',

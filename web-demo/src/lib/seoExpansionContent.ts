@@ -54,7 +54,7 @@ const BASE_COMPARE_VENDORS: CompareVendor[] = [
     rows: [
       { dimension: 'Core use case', vendor: 'Business calling, IVR, tracking, and routing.', vistrow: 'AI-led inbound, outbound, and web conversations.' },
       { dimension: 'Caller experience', vendor: 'Structured call flows and routing logic.', vistrow: 'Natural spoken conversation with knowledge-grounded answers.' },
-      { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'More than 130 languages, including Hindi, English and 9 more Indian languages, with a default language per agent and mid-call switching.' },
+      { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'More than 130 languages, including Hindi, English and 9 other Indian languages, with a default language per agent and mid-call switching.' },
       { dimension: 'CRM output', vendor: 'Depends on integration configuration.', vistrow: 'Lead fields, transcript, call outcome, and recording link are prepared for CRM sync.' },
       { dimension: 'Where it fits', vendor: 'Telephony-first teams.', vistrow: 'Teams that want the AI agent to do the first conversation.' },
     ],
@@ -867,7 +867,7 @@ export const DEMO_CALLS: DemoCall[] = [
     whyItMatters:
       'Inbound calls come at any hour, including when your sales team is away from the phone. An agent that answers, asks the basics and records them means a call at night is waiting as a qualified enquiry in the morning rather than a missed number.',
     configure: [
-      { title: 'An inbound number', body: 'Connect an EnableX number under Phone Numbers, choose the agent that answers it, and use Test call to check it. Set hours, days and limits under Inbound.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
+      { title: 'An inbound number', body: 'Connect your business number under Phone Numbers, choose the agent that answers it, and use Test call to check it. Set hours, days and limits under Inbound.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
       { title: 'Project knowledge', body: 'Add project facts to the knowledge base, so questions about location are answered from approved information.' },
       { title: 'Strict mode', body: 'Keep the agent to your approved answers so it does not invent price or inventory.' },
       { title: 'Kannada voice', body: 'Choose a voice and default language, then test mixed Kannada and English calls on your own agent before going live.' },

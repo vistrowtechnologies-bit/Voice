@@ -15,6 +15,7 @@ from livekit.agents import RunContext
 from livekit.agents.llm import function_tool
 
 import db
+import safe_http
 from lead_placeholders import PLACEHOLDER_VALUES
 from language import (
     catalog_locality,
@@ -570,6 +571,36 @@ TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 _TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
 
+# Second, different line for a lookup still running after the first filler
+# (call 1459, 21 Oct 2026: a 5.8 s check with no filler left for the caller,
+# since the first one is said once per call). Also once per call.
+_STILL_CHECKING_LINES = {
+    "hi-IN": {"female": "बस देख रही हूँ...", "male": "बस देख रहा हूँ..."},
+    "mr-IN": {"female": "बघते आहे, एक क्षण...", "male": "बघतोय, एक क्षण..."},
+    "en-IN": {"default": "Still checking, just a moment..."},
+}
+_STILL_CHECKING_AFTER_S = 3.0
+
+
+def _still_checking_line(context: RunContext) -> str:
+    agent = context.session.current_agent
+    options = _STILL_CHECKING_LINES.get(getattr(agent, "_reply_language", "en-IN")) or _STILL_CHECKING_LINES["en-IN"]
+    return options.get(getattr(agent, "_voice_gender", "female")) or options.get("default") or _STILL_CHECKING_LINES["en-IN"]["default"]
+
+
+async def _await_with_still_checking(context: RunContext, task: "asyncio.Task"):
+    """Await a slow lookup; past _STILL_CHECKING_AFTER_S, say one different
+    holding line (once per call) so the caller never sits in silence."""
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), timeout=_STILL_CHECKING_AFTER_S)
+    except asyncio.TimeoutError:
+        agent = context.session.current_agent
+        if not getattr(agent, "_is_realtime", False) and not getattr(agent, "_said_still_checking", False):
+            agent._said_still_checking = True
+            context.session.say(_still_checking_line(context), allow_interruptions=False)
+        return await task
+
+
 def _calendar_check_filler(context: RunContext) -> str:
     """Natural, language-matched bridge spoken before a calendar lookup."""
     agent = context.session.current_agent
@@ -601,16 +632,19 @@ async def _post_webhook(context: RunContext, payload: dict) -> None:
     for url in (account_url, userdata.get("agent_webhook_url")):
         # The account's webhook (Integrations page) and this agent's own
         # (Agents → Webhook); the same URL in both gets one delivery, not two.
-        if url and url.startswith(("https://", "http://")) and url not in urls:
+        if safe_http.is_http_url(url) and url not in urls:
             urls.append(url)
     if not urls:
         return
     timeout = aiohttp.ClientTimeout(total=5)
-    async with aiohttp.ClientSession(timeout=timeout) as http:
+    async with safe_http.public_session(timeout) as http:
         for url in urls:
             try:
-                await http.post(url, json=payload)
-                logger.info("posted %s event to webhook", payload.get("type"))
+                async with http.post(url, json=payload) as resp:
+                    if 200 <= resp.status < 300:
+                        logger.info("posted %s event to webhook", payload.get("type"))
+                    else:
+                        logger.warning("webhook answered HTTP %s for %s event", resp.status, payload.get("type"))
             except Exception:
                 # One dead endpoint must not stop delivery to the other.
                 logger.warning("webhook post failed", exc_info=True)
@@ -988,14 +1022,14 @@ async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | 
         refreshed = await _zoho_refresh_access_token(http, config)
         if refreshed:
             access_token, config = refreshed
-            db.update_integration_config(account_id, "zoho_crm", config)
+            await asyncio.to_thread(db.update_integration_config, account_id, "zoho_crm", config)
 
     ok, status = await _post(access_token)
     if not ok and status == 401:
         refreshed = await _zoho_refresh_access_token(http, config)
         if refreshed:
             access_token, config = refreshed
-            db.update_integration_config(account_id, "zoho_crm", config)
+            await asyncio.to_thread(db.update_integration_config, account_id, "zoho_crm", config)
             ok, status = await _post(access_token)
     return ok
 
@@ -1556,7 +1590,9 @@ async def _deliver_to_integrations(
         return
     try:
         timeout = aiohttp.ClientTimeout(total=5)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
+        # Public addresses only: generic webhook, Slack and Apps Script URLs
+        # are customer-supplied (server deliveries already check them).
+        async with safe_http.public_session(timeout) as http:
             all_fields_lead = lead
             for integ in integrations:
                 lead = all_fields_lead
@@ -1709,6 +1745,16 @@ async def _publish_event(context: RunContext, payload: dict) -> None:
     await room.local_participant.publish_data(json.dumps(payload), topic="lead-events")
 
 
+def _is_test_call(context: RunContext) -> bool:
+    """A dashboard test call (room "test-agent-..." / "test-phone-...").
+
+    Owner, 23 Oct 2026: test calls booked real appointments onto the
+    workspace calendar. They still read the real calendar, so slot offers
+    are tested, but bookings, callbacks and opt-outs are not written."""
+    room = (context.userdata or {}).get("room")
+    return str(getattr(room, "name", "") or "").startswith(("test-agent-", "test-phone-"))
+
+
 def _is_demo(context: RunContext) -> bool:
     """Whether this call is one of the published marketing demos.
 
@@ -1765,8 +1811,8 @@ async def _calendar_book(
     # people trying the marketing site, sitting alongside genuine bookings
     # with no way to tell them apart. The conversation still behaves exactly
     # as if the booking succeeded; nothing is persisted.
-    if _is_demo(context):
-        logger.info("demo agent: simulating booking on %s at %s (nothing written)", date, time)
+    if _is_demo(context) or _is_test_call(context):
+        logger.info("demo/test call: simulating booking on %s at %s (nothing written)", date, time)
         return {"ok": True}
     account_id = (context.userdata or {}).get("account_id")
     agent_id = (context.userdata or {}).get("agent_id")
@@ -1866,7 +1912,7 @@ async def check_calendar_availability(
             _agent._said_calendar_filler = True
             filler = context.session.say(_calendar_check_filler(context), allow_interruptions=False)
             await filler.wait_for_playout()
-        slots = await slots_task
+        slots = await _await_with_still_checking(context, slots_task)
     except BaseException:
         if not slots_task.done():
             slots_task.cancel()
@@ -2093,8 +2139,8 @@ async def do_not_call(context: RunContext, reason: str = "") -> str:
             "There is no phone number on this call to add to the do-not-call list. Apologise, "
             "assure them they will not be contacted again, and close the call politely."
         )
-    if _is_demo(context):
-        logger.info("demo agent: simulating do-not-call for %s", _mask_phone(phone))
+    if _is_demo(context) or _is_test_call(context):
+        logger.info("demo/test call: simulating do-not-call for %s", _mask_phone(phone))
         added = True
     else:
         added = await asyncio.to_thread(
@@ -2140,6 +2186,20 @@ async def send_brochure(context: RunContext, project: str = "") -> str:
     )
 
 
+def _is_business_own_number(context: RunContext, phone: str) -> bool:
+    """The number is in the agent's own instructions (the business's contact
+    number) and is not the caller's. Call 1459 (21 Oct 2026) booked a website
+    caller under +91 90670 97779 copied from the prompt; call 1479 (23 Oct)
+    did the same with request_callback."""
+    digits = re.sub(r"\D", "", phone or "")
+    caller = re.sub(r"\D", "", str((context.userdata or {}).get("visitor_phone") or ""))
+    if len(digits) < 10 or digits[-10:] == caller[-10:]:
+        return False
+    agent = getattr(getattr(context, "session", None), "current_agent", None)
+    instructions = str(getattr(agent, "instructions", "") or "")
+    return digits[-10:] in re.sub(r"\D", "", instructions)
+
+
 @function_tool
 async def request_callback(
     context: RunContext,
@@ -2166,8 +2226,13 @@ async def request_callback(
             "You do not have both a name and a phone number yet. Ask for whichever is missing — "
             "one at a time — and call this again once you have both."
         )
-    if _is_demo(context):
-        logger.info("demo agent: simulating callback request for %s", _mask_phone(phone))
+    if _is_business_own_number(context, phone):
+        return (
+            "CALLBACK NOT RECORDED — that number is this business's own contact number, not the "
+            "caller's. Ask the caller for their own phone number first."
+        )
+    if _is_demo(context) or _is_test_call(context):
+        logger.info("demo/test call: simulating callback request for %s", _mask_phone(phone))
         result = {"ok": True}
     else:
         result = await asyncio.to_thread(
@@ -2191,11 +2256,11 @@ async def request_callback(
         "time": preferred_time,
         "purpose": reason,
     }
-    await _publish_event(context, event)
-    await _post_webhook(context, event)
     # Same fan-out a booking gets: this is the lead the clinic would otherwise
     # have lost, so it needs to reach Slack/Sheets/CRM, not just the database.
-    await _fan_out_integrations(context, event)
+    # In the background, as for log_lead: awaited here it held the reply
+    # 3.8 s in call 1476.
+    _fan_out_in_background(context, event)
     if result is None:
         logger.warning("callback request could not be stored for %s", _mask_phone(phone))
         return (
@@ -2244,6 +2309,11 @@ async def book_appointment(
     # Same plausibility rule log_lead uses (_looks_like_a_phone_number). The
     # old ">= 8 digits" check let a mis-heard 9-digit number ("982134567",
     # booking test calls 1296 and 1298, 2026-10-14) onto a real booking.
+    if _is_business_own_number(context, phone_digits):
+        return (
+            "BOOKING REJECTED — that number is this business's own contact number, not the "
+            "caller's. Ask the caller for their own phone number and do not say booked yet."
+        )
     if not _looks_like_a_phone_number(phone_digits):
         return (
             "BOOKING REJECTED — the callback phone number looks incomplete or mis-heard. Ask the caller "
@@ -2323,9 +2393,7 @@ async def book_appointment(
             "name": name,
             "phone": phone,
         }
-        await _publish_event(context, event)
-        await _post_webhook(context, event)
-        await _fan_out_integrations(context, event)
+        _fan_out_in_background(context, event)
     if result is None:
         # Recorded on the lead + pushed to integrations, but the native
         # calendar DB call failed — be honest rather than claim a slot exists.
@@ -2405,17 +2473,17 @@ async def log_lead(
 ) -> str:
     """Record what you have learned about this caller so far.
 
-    Call this the MOMENT the caller gives you any detail — what they want, a
-    budget, a locality, a timeline. You do NOT need their name, you do NOT
-    need a phone number, and you do NOT need the full picture. Pass only the
-    fields you actually just learned; everything you omit is left exactly as
-    it was. Calling it eight times across a call with one field each is
-    correct and expected.
+    Call this once the caller has told you what they want, with every field
+    you have so far. You do NOT need their name, you do NOT need a phone
+    number, and you do NOT need the full picture. Each call adds a pause
+    before your reply, so do not call it after every single detail: call it
+    again only for a name, a phone number or a changed detail, and always
+    before a booking or end_call. Everything you omit is left exactly as it
+    was.
 
-    `need` works for every business; budget, location, property_type and
-    configuration are property-specific. Put the need in `need`, in the
-    caller's own words, and use the property fields only when they genuinely
-    apply — never wait for a budget before recording what they want.
+    `need` works for every business: put what they want there, in the
+    caller's own words. Fill the other fields only with what they said -
+    never wait for a budget before recording what they want.
 
     Args:
         name: Caller's name, once they give it.
@@ -2423,13 +2491,14 @@ async def log_lead(
             known from caller ID — do not ask for it.
         budget: Budget as they expressed it, e.g. "around 1 crore". Keep an
             approximation approximate.
-        location: One preferred locality. Call again with the second one if
-            they name more than one — they accumulate, they do not replace.
+        location: A place the caller named. Call again for a second one -
+            they accumulate, they do not replace.
         timeline: When they want it, e.g. "next month".
-        property_type: Property businesses only: apartment, plot, villa, etc.
-        configuration: Property businesses only: e.g. "2 BHK", "2000 sqft plot".
-        purpose: Property businesses only: "investment" or "self-use", ONLY
-            if they actually said it. Never ask it for any other business.
+        property_type: Only if this business sells property: the type they named.
+        configuration: Only if this business sells property: the size or
+            layout they named.
+        purpose: Only if this business sells property: why they are buying,
+            as they said it.
         need: What this caller actually wants, in their own words, for ANY
             business — "root canal, in pain, wants tomorrow", "dinner for 20
             next Friday", "field-service software for 12 technicians", "car
@@ -2594,6 +2663,45 @@ def _looks_like_a_phone_number(digits: str) -> bool:
         return _looks_like_valid_indian_mobile(digits)
     return 10 <= len(digits) <= 15
 
+
+
+# Call 1464 (22 Oct 2026): a website agency's agent stored a website enquiry
+# as property_type "Commercial", configuration "10-12 pages". Agents whose
+# business is not property get this one instead: same tool name and storage,
+# no property fields in the schema the model reads.
+@function_tool(name="log_lead")
+async def log_lead_general(
+    context: RunContext,
+    name: str = "",
+    phone: str = "",
+    budget: str = "",
+    location: str = "",
+    timeline: str = "",
+    need: str = "",
+) -> str:
+    """Record what you have learned about this caller so far.
+
+    Call this once the caller has told you what they want, with every field
+    you have so far. You do NOT need their name, you do NOT need a phone
+    number, and you do NOT need the full picture. Each call adds a pause
+    before your reply, so do not call it after every single detail: call it
+    again only for a name, a phone number or a changed detail, and always
+    before a booking or end_call. Everything you omit is left exactly as it
+    was.
+
+    Args:
+        name: Caller's name, once they give it.
+        phone: Caller's phone number. On an inbound call this is already
+            known from caller ID — do not ask for it.
+        budget: Budget as they expressed it. Keep an approximation approximate.
+        location: A place the caller named.
+        timeline: When they want it, e.g. "next month".
+        need: What this caller wants from this business, in their own words.
+    """
+    return await log_lead(
+        context, name=name, phone=phone, budget=budget, location=location,
+        timeline=timeline, need=need,
+    )
 
 @function_tool
 async def capture_platform_lead(
@@ -3809,7 +3917,7 @@ def build_custom_function_tools(custom_functions: list[dict]) -> list:
             async def _call(raw_arguments: dict) -> str:
                 try:
                     timeout = aiohttp.ClientTimeout(total=10)
-                    async with aiohttp.ClientSession(timeout=timeout) as http:
+                    async with safe_http.public_session(timeout) as http:
                         if method == "GET":
                             resp = await http.get(url, params=raw_arguments, headers=headers)
                         else:

@@ -1,10 +1,15 @@
-import type { ReactNode } from 'react'
+import { lazy, useEffect, type ReactNode } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { ADMIN_HOST, ADMIN_HOST_LIVE, canOpenAdmin, isAdminHost } from '../lib/adminHost'
 import { AuthShell } from '../pages/AuthShell'
 import { Icon } from './Icon'
-import { AdminLayout } from './AdminLayout'
 import { AppLoadingScreen } from './AppLoadingScreen'
+
+// App.tsx imports this gate eagerly, so a static AdminLayout import pulled the
+// whole dashboard shell (and the LiveKit test-call client) into every
+// marketing page. The App-level <Suspense> covers the load.
+const AdminLayout = lazy(() => import('./AdminLayout').then((m) => ({ default: m.AdminLayout })))
 
 /** Gate around every /admin/* route. Only the platform owner (accounts
  * .is_platform_owner) reaches it; everyone else - including logged-in tenants
@@ -16,18 +21,37 @@ export function RequireOwner({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   const { pathname, search } = useLocation()
   const here = pathname + search
+  const onAdminHost = isAdminHost()
+
+  // Once admin.vistrowvoice.com is live the customer app no longer serves
+  // the panel: send the owner there (it has its own sign-in).
+  if (!onAdminHost && ADMIN_HOST_LIVE) return <GoToAdminHost path={here} />
 
   if (loading) {
     return <AppLoadingScreen message="Loading the admin workspace…" />
   }
 
+  if (onAdminHost) {
+    // Only a session from the admin host's own sign-in opens the panel.
+    if (!canOpenAdmin(user) || !user?.adminSession) return <Navigate to={`/login?next=${encodeURIComponent(here)}`} replace />
+    return <AdminLayout>{children}</AdminLayout>
+  }
+
   if (!user) return <Navigate to="/login" state={{ from: here }} replace />
-  if (!user.isPlatformOwner) return <Navigate to="/dashboard" replace />
+  if (!canOpenAdmin(user)) return <Navigate to="/dashboard" replace />
   // The server refuses /admin without two-step login (security audit
   // 2026-10-12); say what to do instead of showing a page of errors.
   if (!user.mfaEnabled || !user.mfaVerified) return <AdminNeedsTwoStep enabled={!!user.mfaEnabled} returnTo={here} />
 
   return <AdminLayout>{children}</AdminLayout>
+}
+
+/** A real navigation, not a router one: it is another host. */
+export function GoToAdminHost({ path }: { path: string }) {
+  useEffect(() => {
+    window.location.replace(`https://${ADMIN_HOST}${path}`)
+  }, [path])
+  return <AppLoadingScreen message="Opening the admin panel…" />
 }
 
 function AdminNeedsTwoStep({ enabled, returnTo }: { enabled: boolean; returnTo: string }) {

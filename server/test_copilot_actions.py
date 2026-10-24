@@ -93,6 +93,7 @@ class CopilotActions(unittest.TestCase):
         import calls_db
         import copilot
         import copilot_tools
+        import kb_crawl
         import help_chat
         import plan_policy
         import voice_catalog
@@ -104,8 +105,9 @@ class CopilotActions(unittest.TestCase):
         ns = token_api_namespace(
             ("_guard_agent_patch", "_guard_stt_provider", "_guard_voice_tier", "_guard_realtime_voice",
              "_guard_admin_only_model", "_realtime_voice_usable", "_GEMINI_LIVE_VOICES",
-             "_ADMIN_ONLY_MODEL_PREFIXES", "_ADMIN_ONLY_MODELS", "_TENANT_REALTIME_MODELS"),
-            {"HTTPException": HTTPException, "calls_db": calls_db, "plan_policy": plan_policy, "voice_catalog": voice_catalog},
+             "_ADMIN_ONLY_MODEL_PREFIXES", "_ADMIN_ONLY_MODELS", "_guard_custom_functions"),
+            {"HTTPException": HTTPException, "calls_db": calls_db, "plan_policy": plan_policy, "voice_catalog": voice_catalog,
+             "json": json, "kb_crawl": kb_crawl},
         )
         cls._saved_guard = copilot_tools.AGENT_PATCH_GUARD
         copilot_tools.AGENT_PATCH_GUARD = ns["_guard_agent_patch"]
@@ -434,6 +436,224 @@ class CopilotActions(unittest.TestCase):
         self.propose()
         detail = admin_db.account_detail(self.a)
         self.assertEqual([r["label"] for r in detail["copilotActions"]], ["Pause agent 'Real estate agent'"])
+
+
+@unittest.skipUnless(TEST_DB, "set TEST_DATABASE_URL to a throwaway Postgres database")
+class FollowUpActions(unittest.TestCase):
+    """Copilot follow-up actions (owner, 22 Oct 2026): schedule, reschedule,
+    cancel and call now, each through the same calls_db function as the
+    Follow-ups page button, only after Confirm. Times are the account's
+    calling time zone (Asia/Kolkata by default)."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ["DATABASE_URL"] = TEST_DB
+        import datetime
+        from zoneinfo import ZoneInfo
+
+        import calls_db
+        import copilot
+        import copilot_tools
+        import help_chat
+        import help_tools
+
+        cls.db, cls.copilot, cls.tools, cls.help_chat, cls.help_tools = calls_db, copilot, copilot_tools, help_chat, help_tools
+        cls.dt, cls.IST = datetime, ZoneInfo("Asia/Kolkata")
+        calls_db.init_tables()
+        stamp = os.urandom(4).hex()
+        a = calls_db.create_account_with_owner("FA", "Asha", f"fa-{stamp}@example.com", "h", email_verified=True)
+        b = calls_db.create_account_with_owner("FB", "Bala", f"fb-{stamp}@example.com", "h", email_verified=True)
+        cls.a, cls.owner, cls.b, cls.b_owner = a["account_id"], a["user_id"], b["account_id"], b["user_id"]
+        conn = calls_db._connect()
+        with conn:
+            conn.execute("UPDATE accounts SET plan = 'growth' WHERE id IN (?, ?)", (cls.a, cls.b))
+            cls.viewer = conn.execute(
+                "INSERT INTO users (account_id, email, name, password_hash, role) VALUES (?, ?, 'Vik', 'h', 'viewer') RETURNING id",
+                (cls.a, f"fv-{stamp}@example.com"),
+            ).fetchone()["id"]
+        conn.close()
+        cls.agent = calls_db.create_agent({"name": "Siya"}, cls.a)["id"]
+        cls.no_number_agent = calls_db.create_agent({"name": "No number"}, cls.a)["id"]
+        cls.b_agent = calls_db.create_agent({"name": "Other"}, cls.b)["id"]
+        tail = str(int(time.time() * 1000))[-7:]
+        calls_db.add_phone_number(f"+91224{tail}", cls.a, agent_id=cls.agent)
+        calls_db.add_phone_number(f"+91225{tail}", cls.b, agent_id=cls.b_agent)
+        cls.n = 0
+
+    def setUp(self):
+        conn = self.db._connect()
+        with conn:
+            conn.execute("DELETE FROM copilot_actions WHERE account_id IN (?, ?)", (self.a, self.b))
+        conn.close()
+
+    def phone(self) -> str:
+        type(self).n += 1
+        return f"+91987{os.getpid() % 100:02d}{self.n:05d}"
+
+    def day(self, days_ahead: int = 1) -> str:
+        return (self.dt.datetime.now(self.IST) + self.dt.timedelta(days=days_ahead)).date().isoformat()
+
+    def propose(self, tool, args, account=None, user=None) -> dict:
+        return self.copilot.propose(account or self.a, user or self.owner, tool, args)
+
+    def confirm(self, pending, account=None, user=None) -> str:
+        return self.copilot.confirm(pending["token"], account or self.a, user or self.owner)["message"]
+
+    def item(self, follow_up_id, account=None) -> dict:
+        return next(i for i in self.db.list_follow_ups(account or self.a, view="all")["items"] if i["id"] == follow_up_id)
+
+    def upcoming_for(self, phone, account=None) -> list[dict]:
+        return [i for i in self.db.list_follow_ups(account or self.a, view="upcoming")["items"] if i["phone"] == phone]
+
+    def schedule(self, phone=None, **extra) -> dict:
+        args = {"name": "Ravi", "phone": phone or self.phone(), "agent_id": self.agent, "kind": "callback",
+                "date": self.day(), "time": "11:00", **extra}
+        return self.propose("schedule_follow_up", args)
+
+    def scheduled(self, phone=None, **extra) -> dict:
+        phone = phone or self.phone()
+        self.confirm(self.schedule(phone, **extra))
+        return self.upcoming_for(phone)[0]
+
+    def assertProposeRefused(self, text, tool, args, account=None, user=None):
+        with self.assertRaises(self.tools.ActionError) as ctx:
+            self.propose(tool, args, account, user)
+        self.assertIn(text, str(ctx.exception))
+
+    # ------------------------------------------------------------------ tests
+
+    def test_schedule_is_proposed_then_created_at_the_local_time(self):
+        phone = self.phone()
+        pending = self.schedule(phone, kind="nurture", note="Ask about the home loan")
+        self.assertEqual(
+            pending["label"],
+            f"Schedule a follow-up call to Ravi ({phone}) on "
+            f"{self.dt.date.fromisoformat(self.day()):%a} {self.dt.date.fromisoformat(self.day()).day} "
+            f"{self.dt.date.fromisoformat(self.day()):%b}, 11:00 am (Asia/Kolkata) by agent 'Siya': "
+            "Check in on their interest, note for the AI: \"Ask about the home loan\"")
+        self.assertEqual(self.upcoming_for(phone), [], "nothing is scheduled before Confirm")
+
+        self.assertIn("scheduled for", self.confirm(pending))
+        [item] = self.upcoming_for(phone)
+        due = self.dt.datetime.fromisoformat(item["dueAt"].replace("Z", "+00:00")).astimezone(self.IST)
+        self.assertEqual((due.date().isoformat(), due.hour, due.minute), (self.day(), 11, 0))
+        self.assertEqual((item["kind"], item["agentId"], item["name"]), ("nurture", self.agent, "Ravi"))
+        conn = self.db._connect()
+        fields = json.loads(conn.execute("SELECT custom_fields FROM campaign_contacts WHERE id = ?", (item["id"],)).fetchone()["custom_fields"])
+        conn.close()
+        self.assertEqual((fields["note_for_this_call"], fields["scheduled_by_user_id"]), ("Ask about the home loan", self.owner))
+        self.assertEqual(self.db.list_copilot_actions(self.a)[0]["status"], "confirmed")
+
+    def test_a_second_schedule_moves_the_waiting_one_and_the_card_says_so(self):
+        phone = self.phone()
+        first = self.scheduled(phone)
+        pending = self.schedule(phone, date=self.day(2), time="16:30")
+        self.assertIn("This moves the follow-up already waiting for them", pending["label"])
+        self.assertIn("Moved the follow-up call to Ravi", self.confirm(pending))
+        [item] = self.upcoming_for(phone)
+        self.assertEqual(item["id"], first["id"])
+        due = self.dt.datetime.fromisoformat(item["dueAt"].replace("Z", "+00:00")).astimezone(self.IST)
+        self.assertEqual((due.date().isoformat(), due.hour, due.minute), (self.day(2), 16, 30))
+
+    def test_schedule_refusals_come_before_the_card(self):
+        base = {"name": "Ravi", "phone": self.phone(), "agent_id": self.agent, "kind": "callback", "date": self.day(), "time": "11:00"}
+        self.assertProposeRefused("in the future", "schedule_follow_up", {**base, "date": self.day(-1)})
+        self.assertProposeRefused("within the next 90 days", "schedule_follow_up", {**base, "date": self.day(91)})
+        self.assertProposeRefused("YYYY-MM-DD", "schedule_follow_up", {**base, "date": "24/10/2026"})
+        self.assertProposeRefused("HH:MM", "schedule_follow_up", {**base, "time": "11am"})
+        self.assertProposeRefused("callback or nurture", "schedule_follow_up", {**base, "kind": "visit_reminder"})
+        self.assertProposeRefused("valid phone", "schedule_follow_up", {**base, "phone": "12"})
+        self.assertProposeRefused("no phone number to call from", "schedule_follow_up", {**base, "agent_id": self.no_number_agent})
+        self.assertProposeRefused("not found", "schedule_follow_up", {**base, "agent_id": self.b_agent})
+        self.assertProposeRefused("too long", "schedule_follow_up", {**base, "note": "x" * 301})
+        dnc = self.phone()
+        self.db.add_dnc(self.a, dnc)
+        self.assertProposeRefused("Do-Not-Call", "schedule_follow_up", {**base, "phone": dnc})
+        self.assertEqual(self.db.list_copilot_actions(self.a), [], "a refused proposal records nothing")
+
+    def test_reschedule_moves_it_after_confirm(self):
+        item = self.scheduled()
+        pending = self.propose("reschedule_follow_up", {"follow_up_id": item["id"], "date": self.day(3), "time": "09:15"})
+        self.assertIn(f"Move the follow-up call to Ravi (", pending["label"])
+        self.assertIn("9:15 am (Asia/Kolkata)", pending["label"])
+        self.assertEqual(self.item(item["id"])["dueAt"], item["dueAt"], "unchanged before Confirm")
+        self.assertIn("is now at", self.confirm(pending))
+        due = self.dt.datetime.fromisoformat(self.item(item["id"])["dueAt"].replace("Z", "+00:00")).astimezone(self.IST)
+        self.assertEqual((due.date().isoformat(), due.hour, due.minute), (self.day(3), 9, 15))
+
+    def test_cancel_after_confirm_and_not_twice(self):
+        item = self.scheduled()
+        pending = self.propose("cancel_follow_up", {"follow_up_id": item["id"]})
+        self.assertTrue(pending["label"].startswith("Cancel the follow-up call to Ravi (Callback they asked for, due "),
+                        pending["label"])
+        self.assertEqual(self.item(item["id"])["state"], "upcoming", "unchanged before Confirm")
+        self.assertIn("will not ring", self.confirm(pending))
+        self.assertEqual(self.item(item["id"])["state"], "cancelled")
+        self.assertProposeRefused("already finished", "cancel_follow_up", {"follow_up_id": item["id"]})
+
+    def test_a_proposal_that_went_stale_fails_on_confirm(self):
+        item = self.scheduled()
+        pending = self.propose("cancel_follow_up", {"follow_up_id": item["id"]})
+        self.db.act_on_follow_up(self.a, item["id"], "cancel")  # cancelled on the page meanwhile
+        with self.assertRaises(self.copilot.ConfirmError) as ctx:
+            self.confirm(pending)
+        self.assertEqual(ctx.exception.status, 400)
+        self.assertIn("already finished", ctx.exception.detail)
+        self.assertEqual(self.db.list_copilot_actions(self.a)[0]["status"], "failed")
+
+    def test_call_now_makes_it_due_now(self):
+        item = self.scheduled()
+        pending = self.propose("call_follow_up_now", {"follow_up_id": item["id"]})
+        self.assertTrue(pending["label"].startswith("Call Ravi now ("), pending["label"])
+        self.assertIn("calling window", self.confirm(pending))
+        due = self.dt.datetime.fromisoformat(self.item(item["id"])["dueAt"].replace("Z", "+00:00"))
+        self.assertLess(abs((due - self.dt.datetime.now(self.dt.timezone.utc)).total_seconds()), 120)
+
+    def test_another_workspace_cannot_touch_it(self):
+        item = self.scheduled()
+        for tool, args in (("cancel_follow_up", {"follow_up_id": item["id"]}),
+                           ("call_follow_up_now", {"follow_up_id": item["id"]}),
+                           ("reschedule_follow_up", {"follow_up_id": item["id"], "date": self.day(2), "time": "10:00"})):
+            self.assertProposeRefused("not found", tool, args, account=self.b, user=self.b_owner)
+        self.assertEqual(self.help_tools.upcoming_follow_ups(self.b)["followUps"], [])
+        self.assertEqual(self.item(item["id"])["state"], "upcoming")
+
+    def test_viewer_cannot_confirm(self):
+        item = self.scheduled()
+        pending = self.propose("cancel_follow_up", {"follow_up_id": item["id"]}, user=self.viewer)
+        with self.assertRaises(self.copilot.ConfirmError) as ctx:
+            self.confirm(pending, user=self.viewer)
+        self.assertEqual(ctx.exception.status, 403)
+        self.assertEqual(self.item(item["id"])["state"], "upcoming")
+
+    def test_read_tool_lists_waiting_ones_in_the_calling_time_zone(self):
+        phone = self.phone()
+        item = self.scheduled(phone, name="Kavya Iyer")
+        out = self.help_tools.upcoming_follow_ups(self.a, query="kavya")
+        self.assertEqual(out["timezone"], "Asia/Kolkata")
+        [row] = out["followUps"]
+        day = self.dt.date.fromisoformat(self.day())
+        self.assertEqual((row["followUpId"], row["name"], row["agent"], row["due"]),
+                         (item["id"], "Kavya Iyer", "Siya", f"{day:%a} {day.day} {day:%b} {day:%Y}, 11:00"))
+        self.assertEqual([r["followUpId"] for r in self.help_tools.upcoming_follow_ups(self.a, query=phone[-6:])["followUps"]], [item["id"]])
+        self.assertEqual(self.help_tools.upcoming_follow_ups(self.a, query="nobody-like-this")["followUps"], [])
+
+    def test_the_copilot_looks_it_up_then_proposes_and_nothing_changes_before_confirm(self):
+        item = self.scheduled(name="Neha Rao")
+        fake = FakeOpenAI([[("upcoming_follow_ups", {"query": "Neha"})],
+                           [("cancel_follow_up", {"follow_up_id": item["id"]})]])
+        with mock.patch.dict("help_chat.os.environ", {"OPENAI_API_KEY": "test-key"}), \
+                mock.patch("help_chat.urllib.request.urlopen", fake):
+            result = self.help_chat.answer_help_question("Cancel Neha's follow-up call", [], self.a,
+                                                         user_id=self.owner, role="owner")
+        self.assertTrue({"upcoming_follow_ups", "cancel_follow_up", "schedule_follow_up",
+                         "reschedule_follow_up", "call_follow_up_now"} <= fake.offered())
+        lookup = [m["content"] for m in fake.requests[1]["messages"] if m.get("role") == "tool"][0]
+        self.assertIn(f'"followUpId": {item["id"]}', lookup)
+        self.assertEqual(result["pendingAction"]["tool"], "cancel_follow_up")
+        self.assertEqual(result["reply"], self.help_chat.CONFIRM_REPLY)
+        self.assertEqual(self.item(item["id"])["state"], "upcoming")
+        self.assertIn("Checked your follow-ups", result.get("steps", []))
 
 
 if __name__ == "__main__":

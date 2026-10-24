@@ -1,10 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import '../lib/chart-setup'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { WatchHowButton } from '../components/HelpVideo'
+import { DateRangeFilter, formatRange, presetRange, rangeDays, rangeLabel, rangePhrase, type DateRange } from '../components/DateRangeFilter'
 import { helpVideoFor } from '../lib/helpVideos'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
@@ -113,11 +114,17 @@ function formatSeconds(seconds: number): string {
 // Attention items shown before "Show all", so the tile stays the height of its neighbours.
 const ATTENTION_PREVIEW = 4
 
-const RANGE_OPTIONS = [
-  { label: 'Week', days: 7 },
-  { label: '14 days', days: 14 },
-  { label: '30 days', days: 30 },
-]
+// The date filter remembers a preset by name (so "Last 14 days" keeps
+// rolling) and a custom range by its dates.
+const RANGE_KEY = 'vv.dashboard.range'
+function loadRange(): DateRange {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RANGE_KEY) || 'null') as DateRange | null
+    if (saved?.preset === 'custom' && /^\d{4}-\d{2}-\d{2}$/.test(saved.start) && /^\d{4}-\d{2}-\d{2}$/.test(saved.end)) return saved
+    if (saved?.preset && saved.preset !== 'custom') return presetRange(saved.preset)
+  } catch { /* blocked storage: the default below */ }
+  return presetRange('last14')
+}
 
 const DASHBOARD_CARDS = [
   { key: 'speed_to_lead', label: 'Speed to lead' },
@@ -165,7 +172,10 @@ export function Dashboard() {
   const [intel, setIntel] = useState<IntelligenceSummary | null>(null)
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
-  const [rangeDays, setRangeDays] = useState(14)
+  const [range, setRange] = useState<DateRange>(loadRange)
+  // True while the three range-driven requests for the current range are out.
+  const [rangeLoading, setRangeLoading] = useState(true)
+  const rangeRequest = useRef(0)
   const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(false)
   const [checklistDismissed, setChecklistDismissed] = useState<boolean | null>(null)
   const [dismissingChecklist, setDismissingChecklist] = useState(false)
@@ -236,10 +246,22 @@ export function Dashboard() {
   }, [analyticsAllowed])
 
   useEffect(() => {
-    fetchUsageTrends(rangeDays).then(setTrends).catch(() => setTrends(null))
-    fetchSpeedToLead(rangeDays).then(setSpeed).catch(() => setSpeed(null))
-    fetchPeriodComparison(rangeDays).then(setComparison).catch(() => setComparison(null))
-  }, [rangeDays])
+    try { localStorage.setItem(RANGE_KEY, JSON.stringify(range)) } catch { /* not remembered this visit */ }
+    // Only the latest range may land: a slow answer for an older range is dropped.
+    const id = ++rangeRequest.current
+    const query = { start: range.start, end: range.end, days: rangeDays(range) }
+    const keep = <T,>(set: (value: T | null) => void) => (value: T | null) => { if (id === rangeRequest.current) set(value) }
+    setRangeLoading(true)
+    Promise.all([
+      fetchUsageTrends(query).then(keep(setTrends)).catch(() => keep(setTrends)(null)),
+      fetchSpeedToLead(query).then(keep(setSpeed)).catch(() => keep(setSpeed)(null)),
+      fetchPeriodComparison(query).then(keep(setComparison)).catch(() => keep(setComparison)(null)),
+    ]).finally(() => { if (id === rangeRequest.current) setRangeLoading(false) })
+  }, [range])
+  const rangeSpan = rangeDays(range)
+  const previousRange = comparison?.previousStart && comparison.previousEnd
+    ? formatRange(comparison.previousStart, comparison.previousEnd)
+    : `the ${rangeSpan} ${rangeSpan === 1 ? 'day' : 'days'} before`
 
   useEffect(() => {
     let cancelled = false
@@ -345,20 +367,8 @@ export function Dashboard() {
                 has, Watch how and Customize sit at the end (icons only on
                 phones, labels for screen readers). */}
             <div className="flex items-center gap-2 sm:gap-3">
-              <div role="group" aria-label="Performance period" className="flex min-w-0 flex-1 gap-1 rounded-full bg-surface p-1 ring-1 ring-border sm:flex-none">
-                {RANGE_OPTIONS.map((range) => (
-                  <button
-                    key={range.days}
-                    type="button"
-                    onClick={() => setRangeDays(range.days)}
-                    aria-pressed={rangeDays === range.days}
-                    className={`flex-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-bold sm:flex-none sm:px-3.5 ${rangeDays === range.days ? 'bg-primary text-white' : 'text-text-muted hover:text-text'}`}
-                  >
-                    {range.label}
-                  </button>
-                ))}
-              </div>
-              <span className="hidden text-xs text-text-muted md:inline">Compared with the {rangeDays} days before</span>
+              <DateRangeFilter value={range} onChange={setRange} loading={rangeLoading} />
+              <span className="hidden text-xs text-text-muted md:inline">Compared with {previousRange}</span>
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 {dashboardVideo && <WatchHowButton slug={dashboardVideo} compact />}
                 <div className="relative">
@@ -420,7 +430,7 @@ export function Dashboard() {
             )}
 
             <div className="bento-grid">
-              <section className="bento-tile bento-hero bento-w2 bento-h2 flex min-h-[300px] flex-col justify-between gap-6">
+              <section className="bento-tile bento-hero bento-w2 bento-h2 flex flex-col justify-between gap-4 sm:min-h-[300px] sm:gap-6">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">{todayLabel}</span>
@@ -430,15 +440,16 @@ export function Dashboard() {
                       </span>
                     )}
                   </div>
-                  <h2 className="bento-title mt-4 break-words text-[28px] leading-tight sm:text-4xl">{greeting()}, {user?.accountName ?? 'there'}</h2>
-                  <p className="mt-3 max-w-md text-[15px] leading-relaxed text-white/80">
+                  <h2 className="bento-title mt-3 break-words text-[22px] leading-tight sm:mt-4 sm:text-4xl">{greeting()}, {user?.accountName ?? 'there'}</h2>
+                  {/* Phones skip this line: the big number below says the same. */}
+                  <p className="mt-3 hidden max-w-md text-[15px] leading-relaxed text-white/80 sm:block">
                     Your agents have handled {totalCalls.toLocaleString('en-IN')} calls so far, and {successPct}% of them qualified as leads.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <p className="bento-num text-6xl leading-none sm:text-7xl">{totalCalls.toLocaleString('en-IN')}</p>
-                    <p className="mt-2 text-sm font-bold text-white/75">calls handled</p>
+                    <p className="bento-num text-5xl leading-none sm:text-7xl">{totalCalls.toLocaleString('en-IN')}</p>
+                    <p className="mt-1 text-sm font-bold text-white/75 sm:mt-2">calls handled</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Link to="/dashboard/agents" className="bento-pill bento-pill-light">Test an agent →</Link>
@@ -447,12 +458,10 @@ export function Dashboard() {
                 </div>
               </section>
 
-              <section className="bento-tile bento-h2 flex flex-col items-center justify-between gap-4 text-center">
-                <div className="self-stretch text-left">
-                  <h3 className="bento-title text-[15px]">Minutes</h3>
-                  <p className="mt-0.5 text-xs text-text-muted">{lowCredits ? 'Running low' : 'Your balance'}</p>
-                </div>
-                <svg width="168" height="168" viewBox="0 0 120 120" role="img" aria-label={`${minutesLeftLabel} minutes left`}>
+              {/* Phones: a small ring beside the text. From sm up the wrapper
+                  dissolves (sm:contents) and the tile stacks as before. */}
+              <section className="bento-tile bento-h2 col-span-2 flex items-center gap-4 sm:col-span-1 sm:flex-col sm:justify-between sm:text-center">
+                <svg viewBox="0 0 120 120" role="img" aria-label={`${minutesLeftLabel} minutes left`} className="h-[92px] w-[92px] shrink-0 sm:order-2 sm:h-[168px] sm:w-[168px]">
                   <circle cx="60" cy="60" r="48" fill="none" stroke="var(--color-surface-high)" strokeWidth="12" />
                   <circle
                     cx="60" cy="60" r="48" fill="none"
@@ -471,10 +480,16 @@ export function Dashboard() {
                   <text x="60" y="58" textAnchor="middle" className="bento-ring-value">{minutesLeftLabel}</text>
                   <text x="60" y="76" textAnchor="middle" className="bento-ring-label">min left</text>
                 </svg>
-                <p className="text-[13px] text-text-muted">
-                  {comparison ? `${comparison.current.minutes.toLocaleString('en-IN')} min used in the last ${rangeDays} days` : 'Usage loads with your calls'}
-                </p>
-                <Link to="/dashboard/settings?tab=billing&topup=1" className="bento-pill bento-pill-dark self-stretch justify-center">Top up minutes</Link>
+                <div className="flex min-w-0 flex-1 flex-col items-start gap-2 sm:contents">
+                  <div className="text-left sm:order-1 sm:self-stretch">
+                    <h3 className="bento-title text-[15px]">Minutes</h3>
+                    <p className="mt-0.5 text-xs text-text-muted">{lowCredits ? 'Running low' : 'Your balance'}</p>
+                  </div>
+                  <p className="text-xs text-text-muted sm:order-3 sm:text-[13px]">
+                    {comparison ? `${comparison.current.minutes.toLocaleString('en-IN')} min used ${rangePhrase(range)}` : 'Usage loads with your calls'}
+                  </p>
+                  <Link to="/dashboard/settings?tab=billing&topup=1" className="bento-pill bento-pill-dark justify-center sm:order-4 sm:self-stretch">Top up minutes</Link>
+                </div>
               </section>
 
               {kpiTiles.map((kpi) => (
@@ -494,23 +509,27 @@ export function Dashboard() {
                     )}
                   </span>
                   <span className="flex flex-col gap-2">
-                    <span className="bento-num mt-2 text-[34px] leading-none">{kpi.value.toLocaleString('en-IN')}</span>
+                    {rangeLoading ? (
+                      <span aria-hidden="true" className="mt-1 block h-[26px] w-16 animate-pulse rounded-lg bg-surface-high sm:mt-2 sm:h-[34px] sm:w-20" />
+                    ) : (
+                      <span className="bento-num mt-1 text-[26px] leading-none sm:mt-2 sm:text-[34px]">{kpi.value.toLocaleString('en-IN')}</span>
+                    )}
                     <span className="text-[13px] font-bold text-text-muted">{kpi.label}</span>
                   </span>
                   {openKpi === kpi.key && (
                     <span className="bento-reveal mt-1 border-t border-dashed border-border pt-2 text-xs text-text-muted">
-                      Previous {rangeDays} days: <b className="text-text">{kpi.previous.toLocaleString('en-IN')}</b>
+                      Compared with {previousRange}: <b className="text-text">{kpi.previous.toLocaleString('en-IN')}</b>
                     </span>
                   )}
                 </button>
               ))}
 
               {isVisible('speed_to_lead') && (
-                <section className="bento-tile bento-w2 flex flex-col">
+                <section aria-busy={rangeLoading} className={`bento-tile bento-w2 flex flex-col transition-opacity ${rangeLoading ? 'opacity-60' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="bento-title text-[15px]">Speed to lead</h3>
-                      <p className="mt-0.5 text-xs text-text-muted">How fast new leads get their first call · last {rangeDays} days</p>
+                      <p className="mt-0.5 text-xs text-text-muted">How fast new leads get their first call · {rangeLabel(range)}</p>
                     </div>
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan/12 text-cyan"><Icon name="bolt" className="text-[19px]" /></span>
                   </div>
@@ -707,7 +726,7 @@ export function Dashboard() {
                     <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan" />Qualified</span>
                   </span>
                 </div>
-                <div className="mt-4 h-[200px]">
+                <div aria-busy={rangeLoading} className={`mt-4 h-[200px] transition-opacity ${rangeLoading ? 'opacity-40' : ''}`}>
                   {trends && trends.labels.length > 0 ? (
                     <Line
                       data={{

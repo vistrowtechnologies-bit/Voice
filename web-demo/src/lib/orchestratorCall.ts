@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchOrchestratorBrowserToken } from './api'
 import type { TranscriptEntry } from './types'
+import { demoVisitorFields } from './demoVisitor'
 
 // Public, unauthenticated fallback used by the marketing site's live demo
 // when LiveKit's demo worker doesn't pick up - deliberately a raw fetch
@@ -8,7 +9,11 @@ import type { TranscriptEntry } from './types'
 // 'vv-unauthorized' event on a 401 that redirects to /login, which is
 // wrong for an anonymous visitor and this route needs no auth anyway.
 async function fetchOrchestratorPlatformDemoToken(): Promise<{ ok: boolean; error?: string; wssUrl?: string }> {
-  const res = await fetch('/api/orchestrator/platform-demo-token', { method: 'POST' })
+  const res = await fetch('/api/orchestrator/platform-demo-token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(demoVisitorFields()),
+  })
   if (!res.ok) return { ok: false, error: `request failed with status ${res.status}` }
   return res.json()
 }

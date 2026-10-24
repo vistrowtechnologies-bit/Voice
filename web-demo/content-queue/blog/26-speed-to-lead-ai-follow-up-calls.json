@@ -1,0 +1,125 @@
+{
+  "n": 26,
+  "publishOn": "2026-11-15",
+  "primaryKeyword": "speed to lead ai calling",
+  "audience": "Global",
+  "slug": "speed-to-lead-ai-follow-up-calls",
+  "title": "Speed to lead: AI follow-up calls within minutes",
+  "seoTitle": "Speed to Lead AI Calling: Follow Up Within Minutes",
+  "metaDescription": "How speed to lead AI calling works: an AI agent calls each new enquiry within minutes, qualifies it and sends it to your CRM, inside your calling rules.",
+  "shortAnswer": "Speed to lead AI calling means an AI voice agent rings each new enquiry within minutes of the form being submitted, while the person still remembers asking. It confirms the request, asks a few qualifying questions, books a visit or callback and sends the result to your CRM. Calling rules, retries and handoffs still need to be set first.",
+  "excerpt": "A lead who filled in your form ten minutes ago is still thinking about you. A lead who hears back tomorrow may not be. Here is how AI follow-up calls close that gap, and what to set up before you switch them on.",
+  "category": "CRM & integrations",
+  "related": [
+    "website-voice-widget-for-lead-generation",
+    "connecting-voice-calls-to-your-crm",
+    "ai-voice-agents-for-real-estate-leads"
+  ],
+  "sections": [
+    {
+      "heading": "What does speed to lead mean?",
+      "paragraphs": [
+        "Speed to lead is the time between a new enquiry arriving and your first real conversation with that person. A lead form, a missed call or an ad response all start the clock. The shorter the gap, the more likely the person still has the question in mind, is near their phone and has not already spoken to someone else.",
+        "Most teams know this and still miss it, because enquiries arrive in the evening, at weekends or while the sales team is out on visits. An AI agent closes that gap by calling every new lead straight away, through [AI outbound calling campaigns](/product/outbound) that run whether or not anyone is at a desk. The results then flow into your systems through [CRM and webhook integrations](/product/integrations), so your team picks up a qualified lead instead of a bare form."
+      ]
+    },
+    {
+      "heading": "Why do slow follow-ups lose leads?",
+      "paragraphs": [
+        "A person who fills in a form is usually comparing options. If a competitor calls first, the conversation that sets their expectations happens without you. If nobody calls for a day, many people forget the enquiry, stop answering unknown numbers or decide the business is too busy to help them.",
+        "Slow follow-up also wastes the money spent on the ad or the website that produced the lead. Our guide to [responding to high-intent website visitors](/resources/blog/website-voice-widget-for-lead-generation) makes the same point for live visitors: intent fades quickly, so the first response matters most."
+      ],
+      "points": [
+        "The enquiry is fresh, so the person recognises why you are calling.",
+        "They are often still near their phone or screen.",
+        "You set the terms of the conversation before anyone else does."
+      ]
+    },
+    {
+      "heading": "How does an AI follow-up call work?",
+      "paragraphs": [
+        "On Vistrow Voice, any source that can send a webhook, such as your website form, your CRM or an automation tool, posts the new lead to a private Instant Lead Follow-up URL. A call is queued within about 15 to 30 seconds of the lead arriving, as the [instant lead follow-up guide](/help/integrations/instant-lead-follow-up) describes. With a personalised greeting, the agent opens with the person's name and the reason for the call, so it does not sound like a cold call.",
+        "Vistrow Voice lets the agent qualify the lead, book a slot in the built-in Appointments calendar or take a callback request, then send the captured details, transcript and outcome to your CRM, Google Sheets, Slack or a webhook. Our guide to [connecting voice calls to your CRM](/resources/blog/connecting-voice-calls-to-your-crm) covers how to map those fields so nothing is lost."
+      ]
+    },
+    {
+      "heading": "What should the first AI call ask?",
+      "paragraphs": [
+        "Keep the first call short. Confirm the enquiry, ask two or three questions that decide what happens next, and offer one clear next step. A property buyer might be asked about budget, area and timing, then offered a site visit; our guide to [qualifying real estate leads without interrogating them](/resources/blog/ai-voice-agents-for-real-estate-leads) shows how to keep that friendly.",
+        "Capture each answer as a field rather than leaving it buried in the transcript. Post-call data extraction pulls fields such as budget or location from every call, and the [agent functions and transfer guide](/help/agents/agent-functions-and-transfer) explains how to hand a hot lead to a salesperson during the call."
+      ],
+      "points": [
+        "Confirm: \"You asked about our two-bedroom flats this evening.\"",
+        "Qualify: two or three questions that decide the next step.",
+        "Commit: a booked visit, a callback time or a transfer to a person."
+      ]
+    },
+    {
+      "heading": "What if the lead does not answer?",
+      "paragraphs": [
+        "Many first calls will go unanswered, and that is normal. Each agent has follow-up rules that set how many attempts to make and how long to wait after no answer, a busy line, a switched-off phone or voicemail.",
+        "Do not keep calling a person who has not picked up several times. Set a sensible attempt limit, and let your team follow up by message or email after that. The agent also honours \"please don't call me again\" and adds the number to your Do-Not-Call list itself.",
+        "When a lead calls you back later, the agent can pick up where the first call left off. Turn on memory and it recognises returning callers by phone number and greets them with a short summary of earlier calls, as the [webhook, CRM routing and memory guide](/help/agents/agent-webhook-crm-memory) explains. Your team can also open every attempt, recording and transcript from the [call history and transcript guide](/help/calls/find-a-call) to see exactly what happened."
+      ]
+    },
+    {
+      "heading": "Which calling rules apply to instant follow-up calls?",
+      "paragraphs": [
+        "Speed does not override the rules. Every queued call on Vistrow Voice is checked against your Do-Not-Call list and calling window, as the [calling window and Do-Not-Call guide](/help/compliance/calling-rules) explains, so a lead that arrives late at night waits for your calling hours rather than being rung at midnight. In India, outbound calling must respect DND preferences and permitted calling windows.",
+        "Rules differ by country. In the UK, for example, the ICO says businesses making live marketing calls should screen numbers against the Telephone Preference Service unless the person has specifically consented to their calls, and must say who is calling. A person who has just asked you to call them is a very different case from a cold list, but check with your adviser how your regulator treats AI calls, and keep a record of the consent the form collected."
+      ]
+    },
+    {
+      "heading": "How do you measure speed to lead?",
+      "paragraphs": [
+        "Track four numbers each week: time from form to first call, the share of leads reached, the share qualified and the share that booked a visit or meeting. Compare them with the period before AI follow-up, using the same lead sources. Read a sample of transcripts too, because a fast call that annoys people is not an improvement.",
+        "Start with one lead source and one agent, then widen it. If your leads speak regional languages, the same flow works in Hindi and other Indian languages; our [Marathi AI voice agent guide](/resources/blog/marathi-ai-voice-agent) shows what to test for one of them. When the numbers look right, size the rollout on the [Vistrow Voice pricing page](/pricing)."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "How fast can an AI agent call a new lead?",
+      "a": "With the Instant Lead Follow-up webhook, a call is queued within about 15 to 30 seconds of the lead arriving, provided it falls inside your calling window and the number is not on your Do-Not-Call list."
+    },
+    {
+      "q": "Which lead sources can trigger an AI follow-up call?",
+      "a": "Any source that can send a webhook: a website form, your CRM, or an automation tool that collects leads from your ads and other channels."
+    },
+    {
+      "q": "Will the AI call leads at night?",
+      "a": "Not outside the calling window you set. A lead that arrives after hours waits until your calling hours start."
+    },
+    {
+      "q": "Can the AI hand a hot lead to a salesperson during the call?",
+      "a": "Yes. If you set a transfer number, the agent dials your colleague into the call and stays on until they answer. Otherwise it books a callback."
+    },
+    {
+      "q": "Does speed to lead AI calling replace my sales team?",
+      "a": "No. It makes the first contact and qualifies the lead. Your team still runs the visits, negotiations and relationships that close the sale."
+    },
+    {
+      "q": "What does the agent say when a lead calls back later?",
+      "a": "With memory switched on, it recognises the number, remembers a short summary of the earlier call and continues from there instead of starting again."
+    }
+  ],
+  "imageAlt": "A young man on a sofa answering his phone, beside a phone screen showing Artha calling a new enquiry and a Lead qualified card",
+  "imagePrompt": "Designed cover (scripts/blog-covers/26-speed-to-lead-ai-follow-up-calls.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "ICO: Telephone marketing (guide to PECR)",
+      "url": "https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/guide-to-pecr/electronic-and-telephone-marketing/telephone-marketing/"
+    }
+  ],
+  "contextualLinks": "To set this up, see how [outbound AI calling campaigns](/product/outbound) work and which [CRM and webhook integrations](/product/integrations) receive each qualified lead.",
+  "inbound": [
+    {
+      "target": "blog:website-voice-widget-for-lead-generation",
+      "sentence": "For leads that arrive through a form rather than the widget, our guide to [speed to lead with AI follow-up calls](/resources/blog/speed-to-lead-ai-follow-up-calls) shows how to call them back within minutes."
+    },
+    {
+      "target": "page:/product/outbound",
+      "sentence": "Read how [AI follow-up calls improve speed to lead](/resources/blog/speed-to-lead-ai-follow-up-calls) when every new enquiry is called within minutes."
+    }
+  ]
+}

@@ -336,14 +336,35 @@ class SendBrochure(unittest.TestCase):
 
     def test_registered_for_tenant_agents_not_roleplay_demos(self):
         base = {"id": 17, "account_id": 1, "name": "Siya", "enabled_functions": "end_call",
-                "_compliance_config": {}}
+                "_compliance_config": {}, "system_prompt": "Book a site visit for the RERA project."}
 
         def names(cfg):
-            return {getattr(t, "__name__", getattr(getattr(t, "__wrapped__", None), "__name__", ""))
-                    for t in main._build_tools(cfg)}
+            return {getattr(t, "id", "") for t in main._build_tools(cfg)}
         self.assertIn("send_brochure", names(dict(base)))
         self.assertIn("send_brochure", names(dict(base, enabled_functions="")))
         self.assertNotIn("send_brochure", names(dict(base, is_platform_demo=True, public_demo_slug="real-estate")))
+
+    def test_brochure_and_property_fields_only_for_property_businesses(self):
+        """Call 1464: a website agency's agent offered a brochure on WhatsApp
+        and saved a website enquiry as property_type "Commercial"."""
+        agency = {"id": 26, "account_id": 2, "name": "Artha", "enabled_functions": "end_call",
+                  "_compliance_config": {}, "system_prompt": "We build websites and run ads."}
+        built = {getattr(t, "id", ""): t for t in main._build_tools(agency)}
+        self.assertNotIn("send_brochure", built)
+        self.assertIs(built["log_lead"], tools.log_lead_general)
+        property_agent = dict(agency, system_prompt="Offer a site visit; all projects are RERA approved.")
+        built = {getattr(t, "id", ""): t for t in main._build_tools(property_agent)}
+        self.assertIn("send_brochure", built)
+        self.assertIs(built["log_lead"], tools.log_lead)
+
+    def test_general_log_lead_stores_like_log_lead(self):
+        lead_data = {}
+        ctx = SimpleNamespace(userdata={"lead_data": lead_data})
+        with patch.object(tools, "log_lead", new=AsyncMock(return_value="ok")) as inner:
+            reply = asyncio.run(tools.log_lead_general.__wrapped__(ctx, need="website", timeline="next month"))
+        self.assertEqual(reply, "ok")
+        inner.assert_awaited_once_with(ctx, name="", phone="", budget="", location="",
+                                       timeline="next month", need="website")
 
 
 if __name__ == "__main__":

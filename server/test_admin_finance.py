@@ -30,6 +30,7 @@ class PureTests(unittest.TestCase):
         self.assertAlmostEqual(cost("sarvam/sarvam-105b-conversations", "phone"), rates["pipeline"] + lk + sip)
         self.assertAlmostEqual(cost("gemini-live", "browser"), rates["realtime_25"] + lk)
         self.assertAlmostEqual(cost("gemini-live:gemini-3.1-flash-live-preview", "phone"), rates["realtime_31"] + lk + sip)
+        self.assertAlmostEqual(cost("duplex:live-1", "phone"), rates["realtime_gpt_live"] + lk + sip)
 
     def test_low_credit_threshold_is_three_days_with_a_floor_of_fifty(self):
         t = self.admin.low_credit_threshold

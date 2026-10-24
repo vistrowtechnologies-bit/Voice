@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import contextlib
 import fcntl
 import json
@@ -131,6 +132,7 @@ from tools import (
     drain_background_fanout,
     end_call,
     log_lead,
+    log_lead_general,
     do_not_call,
     record_consent,
     send_brochure,
@@ -437,6 +439,15 @@ _GEMINI38_TONE_LLM_HINTS = {
     "balanced": "Use clear, naturally conversational phrasing; avoid sounding stiff or overly casual.",
     "casual": "Use relaxed, informal and friendly conversational phrasing; contractions are fine, but do not force slang.",
 }
+
+
+# Call 1467 (22 Oct 2026, Studio): English words in a Hindi reply ("website",
+# "SEO", "CRM") switched to an English accent mid-sentence.
+def _gemini38_accent_hint(reply_language: str) -> str:
+    if (reply_language or "").endswith("-IN"):
+        return ("Indian accent throughout; say English words the way urban Indians do in "
+                "Hinglish, never switching to an American or British accent")
+    return ""
 
 
 def _gemini38_voice_style_hint(voice_value: str) -> tuple[str | None, str | None]:
@@ -1248,7 +1259,14 @@ def _current_objective(
 # 7050ms turn above is log_lead recording a timeline. Seven seconds of dead
 # air is exactly the silence this was built for, and at the delay below no
 # ordinary turn can reach it.
-_BACKCHANNEL_ENABLED = True
+#
+# OFF again 2026-10-22 (call 1462, GPT-5.4 mini + Bharat): all 4 acks played
+# AFTER the reply they were meant to cover ("अच्छा, कितने pages..." then
+# "अच्छा..."). LiveKit 1.8.6 makes the turn's reply handle the current speech
+# from the moment the turn commits, so a say() during "thinking" queues behind
+# it. It can only land first while a tool is still running, and slow tools now
+# speak their own filler (tools._await_with_still_checking).
+_BACKCHANNEL_ENABLED = False
 
 # The delay must clear the WHOLE median turn, not just the LLM leg. Set at
 # 0.9s it fired 9 times in one 3-minute call (898) and read as a verbal tic:
@@ -1748,10 +1766,9 @@ _BACKCHANNEL_WORDS = {line.rstrip(".… ") for lines in _BACKCHANNEL_LINES.value
 _PURE_FILLER_OPENERS = {"हम्म", "hmm"}
 
 
-def _is_native_standard_voice(agent) -> bool:
-    return getattr(agent, "_tts_provider", None) == "google-native" and not voice_catalog.chirp3_persona(
-        getattr(agent, "_speaking_voice", "") or ""
-    )
+def _is_google_native_voice(agent) -> bool:
+    # Native Standard and HD (Chirp 3) voices alike.
+    return getattr(agent, "_tts_provider", None) == "google-native"
 
 
 def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
@@ -1763,9 +1780,10 @@ def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
         agent._last_opener = ""
         return head
     word = match.group("word").lower()
-    if word in _PURE_FILLER_OPENERS and _is_native_standard_voice(agent):
+    if word in _PURE_FILLER_OPENERS and _is_google_native_voice(agent):
         # Call 1452 (21 Oct 2026): a Native (locale Standard) voice reads the
-        # LLM's "हम्म," as a flat, odd syllable. Dropped for these voices.
+        # LLM's "हम्म," as a flat, odd syllable. Call 1463 (22 Oct, HD): the
+        # recording has a 0.1 s blip and a pause there. Dropped for both.
         rest = head[match.end():].lstrip(" ,।.—-")
         return match.group("lead") + rest
     if word != getattr(agent, "_last_opener", ""):
@@ -2101,6 +2119,49 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         # Live API. 2.5 could not be tested.
         **({"context_window_compression": realtime_config.context_compression(instructions)}
            if name in (realtime_config.MODEL_31, realtime_config.MODEL_38) else {}),
+        **realtime_config.affective_options(name),
+    )
+
+
+# OpenAI GPT-Live 1 ("Vistrow Duplex", owner-only since 24 Oct 2026): a
+# full-duplex speech-to-speech model, Ravan's "Duplex" engine. LiveKit wraps
+# it (DuplexRealtimeAdapter) so it takes Gemini Live's place as the agent's
+# llm, with no separate STT/TTS. Tools run on a backend Responses model.
+# Pricing (developers.openai.com/api/docs/pricing, 24 Oct 2026): $0.05 per
+# session minute, plus the backend's tokens (gpt-5.6-luna $0.20/M in,
+# $1.20/M out, the plugin's default backend).
+# The saved id is vendor-neutral ("duplex:live-1") because it ships in the
+# dashboard bundle; the OpenAI model name lives only here.
+_GPT_LIVE_PREFIX = "duplex"
+_GPT_LIVE_DEFAULT_MODEL = "gpt-live-1"
+_GPT_LIVE_MODELS = {"live-1": "gpt-live-1"}
+_REALTIME_PREFIXES = (_GEMINI_LIVE_PREFIX, _GPT_LIVE_PREFIX)
+# OpenAI's GPT-Live voice list has one Indian voice, "nira" (Hindi,
+# feminine), and no Hindi masculine voice; GPT_LIVE_VOICE overrides it.
+_GPT_LIVE_DEFAULT_VOICE = "nira"
+_GPT_LIVE_DEFAULT_BACKEND = "gpt-5.6-luna"
+
+
+def _gpt_live_model_name(model: str) -> str:
+    """"duplex:live-1" -> "gpt-live-1"; a bare "duplex" or an unknown suffix -> the default."""
+    suffix = model.split(":", 1)[1].strip() if ":" in model else ""
+    return _GPT_LIVE_MODELS.get(suffix, _GPT_LIVE_DEFAULT_MODEL)
+
+
+def _build_gpt_live_llm(model: str, instructions: str):
+    """GPT-Live DuplexModel. The agent's instructions reach the voice model
+    through the session (fixed once it starts); the same text goes to the
+    backend so tool calls follow the same business rules."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise RuntimeError(f"{model} is selected, but OPENAI_API_KEY is not configured.")
+    return openai.realtime.GPTLiveModel(
+        model=_gpt_live_model_name(model),
+        voice=os.environ.get("GPT_LIVE_VOICE") or _GPT_LIVE_DEFAULT_VOICE,
+        delegation="responses",
+        responses_options={
+            "model": os.environ.get("GPT_LIVE_BACKEND_MODEL") or _GPT_LIVE_DEFAULT_BACKEND,
+            "instructions": instructions,
+        },
     )
 
 
@@ -2112,11 +2173,19 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
 _FALLBACK_LLM_MODEL = "gpt-5.4-nano"
 # reasoning_effort for GPT-5 voice turns: "none" keeps the first token fast;
 # anything higher spends hidden reasoning tokens while the caller waits.
+# Only GPT-5.x (gpt-5.4-nano, ...) accepts "none"; the original gpt-5,
+# gpt-5-mini and gpt-5-nano answer HTTP 400 to it (verified 2026-10-21), so
+# they get their lowest setting, "minimal".
 _GPT5_VOICE_REASONING = {"reasoning_effort": "none"}
+_GPT5_ORIGINAL_VOICE_REASONING = {"reasoning_effort": "minimal"}
 
 
 def _openai_voice_kwargs(model: str) -> dict:
-    return _GPT5_VOICE_REASONING if model.startswith("gpt-5") else {}
+    if model.startswith("gpt-5."):
+        return _GPT5_VOICE_REASONING
+    if model.startswith("gpt-5"):
+        return _GPT5_ORIGINAL_VOICE_REASONING
+    return {}
 
 
 def _build_llm(model: str, *, max_output_tokens: int = 220):
@@ -2138,7 +2207,14 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
         # Gemini 2.5 rejects thinking_level with 400 "Thinking level is not
         # supported for this model" (verified 2026-10-12), which left 2.5
         # Flash agents silent; 2.5 turns thinking off with a zero budget.
-        thinking = {"thinking_budget": 0} if "2.5" in model else {"thinking_level": "MINIMAL"}
+        # Gemini 3.7/3.8 Flash reject MINIMAL; LOW is their lowest (3.8 Flash
+        # answered in 1.5 s with LOW, probe 12 Oct 2026). Flash-Lite keeps MINIMAL.
+        if "2.5" in model:
+            thinking = {"thinking_budget": 0}
+        elif re.match(r"gemini-3\.[78]-flash(?!-lite)", model):
+            thinking = {"thinking_level": "LOW"}
+        else:
+            thinking = {"thinking_level": "MINIMAL"}
         return google.LLM(
             model=model,
             api_key=api_key,
@@ -2719,6 +2795,16 @@ class _MarkupStrippedTTS(_BaseTTS):
         await self._inner.aclose()
 
 
+def _log_platform_error_off_loop(*args, **kwargs) -> None:
+    """db.log_platform_error from a sync callback on the agent loop, run in a
+    thread: the inline write held the loop ~0.9 s while a TTS fell over
+    (call 1460, 22 Oct 2026) - on top of the slower backup voice."""
+    try:
+        asyncio.get_running_loop().run_in_executor(None, functools.partial(db.log_platform_error, *args, **kwargs))
+    except RuntimeError:
+        db.log_platform_error(*args, **kwargs)
+
+
 def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_language: str, tone_name: str):
     """Keep Gemini calls inside the same voice persona during failover.
 
@@ -2783,7 +2869,7 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
                     primary_model,
                     fallback_model,
                 )
-                db.log_platform_error(
+                _log_platform_error_off_loop(
                     f"Google TTS {primary_model} unavailable — silently using {fallback_model} instead",
                     source="agent_tts", level="warning",
                 )
@@ -2794,7 +2880,7 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
                 logger.error(
                     "Both Gemini TTS models unavailable — falling back to Monika (ElevenLabs) until either recovers"
                 )
-                db.log_platform_error(
+                _log_platform_error_off_loop(
                     "Both Gemini TTS models unavailable — using ElevenLabs safety net",
                     source="agent_tts", level="error",
                 )
@@ -3023,6 +3109,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             _persona_name, persona_hint = _gemini38_voice_style_hint(speaker)
             if persona_hint and tone_name != "professional":
                 style = f"{style}; {persona_hint}"
+            style = "; ".join(p for p in (style, _gemini38_accent_hint(reply_language)) if p)
             gemini38_tts = GeminiInteractionsTTS(
                 model=model,
                 voice=voice_name,
@@ -3443,6 +3530,15 @@ def _add_realtime_usage(usage: dict, metric) -> None:
         usage[key] = usage.get(key, 0) + max(0, int(getattr(obj, attr, 0) or 0))
 
 
+# Every property tenant's prompt names one of these, and no other agent's does
+# (checked 22 Oct 2026 against all agents: 7 Prophunt agents, 0 others).
+_PROPERTY_PROMPT = re.compile(r"\b(RERA|BHK|site visits?|possession)\b", re.IGNORECASE)
+
+
+def _sells_property(config: dict) -> bool:
+    return bool(_PROPERTY_PROMPT.search(config.get("system_prompt") or ""))
+
+
 def _build_tools(config: dict) -> list:
     """The agent's live tool set. Core lead-capture + KB tools are always on
     (they're how the call does its job); enabled_functions only gates the
@@ -3492,10 +3588,16 @@ def _build_tools(config: dict) -> list:
             # lost — nothing recorded it, so the next campaign rang them
             # again. An opt-out an operator can switch off is not an opt-out.
             do_not_call,
-            log_lead,
-            # Records a brochure request for the sales team (nothing is sent
-            # from the call). On for every tenant agent, like log_lead.
-            send_brochure,
+            # Call 1464 (22 Oct 2026): a website enquiry got "brochure या
+            # callback?", a WhatsApp promise from send_brochure's reply, and
+            # property_type "Commercial". The brochure tool (records a request
+            # for the team, sends nothing) and the property fields are for
+            # property businesses only.
+            *(
+                [log_lead, send_brochure]
+                if _sells_property(config)
+                else [log_lead_general]
+            ),
             # No capture_platform_lead: it records a lead for Vistrow Voice
             # itself, so only the platform demos above can use it. Sending it
             # to tenants cost ~900 chars of schema on every LLM request
@@ -3788,7 +3890,7 @@ class RealEstateAgent(Agent):
             caller_tail += (
                 f"\n\n# Caller context\nThis call arrived from {visitor_phone} (caller ID), so you "
                 "already have the caller's phone number — never ask for it. If you need their name "
-                "for the brochure/callback/site-visit, ask for that only."
+                "for a callback or booking, ask for that only."
             )
         # Optional structured inventory/service/catalog data assigned to this
         # agent. Only a compact index enters the prompt; full details are
@@ -3916,19 +4018,31 @@ class RealEstateAgent(Agent):
         instructions += (
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
             "Use the tool that fits what this call is about:\n"
-            "- Any per-tenant business call (the default): call log_lead the MOMENT the caller gives "
-            "any detail at all — what they need, a timeline, a budget (any language or unit: \"50 "
-            "hazaar\", \"एक करोड़\"), a location, a name. Pass only "
-            "what you just learned; omitted fields keep their value. You do NOT need their name or "
-            "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". Make it "
-            "your very next tool call, before you reply and before any booking or end_call; many "
-            "one-field calls are exactly right. Two localities: call it twice (locations accumulate). "
-            # Call 1439 (21 Oct 2026): a website enquiry on a digital-marketing
-            # agent was asked "business ke liye ya investment ke liye?" and for a
-            # locality - property wording here and in log_lead, from when every
-            # tenant sold property. Property tenants' own prompts ask these.
-            "Ask only questions that fit THIS business: locality, property type, BHK, investment "
-            "or self-use are for a business that sells property, never for any other.\n"
+            # Call 1462 (22 Oct 2026, GPT-5.4 mini): "call log_lead the MOMENT
+            # ... many one-field calls are exactly right" was followed
+            # literally - 7 saves in 9 turns, each a second LLM round trip
+            # (~+1.1 s per turn, 18 requests, ~2x the LLM cost). A call that
+            # drops before the save still gets the post-call extraction.
+            "- Any per-tenant business call (the default): call log_lead ONCE the caller has told you "
+            "what they need, with every field you have so far — what they need, a timeline, a budget "
+            "(any language or unit: \"50 hazaar\", \"एक करोड़\"), a name. Every log_lead call adds a "
+            "pause before your reply, so do NOT call it after each single detail; call it again only "
+            "when they give a name, a phone number or change something, and always before any "
+            "booking or end_call. Omitted fields keep their value. You do NOT need their name or "
+            "phone first, and NEVER pass a placeholder like \"not applicable\" or \"unknown\". "
+            # Call 1458 (21 Oct 2026, Sarvam 105B): naming the property questions
+            # here, even to forbid them, primed the model to ask "business ya
+            # investment?" and "kis city ya area mein?" on a website enquiry
+            # (calls 1439/1458). Property tenants' own prompts ask those, so
+            # nothing property-specific is named in the platform rules at all.
+            "Ask only about what THIS business offers, as its own prompt and knowledge base describe "
+            # Call 1463 (22 Oct 2026, GPT-5.4 mini): a website enquiry from a
+            # real-estate caller got "कोई खास city?" and "leads या listings?",
+            # i.e. the caller was qualified as a buyer in THEIR industry.
+            # Call 1466: "keep asking" read as "ask more" (type of website x2,
+            # pages x2) - the rule is about the topic, not the number.
+            "it. When the caller names their own industry, your questions stay on what they need "
+            "from this business, not on their customers, stock or market.\n"
             "- Booking an appointment (clinic, salon, consultation, site visit): call "
             "check_calendar_availability for their preferred date, offer only the slots it returns, and "
             "call book_appointment once they pick one. Published hours in the knowledge base never prove "
@@ -4128,7 +4242,9 @@ class RealEstateAgent(Agent):
             "(or send_brochure noted it for the team — then say only what it tells you to).\n"
             "2. Never ask again for anything listed under what you already know. If the caller "
             "says they already told you, they are right — acknowledge once, briefly, and move "
-            "on to something you genuinely do not know.\n"
+            "on to something you genuinely do not know. If they question or brush off one of "
+            "your questions (\"ये किस type का question है?\", \"ठीक है भाई\"), never ask it again; "
+            "move on.\n"
             "3. If a message is garbled or makes no sense in context, say in one short line "
             "that you did not catch it and ask them to repeat it. Never guess at its meaning, "
             "and never cover for it by asking a different question instead.\n"
@@ -4185,7 +4301,7 @@ class RealEstateAgent(Agent):
         instructions += date_instruction
         # A speech-to-speech model has no TTS, so everything below that shapes
         # a TTS voice (3.8 style hints, the TTS client itself) is skipped.
-        _rt_selected = (config.get("model") or "").startswith(_GEMINI_LIVE_PREFIX)
+        _rt_selected = (config.get("model") or "").startswith(_REALTIME_PREFIXES)
         if not _rt_selected and voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
             # The Gemini persona's short descriptor should shape what the
             # LLM says as well as how TTS renders it. The agent's explicit
@@ -4253,12 +4369,17 @@ class RealEstateAgent(Agent):
         # No saved model -> Vistrow Bharat, the same default the agents.model
         # column and the agent builder use (GPT-4 retired 2026-10-14).
         _model_name = config.get("model") or "sarvam/sarvam-105b-conversations"
-        self._is_realtime = _model_name.startswith(_GEMINI_LIVE_PREFIX)
-        # The Google model id, resolved exactly as _build_realtime_llm does.
-        self._realtime_model_name = (
-            (_model_name[len(_GEMINI_LIVE_PREFIX):].lstrip(":-") or _GEMINI_LIVE_DEFAULT_MODEL)
-            if self._is_realtime else ""
-        )
+        self._is_realtime = _model_name.startswith(_REALTIME_PREFIXES)
+        self._is_gpt_live = _model_name.startswith(_GPT_LIVE_PREFIX)
+        # The provider's model id, resolved exactly as its builder does.
+        if self._is_gpt_live:
+            self._realtime_model_name = _gpt_live_model_name(_model_name)
+        elif self._is_realtime:
+            self._realtime_model_name = (
+                _model_name[len(_GEMINI_LIVE_PREFIX):].lstrip(":-") or _GEMINI_LIVE_DEFAULT_MODEL
+            )
+        else:
+            self._realtime_model_name = ""
         if self._is_realtime:
             # The assembled instruction is written for a separate TTS voice and runs to
             # ~35,000 characters that Google re-bills every turn. Reshape it for a
@@ -4279,10 +4400,15 @@ class RealEstateAgent(Agent):
             # one, which is precisely the bug that took every call down
             # earlier (see _direction at the top of this method). One
             # super().__init__, one path through the rest.
-            _rt = _build_realtime_llm(_model_name, instructions, voice_value, reply_language)
+            if self._is_gpt_live:
+                _rt = _build_gpt_live_llm(_model_name, instructions)
+                _rt_voice = os.environ.get("GPT_LIVE_VOICE") or _GPT_LIVE_DEFAULT_VOICE
+            else:
+                _rt = _build_realtime_llm(_model_name, instructions, voice_value, reply_language)
+                _rt_voice = _gemini_live_voice(voice_value)
             logger.info(
                 "speech-to-speech mode: %s, voice=%s, language=%s (no separate STT/TTS)",
-                _model_name, _gemini_live_voice(voice_value), reply_language,
+                _model_name, _rt_voice, reply_language,
             )
         super().__init__(
             instructions=instructions,
@@ -6106,7 +6232,8 @@ class RealEstateAgent(Agent):
                 }.get(emotion, "") if emotion and self._emotion_intensity > 0 else ""
                 if emotion_style and self._emotion_intensity < 1:
                     emotion_style = f"subtle {emotion_style}"
-                style = "; ".join(part for part in (base_style, emotion_style) if part)
+                accent = _gemini38_accent_hint(getattr(self, "_reply_language", "") or "")
+                style = "; ".join(part for part in (base_style, accent, emotion_style) if part)
                 try:
                     self.tts.update_options(style=style)
                     logger.info("Gemini 3.8 delivery style updated for caller tone=%s", emotion or "neutral")
@@ -6499,19 +6626,27 @@ def _schedule_follow_up(
     if not (phone and account_id and agent_id):
         return None
     policy = retry_rules.follow_up_policy(cfg.get("follow_up_policy"))
+    compliance = db.get_compliance_config(account_id) or {}
     try:
-        tz = ZoneInfo(db.get_compliance_config(account_id).get("timezone") or "Asia/Kolkata")
+        tz = ZoneInfo(compliance.get("timezone") or "Asia/Kolkata")
     except (ZoneInfoNotFoundError, ValueError, TypeError):
         tz = ZoneInfo("Asia/Kolkata")
     previous = call_context.get("custom_fields") or {}
-    plan = follow_ups.plan(policy, lead_data, extracted, datetime.now(tz), str(previous.get("follow_up_kind") or ""))
+    plan = follow_ups.plan(
+        policy, lead_data, extracted, datetime.now(tz), str(previous.get("follow_up_kind") or ""),
+        previous_fields=previous, active_days=compliance.get("active_days"),
+    )
     if not plan:
         return None
     # The previous call's lead fields carry over (ArthaLeads lead id, project,
     # language...) so the follow-up updates the same CRM lead and opens on
-    # what they enquired about; the kind drives the opener.
+    # what they enquired about; the kind drives the opener. A nurture
+    # sequence's step and start date come from the plan; any other kind
+    # drops them, so a later interested call starts a fresh sequence.
+    carried = {k: v for k, v in previous.items() if k not in ("follow_up_step", "nurture_origin", "note_for_this_call")}
     fields = {
-        **previous,
+        **carried,
+        **(plan.get("fields") or {}),
         "follow_up_kind": plan["kind"],
         "previous_call_id": call_id,
         "follow_up_summary": plan["summary"],
@@ -8667,12 +8802,8 @@ async def entrypoint(ctx: JobContext) -> None:
         provider = getattr(metadata, "model_provider", None) if metadata else None
         model = getattr(metadata, "model_name", None) if metadata else None
         if metric_type == "realtime_model_metrics" and _rt_call:
-            provider = provider or "google"
-            configured_model = (cfg.get("model") or "")
-            model = model or (
-                configured_model[len(_GEMINI_LIVE_PREFIX):].lstrip(":-")
-                or _GEMINI_LIVE_DEFAULT_MODEL
-            )
+            provider = provider or ("openai" if getattr(agent, "_is_gpt_live", False) else "google")
+            model = model or getattr(agent, "_realtime_model_name", "") or _GEMINI_LIVE_DEFAULT_MODEL
         label = "/".join(part for part in (provider, model) if part)
         # A RealtimeModel emits no metadata, so provider and model are both
         # None and the joined label comes out empty — which is how a realtime

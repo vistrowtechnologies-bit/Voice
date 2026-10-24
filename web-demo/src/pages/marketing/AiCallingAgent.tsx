@@ -1,10 +1,26 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
-import { LANGUAGES } from '../../lib/marketingContent'
+import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
+import { HERO_STATS, LANGUAGES } from '../../lib/marketingContent'
+import {
+  Bento,
+  FeatureList,
+  HeroFacts,
+  ObjectionCards,
+  Reveal,
+  SectionHead,
+  SplitHero,
+  SplitRow,
+  StickyCta,
+  TrustBand,
+  useStickyRefs,
+} from '../../components/showcase'
+import { BadgeTimeline, Section } from './premium-w2/W2Kit'
+import { W2_VISUALS } from './premium-w2/visuals'
 
 // Landing page for "AI calling agent" / "AI calling" / "automated calling
 // software". It is the umbrella page for the software category; /ai-telecaller
@@ -18,6 +34,9 @@ import { LANGUAGES } from '../../lib/marketingContent'
 // - campaigns have max attempts, retry minutes and a concurrency setting that
 //   is also capped by the telephony channels available,
 // - the agent adds callers who ask not to be called again (tools.do_not_call).
+
+const ROUTE = '/ai-calling-agent'
+const V = W2_VISUALS[ROUTE]
 
 const CALL_TYPES = [
   {
@@ -65,6 +84,62 @@ const RULES = [
   },
 ]
 
+const OLDER_TOOLS = [
+  {
+    icon: 'campaign',
+    title: 'Recorded broadcasts',
+    body: <>Play the same message to everyone. The listener cannot ask anything, so questions turn into missed calls back to your office.</>,
+  },
+  {
+    icon: 'dialpad',
+    title: 'Press-1 menus',
+    body: (
+      <>
+        Route a caller by keypress but do not answer. If you want to replace a menu on an incoming line, see{' '}
+        <Link to="/ai-ivr" className="font-semibold text-primary underline-offset-4 hover:underline">AI IVR</Link>.
+      </>
+    ),
+  },
+  {
+    icon: 'call_split',
+    title: 'Auto-dialers',
+    body: (
+      <>
+        Dial numbers quickly and connect whoever answers to a free human agent. The agent described here holds the
+        conversation first and passes on the calls that need a person.
+      </>
+    ),
+  },
+]
+
+const NEXT = [
+  {
+    to: '/ai-telecaller',
+    icon: 'call',
+    title: 'AI telecaller',
+    body: 'For sales and admissions teams: how the agent takes over routine lead calls, follow-ups and callbacks.',
+  },
+  {
+    to: '/product/outbound',
+    icon: 'campaign',
+    title: 'Outbound campaigns',
+    body: 'The campaign feature itself: lists, segments, retries, concurrency and the results of each run.',
+  },
+  {
+    to: '/ai-call-center',
+    icon: 'groups',
+    title: 'AI call center',
+    body: 'For a support floor: putting an agent on the first line of the queue, with handover to your team.',
+  },
+]
+
+const START = [
+  { title: 'Choose the call', body: 'One inbound number or one follow-up list. Leave everything else as it is.' },
+  { title: 'Write the brief', body: 'What the agent may answer, what it should ask, and when to hand over.' },
+  { title: 'Test in the browser', body: 'Use the Testing Lab for the hard cases: a busy lead, a language switch, a price question.' },
+  { title: 'Review a week', body: 'Read the transcripts with your team lead, fix the knowledge base, then widen.' },
+]
+
 const FAQ = [
   {
     q: 'What is an AI calling agent?',
@@ -105,6 +180,7 @@ const FAQ_JSONLD = {
 const linkClass = 'font-semibold text-primary underline-offset-4 hover:underline'
 
 export function AiCallingAgent() {
+  const { heroCtaRef, endRef } = useStickyRefs()
   return (
     <MarketingLayout>
       <Seo
@@ -114,63 +190,63 @@ export function AiCallingAgent() {
         jsonLd={FAQ_JSONLD}
       />
 
-      <PageHero
+      <SplitHero
         eyebrow="AI calling agent"
         title="An AI calling agent for Indian businesses."
         subhead="Automated calling software that holds the conversation itself: it answers inbound calls, calls your leads and customers, asks your questions in their language and leaves your team a written record of every call."
+        visual={V.hero}
+        chips={[
+          { label: 'Inbound and outbound', live: true },
+          { label: 'Same agent, same records', icon: 'receipt_long' },
+        ]}
+        placement="ai_calling_agent_hero"
+        trust={<HeroFacts facts={HERO_STATS} />}
+        ctaRef={heroCtaRef}
       />
 
-      <section className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <div className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.10] via-surface to-surface p-7 sm:p-9">
-          <SectionEyebrow>In plain words</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What AI calling means for your phone line.</h2>
-          <p className="mt-4 max-w-3xl leading-relaxed text-text-muted">
-            AI calling puts a voice agent on your business calls. It listens to what the person says, works out what
-            they need, answers from information you have approved and takes the next step: a booking, a callback
-            request, a transfer to your team or a note that the customer is not interested. The difference from a
-            recorded message is that the caller can interrupt, ask a question in their own words or switch to
-            Hindi halfway through, and the agent keeps up.
-          </p>
-          <p className="mt-4 max-w-3xl leading-relaxed text-text-muted">
-            Vistrow Voice runs one AI calling agent across inbound phone calls, outbound campaigns and your website,
-            so the same instructions, knowledge and call records apply wherever a customer reaches you.
-          </p>
-        </div>
-      </section>
+      <Section className="py-12 lg:py-14">
+        <SplitRow figure={V.flow} className="">
+          <Reveal>
+            <SectionHead eyebrow="In plain words" title="What AI calling means for your phone line." />
+            <p className="mt-5 leading-relaxed text-text-muted">
+              AI calling puts a voice agent on your business calls. It listens to what the person says, works out what
+              they need, answers from information you have approved and takes the next step: a booking, a callback
+              request, a transfer to your team or a note that the customer is not interested. The difference from a
+              recorded message is that the caller can interrupt, ask a question in their own words or switch to
+              Hindi halfway through, and the agent keeps up.
+            </p>
+            <p className="mt-4 leading-relaxed text-text-muted">
+              Vistrow Voice runs one AI calling agent across inbound phone calls, outbound campaigns and your website,
+              so the same instructions, knowledge and call records apply wherever a customer reaches you.
+            </p>
+          </Reveal>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Inbound and outbound</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">The calls an AI calling agent can take on.</h2>
-          <p className="mt-3 text-text-muted">
-            Start with the calls your team repeats most. Each one below runs on the same agent and lands in the same
-            Calls history.
-          </p>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          {CALL_TYPES.map((item) => (
-            <div key={item.title} className="rounded-2xl border border-border bg-surface p-7">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-                <Icon name={item.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-5 text-sm text-text-muted">
+      <Bento
+        visual={V.types}
+        items={CALL_TYPES}
+        head={
+          <SectionHead
+            eyebrow="Inbound and outbound"
+            title="The calls an AI calling agent can take on."
+            intro="Start with the calls your team repeats most. Each one below runs on the same agent and lands in the same Calls history."
+          />
+        }
+      />
+      <Section className="-mt-8 pb-10 pt-0">
+        <p className="text-sm text-text-muted">
           Set-up details:{' '}
           <Link to="/product/inbound" className={linkClass}>inbound call answering</Link>,{' '}
           <Link to="/product/outbound" className={linkClass}>outbound calling campaigns</Link> and the{' '}
           <Link to="/product/widget" className={linkClass}>website call widget</Link>.
         </p>
-      </section>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
-          <div>
-            <SectionEyebrow>Lead qualification and follow-ups</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Your questions, every call, in the same order.</h2>
+      <Section>
+        <SplitRow figure={V.transcript} flip className="">
+          <Reveal>
+            <SectionHead eyebrow="Lead qualification and follow-ups" title="Your questions, every call, in the same order." />
             <p className="mt-4 leading-relaxed text-text-muted">
               You write the qualifying questions into the agent’s instructions and choose which fields to pull from
               every transcript, such as budget, location, timeline or interest level. With strict mode on, the agent
@@ -181,8 +257,8 @@ export function AiCallingAgent() {
               When a lead is busy, the agent records a callback request with the preferred time. It shows up in
               Appointments and in the tools you connect, so a person follows up at the time the customer chose.
             </p>
-          </div>
-          <ul className="grid gap-3 text-sm leading-relaxed text-text-muted sm:grid-cols-2">
+          </Reveal>
+          <ul className="mt-6 grid gap-3 text-sm leading-relaxed text-text-muted sm:grid-cols-2">
             {[
               'Transcript, summary and recording on every call',
               'Post-call fields filled from what the caller said',
@@ -190,157 +266,128 @@ export function AiCallingAgent() {
               'Earlier calls from the same number shown together',
               'Results sent to Zoho CRM, ArthaLeads, Slack, Google Sheets or a webhook',
               'Campaign counts for connected, pending, no-answer, failed and blocked calls',
-            ].map((item) => (
-              <li key={item} className="flex gap-2 rounded-xl border border-border bg-surface p-4">
-                <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-primary" />
-                <span>{item}</span>
+            ].map((item, i) => (
+              <li key={item}>
+                <Reveal delayMs={(i % 2) * 60} className="vv-lift flex h-full gap-3 rounded-2xl border border-border bg-surface p-4">
+                  <Icon name="check_circle" className="mt-0.5 shrink-0 text-[18px] text-primary" />
+                  <span>{item}</span>
+                </Reveal>
               </li>
             ))}
           </ul>
-        </div>
-      </section>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="rounded-2xl border border-border bg-surface p-7 sm:p-8">
-          <SectionEyebrow>Compared with older tools</SectionEyebrow>
-          <h2 className="mt-3 font-display text-2xl font-bold tracking-tight sm:text-3xl">
-            How it differs from other automated calling software.
-          </h2>
-          <div className="mt-6 grid gap-5 md:grid-cols-3">
-            <div>
-              <h3 className="font-display text-lg font-semibold">Recorded broadcasts</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                Play the same message to everyone. The listener cannot ask anything, so questions turn into missed
-                calls back to your office.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-display text-lg font-semibold">Press-1 menus</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                Route a caller by keypress but do not answer. If you want to replace a menu on an incoming line, see{' '}
-                <Link to="/ai-ivr" className={linkClass}>AI IVR</Link>.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-display text-lg font-semibold">Auto-dialers</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                Dial numbers quickly and connect whoever answers to a free human agent. The agent described here holds
-                the conversation first and passes on the calls that need a person.
-              </p>
-            </div>
-          </div>
+      <Section>
+        <Reveal>
+          <SectionHead
+            eyebrow="Compared with older tools"
+            title="How it differs from other automated calling software."
+            className="mb-10"
+          />
+        </Reveal>
+        <div className="grid gap-4 md:grid-cols-3">
+          {OLDER_TOOLS.map((tool, i) => (
+            <Reveal key={tool.title} delayMs={i * 70} className="h-full">
+              <div className="vv-lift flex h-full flex-col rounded-3xl border border-border bg-surface p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-text-muted">
+                  <Icon name={tool.icon} className="text-[22px]" />
+                </span>
+                <h3 className="mt-5 font-display text-lg font-semibold">{tool.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{tool.body}</p>
+              </div>
+            </Reveal>
+          ))}
         </div>
-      </section>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-          <div>
-            <SectionEyebrow>Languages</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Calls in the language your customer picks.</h2>
+      <TrustBand placement="ai_calling_agent_trust_band" />
+
+      <Section>
+        <SplitRow figure={V.languages} className="">
+          <Reveal>
+            <SectionHead eyebrow="Languages" title="Calls in the language your customer picks." />
             <p className="mt-4 leading-relaxed text-text-muted">
               The agent opens in the language you set and follows the caller if they switch, including the Hinglish
-              and other mixed speech most Indian calls actually use. It speaks English and these Indian languages:
+              and other mixed speech most Indian calls actually use. It speaks more than 130 languages, including Hindi, English and 9 other Indian languages:
             </p>
-          </div>
-          <ul className="flex flex-wrap gap-2 lg:pt-10">
-            {LANGUAGES.map((lang) => (
-              <li key={lang.slug}>
-                <Link
-                  to={`/languages/${lang.slug}`}
-                  className="inline-block rounded-full border border-border px-3 py-1 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
-                >
-                  {lang.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+            <ul className="mt-5 flex flex-wrap gap-2">
+              {LANGUAGES.map((lang) => (
+                <li key={lang.slug}>
+                  <Link
+                    to={`/languages/${lang.slug}`}
+                    className="inline-flex min-h-11 items-center rounded-full border border-border bg-surface px-3.5 py-1.5 sm:min-h-0 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+                  >
+                    {lang.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </SplitRow>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-10 max-w-2xl">
-          <SectionEyebrow>Compliance controls</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Rules checked by the system, not left to the script.</h2>
-          <p className="mt-3 text-text-muted">
-            These are settings in your dashboard that the dialer enforces. They help you meet your obligations; they do
-            not replace them.
+      <Section>
+        <SplitRow figure={V.checks} flip className="">
+          <Reveal>
+            <SectionHead
+              eyebrow="Compliance controls"
+              title="Rules checked by the system, not left to the script."
+              intro="These are settings in your dashboard that the dialer enforces. They help you meet your obligations; they do not replace them."
+            />
+          </Reveal>
+          <FeatureList items={RULES} />
+          <p className="mt-5 text-sm text-text-muted">
+            Details:{' '}
+            <Link to="/help/compliance/calling-rules" className={linkClass}>calling window and Do-Not-Call</Link> and{' '}
+            <Link to="/help/agents/agent-functions-and-transfer" className={linkClass}>functions and transfer</Link>.
           </p>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {RULES.map((rule) => (
-            <div key={rule.title} className="rounded-2xl border border-border bg-surface p-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={rule.icon} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{rule.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{rule.body}</p>
-            </div>
+        </SplitRow>
+      </Section>
+
+      <Section>
+        <Reveal>
+          <SectionHead eyebrow="Where to read next" title="Pick the page that matches your job." className="mb-10" />
+        </Reveal>
+        <div className="grid gap-4 md:grid-cols-3">
+          {NEXT.map((item, i) => (
+            <Reveal key={item.to} delayMs={i * 70} className="h-full">
+              <Link
+                to={item.to}
+                className={`vv-lift group flex h-full flex-col rounded-3xl border p-6 ${
+                  i === 0 ? 'border-primary/40 bg-gradient-to-br from-primary/[0.14] via-surface to-surface' : 'border-border bg-surface'
+                }`}
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                  <Icon3D name={item.icon} className="text-[22px]" />
+                </span>
+                <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+                <Icon name="arrow_forward" className="mt-auto pt-4 text-[20px] text-primary transition-transform group-hover:translate-x-1" />
+              </Link>
+            </Reveal>
           ))}
         </div>
-        <p className="mt-5 text-sm text-text-muted">
-          Details:{' '}
-          <Link to="/help/compliance/calling-rules" className={linkClass}>calling window and Do-Not-Call</Link> and{' '}
-          <Link to="/help/agents/agent-functions-and-transfer" className={linkClass}>functions and transfer</Link>.
-        </p>
-      </section>
+      </Section>
 
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
-          <SectionEyebrow>Where to read next</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Pick the page that matches your job.</h2>
-        </div>
-        <div className="grid gap-5 md:grid-cols-3">
-          <Link to="/ai-telecaller" className="rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary">
-            <Icon name="call" className="text-[22px] text-cyan" />
-            <h3 className="mt-4 font-display text-lg font-semibold">AI telecaller</h3>
-            <p className="mt-2 text-sm leading-relaxed text-text-muted">
-              For sales and admissions teams: how the agent takes over routine lead calls, follow-ups and callbacks.
-            </p>
-          </Link>
-          <Link to="/product/outbound" className="rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary">
-            <Icon name="campaign" className="text-[22px] text-cyan" />
-            <h3 className="mt-4 font-display text-lg font-semibold">Outbound campaigns</h3>
-            <p className="mt-2 text-sm leading-relaxed text-text-muted">
-              The campaign feature itself: lists, segments, retries, concurrency and the results of each run.
-            </p>
-          </Link>
-          <Link to="/ai-call-center" className="rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary">
-            <Icon name="groups" className="text-[22px] text-cyan" />
-            <h3 className="mt-4 font-display text-lg font-semibold">AI call center</h3>
-            <p className="mt-2 text-sm leading-relaxed text-text-muted">
-              For a support floor: putting an agent on the first line of the queue, with handover to your team.
-            </p>
-          </Link>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
-        <div className="mb-8 max-w-2xl">
+      <Section className="py-14 lg:py-20">
+        <Reveal>
           <SectionEyebrow>Getting started</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Start with one kind of call.</h2>
-        </div>
-        <ol className="grid gap-4 md:grid-cols-4">
-          {[
-            { title: 'Choose the call', body: 'One inbound number or one follow-up list. Leave everything else as it is.' },
-            { title: 'Write the brief', body: 'What the agent may answer, what it should ask, and when to hand over.' },
-            { title: 'Test in the browser', body: 'Use the Testing Lab for the hard cases: a busy lead, a language switch, a price question.' },
-            { title: 'Review a week', body: 'Read the transcripts with your team lead, fix the knowledge base, then widen.' },
-          ].map((step, i) => (
-            <li key={step.title} className="rounded-2xl border border-border bg-surface p-6">
-              <span className="font-display text-2xl font-bold text-primary">{i + 1}</span>
-              <h3 className="mt-3 font-display text-base font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
+          <h2 className="mb-12 mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">Start with one kind of call.</h2>
+        </Reveal>
+        <BadgeTimeline steps={START.map((step, i) => ({ ...step, badge: `Step ${i + 1}` }))} />
+      </Section>
+
+      <ObjectionCards route={ROUTE} placement="ai_calling_agent_objections" />
 
       <FaqSection items={FAQ} title="AI calling questions." />
 
+      <div ref={endRef} />
       <CTABand
         title="Bring one call type to a demo."
         subtitle="Tell us who you call or who calls you, and we will show the agent taking that call and handing over the rest."
       />
+      <StickyCta heroCtaRef={heroCtaRef} endRef={endRef} />
     </MarketingLayout>
   )
 }

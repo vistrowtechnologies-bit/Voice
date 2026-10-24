@@ -2,6 +2,8 @@ import type {
   AgentActivity,
   GrowthInsights,
   MissedMoneyQueue,
+  FollowUp,
+  FollowUpList,
   SpeedToLead,
   ActiveCallInfo,
   AgentConfig,
@@ -309,11 +311,33 @@ export const fetchActiveCalls = () => get<ActiveCallInfo[]>('/active-calls')
 // ------------------------------------------------------------- dashboard
 
 export const fetchDashboardSummary = () => get<DashboardSummary>('/dashboard/summary')
-export const fetchUsageTrends = (days = 14) => get<UsageTrends>(`/dashboard/usage-trends?days=${days}`)
-export const fetchPeriodComparison = (days = 14) => get<DashboardPeriodComparison>(`/dashboard/period-comparison?days=${days}`)
+/** A dashboard date range: inclusive local days. ``days`` is sent too, so a
+ * server without start/end support still answers with a same-length window. */
+export interface DashboardRangeQuery { start: string; end: string; days: number }
+function rangeParams(r: DashboardRangeQuery): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata'
+  return new URLSearchParams({ days: String(r.days), start: r.start, end: r.end, tz }).toString()
+}
+export const fetchUsageTrends = (r: DashboardRangeQuery) => get<UsageTrends>(`/dashboard/usage-trends?${rangeParams(r)}`)
+export const fetchPeriodComparison = (r: DashboardRangeQuery) => get<DashboardPeriodComparison>(`/dashboard/period-comparison?${rangeParams(r)}`)
 export const fetchAnalytics = () => get<Analytics>('/dashboard/analytics')
-export const fetchSpeedToLead = (days = 14) => get<SpeedToLead>(`/dashboard/speed-to-lead?days=${days}`)
+export const fetchSpeedToLead = (r: DashboardRangeQuery) => get<SpeedToLead>(`/dashboard/speed-to-lead?${rangeParams(r)}`)
 export const fetchMissedMoney = () => get<MissedMoneyQueue>('/dashboard/missed-money')
+export const fetchFollowUps = (view: 'upcoming' | 'done' | 'cancelled' | 'all' = 'upcoming', sourceCallId?: number) =>
+  get<FollowUpList>(`/follow-ups?view=${view}${sourceCallId != null ? `&source_call_id=${sourceCallId}` : ''}`)
+export const followUpCallNow = (id: number) => send<FollowUp>('POST', `/follow-ups/${id}/call-now`)
+export const followUpReschedule = (id: number, at: string) => send<FollowUp>('POST', `/follow-ups/${id}/reschedule`, { at })
+export const followUpCancel = (id: number) => send<FollowUp>('POST', `/follow-ups/${id}/cancel`)
+/** Schedule a follow-up call by hand. Phone, name and agent default to the source call's. */
+export const createFollowUp = (data: {
+  source_call_id?: number
+  agent_id?: number
+  phone?: string
+  name?: string
+  kind: 'callback' | 'nurture'
+  at: string
+  note?: string
+}) => send<{ item: FollowUp; replaced: boolean }>('POST', '/follow-ups', data)
 export const fetchInsights = (days = 30) => get<GrowthInsights>(`/dashboard/insights?days=${days}`)
 export const fetchLaunchReadiness = () => get<LaunchReadiness>('/dashboard/launch-readiness')
 export const fetchFeedbackSummary = () => get<FeedbackSummary>('/dashboard/feedback')

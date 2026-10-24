@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -13,9 +13,12 @@ import {
   formatDateTime,
   formatDuration,
   pushCallToArthaleads,
+  fetchFollowUps,
 } from '../lib/api'
-import { useAuth } from '../lib/auth'
-import type { CallRecord } from '../lib/types'
+import { hasRole, useAuth } from '../lib/auth'
+import type { CallRecord, FollowUp } from '../lib/types'
+import { formatWhen } from '../lib/followUps'
+import { ScheduleFollowUpModal } from '../components/ScheduleFollowUpModal'
 import { Tooltip } from '../components/ui/Tooltip'
 
 const SENTIMENT_STYLE: Record<string, string> = {
@@ -103,6 +106,14 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
   // tenant-facing feature - see the rows below.
   const { user } = useAuth()
   const [call, setCall] = useState<CallRecord | null | undefined>(undefined)
+  const [followUps, setFollowUps] = useState<FollowUp[]>([])
+  const [scheduling, setScheduling] = useState(false)
+  const loadFollowUps = useCallback(() => {
+    const n = Number(id)
+    if (!Number.isFinite(n)) return
+    fetchFollowUps('all', n).then((d) => setFollowUps(d.items)).catch(() => setFollowUps([]))
+  }, [id])
+  useEffect(loadFollowUps, [loadFollowUps])
   const [notes, setNotes] = useState('')
   // Which header value was just copied, for a brief check-mark.
   const [copied, setCopied] = useState<'id' | 'phone' | null>(null)
@@ -824,6 +835,37 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                     generic booking any agent can make via book_appointment. */}
                 Appointment · {call.siteVisit.date} at {call.siteVisit.time}
               </div>
+            )}
+            {/* Follow-ups this call created, and the one it fulfilled (owner,
+                22 Oct: nothing showed a follow-up was coming). */}
+            {followUps.map((f) =>
+              f.callId != null && String(f.callId) === String(call.id) ? (
+                <Link key={`from-${f.id}`} to={f.sourceCallId != null ? `/dashboard/calls/${f.sourceCallId}` : '/dashboard/follow-ups'} className="mt-3 flex items-center gap-2 rounded-lg bg-surface-high px-3 py-2 text-xs font-semibold text-text hover:bg-primary/10">
+                  <Icon name="event_repeat" className="text-[16px] text-primary" />
+                  This was a follow-up call ({f.label.toLowerCase()}){f.sourceCallId != null ? ` from call #${f.sourceCallId}` : ''}
+                </Link>
+              ) : (
+                <Link key={f.id} to="/dashboard/follow-ups" className="mt-3 flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/15">
+                  <Icon name="event_repeat" className="text-[16px]" />
+                  {f.state === 'upcoming'
+                    ? `Follow-up scheduled for ${formatWhen(f.dueAt)} (${f.label.toLowerCase()})`
+                    : f.state === 'cancelled'
+                      ? `Follow-up cancelled (${f.label.toLowerCase()})`
+                      : `Follow-up made ${formatWhen(f.lastAttemptAt)} (${f.label.toLowerCase()})${f.callId != null ? ` · call #${f.callId}` : ''}`}
+                </Link>
+              ),
+            )}
+            {hasRole(user, 'member') && call.phone && (
+              <button type="button" onClick={() => setScheduling(true)} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-primary/40 bg-transparent px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/5">
+                <Icon name="event_repeat" className="text-[16px]" /> Schedule a follow-up call
+              </button>
+            )}
+            {scheduling && (
+              <ScheduleFollowUpModal
+                source={{ callId: Number(call.id), name: call.name, phone: call.phone, agentId: call.agentId }}
+                onClose={() => setScheduling(false)}
+                onScheduled={() => { setScheduling(false); loadFollowUps() }}
+              />
             )}
           </Card>
 

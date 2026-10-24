@@ -46,6 +46,9 @@
   --color-text: #f5f3ff;
   --color-text-muted: #9089b0;
   --color-destructive: #ef4444;
+  /* Tinted backdrop behind product screenshots in marketing figure frames. */
+  --color-panel: #120e1b;
+  --color-panel-line: #2a2438;
 }
 
 /* Light mode: flip the design tokens and every bg-surface / text-cyan /
@@ -68,6 +71,8 @@
   --color-text: #1a1523;
   --color-text-muted: #5d5776;
   --color-destructive: #dc2626;
+  --color-panel: #f4f1fb;
+  --color-panel-line: #e4def2;
 }
 
 body {
@@ -953,6 +958,33 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
   display: none;
 }
 
+/* Card grids whose rows always close, whatever the card count.
+   grid-close-2: on a two-column grid, an odd last card takes the whole row
+   (use with a breakpoint range, e.g. sm:max-lg:grid-close-2).
+   grid-close-3: three columns drawn on six tracks; a short last row of two
+   cards shares the width equally, and a lone last card turns the last four
+   into two rows of two. Six cards look exactly like grid-cols-3. */
+@utility grid-close-2 {
+  & > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+@utility grid-close-3 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  & > * {
+    grid-column: span 2 / span 2;
+  }
+  & > :nth-child(3n + 1):nth-last-child(2),
+  & > :nth-child(3n + 1):nth-last-child(2) ~ *,
+  & > :nth-child(3n + 1):nth-last-child(4),
+  & > :nth-child(3n + 1):nth-last-child(4) ~ * {
+    grid-column: span 3 / span 3;
+  }
+  & > :only-child {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vv-marquee-track {
     animation: none;
@@ -1106,81 +1138,68 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
 @keyframes vv-tooltip-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .vv-tooltip { animation: none; } }
 
-/* Language-page sample-call player (VoiceSamplePlayer). The orb scales with
-   --vs-level, which the component sets from the audio analyser while playing. */
-.vs-orb {
-  --vs-level: 0;
-  background:
-    radial-gradient(circle at 32% 28%, rgb(255 255 255 / 55%), transparent 38%),
-    radial-gradient(circle at 70% 75%, var(--color-cyan), transparent 55%),
-    linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  box-shadow: 0 0 calc(30px + var(--vs-level) * 40px) calc(var(--vs-level) * 10px) color-mix(in srgb, var(--color-primary) 55%, transparent);
-  transform: scale(calc(1 + var(--vs-level) * 0.12));
-  transition: transform 90ms linear, box-shadow 90ms linear;
+/* Language-page sample-call player (VoiceSamplePlayer). Theme tokens only;
+   the language switch is the one animated moment: the header pair flips,
+   the track marker pulses once and the target segment starts filling. */
+.vs-card {
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-text) 5%, transparent),
+    0 24px 48px -32px color-mix(in srgb, var(--color-text) 40%, transparent);
 }
-.vs-orb.is-playing::after {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  border-radius: 9999px;
-  border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
-  animation: vs-ring 1.8s ease-out infinite;
+.vs-play {
+  box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--color-primary) 70%, transparent);
 }
-@keyframes vs-ring {
-  0% { opacity: 0.9; transform: scale(0.95); }
-  100% { opacity: 0; transform: scale(1.25); }
-}
-.vs-chip.is-switched {
-  animation: vs-chip-in 600ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
-}
-@keyframes vs-chip-in {
-  0% { opacity: 0; transform: translateY(6px) scale(0.85); }
-  100% { opacity: 1; transform: none; }
-}
-.vs-line {
-  transition: opacity 350ms ease, transform 350ms ease;
-}
-.vs-line.is-hidden {
-  opacity: 0;
-  transform: translateY(8px);
-  pointer-events: none;
-}
-.vs-range {
-  appearance: none;
-  height: 6px;
-  border-radius: 9999px;
-  background: linear-gradient(90deg, var(--color-primary) var(--vs-progress, 0%), color-mix(in srgb, var(--color-primary) 18%, var(--color-surface-high)) var(--vs-progress, 0%));
-  cursor: pointer;
-}
-.vs-range::-webkit-slider-thumb {
-  appearance: none;
-  height: 14px;
-  width: 14px;
-  border-radius: 9999px;
-  background: var(--color-primary);
-  border: 2px solid white;
-}
-.vs-range::-moz-range-thumb {
-  height: 14px;
-  width: 14px;
-  border-radius: 9999px;
-  background: var(--color-primary);
-  border: 2px solid white;
-}
-.vs-range:focus-visible {
+.vs-play:focus-visible,
+.vs-wave:focus-visible {
   outline: 2px solid var(--color-primary);
-  outline-offset: 4px;
+  outline-offset: 3px;
 }
 /* Unlayered .material-symbols-outlined (font-size 20px) beats Tailwind's
    text-[..px] utilities, so the play glyph is sized here, after that rule. */
 .material-symbols-outlined.vs-play-icon {
-  font-size: 44px;
-  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 48;
+  font-size: 28px;
+  font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
+}
+.vs-wave-switch {
+  background-image: linear-gradient(var(--color-primary) 50%, transparent 50%);
+  background-size: 1px 4px;
+  opacity: 0.55;
+}
+.vs-pair span {
+  transition: background-color 300ms ease, color 300ms ease;
+}
+.vs-pair.is-switched .vs-pair-to {
+  animation: vs-flip 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.vs-pair.is-switched .vs-pair-arrow {
+  color: var(--color-primary);
+}
+@keyframes vs-flip {
+  0% { opacity: 0; transform: translateY(5px); }
+  100% { opacity: 1; transform: none; }
+}
+.vs-marker.is-switched {
+  animation: vs-pulse 900ms ease-out 1;
+}
+@keyframes vs-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent); }
+  100% { box-shadow: 0 0 0 10px transparent; }
+}
+.vs-track-label {
+  transition: border-color 300ms ease;
+}
+/* Lines appear as they are spoken (only after hydration: .is-live). A line
+   going from display:none to shown restarts the animation, so each new line
+   eases in once; lines already on show do not replay it. */
+.vs-transcript.is-live > li {
+  animation: vs-line-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes vs-line-in {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vs-orb, .vs-line { transition: none; }
-  .vs-orb.is-playing::after, .vs-chip.is-switched { animation: none; }
-  .vs-line.is-hidden { transform: none; }
+  .vs-pair span, .vs-track-label, .vs-line { transition: none; }
+  .vs-pair.is-switched .vs-pair-to, .vs-marker.is-switched, .vs-transcript.is-live > li { animation: none; }
 }
 
 /* ---- Marketing header (MarketingLayout.tsx) ---- */
@@ -1323,8 +1342,12 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
 
 /* Dashboard overview: the Bento layout (owner pick, 17 Oct). Tiles use the
    theme tokens so they work in light and dark; the hero is always violet. */
-.bento-grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 640px) { .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bento-w2 { grid-column: span 2; } }
+/* Phones get two columns too, so the four stat tiles pair up instead of each
+   filling a screen-wide row; wide tiles span both. */
+.bento-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bento-w2 { grid-column: span 2; }
+@media (max-width: 639.98px) { .bento-kpi { padding: 0.875rem 1rem; } }
+@media (min-width: 640px) { .bento-grid { gap: 1rem; } }
 @media (min-width: 1280px) { .bento-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .bento-h2 { grid-row: span 2; } }
 .bento-w4 { grid-column: 1 / -1; }
 .bento-tile {
@@ -1416,3 +1439,44 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
    scrolls with the wheel, trackpad, touch and keyboard focus. */
 .vv-quiet-scroll { scrollbar-width: none; }
 .vv-quiet-scroll::-webkit-scrollbar { display: none; }
+
+/* Phone tab bar (MobileTabBar). Below lg the bar floats at the bottom, so the
+   help launcher and the sticky save bars sit above it instead of under it.
+   The help launcher's inline bottom (set when a save bar is showing) still
+   wins, and it is measured from the lifted bar. */
+/* The marketing site's own voice widget is not meant for the dashboard
+   (index.html only loads it off app.*); where it still loads, it would cover
+   the More tab. */
+html.vv-tabbar #vistrow-voice-widget-host { display: none !important; }
+html.vv-sheet-open .vv-help-root { display: none !important; }
+@media (max-width: 1023.98px) {
+  html.vv-tabbar .vv-help-root { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  html.vv-tabbar .vv-action-bar { bottom: calc(5rem + env(safe-area-inset-bottom)); }
+}
+@keyframes vv-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes vv-sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+.vv-sheet-up { animation: vv-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+.vv-sheet-fade { animation: vv-sheet-fade 0.2s ease-out; }
+/* The date filter is a bottom sheet on phones and a plain popover from sm up. */
+@media (min-width: 640px) { .vv-sheet-up.vv-range-pop { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .vv-sheet-up, .vv-sheet-fade { animation: none; }
+}
+
+/* Copilot on phones: a full-screen panel, like a chat app, instead of a card
+   floating over the page and the tab bar. Its header has the close button,
+   so the floating launcher (and its second X) steps aside while it is open. */
+@media (max-width: 639.98px) {
+  .vv-help-panel {
+    position: fixed; inset: 0; z-index: 70;
+    width: 100vw !important; height: 100dvh !important;
+    border: 0; border-radius: 0;
+    padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+    animation: vv-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .vv-help-root:has(.vv-help-panel) .vv-help-launcher { display: none; }
+  html:has(.vv-help-panel) body { overflow: hidden; }
+}
+@media (max-width: 639.98px) and (prefers-reduced-motion: reduce) {
+  .vv-help-panel { animation: none; }
+}

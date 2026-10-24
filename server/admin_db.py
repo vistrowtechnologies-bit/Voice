@@ -1093,6 +1093,10 @@ VENDOR_COST_RATES = {
     # Gemini Live 2.5 native audio: same bill, about Rs110 over 23.8 minutes.
     "realtime_25": {"label": "Gemini Live 2.5", "inrPerMin": 4.6,
                     "source": "Google Cloud bill, 6-9 Oct 2026 (Rs110 / 23.8 min)"},
+    # OpenAI GPT-Live 1 ("Vistrow Duplex"): list price $0.05 per session
+    # minute at Rs96/$, before the backend model's tokens; not yet measured.
+    "realtime_gpt_live": {"label": "OpenAI GPT-Live 1", "inrPerMin": 4.8,
+                          "source": "developers.openai.com/api/docs/pricing, 24 Oct 2026 ($0.05/min, list)"},
     # Every other model (STT -> LLM -> TTS): gpt-4.1-mini + Sarvam STT +
     # ElevenLabs Flash provider cost, docs/REALTIME-VS-CASCADED-COST-2026-10-05.md
     # rupee table (Rs95.16/USD). Sarvam LLM turns cost ~3x gpt-4.1-mini's
@@ -1119,6 +1123,8 @@ def vendor_cost_per_minute(model: str | None, call_type: str | None) -> float:
     if name.startswith("gemini-live"):
         # 3.8 Live is priced like 3.1; only the 2.5 default is cheaper.
         engine = "realtime_25" if name == "gemini-live" or "2.5" in name else "realtime_31"
+    elif name.startswith("duplex"):
+        engine = "realtime_gpt_live"
     else:
         engine = "pipeline"
     rate = VENDOR_COST_RATES[engine]["inrPerMin"] + VENDOR_COST_RATES["livekit_session"]["inrPerMin"]

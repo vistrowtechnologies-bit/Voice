@@ -28,7 +28,7 @@ TENANT = {
 
 def tool_names(config):
     return {
-        getattr(t, "__name__", getattr(getattr(t, "__wrapped__", None), "__name__", ""))
+        getattr(t, "id", None) or getattr(t, "__name__", "")
         for t in main._build_tools(config)
     }
 

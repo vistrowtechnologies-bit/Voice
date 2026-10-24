@@ -21,6 +21,8 @@ Vistrow Voice supports 99 languages (the Gemini Live API language list) across i
 
 - Language overview: https://www.vistrowvoice.com/languages
 - Hindi: https://www.vistrowvoice.com/languages/hindi
+- English (India): https://www.vistrowvoice.com/languages/english
+- American and British English (US and UK callers): https://www.vistrowvoice.com/languages/american-british-english
 - Marathi: https://www.vistrowvoice.com/languages/marathi
 - Tamil: https://www.vistrowvoice.com/languages/tamil
 - Telugu: https://www.vistrowvoice.com/languages/telugu

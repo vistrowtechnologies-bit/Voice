@@ -1687,6 +1687,11 @@ def init_tables() -> None:
             ):
                 conn.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER DEFAULT 1")
+            # Admin-panel access per LOGIN (owner, 23 Oct 2026): a dedicated
+            # admin login, separate from the platform owner's everyday
+            # workspace, which keeps its features (is_platform_owner) but
+            # not admin once any login has this. See can_open_admin().
+            conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_admin INTEGER DEFAULT 0")
             # NULL until the first-run dashboard tour is finished or skipped.
             # Per-user (not per-account like onboarded_at above) so a
             # teammate invited into an already-onboarded account still sees
@@ -2119,7 +2124,7 @@ def get_user_by_id(user_id: int) -> dict | None:
             """
             SELECT u.id, u.email, u.name, u.phone, u.role, u.account_id, u.tour_completed_at,
                    u.auth_provider, u.password_set, u.avatar_url, u.session_version, u.email_verified_at,
-                   u.mfa_enabled_at,
+                   u.mfa_enabled_at, COALESCE(u.platform_admin, 0) AS platform_admin,
                    a.name AS account_name, a.plan AS account_plan,
                    a.is_platform_owner, a.onboarded_at, a.status AS account_status
             FROM users u JOIN accounts a ON a.id = u.account_id
@@ -3096,6 +3101,24 @@ def _tenant_diagnostic_events(row: dict) -> tuple[list[dict], bool]:
     return milestones, False
 
 
+def _tenant_latency_metrics(raw) -> dict:
+    """The per-call timing block as a tenant may see it: numbers and lists of
+    numbers only. The stored block also names the speech, language-model and
+    voice vendors ("stack", provider labels, usage keyed by model), which a
+    tenant must never see; admin pages read the raw column through admin_db."""
+    if not isinstance(raw, dict):
+        return {}
+    keep: dict = {}
+    for key, value in raw.items():
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            keep[key] = value
+        elif isinstance(value, list) and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value):
+            keep[key] = value
+    return keep
+
+
 def _call_dict(
     row: dict,
     include_transcript: bool = True,
@@ -3184,7 +3207,7 @@ def _call_dict(
         "firstResponseLatencyMs": _row_get(row, "first_response_latency_ms"),
         "failureReason": _row_get(row, "failure_reason"),
         "feedbackComment": _row_get(row, "feedback_comment"),
-        "latencyMetrics": _load_json_field(_row_get(row, "latency_metrics_json"), {}),
+        "latencyMetrics": _tenant_latency_metrics(_load_json_field(_row_get(row, "latency_metrics_json"), {})),
         # Why the call ended, for every channel — unlike failureReason above,
         # which only widget calls ever set. Empty string on calls recorded
         # before the column existed.
@@ -3292,6 +3315,24 @@ def list_calls(
             )
             for r in rows
         ]
+        # Follow-up calls the AI placed (owner, 22 Oct): one lookup for the
+        # whole page, so the list can tag them.
+        try:
+            ids = [r["id"] for r in rows]
+            kinds = {}
+            if ids:
+                for f in conn.execute(
+                    "SELECT call_id, custom_fields FROM campaign_contacts "
+                    "WHERE account_id = ? AND call_id = ANY(?) AND custom_fields LIKE ?",
+                    (account_id, ids, _FOLLOW_UP_MARK),
+                ).fetchall():
+                    kinds[f["call_id"]] = str(_load_json_field(f["custom_fields"], {}).get("follow_up_kind") or "")
+            for r, c in zip(rows, calls):
+                kind = kinds.get(r["id"])
+                c["followUpKind"] = kind
+                c["followUpLabel"] = _FOLLOW_UP_LABELS.get(kind or "", "Follow-up call") if kind is not None else None
+        except Exception:
+            logger.warning("list_calls: follow-up tags failed", exc_info=True)
         if search:
             s = search.lower()
             # Phone match is digits-only and bidirectional-substring, not a
@@ -3840,21 +3881,62 @@ def feedback_summary(account_id: int) -> dict:
         conn.close()
 
 
-def usage_trends(account_id: int, days: int = 14) -> dict:
+# A call's calendar day in the viewer's time zone. started_at is UTC text in
+# two shapes; both cast cleanly to timestamp (see calls_for_local_date).
+_CALL_LOCAL_DAY = "((started_at::timestamp AT TIME ZONE 'UTC') AT TIME ZONE ?)::date"
+
+
+def _dashboard_window(start: str | None, end: str | None, tz: str) -> tuple[datetime.date, datetime.date] | None:
+    """A custom dashboard date range (the Overview's date filter): both ends
+    inclusive, as local calendar days in ``tz``. None when no range was given,
+    so callers keep their rolling "last N days" behaviour."""
+    if not start and not end:
+        return None
+    try:
+        first = datetime.date.fromisoformat(start or end or "")
+        last = datetime.date.fromisoformat(end or start or "")
+        ZoneInfo(tz)
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        raise ValueError("Use YYYY-MM-DD dates and an IANA timezone") from exc
+    if last < first:
+        raise ValueError("The end date is before the start date")
+    if (last - first).days > 365:
+        raise ValueError("Pick a range of one year or less")
+    return first, last
+
+
+def usage_trends(account_id: int, days: int = 14, start: str | None = None, end: str | None = None,
+                 tz: str = "Asia/Kolkata") -> dict:
+    window = _dashboard_window(start, end, tz)
     conn = _connect()
     try:
-        rows = conn.execute(
-            f"""
-            SELECT started_at::date::text AS day,
-                   COUNT(*) AS total,
-                   SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
-                   COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
-            FROM calls
-            WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date
-            GROUP BY day ORDER BY day
-            """,
-            (account_id, str(days - 1)),
-        ).fetchall()
+        if window:
+            rows = conn.execute(
+                f"""
+                SELECT {_CALL_LOCAL_DAY}::text AS day,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
+                       COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
+                FROM calls
+                WHERE account_id = ? AND COALESCE(test_run_id, '') = ''
+                  AND {_CALL_LOCAL_DAY} BETWEEN ?::date AND ?::date
+                GROUP BY day ORDER BY day
+                """,
+                (tz, account_id, tz, window[0].isoformat(), window[1].isoformat()),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                f"""
+                SELECT started_at::date::text AS day,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN {lead_quality.QUALIFIED_SQL} THEN 1 ELSE 0 END) AS qualified,
+                       COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
+                FROM calls
+                WHERE account_id = ? AND COALESCE(test_run_id, '') = '' AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date
+                GROUP BY day ORDER BY day
+                """,
+                (account_id, str(days - 1)),
+            ).fetchall()
         return {
             "labels": [r["day"] for r in rows],
             "calls": [r["total"] for r in rows],
@@ -3865,10 +3947,16 @@ def usage_trends(account_id: int, days: int = 14) -> dict:
         conn.close()
 
 
-def period_comparison(account_id: int, days: int = 14) -> dict:
+def period_comparison(account_id: int, days: int = 14, start: str | None = None, end: str | None = None,
+                      tz: str = "Asia/Kolkata") -> dict:
     """Compare the selected rolling period with the equally sized period
     immediately before it. One query keeps every dashboard KPI on the same
-    date boundary and avoids misleading comparisons assembled client-side."""
+    date boundary and avoids misleading comparisons assembled client-side.
+    With start/end it compares that exact range (local days in ``tz``) with
+    the same number of days just before it."""
+    window = _dashboard_window(start, end, tz)
+    if window:
+        return _range_comparison(account_id, window[0], window[1], tz)
     days = max(1, min(int(days), 90))
     conn = _connect()
     try:
@@ -3923,6 +4011,72 @@ def period_comparison(account_id: int, days: int = 14) -> dict:
         }
     finally:
         conn.close()
+
+
+def _comparison_snapshot(row, prefix: str) -> dict:
+    calls = row[f"{prefix}_calls"] or 0
+    qualified = row[f"{prefix}_qualified"] or 0
+    booked = row[f"{prefix}_booked"] or 0
+    return {
+        "calls": calls,
+        "qualified": qualified,
+        "booked": booked,
+        "minutes": round((row[f"{prefix}_seconds"] or 0) / 60, 1),
+        "qualificationRate": round(qualified * 100 / calls, 1) if calls else 0,
+        "bookingRate": round(booked * 100 / calls, 1) if calls else 0,
+    }
+
+
+def _range_comparison(account_id: int, first: datetime.date, last: datetime.date, tz: str) -> dict:
+    """period_comparison() for an exact date range: the range against the same
+    number of days immediately before it, counted in local days."""
+    span = (last - first).days + 1
+    prev_last = first - datetime.timedelta(days=1)
+    prev_first = first - datetime.timedelta(days=span)
+    cur = "d BETWEEN ?::date AND ?::date"
+    prev = "d BETWEEN ?::date AND ?::date"
+    conn = _connect()
+    try:
+        row = conn.execute(
+            f"""
+            SELECT
+              COUNT(*) FILTER (WHERE {cur}) current_calls,
+              COUNT(*) FILTER (WHERE {cur} AND {lead_quality.QUALIFIED_SQL}) current_qualified,
+              COUNT(*) FILTER (WHERE {cur} AND site_visit_json IS NOT NULL) current_booked,
+              COALESCE(SUM(duration_seconds) FILTER (WHERE {cur}), 0) current_seconds,
+              COUNT(*) FILTER (WHERE {prev}) previous_calls,
+              COUNT(*) FILTER (WHERE {prev} AND {lead_quality.QUALIFIED_SQL}) previous_qualified,
+              COUNT(*) FILTER (WHERE {prev} AND site_visit_json IS NOT NULL) previous_booked,
+              COALESCE(SUM(duration_seconds) FILTER (WHERE {prev}), 0) previous_seconds
+            FROM (SELECT calls.*, {_CALL_LOCAL_DAY} AS d FROM calls
+                  WHERE account_id = ? AND COALESCE(test_run_id, '') = '') c
+            """,
+            (
+                *(first.isoformat(), last.isoformat()) * 4,
+                *(prev_first.isoformat(), prev_last.isoformat()) * 4,
+                tz, account_id,
+            ),
+        ).fetchone()
+    finally:
+        conn.close()
+    current, previous = _comparison_snapshot(row, "current"), _comparison_snapshot(row, "previous")
+
+    def change(key: str) -> float | None:
+        before = previous[key]
+        if before == 0:
+            return None if current[key] == 0 else 100.0
+        return round((current[key] - before) * 100 / before, 1)
+
+    return {
+        "days": span,
+        "start": first.isoformat(),
+        "end": last.isoformat(),
+        "previousStart": prev_first.isoformat(),
+        "previousEnd": prev_last.isoformat(),
+        "current": current,
+        "previous": previous,
+        "change": {key: change(key) for key in ("calls", "qualified", "booked", "minutes")},
+    }
 
 
 def agent_activity(account_id: int) -> list[dict]:
@@ -4151,6 +4305,7 @@ _QUEUE_STUCK_AFTER = "15 minutes"
 _SOURCE_LABELS = {
     "facebook_lead_ads": "Facebook lead", "facebook_lead_ads_native": "Facebook lead",
     "whatsapp": "WhatsApp lead", "website": "Website lead", "api": "API lead", "arthaleads": "CRM lead",
+    "webhook": "Webhook lead",
 }
 
 
@@ -4169,17 +4324,26 @@ def _lead_channel_label(fields: dict, source: str = "") -> str:
     return _SOURCE_LABELS.get(str(source or "").casefold(), "New lead")
 
 
-def speed_to_lead(account_id: int, days: int = 14) -> dict:
+def speed_to_lead(account_id: int, days: int = 14, start: str | None = None, end: str | None = None,
+                  tz: str = "Asia/Kolkata") -> dict:
     """How fast new leads got their first call: seconds from the lead
     reaching us to the first dial. The first dial is first_attempt_at; rows
     older than that column fall back to the call the contact produced, or to
     last_attempt_at when there was only one attempt. A lead that was never
     queued or never dialled counts as received but not called."""
-    days = max(1, min(int(days or 14), 90))
+    window = _dashboard_window(start, end, tz)
+    if window:
+        days = (window[1] - window[0]).days + 1
+        when = "AND ((e.created_at::timestamp AT TIME ZONE 'UTC') AT TIME ZONE ?)::date BETWEEN ?::date AND ?::date"
+        params: tuple = (account_id, tz, window[0].isoformat(), window[1].isoformat())
+    else:
+        days = max(1, min(int(days or 14), 90))
+        when = "AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - (? || ' days')::interval"
+        params = (account_id, days)
     conn = _connect()
     try:
         rows = conn.execute(
-            """
+            f"""
             SELECT EXTRACT(EPOCH FROM (
                        COALESCE(cc.first_attempt_at::timestamp, ca.started_at::timestamp,
                                 CASE WHEN cc.attempts = 1 THEN cc.last_attempt_at::timestamp END)
@@ -4188,9 +4352,9 @@ def speed_to_lead(account_id: int, days: int = 14) -> dict:
             LEFT JOIN campaign_contacts cc ON cc.id = e.campaign_contact_id AND cc.account_id = e.account_id
             LEFT JOIN calls ca ON ca.id = cc.call_id AND ca.account_id = e.account_id
             WHERE e.account_id = ?
-              AND e.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - (? || ' days')::interval
+              {when}
             """,
-            (account_id, days),
+            params,
         ).fetchall()
     finally:
         conn.close()
@@ -4352,6 +4516,384 @@ def missed_money_queue(account_id: int, limit: int = 20) -> dict:
         "counts": counts,
         "toCall": counts["uncalled_lead"] + counts["overdue_follow_up"] + counts["dropped_call"],
     }
+
+
+
+# --- Follow-ups page (owner, 22 Oct 2026) ---------------------------------
+# A follow-up is a campaign_contacts row whose custom_fields carry
+# follow_up_kind (agent/db.py schedule_follow_up_call). previous_call_id is the
+# call that created it; call_id, once dialled, is the follow-up call itself.
+_FOLLOW_UP_RETRY = ("no_answer", "failed", "voicemail")
+_FOLLOW_UP_DONE = ("done", "no_answer", "failed", "voicemail", "blocked")
+
+
+def _utc_iso(value: str | None) -> str | None:
+    """Stored UTC text ('YYYY-MM-DD HH:MM:SS' or ISO) as ISO-8601 with Z, so the
+    browser reads it as UTC rather than local time."""
+    if not value:
+        return None
+    text = str(value).strip().replace(" ", "T")
+    if text.endswith("Z") or "+" in text[10:]:
+        return text
+    return text + "Z"
+
+
+def _follow_up_state(status: str, next_attempt_at: str | None) -> str:
+    if status == "cancelled":
+        return "cancelled"
+    if status in ("pending", "calling") or (status in _FOLLOW_UP_RETRY and next_attempt_at):
+        return "upcoming"
+    return "done"
+
+
+def _follow_up_item(r) -> dict:
+    fields = _load_json_field(r["custom_fields"], {})
+    kind = str(fields.get("follow_up_kind") or "")
+    try:
+        source = int(fields.get("previous_call_id")) if fields.get("previous_call_id") not in (None, "") else None
+    except (TypeError, ValueError):
+        source = None
+    return {
+        "id": r["id"],
+        "name": _queue_name(r["name"], r["phone"], "Follow-up"),
+        "phone": r["phone"] or "",
+        "kind": kind,
+        "label": _FOLLOW_UP_LABELS.get(kind, "Follow-up call"),
+        "summary": str(fields.get("follow_up_summary") or ""),
+        "visitAt": str(fields.get("follow_up_visit_at") or ""),
+        "status": r["status"],
+        "state": _follow_up_state(r["status"], r["next_attempt_at"]),
+        "outcome": r["outcome"] or "",
+        "attempts": r["attempts"] or 0,
+        "dueAt": _utc_iso(r["next_attempt_at"]),
+        "lastAttemptAt": _utc_iso(r["last_attempt_at"]),
+        "createdAt": _utc_iso(r["created_at"]),
+        "sourceCallId": source,
+        "callId": r["call_id"],
+        "agentId": r["agent_id"],
+        "agentName": r["agent_name"] or "",
+        "campaignId": r["campaign_id"],
+        "campaignPaused": r["campaign_status"] not in ("running", "completed"),
+        "contactId": r["contact_id"],
+    }
+
+
+_FOLLOW_UP_SELECT = """
+    SELECT cc.id, cc.name, cc.phone, cc.status, cc.outcome, cc.attempts, cc.next_attempt_at,
+           cc.last_attempt_at, cc.created_at, cc.call_id, cc.custom_fields, cc.campaign_id,
+           cp.status AS campaign_status, cp.agent_id, a.name AS agent_name, ct.id AS contact_id
+    FROM campaign_contacts cc
+    JOIN campaigns cp ON cp.id = cc.campaign_id
+    LEFT JOIN agents a ON a.id = cp.agent_id
+    LEFT JOIN contacts ct ON ct.account_id = cc.account_id AND ct.phone = cc.phone AND ct.deleted_at IS NULL
+    WHERE cc.account_id = ? AND cc.custom_fields LIKE ?
+"""
+_FOLLOW_UP_MARK = "%follow_up_kind%"
+
+
+def list_follow_ups(account_id: int, view: str = "upcoming", source_call_id: int | None = None,
+                    limit: int = 300) -> dict:
+    """Every follow-up the AI scheduled for this account. view: 'upcoming'
+    (waiting or being retried), 'done' (dialled for the last time),
+    'cancelled', or 'all'. With source_call_id, the follow-ups that call
+    created plus the one it fulfilled (any state), for the call page."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            _FOLLOW_UP_SELECT + " ORDER BY cc.id DESC LIMIT 1000", (account_id, _FOLLOW_UP_MARK)
+        ).fetchall()
+    finally:
+        conn.close()
+    items = [_follow_up_item(r) for r in rows]
+    counts = {k: sum(1 for i in items if i["state"] == k) for k in ("upcoming", "done", "cancelled")}
+    if source_call_id is not None:
+        items = [i for i in items if i["sourceCallId"] == source_call_id or i["callId"] == source_call_id]
+    elif view in counts:
+        items = [i for i in items if i["state"] == view]
+    if view == "upcoming" and source_call_id is None:
+        items.sort(key=lambda i: i["dueAt"] or "")
+    else:
+        items.sort(key=lambda i: i["lastAttemptAt"] or i["createdAt"] or "", reverse=True)
+    return {"items": items[:limit], "counts": counts}
+
+
+def _parse_follow_up_time(at: str | None) -> datetime.datetime:
+    """A follow-up's due time from the browser: ISO-8601 with a zone, in the
+    future and within 90 days. Returned in UTC."""
+    try:
+        parsed = datetime.datetime.fromisoformat(str(at or "").replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("Pick a valid date and time") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("The time must include a time zone")
+    when = parsed.astimezone(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if when < now - datetime.timedelta(minutes=1):
+        raise ValueError("Pick a time in the future")
+    if when > now + datetime.timedelta(days=90):
+        raise ValueError("Pick a time within the next 90 days")
+    return when
+
+
+# Kinds a person can schedule by hand. A visit reminder needs a booked visit,
+# so it stays the agent's own (appointments carry their own reminder).
+MANUAL_FOLLOW_UP_KINDS = ("callback", "nurture")
+_FOLLOW_UP_NOTE_CAP = 300
+
+
+def create_follow_up(account_id: int, data: dict, user_id: int | None = None) -> dict:
+    """Schedule a follow-up call by hand (owner, 22 Oct 2026: phase 1).
+
+    The same row the agent writes (agent/db.py schedule_follow_up_call): a
+    pending campaign_contacts row in the agent's "Follow-up calls" campaign,
+    dialled from the source call's campaign number, else the agent's own
+    number. A waiting follow-up for the same number is moved, not doubled.
+    data: source_call_id?, agent_id?, phone?, name?, kind, at (ISO with zone),
+    note?. Phone, name and agent default to the source call's. The note
+    reaches the AI as "Note for this call" (agent/contact_notes.py lists
+    unknown fields by their key). Raises LookupError / ValueError."""
+    try:
+        require_feature(account_id, "campaigns")
+    except plan_policy.EntitlementError as exc:
+        raise ValueError(str(exc)) from exc
+    kind = str(data.get("kind") or "callback")
+    if kind not in MANUAL_FOLLOW_UP_KINDS:
+        raise ValueError("Pick a follow-up type")
+    when = _parse_follow_up_time(data.get("at"))
+    note = str(data.get("note") or "").strip()[:_FOLLOW_UP_NOTE_CAP]
+
+    def _int(value):
+        try:
+            return int(value) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            raise ValueError("Invalid id") from None
+
+    source_call_id, agent_id = _int(data.get("source_call_id")), _int(data.get("agent_id"))
+    phone, name = str(data.get("phone") or "").strip(), str(data.get("name") or "").strip()
+    base: dict = {}
+    source_campaign_id = None
+    conn = _connect()
+    try:
+        if source_call_id is not None:
+            call = conn.execute(
+                "SELECT id, agent_id, lead_phone, lead_name FROM calls WHERE id = ? AND account_id = ?",
+                (source_call_id, account_id),
+            ).fetchone()
+            if call is None:
+                raise LookupError("Call not found")
+            phone = phone or (call["lead_phone"] or "").strip()
+            name = name or (call["lead_name"] or "").strip()
+            agent_id = agent_id or call["agent_id"]
+            contact = conn.execute(
+                "SELECT custom_fields, campaign_id FROM campaign_contacts WHERE account_id = ? AND call_id = ? "
+                "ORDER BY id DESC LIMIT 1",
+                (account_id, source_call_id),
+            ).fetchone()
+            if contact is not None:
+                # What we knew about them (project, CRM lead id, language...)
+                # carries over, as the agent's own follow-ups do.
+                base = {
+                    k: v for k, v in _load_json_field(contact["custom_fields"], {}).items()
+                    if not k.startswith("follow_up_") and k not in ("previous_call_id", "note_for_this_call")
+                }
+                source_campaign_id = contact["campaign_id"]
+        if not agent_id:
+            raise ValueError("Pick the agent who should make the call")
+        if conn.execute("SELECT 1 FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id)).fetchone() is None:
+            raise LookupError("Agent not found")
+        # The same check a contact import uses: junk such as "123" is refused
+        # instead of becoming a number the dialer would ring.
+        e164 = account_phone(account_id, phone)
+        norm = _normalize_phone(e164, account_id) if e164 else ""
+        if not norm:
+            raise ValueError("Enter a valid phone number")
+        if get_compliance(account_id).get("honor_dnc", True) and is_dnc(account_id, e164):
+            raise ValueError("This number is on your Do-Not-Call list")
+        with conn:
+            from_number = ""
+            if source_campaign_id:
+                row = conn.execute("SELECT from_number FROM campaigns WHERE id = ?", (source_campaign_id,)).fetchone()
+                from_number = (row["from_number"] if row else "") or ""
+            if not from_number:
+                row = conn.execute(
+                    "SELECT number FROM phone_numbers WHERE account_id = ? AND agent_id = ? AND status = 'active' "
+                    "ORDER BY id LIMIT 1",
+                    (account_id, agent_id),
+                ).fetchone()
+                from_number = row["number"] if row else ""
+            if not from_number:
+                raise ValueError("This agent has no phone number to call from. Assign one in Phone Numbers first.")
+            camp = conn.execute(
+                "SELECT id, status FROM campaigns WHERE account_id = ? AND agent_id = ? AND name = ? ORDER BY id LIMIT 1",
+                (account_id, agent_id, retry_rules.FOLLOW_UP_CAMPAIGN_NAME),
+            ).fetchone()
+            if camp is None:
+                camp = conn.execute(
+                    "INSERT INTO campaigns (account_id, name, agent_id, from_number, status, started_at, "
+                    f"max_attempts, retry_minutes, concurrency) VALUES (?, ?, ?, ?, 'running', {_NOW}, 3, 30, 1) "
+                    "RETURNING id, status",
+                    (account_id, retry_rules.FOLLOW_UP_CAMPAIGN_NAME, agent_id, from_number),
+                ).fetchone()
+            elif camp["status"] == "cancelled":
+                raise ValueError("This agent's follow-up calls campaign is cancelled, so it cannot call anyone")
+            else:
+                conn.execute(
+                    "UPDATE campaigns SET from_number = ?, status = CASE WHEN status = 'completed' "
+                    "THEN 'running' ELSE status END WHERE id = ?",
+                    (from_number, camp["id"]),
+                )
+            fields = {**base, "follow_up_kind": kind}
+            if source_call_id is not None:
+                fields["previous_call_id"] = source_call_id
+            if note:
+                fields["note_for_this_call"] = note
+            if user_id:
+                fields["scheduled_by_user_id"] = user_id
+            due = when.strftime("%Y-%m-%d %H:%M:%S")
+            dup = conn.execute(
+                "SELECT id, status FROM campaign_contacts WHERE campaign_id = ? AND phone_norm = ? "
+                "AND status IN ('pending', 'calling') ORDER BY id DESC LIMIT 1",
+                (camp["id"], norm),
+            ).fetchone()
+            if dup is not None and dup["status"] == "calling":
+                raise ValueError("The AI is calling this person right now")
+            if dup is not None:
+                conn.execute(
+                    "UPDATE campaign_contacts SET name = ?, custom_fields = ?, next_attempt_at = ?, attempts = 0 "
+                    "WHERE id = ? AND status = 'pending'",
+                    (name, json.dumps(fields, ensure_ascii=False), due, dup["id"]),
+                )
+                contact_id = dup["id"]
+            else:
+                contact_id = conn.execute(
+                    "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, company, "
+                    "custom_fields, next_attempt_at) VALUES (?, ?, ?, ?, ?, '', ?, ?) RETURNING id",
+                    (camp["id"], account_id, name, e164, norm,
+                     json.dumps(fields, ensure_ascii=False), due),
+                ).fetchone()["id"]
+        row = conn.execute(_FOLLOW_UP_SELECT + " AND cc.id = ?", (account_id, _FOLLOW_UP_MARK, contact_id)).fetchone()
+    finally:
+        conn.close()
+    return {"item": _follow_up_item(row), "replaced": dup is not None}
+
+
+# A nurture call is a nudge to someone who went quiet. If they have since
+# talked to us themselves, or booked, ringing them reads as not listening
+# (owner, 22 Oct 2026: phase 1). Callbacks and visit reminders are honoured:
+# the person asked for those.
+_FOLLOW_UP_SKIP_MIN_SECONDS = 15
+
+
+def follow_up_skip_reason(contact: dict) -> str | None:
+    """Why a claimed nurture follow-up should not be dialled, or None.
+
+    Counts only contact the person started or chose since it was scheduled:
+    an inbound phone call, a website/browser call with their number, at
+    least 15 s long (a real conversation, not a drop), and appointments
+    booked for their number. Our own outbound dials never count, so a
+    follow-up's earlier unanswered attempts cannot cancel it."""
+    fields = _load_json_field(contact.get("custom_fields"), {})
+    if str(fields.get("follow_up_kind") or "") != "nurture":
+        return None
+    account_id, since = contact.get("account_id"), contact.get("created_at")
+    norm = contact.get("phone_norm") or _normalize_phone(contact.get("phone") or "", account_id)
+    if not (account_id and since and norm):
+        return None
+    conn = _connect()
+    try:
+        calls = conn.execute(
+            "SELECT started_at, lead_phone FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = '' "
+            "AND room_name NOT LIKE ? AND COALESCE(direction, '') <> 'outbound' "
+            "AND COALESCE(duration_seconds, 0) >= ? AND COALESCE(lead_phone, '') <> '' "
+            "AND started_at::timestamp > ?::timestamp ORDER BY started_at LIMIT 500",
+            (account_id, "test-%", _FOLLOW_UP_SKIP_MIN_SECONDS, since),
+        ).fetchall()
+        for c in calls:
+            if _normalize_phone(c["lead_phone"], account_id) == norm:
+                return f"Skipped: they talked to us on {_follow_up_when(c['started_at'], get_compliance(account_id).get('timezone') or 'Asia/Kolkata')}"
+        appts = conn.execute(
+            "SELECT contact_phone, appt_date FROM appointments WHERE account_id = ? "
+            "AND status IN ('confirmed', 'rescheduled', 'completed') AND COALESCE(contact_phone, '') <> '' "
+            "AND created_at::timestamp >= ?::timestamp ORDER BY id LIMIT 500",
+            (account_id, since),
+        ).fetchall()
+        for a in appts:
+            if _normalize_phone(a["contact_phone"], account_id) == norm:
+                return f"Skipped: appointment booked for {a['appt_date']}"
+    finally:
+        conn.close()
+    return None
+
+
+def skip_claimed_follow_up(contact_id: int, reason: str) -> None:
+    """Close a follow-up the dialer claimed but should not ring. The claim
+    counted an attempt; give it back, as release_campaign_contact does."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE campaign_contacts SET status = 'cancelled', outcome = ?, next_attempt_at = NULL, "
+                "attempts = GREATEST(attempts - 1, 0), room_name = NULL WHERE id = ? AND status = 'calling'",
+                (reason[:200], contact_id),
+            )
+    finally:
+        conn.close()
+
+
+def act_on_follow_up(account_id: int, follow_up_id: int, action: str, at: str | None = None) -> dict:
+    """Call now, reschedule or cancel one upcoming follow-up. Raises LookupError
+    when it is not this account's follow-up, ValueError when the action does
+    not apply. Every update is conditional on the status just read, so it
+    never races the dialer claiming the same row."""
+    if action not in ("call_now", "reschedule", "cancel"):
+        raise ValueError("Unknown action")
+    when = _parse_follow_up_time(at) if action == "reschedule" else None
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(_FOLLOW_UP_SELECT + " AND cc.id = ?", (account_id, _FOLLOW_UP_MARK, follow_up_id)).fetchone()
+            if row is None:
+                raise LookupError("Follow-up not found")
+            if row["status"] == "calling":
+                raise ValueError("The AI is calling this person right now")
+            if _follow_up_state(row["status"], row["next_attempt_at"]) != "upcoming":
+                raise ValueError("This follow-up has already finished")
+            if action == "cancel":
+                cur = conn.execute(
+                    "UPDATE campaign_contacts SET status = 'cancelled', outcome = 'cancelled', next_attempt_at = NULL "
+                    "WHERE id = ? AND status = ?",
+                    (follow_up_id, row["status"]),
+                )
+            else:
+                due = (when or datetime.datetime.now(datetime.timezone.utc)).strftime("%Y-%m-%d %H:%M:%S")
+                # A retry keeps its status and attempts; a waiting one stays pending.
+                cur = conn.execute(
+                    "UPDATE campaign_contacts SET next_attempt_at = ? WHERE id = ? AND status = ?",
+                    (due, follow_up_id, row["status"]),
+                )
+                # The dialer auto-completes a campaign once its queue is empty.
+                conn.execute(
+                    "UPDATE campaigns SET status = 'running' WHERE id = ? AND status = 'completed'",
+                    (row["campaign_id"],),
+                )
+            if cur.rowcount != 1:
+                raise ValueError("The follow-up just changed; refresh and try again")
+            row = conn.execute(_FOLLOW_UP_SELECT + " AND cc.id = ?", (account_id, _FOLLOW_UP_MARK, follow_up_id)).fetchone()
+    finally:
+        conn.close()
+    return _follow_up_item(row)
+
+
+def _follow_up_when(value: str | None, tz: str) -> str:
+    """'22 Oct, 11:00 am' in the account's time zone, like the dashboard."""
+    iso = _utc_iso(value)
+    if not iso:
+        return ""
+    try:
+        dt = datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(ZoneInfo(tz))
+    except (ValueError, ZoneInfoNotFoundError):
+        return str(value)
+    return f"{dt.day} {dt:%b}, {dt.hour % 12 or 12}:{dt:%M} {'am' if dt.hour < 12 else 'pm'}"
 
 
 
@@ -4651,6 +5193,26 @@ def concurrent_call_limit(account_id: int) -> int:
         return 10**9
     plan = get_account_plan(account_id)
     return CONCURRENT_CALL_LIMITS.get(plan, CONCURRENT_CALL_LIMITS["starter"])
+
+
+def can_open_admin(user: dict | None) -> bool:
+    """Whether this login (a get_user_by_id row) may use the admin panel.
+
+    A login marked platform_admin may. Until any login is, the platform
+    owner's workspace owner keeps admin as before, so the switch to a
+    dedicated admin login never locks the owner out midway."""
+    if not user or user.get("role") != "owner":
+        return False
+    if user.get("platform_admin"):
+        return True
+    if not user.get("is_platform_owner"):
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT 1 FROM users WHERE COALESCE(platform_admin, 0) = 1 LIMIT 1").fetchone()
+        return row is None
+    finally:
+        conn.close()
 
 
 def is_platform_owner(account_id: int) -> bool:
@@ -5399,6 +5961,62 @@ def list_contacts(account_id: int) -> list[dict]:
                 "SELECT * FROM contacts WHERE account_id = ? AND deleted_at IS NULL ORDER BY created_at DESC", (account_id,)
             ).fetchall()
         ]
+    finally:
+        conn.close()
+
+
+def save_demo_visitor(name: str, phone: str, email: str = "", company: str = "", *, source: str = "website_demo",
+                      tag: str = "website-demo", fields: dict | None = None) -> int | None:
+    """A website visitor who left their details with Vistrow itself — the
+    homepage live demo's form (source website_demo) or the Contact Us form
+    (source contact_form) — becomes a contact in the account that owns the
+    platform demo agent, i.e. Vistrow's own workspace. `fields` (page, time,
+    IP, country, UTM, form answers) land in custom_fields so the team can see
+    where the lead came from. The demo call itself is kept out of the contact
+    sync (_sync_contacts_from_calls), but it is saved with this phone as
+    lead_phone, so it shows on this contact's Calls tab. Returns the contact
+    id, or None when there is no platform demo agent or the phone is
+    unusable."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT account_id FROM agents WHERE is_platform_demo = 1 AND account_id IS NOT NULL ORDER BY id LIMIT 1"
+        ).fetchone()
+        if not row:
+            return None
+        account_id = int(row["account_id"])
+        phone = canonical_contact_phone(phone, account_id)
+        if not phone:
+            return None
+        name = (name or "").strip()[:120] or "Website visitor"
+        email = (email or "").strip()[:200]
+        company = (company or "").strip()[:200]
+        extra = {k: v for k, v in (fields or {}).items() if v not in (None, "", {}, [])}
+        with conn:
+            existing = conn.execute(
+                "SELECT id, name, tags, email, company, custom_fields FROM contacts WHERE account_id = ? AND phone = ?",
+                (account_id, phone),
+            ).fetchone()
+            if existing:
+                # Keep what the team already knows; only add the tag, fill
+                # missing name/email/company and record the latest visit.
+                keep_name = (existing["name"] or "").strip().lower() not in ("", "unknown", "website visitor")
+                merged = {**_safe_json_loads(existing["custom_fields"]), **extra}
+                conn.execute(
+                    "UPDATE contacts SET tags = ?, name = ?, email = ?, company = ?, custom_fields = ?, "
+                    f"deleted_at = NULL, updated_at = {_NOW} WHERE id = ?",
+                    (_clean_tags(f"{existing['tags'] or ''},{tag}"),
+                     existing["name"] if keep_name else name,
+                     existing["email"] or email, existing["company"] or company,
+                     json.dumps(merged), existing["id"]),
+                )
+                return int(existing["id"])
+            created = conn.execute(
+                "INSERT INTO contacts (account_id, name, phone, email, company, custom_fields, status, tags, source) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'new', ?, ?) RETURNING id",
+                (account_id, name, phone, email, company, json.dumps(extra), _clean_tags(tag), source),
+            ).fetchone()
+            return int(created["id"])
     finally:
         conn.close()
 
@@ -6803,6 +7421,19 @@ def _arthaleads_route_match(route: dict, fields: dict) -> bool:
     return value == match or (source == "website" and match in value)
 
 
+# Sources whose leads carry their own ad/form/Page route (meta_leads.resolve_route):
+# Lead Ads forms and Click-to-WhatsApp chats (whatsapp_leads.py).
+META_ROUTED_SOURCES = ("meta_lead_ads", "whatsapp_ctwa")
+
+
+def _meta_campaign_setting_key(route: dict) -> str:
+    """One "Meta Instant Follow-up" campaign per (agent, caller number), as
+    ArthaLeads routes have, so a Page/form/ad rule's agent is the one that
+    calls (meta_leads.resolve_route)."""
+    digest = hashlib.sha256(f"{route.get('agentId')}:{route.get('fromNumber')}".encode()).hexdigest()[:20]
+    return f"meta_instant_campaign_{digest}"
+
+
 def _arthaleads_campaign_setting_key(route: dict) -> str:
     digest = hashlib.sha256(
         f"{route.get('source')}|{route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}".encode()
@@ -7027,16 +7658,22 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
     conn = _connect()
     try:
         arthaleads = source == "arthaleads"
+        # A Meta lead with a resolved Page/form/ad route gets that route's own
+        # campaign; without one it uses the generic shared campaign below.
+        meta_routed = source in META_ROUTED_SOURCES and bool(route)
         setting_key = "arthaleads_instant_campaign_id" if arthaleads else _INSTANT_LEAD_CAMPAIGN_ID_SETTING
-        if arthaleads:
+        if arthaleads or meta_routed:
             if not route:
                 return None
             agent_id = int(route.get("agentId") or 0)
             from_number = str(route.get("fromNumber") or "")
-            setting_key = _arthaleads_campaign_setting_key(route)
+            setting_key = _meta_campaign_setting_key(route) if meta_routed else _arthaleads_campaign_setting_key(route)
+            # ArthaLeads agents must carry a knowledge base; a Meta rule's agent
+            # was validated when the rule was saved and again on resolve.
             agent_row = conn.execute(
                 "SELECT id FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
-                "AND kb_id IS NOT NULL AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+                + ("" if meta_routed else "AND kb_id IS NOT NULL ")
+                + "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
                 (agent_id, account_id),
             ).fetchone()
             number_row = conn.execute(
@@ -7084,7 +7721,8 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
                 "INSERT INTO campaigns (account_id, name, agent_id, from_number, status, "
                 f"started_at, max_attempts, retry_minutes, concurrency) "
                 f"VALUES (?, ?, ?, ?, 'running', {_NOW}, ?, ?, ?) RETURNING id",
-                (account_id, "ArthaLeads Instant Follow-up" if arthaleads else _INSTANT_LEAD_CAMPAIGN_NAME,
+                (account_id, "ArthaLeads Instant Follow-up" if arthaleads
+                 else ("Meta Instant Follow-up" if meta_routed else _INSTANT_LEAD_CAMPAIGN_NAME),
                  agent_row["id"], from_number, 3, 30, 2),
             )
             campaign_id = cur.fetchone()["id"]
@@ -7120,7 +7758,7 @@ def _record_lead_event(account_id: int, source: str, external_id: str, name: str
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
     external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
-    requested_agent_id: str = "",
+    requested_agent_id: str = "", route: dict | None = None,
 ) -> dict:
     """Entry point for every external lead source (Facebook Lead Ads via
     Zapier or a native Meta webhook, WhatsApp Cloud API, or any other
@@ -7148,7 +7786,9 @@ def ingest_inbound_lead(
     arthaleads_source = next((category for value in (
         fields.get("source_detail"), fields.get("lead_source"), fields.get("source"), fields.get("channel")
     ) if (category := _arthaleads_source(value))), "") if source == "arthaleads" else ""
-    route = None
+    # `route` is the caller's resolved {agentId, fromNumber, label}; only a Meta
+    # lead passes one (meta_leads.resolve_route). ArthaLeads resolves its own below.
+    route = route if (source in META_ROUTED_SOURCES and allow_call and route) else None
     no_call_reason = "no_matching_enabled_route"
     if source == "arthaleads" and allow_call and requested_agent_id:
         # ArthaLeads routed the lead and named the agent: honour exactly that.
@@ -7860,6 +8500,7 @@ def record_campaign_dial_result(
     'calling', so a background reconciler can never overwrite an outcome the
     agent already recorded for the same call."""
     guard = " AND status = 'calling'" if only_if_calling else ""
+    advance = False
     conn = _connect()
     try:
         with conn:
@@ -7907,6 +8548,7 @@ def record_campaign_dial_result(
                     "WHERE id = ?" + guard,
                     (outcome, outcome.replace("_", " "), contact_id),
                 )
+                advance = True
             else:  # no_answer / failed / voicemail, retry
                 next_at = (
                     datetime.datetime.now(datetime.timezone.utc)
@@ -7917,6 +8559,90 @@ def record_campaign_dial_result(
                     "WHERE id = ?" + guard,
                     (outcome, outcome.replace("_", " "), next_at, contact_id),
                 )
+    finally:
+        conn.close()
+    if advance:
+        _advance_nurture_after_no_answer(contact_id)
+
+
+def _advance_nurture_after_no_answer(contact_id: int) -> None:
+    """Move a nurture follow-up whose retries just ran out with no answer to
+    the next step of its sequence (owner, 22 Oct 2026), instead of ending it.
+
+    Called after record_campaign_dial_result's final write has committed, in
+    its own transaction, so a failure here can never lose that write; never
+    raises. Acts only on exactly that state (a "Follow-up calls" row, kind
+    nurture, status no_answer/voicemail/failed, no next attempt), and the
+    update is conditional on it, so a changed row (cancelled, re-claimed) is
+    left alone. Re-checks DNC and a booking first. MUST mirror agent/db.py's
+    _advance_nurture_after_no_answer."""
+    try:
+        conn = _connect()
+    except Exception:
+        logger.exception("could not advance nurture follow-up %s", contact_id)
+        return
+    try:
+        with conn:
+            row = conn.execute(
+                "SELECT cc.status, cc.outcome, cc.next_attempt_at, cc.custom_fields, cc.account_id, cc.phone, "
+                "cc.phone_norm, cc.created_at, cc.campaign_id, c.name AS campaign_name, a.follow_up_policy "
+                "FROM campaign_contacts cc JOIN campaigns c ON c.id = cc.campaign_id "
+                "LEFT JOIN agents a ON a.id = c.agent_id WHERE cc.id = ?",
+                (contact_id,),
+            ).fetchone()
+            if row is None or row["campaign_name"] != retry_rules.FOLLOW_UP_CAMPAIGN_NAME:
+                return
+            if row["status"] not in ("no_answer", "voicemail", "failed") or row["next_attempt_at"]:
+                return
+            fields = _load_json_field(row["custom_fields"], {})
+            if not isinstance(fields, dict) or fields.get("follow_up_kind") != "nurture":
+                return
+            policy = retry_rules.follow_up_policy(row["follow_up_policy"])
+            if not policy["nurtureAdvanceOnNoAnswer"]:
+                return
+            account_id = row["account_id"]
+            norm = row["phone_norm"] or _normalize_phone(row["phone"] or "", account_id)
+            if norm and conn.execute(
+                "SELECT 1 FROM dnc_list WHERE account_id = ? AND phone_norm = ?", (account_id, norm)
+            ).fetchone():
+                return
+            if norm:
+                for appt in conn.execute(
+                    "SELECT contact_phone FROM appointments WHERE account_id = ? "
+                    "AND status IN ('confirmed', 'rescheduled', 'completed') AND COALESCE(contact_phone, '') <> '' "
+                    "AND created_at::timestamp >= ?::timestamp",
+                    (account_id, row["created_at"]),
+                ).fetchall():
+                    if _normalize_phone(appt["contact_phone"], account_id) == norm:
+                        return
+            compliance = get_compliance(account_id)
+            try:
+                tz = ZoneInfo(compliance.get("timezone") or "Asia/Kolkata")
+            except (ZoneInfoNotFoundError, ValueError, TypeError):
+                tz = ZoneInfo("Asia/Kolkata")
+            step = retry_rules.next_nurture_step(
+                fields, policy, datetime.datetime.now(tz), compliance.get("active_days")
+            )
+            if step is None:
+                return
+            due = step["at"].astimezone(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            said = (row["outcome"] or "no answer").replace("_", " ")
+            moved = conn.execute(
+                "UPDATE campaign_contacts SET status = 'pending', attempts = 0, next_attempt_at = ?, custom_fields = ?, "
+                "outcome = ? WHERE id = ? AND status = ? AND next_attempt_at IS NULL RETURNING id",
+                (due, json.dumps({**fields, **step["fields"]}, ensure_ascii=False),
+                 f"{said} · moved to step {step['fields']['follow_up_step']}", contact_id, row["status"]),
+            ).fetchone()
+            if moved is None:
+                return
+            conn.execute(
+                "UPDATE campaigns SET status = 'running' WHERE id = ? AND status = 'completed'",
+                (row["campaign_id"],),
+            )
+            logger.info("nurture follow-up %s: no answer, moved to step %s at %s UTC",
+                        contact_id, step["fields"]["follow_up_step"], due)
+    except Exception:
+        logger.exception("could not advance nurture follow-up %s", contact_id)
     finally:
         conn.close()
 
@@ -8385,7 +9111,11 @@ def mark_support_ticket_emailed(ticket_id: int, account_id: int) -> None:
 # Integrations the owner has switched off for NEW connections. Accounts that
 # already have one connected keep it (delivery is unchanged) and can still
 # update or disconnect it; once disconnected it cannot be connected again.
-NEW_CONNECTIONS_UNAVAILABLE = frozenset({"facebook", "whatsapp"})
+# Facebook Lead Ads reopened for Growth accounts on servers where the Meta app
+# is configured (server/meta_leads.py); WhatsApp stays off.
+NEW_CONNECTIONS_UNAVAILABLE = frozenset(
+    {"whatsapp"} | ({"facebook"} if not os.environ.get("META_OAUTH_CLIENT_ID") else set())
+)
 
 
 def integration_accepts_connect(account_id: int, key: str) -> bool:
@@ -9920,6 +10650,10 @@ def model_tier(model: str | None) -> str:
     # and so the two can be repriced separately.
     if name.startswith("gemini-live"):
         return "realtime" if name == "gemini-live" or "2.5" in name else "realtime_plus"
+    # OpenAI GPT-Live 1 ("Vistrow Duplex", owner-only): $0.05/min (~Rs 4.8)
+    # plus the backend model, so realtime pricing, never 1x.
+    if name.startswith("duplex"):
+        return "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:
@@ -10909,6 +11643,47 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                 })
         except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: appointments section failed", exc_info=True)
+
+        # Follow-ups the AI scheduled, and how each dial went (owner, 22 Oct:
+        # a follow-up rang with nothing on the dashboard beforehand). One item
+        # per schedule and one per attempt, so a retry notifies again.
+        try:
+            tz = get_compliance(account_id).get("timezone") or "Asia/Kolkata"
+            for r in conn.execute(
+                _FOLLOW_UP_SELECT + " AND cc.created_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '48 hours' "
+                "AND cc.status NOT IN ('cancelled', 'calling') AND cc.next_attempt_at IS NOT NULL "
+                "ORDER BY cc.id DESC LIMIT 8",
+                (account_id, _FOLLOW_UP_MARK),
+            ).fetchall():
+                item = _follow_up_item(r)
+                items.append({
+                    "id": f"follow-up:{r['id']}:scheduled",
+                    "severity": "info",
+                    "title": f"Follow-up scheduled: {item['name']}",
+                    "body": f"{item['label']} · {_follow_up_when(r['next_attempt_at'], tz)}",
+                    "to": "/dashboard/follow-ups",
+                    "at": r["created_at"],
+                    "kind": "follow_up",
+                })
+            for r in conn.execute(
+                _FOLLOW_UP_SELECT + " AND cc.last_attempt_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '48 hours' "
+                "AND cc.status IN ('done', 'no_answer', 'failed', 'voicemail') ORDER BY cc.last_attempt_at DESC LIMIT 8",
+                (account_id, _FOLLOW_UP_MARK),
+            ).fetchall():
+                item = _follow_up_item(r)
+                outcome = "connected" if r["status"] == "done" else (r["outcome"] or r["status"]).replace("_", " ")
+                retry = f" · trying again {_follow_up_when(r['next_attempt_at'], tz)}" if r["next_attempt_at"] else ""
+                items.append({
+                    "id": f"follow-up:{r['id']}:attempt:{r['attempts'] or 0}",
+                    "severity": "info",
+                    "title": f"AI called {item['name']} (follow-up) – {outcome}",
+                    "body": item["label"] + retry,
+                    "to": f"/dashboard/calls/{r['call_id']}" if r["call_id"] else "/dashboard/follow-ups",
+                    "at": r["last_attempt_at"],
+                    "kind": "follow_up",
+                })
+        except Exception:  # best-effort per section: never blank the feed
+            logger.warning("notifications: follow-ups section failed", exc_info=True)
     finally:
         conn.close()
 

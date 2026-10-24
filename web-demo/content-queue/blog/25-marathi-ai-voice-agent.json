@@ -1,0 +1,126 @@
+{
+  "n": 25,
+  "publishOn": "2026-11-14",
+  "primaryKeyword": "marathi ai voice agent",
+  "audience": "India",
+  "slug": "marathi-ai-voice-agent",
+  "title": "Marathi AI voice agent: what to check before Maharashtra callers hear it",
+  "seoTitle": "Marathi AI Voice Agent: A Buyer's Guide for Maharashtra",
+  "metaDescription": "What a Marathi AI voice agent should handle, how it copes with Marathi, Hindi and English in one call, and the tests to run before your callers hear it.",
+  "shortAnswer": "A Marathi AI voice agent answers and places calls in Marathi, follows callers who switch to Hindi or English, and answers from your approved information. It suits site-visit bookings, appointment calls and reminders across Maharashtra. Before launch, write the greeting in proper Marathi, add local place names, and test with callers from each region you serve.",
+  "excerpt": "Many Maharashtra callers would rather speak Marathi than be pushed into Hindi or English. Here is what a Marathi AI voice agent should do, where it needs care, and how to test one properly.",
+  "category": "Languages & speech",
+  "related": [
+    "how-to-choose-a-multilingual-voice-agent",
+    "ai-voice-agents-for-real-estate-leads",
+    "ai-voice-agent-platform-buyers-checklist"
+  ],
+  "sections": [
+    {
+      "heading": "What is a Marathi AI voice agent?",
+      "paragraphs": [
+        "A Marathi AI voice agent is software that holds a spoken conversation in Marathi on a phone line or a website. It listens, understands what the caller wants, answers from information you have approved, and books, records or hands over the call. It is not a recorded menu that asks callers to press a key. Vistrow Voice answers Marathi calls on your phone line and website, books visits and appointments, and sends each lead to your CRM. Our [Marathi AI calling agent page](/languages/marathi) has a sample call and the use cases it suits.",
+        "The audience is large. The 2011 Census of India counted about 8.3 crore people (83 million) whose mother tongue is Marathi, most of them in Maharashtra. Many of them will answer a business call in Marathi first. If your team serves Pune, Mumbai, Nashik, Nagpur or smaller towns, an agent that greets them in Marathi feels local from the first line. For the wider buying picture, read our guide on [choosing a multilingual voice agent for India](/resources/blog/how-to-choose-a-multilingual-voice-agent)."
+      ],
+      "points": [
+        "Opens in Marathi, or in the language you set, with a greeting written for Marathi callers.",
+        "Answers from your approved knowledge base rather than guessing.",
+        "Books, captures lead details or takes a callback, and logs a transcript of every call."
+      ]
+    },
+    {
+      "heading": "Which calls should a Marathi voice agent take first?",
+      "paragraphs": [
+        "Start with calls that repeat every day and have clear answers. Property enquiries are the obvious one in Mumbai and Pune: budget, location, possession and a site-visit slot. The [Marathi real estate calling agent for Mumbai](/solutions/real-estate/marathi-ai-calling-agent-mumbai-real-estate) page walks through that flow, and you can listen to a [Marathi site-visit booking demo call](/demo-calls/marathi-site-visit-booking) before you decide.",
+        "Clinics, diagnostic labs and home-service businesses are the next fit: slot requests, timings, preparation instructions and rescheduling. Payment and renewal reminders also work well, because the script is short and the outcome is simple to record. Avoid starting with complaints or sensitive negotiations; those belong with your team."
+      ],
+      "points": [
+        "Real estate: project details, budget questions and site-visit booking.",
+        "Clinics and labs: appointment slots, timings and visit instructions.",
+        "Reminders: due dates, renewals and appointment confirmations."
+      ]
+    },
+    {
+      "heading": "How does it handle Marathi mixed with Hindi and English?",
+      "paragraphs": [
+        "Real calls in Maharashtra are rarely pure Marathi. A Pune caller may say the whole sentence in Marathi and drop in \"site visit\", \"EMI\" or a phone number in English, or switch to Hindi halfway through. Vistrow Voice keeps replying in Marathi while the caller mixes words, and switches fully to Hindi or English when the caller does. Our page on [Hindi and Hinglish calling](/languages/hindi) covers the Hindi side of the same behaviour.",
+        "Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia). For most Maharashtra businesses the useful set is Marathi, Hindi and English on the same line, without asking the caller to choose a language from a menu."
+      ]
+    },
+    {
+      "heading": "What makes Marathi harder than it looks?",
+      "paragraphs": [
+        "Marathi and Hindi share the Devanagari script, so a welcome line can look right on screen and still sound like Hindi to a Marathi ear. Verb endings, polite forms and everyday words differ. Write the greeting and the key lines in proper Marathi, starting with \"नमस्कार\", and have a native speaker read them aloud before launch. Our guide to [writing an AI voice agent prompt](/resources/blog/write-ai-voice-agent-prompts) explains how to keep those lines short and natural.",
+        "Spoken Marathi also changes between Mumbai, Pune, Nashik, Nagpur and Marathwada. Place names, project names and local landmarks are where a speech system is most likely to mishear. Add them to the knowledge base, and decide how the agent reads back numbers: many callers say digits in English even when the rest of the call is Marathi."
+      ]
+    },
+    {
+      "heading": "How do you test a Marathi AI voice agent before launch?",
+      "paragraphs": [
+        "Run at least 20 to 30 test calls on the call type you plan to launch, using people who actually speak the way your customers do. The [Testing Lab guide](/help/testing-lab/run-a-test) shows how to run scenarios such as an impatient caller, Hindi-English switching and a noisy background in the browser, with checks on response length and tool accuracy.",
+        "Score each call on four things: did the agent understand the request, did it answer from your approved facts, did it book or capture the right details, and did it sound like a person from Maharashtra rather than a translated script. Fix the prompt or the knowledge base, then re-run the same scenarios."
+      ],
+      "points": [
+        "A caller from each region you serve, including one older caller who speaks slowly.",
+        "A caller who switches to Hindi or English mid-call.",
+        "Names, pin codes, dates and phone numbers read back correctly.",
+        "A question the agent should not answer, to check it hands over or takes a callback."
+      ]
+    },
+    {
+      "heading": "Can a Marathi agent make outbound calls?",
+      "paragraphs": [
+        "Yes. An outbound campaign can call a list of contacts in Marathi with a personalised greeting, for reminders, follow-ups or site-visit confirmations. The [outbound calling campaigns page](/product/outbound) shows the setup. Every dial is checked against your Do-Not-Call list and calling window before it goes out, as the [calling window and Do-Not-Call guide](/help/compliance/calling-rules) explains, and blocked contacts are counted rather than called.",
+        "Keep outbound scripts short and state the purpose in the first sentence. A Marathi caller who hears their name, the business name and the reason for the call in natural Marathi is far more likely to stay on the line than one who hears a stiff translation."
+      ]
+    },
+    {
+      "heading": "How do Marathi callers reach the agent?",
+      "paragraphs": [
+        "On the phone, you connect a number from your own telephony provider and route it to the agent, with your own hours and limits. On the web, the [website voice widget](/product/widget) adds a talk button to your site, so a visitor can speak Marathi to the agent from any browser without dialling.",
+        "Whichever channel you use, set a transfer number for calls that need a person; on phone calls the agent dials your colleague in and stays on until they answer. Store your project details, timings and policies in the [Vistrow Voice knowledge base](/product/knowledge-base) and switch on strict mode so the agent quotes approved answers. When you are ready to size a rollout, compare plans on the [Vistrow Voice pricing page](/pricing)."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Can an AI voice agent really speak natural Marathi?",
+      "a": "Yes, for everyday business calls. Write the greeting in proper Marathi rather than reusing a Hindi line, and test with callers from the regions you serve, because spoken Marathi varies across Maharashtra."
+    },
+    {
+      "q": "What happens if a caller switches from Marathi to Hindi or English?",
+      "a": "The agent keeps replying in Marathi while the caller only mixes in a few words, and switches fully to Hindi or English when the caller does. The caller never has to pick a language from a menu."
+    },
+    {
+      "q": "Is a Marathi AI voice agent only for real estate?",
+      "a": "No. Real estate is a common start, but clinics, labs, home services, education and payment reminders also suit it. Pick one repeated call type first."
+    },
+    {
+      "q": "Can the agent book site visits or appointments in Marathi?",
+      "a": "Yes. It offers free slots inside the hours you set, collects the caller's details in Marathi and confirms the booking in the built-in Appointments calendar."
+    },
+    {
+      "q": "Will the agent call people on the Do-Not-Call list?",
+      "a": "No. Outbound dials are checked against your Do-Not-Call list and calling window first. When a caller asks not to be called again, the agent adds them itself."
+    }
+  ],
+  "imageAlt": "Large Marathi greeting नमस्कार beside a smiling shop owner on her phone in a Pune sweet shop, with an Artha badge answering in Marathi",
+  "imagePrompt": "Designed cover (scripts/blog-covers/25-marathi-ai-voice-agent.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Census of India 2011, Table C-16: Population by mother tongue, India",
+      "url": "https://censusindia.gov.in/nada/index.php/catalog/10191"
+    }
+  ],
+  "contextualLinks": "To hear and plan a Marathi line, start with the [Marathi AI calling agent overview](/languages/marathi) and the [AI calling agent for real estate](/solutions/real-estate) page.",
+  "inbound": [
+    {
+      "target": "language:marathi",
+      "sentence": "For a buyer's view of what to test before launch, read our guide to choosing a [Marathi AI voice agent](/resources/blog/marathi-ai-voice-agent)."
+    },
+    {
+      "target": "blog:how-to-choose-a-multilingual-voice-agent",
+      "sentence": "If Maharashtra is your main market, our [Marathi AI voice agent guide](/resources/blog/marathi-ai-voice-agent) covers code-mixing, regional speech and testing in detail."
+    }
+  ]
+}

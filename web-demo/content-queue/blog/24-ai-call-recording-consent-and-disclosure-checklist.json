@@ -1,0 +1,150 @@
+{
+  "n": 24,
+  "publishOn": "2026-11-13",
+  "primaryKeyword": "ai call recording consent",
+  "audience": "Global",
+  "slug": "ai-call-recording-consent-and-disclosure-checklist",
+  "title": "AI calls, recording consent and disclosure: a practical checklist",
+  "seoTitle": "AI Call Recording Consent and Disclosure: A Checklist",
+  "metaDescription": "A practical checklist for AI call recording consent and disclosure: telling callers it is AI, recording notices, consent, retention and access.",
+  "shortAnswer": "Before an AI agent takes live calls, tell callers at the start that they are speaking with an AI and whether the call is recorded, explain why, give them a way to decline or reach a person, keep recordings only as long as needed, and limit who can open them. Rules differ by country, so confirm locally.",
+  "excerpt": "Recording and AI disclosure rules differ between India, the UK, the EU, Canada and the US, but the practical steps overlap. This checklist covers what to set up before calls go live. It is general guidance, not legal advice.",
+  "category": "Voice AI basics",
+  "related": [
+    "ai-call-recordings-and-transcripts",
+    "ai-voice-agent-platform-buyers-checklist",
+    "what-is-an-ai-receptionist"
+  ],
+  "sections": [
+    {
+      "heading": "Why do AI calls need a recording and disclosure checklist?",
+      "paragraphs": [
+        "An AI voice agent collects personal data the moment a caller gives a name, a number or a reason for calling, and many businesses also record the audio. Two questions follow on every call: does the caller know they are talking to an AI, and do they know the call is recorded and why? Our guide to [AI call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) covers what recordings are useful for; this checklist covers what callers should be told.",
+        "The rules differ by country and sometimes by state or province, and they change. This article summarises primary sources as practical guidance. It is not legal advice, so agree your wording and retention period with whoever handles compliance for each market. The [Vistrow Voice security overview](/security) lists the controls in place today."
+      ]
+    },
+    {
+      "heading": "Do you have to tell callers they are speaking with an AI?",
+      "paragraphs": [
+        "In the European Union, Article 50 of the AI Act requires AI systems that interact directly with people to be designed so that people are informed they are interacting with an AI system, unless that is obvious. The European Commission says this applies from 2 August 2026 and that the notice should come at the start of the first interaction. In the United States, the Federal Communications Commission ruled in February 2024 that AI-generated voices count as an “artificial” voice under the Telephone Consumer Protection Act, so outbound calls using them need the called party’s prior express consent unless an exemption applies.",
+        "Even where no rule requires it, saying so is good practice. Callers who work it out on their own can lose trust in the whole call. One short sentence at the start is enough, in the caller’s language. See how Vistrow Voice handles this in the [consent, recording and retention settings](/help/compliance/consent-recording-retention)."
+      ]
+    },
+    {
+      "heading": "What should the recording notice say?",
+      "paragraphs": [
+        "Tell callers the call is recorded before the conversation starts, and say why in plain words. Canada’s Office of the Privacy Commissioner says organisations must inform customers that a call is recorded and state the purpose as clearly and narrowly as possible. The UK Information Commissioner’s Office says people must be told the purposes and retention period when their data is collected."
+      ],
+      "points": [
+        "Say it first: the notice belongs in the opening line, before the caller shares details.",
+        "Say why: for example, to handle your request and improve our service. Do not hide other uses behind a vague purpose.",
+        "Say it in the caller’s language, not only in English.",
+        "Point to more detail, such as your [privacy policy page](/privacy), for callers who ask."
+      ]
+    },
+    {
+      "heading": "How should you ask for consent, and what if a caller says no?",
+      "paragraphs": [
+        "Consent rules vary. India’s Digital Personal Data Protection Act, 2023 says a request for consent must come with a notice describing the personal data and the purpose, and that consent must be free, specific, informed, unconditional and unambiguous, given by a clear affirmative action; it also lets the person read the notice in English or a language listed in the Eighth Schedule. Its provisions come into force on dates the government notifies, so check which apply to you. In Canada, the privacy commissioner says customers must be given a choice about being recorded, with an alternative where recording is not integral to the service.",
+        "Plan what happens when someone declines. They should still be able to get help, by continuing without recording, by speaking to a person, or by another channel. For outbound calls in India, also respect Do-Not-Call preferences and calling windows, which the [outbound campaigns page](/product/outbound) covers."
+      ]
+    },
+    {
+      "heading": "How does Vistrow Voice handle disclosure and consent?",
+      "paragraphs": [
+        "Vistrow Voice lets each account control this from the Compliance page. These are the settings as they work today, described in [consent, recording and retention settings](/help/compliance/consent-recording-retention)."
+      ],
+      "points": [
+        "Announce recording and AI: on by default. While recording is on, the opening line says the call is recorded and that the caller is speaking with an AI assistant. The built-in wording is in Hindi for Hindi agents and in English for every other language; you can write your own one-sentence wording, for example in Tamil or Punjabi, or turn it off.",
+        "If your welcome message already mentions recording, nothing extra is added.",
+        "With recording off, no notice is added automatically, so put the AI disclosure in your own greeting.",
+        "Require spoken consent: the agent asks in its first reply and saves the answer. If the caller declines or leaves first, the recording is discarded and no personal details are collected."
+      ]
+    },
+    {
+      "heading": "How long should you keep recordings and transcripts?",
+      "paragraphs": [
+        "Keep them only as long as the purpose needs. The UK ICO expects you to tell people your retention period, and Canada’s privacy commissioner says recordings should be kept no longer than their purpose requires. Pick a period for each use, such as resolving disputes or training, and write it down.",
+        "On Vistrow Voice, the data retention setting deletes transcripts and recordings older than the number of days you choose, every day; zero keeps them indefinitely, which is rarely the right choice. The [guide to finding a call, transcript or recording](/help/calls/find-a-call) shows where they are stored."
+      ]
+    },
+    {
+      "heading": "Who should be able to listen to calls?",
+      "paragraphs": [
+        "Limit access to the people who need it. Recordings often contain names, numbers, addresses and sometimes health or financial details. Review who has a dashboard login, remove people who leave, and give viewers the lowest role that lets them do their job. Vistrow Voice workspaces have Owner, Admin, Member and Viewer roles, set under [workspace and team settings](/help/settings/workspace-and-team).",
+        "Check where call data goes after the call too. If transcripts or leads are sent to a CRM, a spreadsheet or a chat channel, the same retention and access rules should apply there."
+      ]
+    },
+    {
+      "heading": "What is the short checklist before calls go live?",
+      "paragraphs": [
+        "Run through this list for each market and each agent, then test it by calling the agent yourself and listening to the first ten seconds. Our [AI voice agent platform checklist](/resources/blog/ai-voice-agent-platform-buyers-checklist) covers the wider evaluation."
+      ],
+      "points": [
+        "The opening line says it is an AI, in the caller’s language.",
+        "If you record, the opening line says so and why.",
+        "Callers who decline can still get help or reach a person.",
+        "A retention period is set and written down.",
+        "Only the people who need recordings can open them.",
+        "Outbound calls respect consent, Do-Not-Call lists and calling windows."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "Is this legal advice?",
+      "a": "No. It is general guidance based on public primary sources. Confirm the rules for each country and region you serve with a qualified adviser."
+    },
+    {
+      "q": "Do I need consent to record customer calls?",
+      "a": "It depends on where you and your callers are. Some rules accept notice plus continuing the call; others need explicit consent. Always tell callers first."
+    },
+    {
+      "q": "Does a Vistrow Voice agent tell callers it is an AI?",
+      "a": "When recording is on, the default opening line says the call is recorded and that the caller is speaking with an AI assistant. With recording off, add the AI disclosure to your greeting."
+    },
+    {
+      "q": "Can callers refuse to be recorded?",
+      "a": "With Require spoken consent on, a caller who declines is not recorded and the agent does not collect personal details. Offer them another way to get help."
+    },
+    {
+      "q": "How long should call recordings be kept?",
+      "a": "Only as long as your stated purpose needs. Set a retention period in days and review it with whoever handles compliance."
+    }
+  ],
+  "imageAlt": "Checklist board for AI call recording and consent: tell callers it is an AI, recording notice, consent, retention and access, with Artha’s opening line",
+  "imagePrompt": "Designed cover (scripts/blog-covers/24-ai-call-recording-consent-and-disclosure-checklist.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "European Commission: Transparency obligations under Article 50 of the AI Act (FAQ)",
+      "url": "https://digital-strategy.ec.europa.eu/en/faqs/transparency-obligations-under-article-50-ai-act"
+    },
+    {
+      "title": "Federal Communications Commission: Declaratory Ruling FCC 24-17 on AI-generated voices under the TCPA (adopted 2 February 2024)",
+      "url": "https://docs.fcc.gov/public/attachments/FCC-24-17A1.pdf"
+    },
+    {
+      "title": "Office of the Privacy Commissioner of Canada: Recording of customer telephone calls",
+      "url": "https://www.priv.gc.ca/en/privacy-topics/surveillance/02_05_d_14/"
+    },
+    {
+      "title": "Information Commissioner’s Office (UK): Right to be informed",
+      "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/individual-rights/individual-rights/right-to-be-informed/"
+    },
+    {
+      "title": "The Digital Personal Data Protection Act, 2023 (Gazette of India, No. 22 of 2023), sections 5 and 6",
+      "url": "https://www.trai.gov.in/sites/default/files/2024-09/DPDT_11082024.pdf"
+    }
+  ],
+  "contextualLinks": "For what to do with recordings once you have them, read [AI call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) and the [Vistrow Voice security overview](/security).",
+  "inbound": [
+    {
+      "target": "blog:ai-call-recordings-and-transcripts",
+      "sentence": "Before you switch recording on, work through our [AI call recording consent and disclosure checklist](/resources/blog/ai-call-recording-consent-and-disclosure-checklist)."
+    },
+    {
+      "target": "page:/security",
+      "sentence": "For the steps your own team should take, see our [checklist for AI call recording consent and disclosure](/resources/blog/ai-call-recording-consent-and-disclosure-checklist)."
+    }
+  ]
+}

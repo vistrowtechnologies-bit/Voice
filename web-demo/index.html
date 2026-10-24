@@ -1,7 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
+    <!-- Theme before first paint: the same rule as src/lib/theme.ts
+         (stored 'av-theme' of 'dark' means dark, anything else or no
+         storage means light), so prerendered pages don't flash the dark
+         default tokens until main.tsx runs. data-theme="light" on <html>
+         covers visitors without JavaScript. If this script changes, update
+         its sha256 in vercel.json's Content-Security-Policy-Report-Only. -->
+    <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('av-theme')==='dark'?'dark':'light')}catch(e){document.documentElement.setAttribute('data-theme','light')}</script>
     <!-- A single dark-badge mark (self-contained square background, not a
          transparent glyph) reads fine against both light and dark browser
          chrome, so one icon covers both - no more theme-matched variants. -->
@@ -100,9 +107,10 @@
          app.vistrowvoice.com (the dashboard app itself, see hostBuckets.ts)
          - a plain <script> tag here would load on both, so the floating
          button showed up while using the dashboard too. Gated behind a
-         hostname check so it only ever loads on the marketing site. -->
+         hostname check so it only ever loads on the marketing site (not
+         the app, and not admin.vistrowvoice.com). -->
     <script>
-      if (location.hostname.indexOf('app.') !== 0) {
+      if (location.hostname.indexOf('app.') !== 0 && location.hostname.indexOf('admin.') !== 0) {
         var vistrowWidgetScript = document.createElement('script')
         vistrowWidgetScript.src = '/api/widget.js'
         vistrowWidgetScript.setAttribute('data-site-key', 'av_live_K3WlEka3sKGHgFA-xwQrijJsTO8XfqhK')

@@ -116,6 +116,9 @@ def _model_tier(model: str | None) -> str:
         return "standard"
     if name.startswith("gemini-live"):
         return "realtime" if name == "gemini-live" or "2.5" in name else "realtime_plus"
+    if name.startswith("duplex"):
+        # Vistrow Duplex = OpenAI GPT-Live 1 ($0.05/min + backend): realtime, never 1x.
+        return "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:
@@ -530,11 +533,16 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
     on the call's critical path — this was the single largest piece of the
     "still listening" gap reported after the caller stops talking, and
     predates streaming/turn-detection entirely: the agent hadn't even
-    started session.start() yet."""
+    started session.start() yet.
+
+    The cache holds the full text and each caller gets its own cut: realtime
+    asks for ~5,500 characters and pipelines for 8,000, and a cache of the
+    first caller's cut served that length to the other (Codex, 24 Oct 2026)."""
     cached = _kb_cache.get(kb_id)
     now = time.monotonic()
     if cached is not None and now - cached[0] < _KB_CACHE_TTL_S:
-        return cached[1]
+        content, strict = cached[1]
+        return content[:max_chars], strict
     conn = dbconn.connect()
     try:
         parts: list[str] = []
@@ -554,7 +562,7 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
             (kb_id,),
         ).fetchall()
         parts.extend(f"## {r['name']}\n{r['content']}" for r in rows)
-        content = "\n\n".join(parts)[:max_chars]
+        content = "\n\n".join(parts)
         strict_row = conn.execute("SELECT strict FROM knowledge_bases WHERE id = ?", (kb_id,)).fetchone()
         strict = bool(strict_row["strict"]) if strict_row is not None else True
     except psycopg.Error:
@@ -563,9 +571,8 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
         return "", True
     finally:
         conn.close()
-    result = (content, strict)
-    _kb_cache[kb_id] = (now, result)
-    return result
+    _kb_cache[kb_id] = (now, (content, strict))
+    return content[:max_chars], strict
 
 
 # Confirmed live (2026-09-01): a one-shot prewarm at process boot doesn't
@@ -1008,9 +1015,27 @@ def _hhmm_to_minutes(t: str) -> int:
     return int(h) * 60 + int(m)
 
 
+# 60 s, like get_account_country: a booking read this once for the past-time
+# check and again for the slots, each a round-trip over the DB proxy (call
+# 1459: booking took 4.7 s). An edit on the dashboard applies within a minute.
+_AVAILABILITY_CACHE_TTL_S = 60.0
+_availability_cache: dict[int, tuple[float, dict]] = {}
+
+
 def get_availability_config(account_id: int | None) -> dict:
     if account_id is None:
         return dict(_AVAILABILITY_DEFAULTS)
+    hit = _availability_cache.get(account_id)
+    if hit and time.monotonic() - hit[0] < _AVAILABILITY_CACHE_TTL_S:
+        return dict(hit[1])
+    cfg = _read_availability_config(account_id)
+    if cfg is None:
+        return dict(_AVAILABILITY_DEFAULTS)
+    _availability_cache[account_id] = (time.monotonic(), cfg)
+    return dict(cfg)
+
+
+def _read_availability_config(account_id: int) -> dict | None:
     conn = dbconn.connect()
     try:
         row = conn.execute(
@@ -1024,17 +1049,22 @@ def get_availability_config(account_id: int | None) -> dict:
                 cfg.update({k: v for k, v in stored.items() if k in _AVAILABILITY_DEFAULTS})
         return cfg
     except psycopg.Error:
-        return dict(_AVAILABILITY_DEFAULTS)
+        return None  # not cached: the next call retries the real setting
     finally:
         conn.close()
 
 
-def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, duration_minutes: int) -> bool:
-    rows = conn.execute(
+def _confirmed_appointments(conn, account_id: int, appt_date: str) -> list:
+    return conn.execute(
         "SELECT start_time, duration_minutes FROM appointments "
         "WHERE account_id = ? AND appt_date = ? AND status = 'confirmed'",
         (account_id, appt_date),
     ).fetchall()
+
+
+def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, duration_minutes: int, rows=None) -> bool:
+    if rows is None:
+        rows = _confirmed_appointments(conn, account_id, appt_date)
     new_start = _hhmm_to_minutes(start_time)
     new_end = new_start + duration_minutes
     for r in rows:
@@ -1094,10 +1124,13 @@ def check_appointment_availability(account_id: int | None, date: str, duration_m
         is_today = date == now.date().isoformat()
         now_minutes = now.hour * 60 + now.minute
         slots: list[str] = []
+        # One query for the day, not one per slot: call 1459 (21 Oct 2026)
+        # spent 6.0 s here on ~16 round-trips over the database proxy.
+        booked = _confirmed_appointments(conn, account_id, date)
         cursor = open_m
         while cursor + duration_minutes <= close_m:
             hhmm = f"{cursor // 60:02d}:{cursor % 60:02d}"
-            if not (is_today and cursor <= now_minutes) and not _appt_slot_conflict(conn, account_id, date, hhmm, duration_minutes):
+            if not (is_today and cursor <= now_minutes) and not _appt_slot_conflict(conn, account_id, date, hhmm, duration_minutes, rows=booked):
                 slots.append(hhmm)
             cursor += slot_minutes
         return slots
@@ -1125,6 +1158,9 @@ def book_native_appointment(
     # booking for a time that has already passed in the account's timezone.
     if _appointment_in_past(account_id, date, time):
         return {"ok": False, "error": "that time has already passed"}
+    # Before the transaction, not inside it: one fewer round-trip while the
+    # advisory lock is held.
+    stored_phone = account_phone(account_id, phone) or phone
     conn = dbconn.connect()
     try:
         with conn:
@@ -1135,7 +1171,7 @@ def book_native_appointment(
                 "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, contact_phone, "
                 "contact_email, purpose, appt_date, start_time, duration_minutes, status, source) "
                 "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, ?, 'confirmed', 'agent')",
-                (account_id, agent_id, name, account_phone(account_id, phone) or phone, purpose, date, time,
+                (account_id, agent_id, name, stored_phone, purpose, date, time,
                  duration_minutes),
             )
             return {"ok": True}
@@ -1177,12 +1213,15 @@ def record_callback_request(
                 "contact_phone, contact_email, purpose, appt_date, start_time, duration_minutes, "
                 "status, source, notes) "
                 "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, 0, 'callback_requested', 'agent', ?)",
+                # appt_date/start_time are NOT NULL text: None failed every
+                # callback with no day or time (none stored before 23 Oct 2026).
                 (account_id, agent_id, name, account_phone(account_id, phone) or phone, reason or "callback requested",
-                 preferred_date or None, preferred_time or None,
+                 preferred_date or "", preferred_time or "",
                  f"Wanted {preferred_date or 'any day'} {preferred_time or ''}".strip()),
             )
             return {"ok": True}
     except psycopg.Error:
+        logger.exception("could not store callback request (account %s)", account_id)
         return None
     finally:
         conn.close()
@@ -1731,6 +1770,92 @@ def _campaign_retry_rules(conn, campaign_id: int) -> tuple:
     return policy, max_attempts, retry_minutes
 
 
+def _advance_nurture_after_no_answer(contact_id: int) -> None:
+    """Move a nurture follow-up whose retries just ran out with no answer to
+    the next step of its sequence (owner, 22 Oct 2026), instead of ending it.
+
+    Called after the caller's final no-answer write has committed, in its
+    own transaction, so a failure here can never lose that write; it is
+    best-effort and never raises. It only acts on exactly that state: a "Follow-up calls" row,
+    kind nurture, status no_answer/voicemail/failed with no next attempt.
+    The update is conditional on that status, so a row that changed in the
+    meantime (cancelled, re-claimed) is left alone. Before moving on it
+    re-checks that the person has not since asked not to be called (DNC) or
+    booked an appointment. MUST mirror server/calls_db.py's
+    _advance_nurture_after_no_answer."""
+    conn = None
+    try:
+        conn = dbconn.connect()
+        with conn:
+            row = conn.execute(
+                "SELECT cc.status, cc.outcome, cc.next_attempt_at, cc.custom_fields, cc.account_id, cc.phone, "
+                "cc.phone_norm, cc.created_at, cc.campaign_id, c.name AS campaign_name, a.follow_up_policy "
+                "FROM campaign_contacts cc JOIN campaigns c ON c.id = cc.campaign_id "
+                "LEFT JOIN agents a ON a.id = c.agent_id WHERE cc.id = ?",
+                (contact_id,),
+            ).fetchone()
+            if row is None or row["campaign_name"] != retry_rules.FOLLOW_UP_CAMPAIGN_NAME:
+                return
+            if row["status"] not in ("no_answer", "voicemail", "failed") or row["next_attempt_at"]:
+                return
+            try:
+                fields = json.loads(row["custom_fields"] or "{}")
+            except ValueError:
+                return
+            if not isinstance(fields, dict) or fields.get("follow_up_kind") != "nurture":
+                return
+            policy = retry_rules.follow_up_policy(row["follow_up_policy"])
+            if not policy["nurtureAdvanceOnNoAnswer"]:
+                return
+            account_id = row["account_id"]
+            norm = row["phone_norm"] or _normalize_dnc_phone(row["phone"] or "", account_id)
+            if norm and conn.execute(
+                "SELECT 1 FROM dnc_list WHERE account_id = ? AND phone_norm = ?", (account_id, norm)
+            ).fetchone():
+                return
+            if norm:
+                for appt in conn.execute(
+                    "SELECT contact_phone FROM appointments WHERE account_id = ? "
+                    "AND status IN ('confirmed', 'rescheduled', 'completed') AND COALESCE(contact_phone, '') <> '' "
+                    "AND created_at::timestamp >= ?::timestamp",
+                    (account_id, row["created_at"]),
+                ).fetchall():
+                    if _normalize_dnc_phone(appt["contact_phone"], account_id) == norm:
+                        return
+            compliance = get_compliance_config(account_id) or {}
+            try:
+                tz = ZoneInfo(compliance.get("timezone") or "Asia/Kolkata")
+            except (ZoneInfoNotFoundError, ValueError, TypeError):
+                tz = ZoneInfo("Asia/Kolkata")
+            step = retry_rules.next_nurture_step(
+                fields, policy, datetime.datetime.now(tz), compliance.get("active_days")
+            )
+            if step is None:
+                return
+            due = step["at"].astimezone(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            said = (row["outcome"] or "no answer").replace("_", " ")
+            moved = conn.execute(
+                "UPDATE campaign_contacts SET status = 'pending', attempts = 0, next_attempt_at = ?, custom_fields = ?, "
+                "outcome = ? WHERE id = ? AND status = ? AND next_attempt_at IS NULL RETURNING id",
+                (due, json.dumps({**fields, **step["fields"]}, ensure_ascii=False),
+                 f"{said} · moved to step {step['fields']['follow_up_step']}", contact_id, row["status"]),
+            ).fetchone()
+            if moved is None:
+                return
+            # The dialer auto-completes a campaign once nothing is due.
+            conn.execute(
+                "UPDATE campaigns SET status = 'running' WHERE id = ? AND status = 'completed'",
+                (row["campaign_id"],),
+            )
+            logger.info("nurture follow-up %s: no answer, moved to step %s at %s UTC",
+                        contact_id, step["fields"]["follow_up_step"], due)
+    except Exception:
+        logger.exception("could not advance nurture follow-up %s", contact_id)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = "voicemail") -> None:
     """Correct a campaign contact from 'placed' to what actually picked up.
 
@@ -1755,6 +1880,7 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
     direct write rather than a call into that module because the agent worker
     does not import the server package.
     """
+    advance = False
     conn = dbconn.connect()
     try:
         with conn:
@@ -1777,6 +1903,7 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
                     "next_attempt_at = NULL WHERE id = ?",
                     (status, label, contact_id),
                 )
+                advance = True
             else:
                 next_at = (
                     datetime.datetime.now(datetime.timezone.utc)
@@ -1797,6 +1924,8 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
         logger.exception("could not record campaign voicemail for contact %s", contact_id)
     finally:
         conn.close()
+    if advance:
+        _advance_nurture_after_no_answer(contact_id)
 
 
 def _normalize_dnc_phone(phone: str, account_id: int | None) -> str:
@@ -1883,6 +2012,7 @@ def finish_campaign_contact(
     announcement and voicemail paths may already have resolved it mid-call,
     and those more specific outcomes must win. Best-effort, never raises.
     """
+    advance = False
     conn = dbconn.connect()
     try:
         with conn:
@@ -1922,11 +2052,14 @@ def finish_campaign_contact(
                     "next_attempt_at = ? WHERE id = ? AND status = 'calling'",
                     ("short call" if outcome == "short_call" else "no answer", next_at, contact_id),
                 )
+                advance = next_at is None
         logger.info("campaign contact %s finished as %s", contact_id, outcome)
     except Exception:
         logger.exception("could not finish campaign contact %s", contact_id)
     finally:
         conn.close()
+    if advance:
+        _advance_nurture_after_no_answer(contact_id)
 
 
 def schedule_follow_up_call(

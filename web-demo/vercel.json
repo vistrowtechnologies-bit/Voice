@@ -17,9 +17,14 @@
         { "key": "Permissions-Policy", "value": "camera=(), geolocation=(), microphone=(self)" },
         {
           "key": "Content-Security-Policy-Report-Only",
-          "value": "default-src 'self'; script-src 'self' 'sha256-VN2OVtgaU08diDnnyGzM7EPkptRJa9ROzDEiYY+sqtc=' 'sha256-Vob3g7sPh4ErJ6kBjH43LzInpsKIQF7/+62sA0Aqryw=' https://www.googletagmanager.com https://www.clarity.ms https://scripts.clarity.ms https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.google-analytics.com https://*.googletagmanager.com https://*.clarity.ms https://c.bing.com https://*.razorpay.com; font-src 'self' data:; media-src 'self' blob: data: https://*.backblazeb2.com; connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud wss://*.up.railway.app https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.clarity.ms https://c.bing.com https://*.razorpay.com; frame-src https://*.razorpay.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+          "value": "default-src 'self'; script-src 'self' 'sha256-VN2OVtgaU08diDnnyGzM7EPkptRJa9ROzDEiYY+sqtc=' 'sha256-Ybg7BjP5EwS7YO0wk4cmuktCHtivDoog0XnHjNmN3CI=' 'sha256-Vob3g7sPh4ErJ6kBjH43LzInpsKIQF7/+62sA0Aqryw=' https://www.googletagmanager.com https://www.clarity.ms https://scripts.clarity.ms https://checkout.razorpay.com https://connect.facebook.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.google-analytics.com https://*.googletagmanager.com https://*.clarity.ms https://c.bing.com https://*.razorpay.com; font-src 'self' data:; media-src 'self' blob: data: https://*.backblazeb2.com; connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud wss://*.up.railway.app https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.clarity.ms https://c.bing.com https://*.razorpay.com https://*.facebook.com; frame-src https://*.razorpay.com https://www.facebook.com https://web.facebook.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
         }
       ]
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "admin.vistrowvoice.com" }],
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     },
     {
       "source": "/media/(.*)",

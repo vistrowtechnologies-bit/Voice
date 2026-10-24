@@ -1,0 +1,135 @@
+{
+  "n": 21,
+  "publishOn": "2026-11-10",
+  "primaryKeyword": "tamil voice bot",
+  "audience": "India",
+  "slug": "tamil-voice-bot-testing-guide",
+  "title": "Tamil voice bot: a testing guide",
+  "seoTitle": "Tamil Voice Bot Testing Guide: What to Check Before Launch",
+  "metaDescription": "How to test a Tamil voice bot before launch: spoken Tamil, Tanglish, names, numbers, noisy lines, handoffs and approved answers, with a scoring sheet.",
+  "shortAnswer": "To test a Tamil voice bot, have native speakers from your regions call it with real tasks in everyday spoken Tamil and Tanglish. Score how it handles names, numbers, dates, interruptions, noisy mobile lines and handoffs, check every answer against your approved facts, and fix and retest before it takes live calls.",
+  "excerpt": "A Tamil voice bot can pass a polished demo and still fail on a Chennai caller who mixes English, speaks fast and gives a phone number in one breath. This guide shows what to test and how to score it.",
+  "category": "Languages & speech",
+  "related": [
+    "how-to-choose-a-multilingual-voice-agent",
+    "voice-ai-latency-how-to-measure-it",
+    "ai-voice-agent-platform-buyers-checklist"
+  ],
+  "sections": [
+    {
+      "heading": "Why does a Tamil voice bot need its own test plan?",
+      "paragraphs": [
+        "Tamil is one of India’s largest languages: the 2011 Census of India counted about 6.9 crore (69 million) Tamil speakers. Your callers expect to be understood in it, and many will not accept a Hindi-first or English-only line. Our [Tamil AI voice calling agent page](/languages/tamil) shows a sample property call in Tamil with an English gloss.",
+        "Spoken Tamil is also quite different from written Tamil. Callers use colloquial forms, regional accents and plenty of English words, so a bot that reads formal Tamil well can still sound stiff or mishear a caller. That is why a generic [voice bot for customer calls](/voice-bot) needs a Tamil-specific test before launch, run by people who speak it every day."
+      ]
+    },
+    {
+      "heading": "Who should test it, and with which calls?",
+      "paragraphs": [
+        "Recruit at least three native speakers: one from Chennai, one from another region you serve (for example Coimbatore or Madurai), and one older caller who rarely mixes English. Give each a written task, not a script: “book a site visit for Sunday”, “ask whether the clinic is open on Pongal”, “give your phone number and ask for a callback”. Let them say it their own way.",
+        "Use the call types that make up most of your traffic, plus one or two awkward ones. Our [multilingual voice agent buying guide](/resources/blog/how-to-choose-a-multilingual-voice-agent) explains how to plan the test set across languages."
+      ],
+      "points": [
+        "New enquiry: a caller asking about a product, project or service and leaving their details.",
+        "Booking: a caller who wants a specific day and time, then changes it halfway through.",
+        "Existing customer: someone asking about an earlier booking or order by name.",
+        "Out of scope: a question the bot should not answer, such as medical or legal advice, which it should pass to a person.",
+        "Unhappy caller: a complaint, where the right outcome is a calm apology and a handover."
+      ]
+    },
+    {
+      "heading": "How well does it handle Tamil names, numbers and dates?",
+      "paragraphs": [
+        "These are the details callers notice first and the ones that break bookings. Listen to every recording and read the transcript next to it; the [guide to finding a call, transcript or recording](/help/calls/find-a-call) shows where both are saved. The agent should repeat important details back before it saves them, so a mistake can be corrected on the call."
+      ],
+      "points": [
+        "Names: Tamil personal names, initials (“R. Karthik”), and place names such as Tambaram, Porur or Velachery, both heard correctly and pronounced naturally.",
+        "Numbers: phone numbers read in groups, prices in lakhs, and numbers said in English inside a Tamil sentence, which many callers do.",
+        "Dates and times: “next Sunday”, “Friday evening after six”, and festival references the caller assumes you know.",
+        "Addresses: door numbers, street names and landmarks, which are often mixed Tamil and English."
+      ]
+    },
+    {
+      "heading": "Does it follow Tanglish and language switches?",
+      "paragraphs": [
+        "Chennai callers mix Tamil and English freely: “EMI”, “booking”, “site visit” and “2BHK” usually stay in English. A good bot understands those words inside a Tamil sentence, keeps replying in Tamil, and moves to English only when the caller does. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and its agents follow the caller when they switch; the [supported languages page](/languages) lists the Indian ones.",
+        "Test the switch in both directions: a caller who starts in English and moves to Tamil, and one who asks in Tamil and then says “can you tell me in English?”. Check the bot does not restart the conversation or forget details already given."
+      ]
+    },
+    {
+      "heading": "How does it cope with real phone conditions?",
+      "paragraphs": [
+        "Demos happen in quiet rooms. Real calls come from bikes, buses, shop floors and homes with a television on. Ask testers to call from an ordinary mobile, at a busy time of day, with some background noise, and to interrupt the bot once while it is talking. Time the gap between the caller finishing and the bot replying with our [voice AI latency measurement guide](/resources/blog/voice-ai-latency-how-to-measure-it)."
+      ],
+      "points": [
+        "Interruptions: the bot should stop and listen, then pick up the new point.",
+        "Silence: if the caller goes quiet, it should prompt once, politely, and not talk over them.",
+        "Fast and slow speakers: both should be understood without being cut off."
+      ]
+    },
+    {
+      "heading": "Does it stay within your approved facts and hand over cleanly?",
+      "paragraphs": [
+        "Ask questions just outside what the bot was given, such as a fee you never listed, and see whether it guesses. With a [knowledge base in strict mode](/product/knowledge-base), Vistrow Voice answers only from your approved content and says it will check with the team when something is missing. Then test the exits: a booking with no free slot, a request for a person, and a complaint."
+      ],
+      "points": [
+        "Bookings should be confirmed only once saved inside your bookable hours.",
+        "Transfers on phone calls should reach a colleague, with a callback request taken if nobody answers; the [guide to functions and transfers](/help/agents/agent-functions-and-transfer) shows the settings.",
+        "The person who takes over should see the caller’s name, need and language in the call record."
+      ]
+    },
+    {
+      "heading": "How do you score the results and decide to launch?",
+      "paragraphs": [
+        "Use a simple sheet with one row per test call and a pass, minor issue or fail for each check: understood the request, details correct, answer from approved facts, natural Tamil, correct outcome, clean handover. Ask testers for one line on how the call felt. Fix the most common failures, usually a missing fact or an unclear instruction, then rerun the same calls.",
+        "On Vistrow Voice you can rerun saved situations in the [Testing Lab scenario runner](/help/testing-lab/run-a-test), such as an impatient caller or a noisy background, after every change. Launch on one line or one call type first, and keep reading transcripts in the first weeks.",
+        "Finally, check what callers hear about AI and recording. When recording is on, the built-in notice is in Hindi for Hindi agents and in English for every other language, so write your own one-line notice in Tamil if your callers expect it."
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "q": "What is a Tamil voice bot?",
+      "a": "Software that holds a spoken conversation in Tamil on a phone call or website, understands what the caller says, answers from your facts and completes or hands over the request."
+    },
+    {
+      "q": "How many test calls do I need before launch?",
+      "a": "Enough to cover each common call type with several native speakers, plus awkward cases. Repeat the same set after every fix so results are comparable."
+    },
+    {
+      "q": "Should a Tamil voice bot speak formal or spoken Tamil?",
+      "a": "Callers usually respond better to natural spoken Tamil with common English words. Ask native testers whether the bot sounds natural and respectful."
+    },
+    {
+      "q": "Can a Tamil voice bot switch to English mid-call?",
+      "a": "It should, when the caller switches. Test both directions and check it keeps the details already given."
+    },
+    {
+      "q": "What usually causes a Tamil voice bot to fail a test?",
+      "a": "Most often a missing fact, a vague instruction or a misheard name or number. Reading transcripts next to recordings shows which one, and each is usually quick to fix."
+    },
+    {
+      "q": "Can I test it before connecting a phone number?",
+      "a": "Yes. On Vistrow Voice you can talk to an agent in the browser with the [quick browser test](/help/testing-lab/quick-browser-test), then place a test call to a real phone."
+    }
+  ],
+  "imageAlt": "Checklist board headed with the Tamil greeting Vanakkam: names and places, numbers and dates, Tamil-English switching, noisy lines and handoff, beside a tester wearing a headset",
+  "imagePrompt": "Designed cover (scripts/blog-covers/21-tamil-voice-bot-testing-guide.html) per docs/SEO-BLOG-COVER-GUIDE.md",
+  "sources": [
+    {
+      "title": "Census of India 2011, Paper 1 of 2018: Language, India, States and Union Territories (Table C-16), Statement 4",
+      "url": "https://censusindia.gov.in/nada/index.php/catalog/42458/download/46089/C-16_25062018.pdf"
+    }
+  ],
+  "contextualLinks": "See a sample call on the [Tamil AI voice calling agent page](/languages/tamil) or compare platforms with our [AI voice agent platform checklist](/resources/blog/ai-voice-agent-platform-buyers-checklist).",
+  "inbound": [
+    {
+      "target": "language:tamil",
+      "sentence": "Before you go live, follow our [Tamil voice bot testing guide](/resources/blog/tamil-voice-bot-testing-guide) with native speakers from your regions."
+    },
+    {
+      "target": "page:/voice-bot",
+      "sentence": "Launching in Tamil? Our [step-by-step Tamil voice bot testing guide](/resources/blog/tamil-voice-bot-testing-guide) shows what to check on real calls."
+    }
+  ]
+}

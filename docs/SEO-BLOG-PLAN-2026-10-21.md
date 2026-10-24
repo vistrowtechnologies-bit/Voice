@@ -43,9 +43,9 @@ Scope: only buyers we can serve honestly (Indian businesses in the Indian call l
 | # | Date | Title | Primary keyword | Stage | Audience | Cluster | Link targets | Status |
 |---|---|---|---|---|---|---|---|---|
 | 1 | 21 Oct | Multilingual AI receptionist for Hindi, Punjabi and English callers | multilingual ai receptionist | Comparing | UK, CA, US, UAE | Diaspora | /languages/hindi, /languages/punjabi, /product/widget | Published |
-| 2 | 22 Oct | AI receptionist vs answering service vs IVR: how to compare | ai receptionist vs answering service | Comparing | Global | Receptionist | /ai-receptionist, /ai-ivr, /vs-ivr, /pricing |  |
-| 3 | 23 Oct | What is an AI receptionist and what should it handle? | ai receptionist | Learning | Global | Receptionist | /ai-receptionist, /product/inbound, /product/knowledge-base |  |
-| 4 | 24 Oct | AI IVR: replacing phone menus with a conversation | ai ivr | Comparing | India + global | IVR | /ai-ivr, /vs-ivr, /product/inbound |  |
+| 2 | 22 Oct | AI receptionist vs answering service vs IVR: how to compare | ai receptionist vs answering service | Comparing | Global | Receptionist | /ai-receptionist, /ai-ivr, /vs-ivr, /pricing | Published 2026-10-22 |
+| 3 | 23 Oct | What is an AI receptionist and what should it handle? | ai receptionist | Learning | Global | Receptionist | /ai-receptionist, /product/inbound, /product/knowledge-base | Published 2026-10-23 |
+| 4 | 24 Oct | AI IVR: replacing phone menus with a conversation | ai ivr | Comparing | India + global | IVR | /ai-ivr, /vs-ivr, /product/inbound | Published 2026-10-24 |
 | 5 | 25 Oct | How to evaluate an AI voice agent platform: a buyer's checklist | ai voice agent platform | Choosing | Global | Buyer guides | /product/agents, /pricing, /languages |  |
 | 6 | 26 Oct | AI receptionist for clinics: bookings, reminders and handoffs | ai receptionist for clinics | Choosing | India + diaspora | Healthcare | /solutions/healthcare, /ai-receptionist |  |
 | 7 | 27 Oct | Hindi AI voice agent: what natural Hindi on a call sounds like | hindi ai voice agent | Comparing | India + diaspora | Languages | /languages/hindi, /product/agents |  |

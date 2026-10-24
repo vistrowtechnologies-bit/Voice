@@ -44,6 +44,14 @@ FROM_SUPPORT = "Vistrow Voice Support <support@vistrowvoice.com>"
 FROM_BILLING = "Vistrow Voice Billing <billing@vistrowvoice.com>"  # receipts and invoices
 
 
+def sales_inboxes() -> list[str]:
+    """Where Vistrow's own leads are announced: the contact form and the lead
+    emails for Vistrow's workspace. SALES_NOTIFY_EMAIL is a comma-separated
+    list (owner, 24 Oct: vistrowai@ and vistrowtechnologies@)."""
+    raw = os.environ.get("SALES_NOTIFY_EMAIL") or "vistrowai@gmail.com"
+    return list(dict.fromkeys(a.strip().lower() for a in raw.split(",") if "@" in a))
+
+
 def is_configured() -> bool:
     return bool(os.environ.get("RESEND_API_KEY") or os.environ.get("SMTP_HOST"))
 
@@ -153,6 +161,7 @@ def send_email(
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
     reply_to: str | None = None,
+    text: str | None = None,
 ) -> bool:
     """Best-effort send. Returns True only on a confirmed handoff to a provider.
 
@@ -169,9 +178,9 @@ def send_email(
         subject = f"[STAGING] {subject}"
     resend_key = os.environ.get("RESEND_API_KEY")
     if resend_key:
-        return _send_resend(resend_key, to, subject, html, from_address, attachments, reply_to)
+        return _send_resend(resend_key, to, subject, html, from_address, attachments, reply_to, text)
     if os.environ.get("SMTP_HOST"):
-        return _send_smtp(to, subject, html, from_address, attachments)
+        return _send_smtp(to, subject, html, from_address, attachments, text, reply_to)
     logger.warning(
         "email not configured — would have sent to %s: %r. Set RESEND_API_KEY or SMTP_* to enable.",
         to,
@@ -188,8 +197,11 @@ def _send_resend(
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
     reply_to: str | None = None,
+    text: str | None = None,
 ) -> bool:
     body = {"from": _from_address(from_address), "to": [to], "subject": subject, "html": html}
+    if text:
+        body["text"] = text
     if reply_to:
         # Support-ticket emails set a per-ticket address here so a reply from
         # Gmail lands back in the ticket (see support_inbound.py).
@@ -233,6 +245,8 @@ def _send_smtp(
     html: str,
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
+    text: str | None = None,
+    reply_to: str | None = None,
 ) -> bool:
     host = os.environ["SMTP_HOST"]
     port = int(os.environ.get("SMTP_PORT") or 587)
@@ -242,7 +256,11 @@ def _send_smtp(
     msg["From"] = _from_address(from_address)
     msg["To"] = to
     msg["Subject"] = subject
-    msg.set_content("This message requires an HTML-capable email client.")
+    if reply_to:
+        # Was only passed to Resend: on SMTP a reply to a contact-form email
+        # went to our own address instead of the prospect.
+        msg["Reply-To"] = reply_to
+    msg.set_content(text or "This message requires an HTML-capable email client.")
     msg.add_alternative(html, subtype="html")
     for item in attachments or []:
         try:

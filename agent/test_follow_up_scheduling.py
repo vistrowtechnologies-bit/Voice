@@ -89,11 +89,18 @@ class VisitReminderPlan(unittest.TestCase):
 
 
 class NurturePlan(unittest.TestCase):
-    def test_interested_with_nothing_booked_rings_n_days_later_at_eleven(self):
-        plan = follow_ups.plan(POLICY, {}, {"interest_level": "High"}, NOW)
-        self.assertEqual((plan["kind"], plan["at"]), ("nurture", at(17, 11)))
-        policy = retry_rules.follow_up_policy({"nurtureDays": 7})
+    def test_interested_with_nothing_booked_starts_the_sequence_on_day_two(self):
+        plan = follow_ups.plan(POLICY, {}, {"interest_level": "High"}, NOW)  # Wed 14 Oct
+        self.assertEqual((plan["kind"], plan["at"]), ("nurture", at(16, 11)))  # Fri, day 2
+        self.assertEqual(plan["fields"], {"follow_up_step": 1, "nurture_origin": "2026-10-14"})
+        policy = retry_rules.follow_up_policy({"nurtureSteps": [7, 14]})
         self.assertEqual(follow_ups.plan(policy, {}, {"interest_level": "warm"}, NOW)["at"], at(21, 11))
+
+    def test_nurture_time_is_set_per_agent(self):
+        policy = retry_rules.follow_up_policy({"nurtureTime": "16:00"})
+        self.assertEqual(follow_ups.plan(policy, {}, {"interest_level": "warm"}, NOW)["at"], at(16, 16))
+        # A date-only callback keeps its own 11:00.
+        self.assertEqual(follow_ups.plan(policy, {"callback": {"date": "2026-10-16"}}, {}, NOW)["at"], at(16, 11))
 
     def test_not_interested_or_unknown_gets_nothing(self):
         for level in ("not interested", "none", "", "cold", None):
@@ -113,13 +120,62 @@ class NurturePlan(unittest.TestCase):
         lead = {"opted_out": True, "callback": {"time": "17:00"}}
         self.assertIsNone(follow_ups.plan(POLICY, lead, {"interest_level": "high"}, NOW))
 
-    def test_a_nurture_call_does_not_earn_another_nurture_call(self):
-        self.assertIsNone(follow_ups.plan(POLICY, {}, {"interest_level": "high"}, NOW, previous_kind="nurture"))
-        # ...but a callback they asked for on that call is honoured.
-        self.assertEqual(follow_ups.plan(POLICY, {"callback": {"time": "17:00"}}, {}, NOW, previous_kind="nurture")["kind"],
-                         "callback")
+    def test_a_nurture_call_earns_the_next_step_until_the_last(self):
+        step1 = {"follow_up_kind": "nurture", "follow_up_step": 1, "nurture_origin": "2026-10-12"}
+        plan = follow_ups.plan(POLICY, {}, {"interest_level": "high"}, NOW, previous_kind="nurture", previous_fields=step1)
+        self.assertEqual(plan["at"], at(17, 11))  # Mon 12 + 5 = Sat 17
+        self.assertEqual(plan["fields"], {"follow_up_step": 2, "nurture_origin": "2026-10-12"})
+        step2 = {**step1, **plan["fields"]}
+        plan = follow_ups.plan(POLICY, {}, {"interest_level": ""}, NOW, previous_kind="nurture", previous_fields=step2)
+        self.assertEqual((plan["at"], plan["fields"]["follow_up_step"]), (at(22, 11), 3))  # day 10; no answer either way
+        step3 = {**step2, **plan["fields"]}
+        self.assertIsNone(follow_ups.plan(POLICY, {}, {"interest_level": "high"}, NOW, previous_kind="nurture", previous_fields=step3))
+
+    def test_a_no_ends_the_sequence_but_a_callback_or_visit_is_honoured(self):
+        step1 = {"follow_up_kind": "nurture", "follow_up_step": 1, "nurture_origin": "2026-10-12"}
+        for level in ("not interested", "Not Interested at all"):
+            self.assertIsNone(follow_ups.plan(POLICY, {}, {"interest_level": level}, NOW, previous_kind="nurture", previous_fields=step1))
+        self.assertIsNone(follow_ups.plan(POLICY, {"opted_out": True}, {"interest_level": "high"}, NOW,
+                                          previous_kind="nurture", previous_fields=step1))
+        self.assertEqual(follow_ups.plan(POLICY, {"callback": {"time": "17:00"}}, {}, NOW, previous_kind="nurture",
+                                         previous_fields=step1)["kind"], "callback")
         self.assertEqual(follow_ups.plan(POLICY, {}, {"interest_level": "high"}, NOW, previous_kind="callback")["kind"],
                          "nurture")
+
+    def test_a_row_from_before_sequences_counts_as_step_one(self):
+        plan = follow_ups.plan(POLICY, {}, {"interest_level": "high"}, NOW, previous_kind="nurture",
+                               previous_fields={"follow_up_kind": "nurture"})
+        # Step 1 is day 2, so it began 12 Oct; step 2 is day 5 = 17 Oct.
+        self.assertEqual((plan["at"], plan["fields"]["follow_up_step"]), (at(17, 11), 2))
+
+    def test_sunday_and_other_non_calling_days_move_to_the_next_calling_day(self):
+        friday = datetime.datetime(2026, 10, 16, 10, 0, tzinfo=IST)
+        self.assertEqual(follow_ups.plan(POLICY, {}, {"interest_level": "high"}, friday)["at"], at(19, 11))  # Sun -> Mon
+        every_day = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        self.assertEqual(follow_ups.plan(POLICY, {}, {"interest_level": "high"}, friday, active_days=every_day)["at"], at(18, 11))
+        weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+        wednesday = NOW + datetime.timedelta(days=1)  # Thu 15: day 2 = Sat 17 -> Mon 19
+        self.assertEqual(follow_ups.plan(POLICY, {}, {"interest_level": "high"}, wednesday, active_days=weekdays)["at"], at(19, 11))
+
+    def test_a_step_whose_day_has_passed_goes_to_the_next_calling_day(self):
+        old = {"follow_up_kind": "nurture", "follow_up_step": 1, "nurture_origin": "2026-09-01"}
+        plan = follow_ups.plan(POLICY, {}, {"interest_level": "high"}, NOW, previous_kind="nurture", previous_fields=old)
+        self.assertEqual(plan["at"], at(15, 11))  # tomorrow, not 6 Sep
+
+
+class NurtureSequencePolicy(unittest.TestCase):
+    def test_default_is_two_five_ten_and_advances_on_no_answer(self):
+        self.assertEqual((POLICY["nurtureSteps"], POLICY["nurtureDays"], POLICY["nurtureAdvanceOnNoAnswer"]), ([2, 5, 10], 2, True))
+
+    def test_bad_sequences_fall_back_to_the_default(self):
+        for bad in ([], [0, 3], [3, 3], [5, 2], [2, 61], [1, 2, 3, 4, 5, 6], ["2"], [True, 3], "2,5", None):
+            self.assertEqual(retry_rules.follow_up_policy({"nurtureSteps": bad})["nurtureSteps"], [2, 5, 10], bad)
+        good = retry_rules.follow_up_policy({"nurtureSteps": [1, 3, 7, 14, 30], "nurtureAdvanceOnNoAnswer": False})
+        self.assertEqual((good["nurtureSteps"], good["nurtureDays"], good["nurtureAdvanceOnNoAnswer"]), ([1, 3, 7, 14, 30], 1, False))
+
+    def test_switched_off_nurture_has_no_next_step(self):
+        policy = retry_rules.follow_up_policy({"nurtureEnabled": False})
+        self.assertIsNone(retry_rules.next_nurture_step({"follow_up_step": 1, "nurture_origin": "2026-10-12"}, policy, NOW))
 
 
 class MainSchedulesThePlan(unittest.TestCase):
@@ -158,11 +214,36 @@ class MainSchedulesThePlan(unittest.TestCase):
         _, schedule = self._run({"phone": "+919812300011", "site_visit": {"date": "2026-10-18", "time": "15:00"}}, {}, ctx={})
         self.assertEqual(schedule.call_args.args[4]["follow_up_visit_at"], "2026-10-18 15:00")
 
-    def test_the_previous_calls_kind_is_passed_on(self):
-        ctx = {**self.CTX, "custom_fields": {**self.CTX["custom_fields"], "follow_up_kind": "nurture"}}
+    def test_a_nurture_call_queues_the_next_step_with_the_sequence_fields(self):
+        ctx = {**self.CTX, "custom_fields": {**self.CTX["custom_fields"], "follow_up_kind": "nurture",
+                                             "follow_up_step": 1, "nurture_origin": "2026-10-12"}}
+        result, schedule = self._run({"phone": "+919812300011"}, {"interest_level": "high"}, ctx=ctx)
+        self.assertEqual(result, 123)
+        fields, when = schedule.call_args.args[4], schedule.call_args.args[5]
+        self.assertEqual(when, "2026-10-17 05:30:00")  # Sat 17 Oct, 11:00 IST
+        self.assertEqual((fields["follow_up_step"], fields["nurture_origin"], fields["project"]), (2, "2026-10-12", "SP Khopoli"))
+        # The last step ends it.
+        ctx["custom_fields"]["follow_up_step"] = 3
         result, schedule = self._run({"phone": "+919812300011"}, {"interest_level": "high"}, ctx=ctx)
         self.assertIsNone(result)
         schedule.assert_not_called()
+
+    def test_the_accounts_calling_days_are_used(self):
+        with patch.object(db, "get_compliance_config", return_value={"timezone": "Asia/Kolkata", "active_days": ["Mon", "Tue", "Wed", "Thu"]}), \
+                patch.object(db, "schedule_follow_up_call", return_value=1) as schedule, \
+                patch.object(main, "datetime") as dt:
+            dt.now.return_value = NOW  # Wed: day 2 = Fri 16, not a calling day -> Mon 19
+            main._schedule_follow_up(self.CFG, self.CTX, {"phone": "+919812300011"}, {"interest_level": "high"}, 1001, 3)
+        self.assertEqual(schedule.call_args.args[5], "2026-10-19 05:30:00")
+
+    def test_a_callback_after_a_nurture_call_drops_the_sequence_fields(self):
+        ctx = {**self.CTX, "custom_fields": {**self.CTX["custom_fields"], "follow_up_kind": "nurture",
+                                             "follow_up_step": 2, "nurture_origin": "2026-10-12", "note_for_this_call": "x"}}
+        _, schedule = self._run({"phone": "+919812300011", "callback": {"date": "2026-10-16", "time": "18:30"}}, {}, ctx=ctx)
+        fields = schedule.call_args.args[4]
+        self.assertEqual(fields["follow_up_kind"], "callback")
+        for key in ("follow_up_step", "nurture_origin", "note_for_this_call"):
+            self.assertNotIn(key, fields)
 
     def test_nothing_to_schedule_or_no_phone_queues_nothing(self):
         for lead in ({"phone": "+919812300011"}, {"callback": {"time": "17:00"}}):

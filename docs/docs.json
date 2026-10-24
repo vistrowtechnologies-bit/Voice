@@ -1,17 +1,36 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
+  "theme": "aspen",
   "name": "Vistrow Voice",
-  "description": "AI voice agents that answer, qualify, and book calls in 11 Indian languages.",
+  "description": "AI voice agents that answer, qualify, and book calls in more than 130 languages, including Hindi, English and 9 other Indian languages.",
   "colors": {
     "primary": "#9333ea",
     "light": "#a855f7",
     "dark": "#7e22ce"
   },
+  "fonts": {
+    "heading": {
+      "family": "Sora",
+      "weight": 700
+    },
+    "body": {
+      "family": "Manrope"
+    }
+  },
+  "background": {
+    "color": {
+      "light": "#f4f2f9",
+      "dark": "#0a0a12"
+    }
+  },
+  "appearance": {
+    "default": "system"
+  },
   "favicon": "/favicon.png",
   "logo": {
     "light": "/logo/logo-light.png",
-    "dark": "/logo/logo-dark.png"
+    "dark": "/logo/logo-dark.png",
+    "href": "https://www.vistrowvoice.com"
   },
   "navigation": {
     "tabs": [
@@ -109,16 +128,62 @@
       {
         "label": "Dashboard",
         "href": "https://app.vistrowvoice.com"
+      },
+      {
+        "label": "Sign in",
+        "href": "https://app.vistrowvoice.com/login"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Sign in",
-      "href": "https://app.vistrowvoice.com/login"
+      "label": "Book a demo",
+      "href": "https://www.vistrowvoice.com/contact"
     }
   },
   "footer": {
-    "socials": {}
+    "socials": {
+      "website": "https://www.vistrowvoice.com"
+    },
+    "links": [
+      {
+        "header": "Product",
+        "items": [
+          {
+            "label": "Talk to Artha",
+            "href": "https://www.vistrowvoice.com/#live-demo"
+          },
+          {
+            "label": "Pricing",
+            "href": "https://www.vistrowvoice.com/pricing"
+          },
+          {
+            "label": "Languages",
+            "href": "https://www.vistrowvoice.com/languages"
+          },
+          {
+            "label": "Help center",
+            "href": "https://www.vistrowvoice.com/help"
+          }
+        ]
+      },
+      {
+        "header": "Company",
+        "items": [
+          {
+            "label": "Book a demo",
+            "href": "https://www.vistrowvoice.com/contact"
+          },
+          {
+            "label": "Privacy",
+            "href": "https://www.vistrowvoice.com/privacy"
+          },
+          {
+            "label": "Terms",
+            "href": "https://www.vistrowvoice.com/terms"
+          }
+        ]
+      }
+    ]
   },
   "contextual": {
     "options": [

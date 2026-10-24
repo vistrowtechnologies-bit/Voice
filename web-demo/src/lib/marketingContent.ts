@@ -142,7 +142,7 @@ export const PRODUCT_DETAIL: Record<
     ],
     faqs: [
       { q: 'Do I need to write code to build an agent?', a: 'No - the builder is entirely no-code. Set the persona, prompt, voice, and language, then publish.' },
-      { q: 'Which voices can my agent use?', a: 'A curated set of Sarvam and ElevenLabs voices across Indian languages and English, previewable before you publish.' },
+      { q: 'Which voices can my agent use?', a: 'A curated set of natural voices across Indian languages and English, previewable before you publish.' },
       { q: 'Can I test the agent before it goes live?', a: 'Yes - talk to any agent in the browser instantly, with the exact prompt and voice it will use on real calls. The Testing Lab also runs scenarios such as an angry caller, a silent caller or a booking conflict and shows checks like opening quality and tool accuracy.' },
       { q: 'What happens when I change the prompt?', a: 'Changes apply from the next call; there is nothing to redeploy. You can save a scenario as a custom regression test in the Testing Lab and re-run it after each prompt change.' },
       { q: 'Can the agent hand a call to a person?', a: 'Yes, on phone calls. Set a transfer number on the agent and it can dial that person into the call on request. Web calls cannot be transferred to a phone.' },
@@ -165,7 +165,7 @@ export const PRODUCT_DETAIL: Record<
         eyebrow: 'How it works',
         title: 'What happens on an inbound call to your number.',
         items: [
-          { icon: 'dialpad', title: '1. Connect a number', body: 'Provision the number with your telephony provider (EnableX today), connect it under Phone Numbers in full international format, and run a test call.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
+          { icon: 'dialpad', title: '1. Connect a number', body: 'Provision the number with your telephony provider, connect it under Phone Numbers in full international format, and run a test call.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
           { icon: 'route', title: '2. Route it to an agent', body: 'On the Inbound page, pick the number and the agent and create the route. It is live immediately.', to: '/help/inbound/route-inbound-calls', link: 'Route incoming calls' },
           { icon: 'record_voice_over', title: '3. The agent takes the call', body: 'It opens with the welcome line you wrote for inbound calls, answers from your knowledge base, follows the caller if they change language, and can book an appointment or take a callback request.' },
           { icon: 'receipt_long', title: '4. You get the record', body: 'Each call has a transcript, the lead fields captured, CRM delivery status and, if recording is on, the audio. Earlier calls from the same number sit alongside.', to: '/help/calls/find-a-call', link: 'Find a call or transcript' },
@@ -197,7 +197,7 @@ export const PRODUCT_DETAIL: Record<
       },
     ],
     faqs: [
-      { q: 'Do I need a new phone number?', a: 'Not necessarily. Numbers are connected through your telephony provider (EnableX today) and then routed to an agent on the Inbound page. The connect-a-number guide in the help centre lists the steps.' },
+      { q: 'Do I need a new phone number?', a: 'Not necessarily. Numbers are connected through your telephony provider and then routed to an agent on the Inbound page. The connect-a-number guide in the help centre lists the steps.' },
       { q: 'What happens if the agent can’t help a caller?', a: 'On phone calls it can transfer to a person if you have set a transfer number, or take a callback request - never a dead end or hold music.' },
       { q: 'Is every call recorded and transcribed?', a: 'Every call gets a transcript. Audio recording is a setting you can turn on or off under Compliance, along with spoken consent and how long data is kept.' },
       { q: 'Can I limit when the agent answers?', a: 'Yes. Set a call window, active days and a maximum number of concurrent calls per number. Calls outside those rules are not answered by the agent.' },
@@ -492,7 +492,7 @@ export const SOLUTIONS: Solution[] = [
     label: 'Real Estate',
     to: '/solutions/real-estate',
     icon: 'apartment',
-    desc: 'Qualify buyers and book site visits - 24/7, in 130+ languages, including Hindi and 9 more Indian languages.',
+    desc: 'Qualify buyers and book site visits - 24/7, in more than 130 languages, including Hindi, English and 9 other Indian languages.',
     headline: 'AI calling agent for real estate enquiries and site visits.',
     subhead:
       'Artha answers property enquiries and calls new leads back within seconds, in more than 130 languages, including Hindi, English and 9 other Indian languages. It qualifies budget, location, configuration, timeline and purpose, and books site visits on your calendar, day or night.',
@@ -742,7 +742,7 @@ export const SOLUTIONS: Solution[] = [
           { icon: 'api', title: 'Order status through a custom function', body: 'A custom function calls your order system with the order number the customer gives and reads back what it returns. Test it with sample orders before real customers call.', to: '/help/agents/agent-functions-and-transfer', link: 'Functions and transfer' },
           { icon: 'confirmation_number', title: 'Cases to your helpdesk', body: 'Damaged-delivery and return requests are posted as JSON to any helpdesk or automation tool that accepts a webhook, with the transcript and the outcome the customer asked for.', to: '/integrations', link: 'All integrations' },
           { icon: 'graphic_eq', title: 'A voice button on product pages', body: 'Put the website widget on product or order-tracking pages so a shopper can ask a question out loud without leaving the page. Page rules can send each page to a different agent.', to: '/product/widget', link: 'Website call widget' },
-          { icon: 'translate', title: 'The language your customer shops in', body: 'The same agent answers in more than 130 languages, including Hindi, English and 9 more Indian languages, and follows a customer who switches mid-call, which matters when you sell across several states.', to: '/languages', link: 'Supported languages' },
+          { icon: 'translate', title: 'The language your customer shops in', body: 'The same agent answers in more than 130 languages, including Hindi, English and 9 other Indian languages, and follows a customer who switches mid-call, which matters when you sell across several states.', to: '/languages', link: 'Supported languages' },
         ],
         note: 'Refunds, replacements and exceptions should stay with your team. The agent collects the facts and the customer’s request so nobody has to ask twice.',
       },
@@ -1116,9 +1116,8 @@ export const WORKS_WITH = ['Slack', 'Zoho CRM', 'Google Sheets', 'Zapier', 'Any 
 //
 // Mirrors LANGUAGE_NAMES in lib/api.ts exactly - that map is what the agent
 // builder actually offers, so this list must never claim a language the
-// product can't be configured to speak. Ten regional languages here, plus
-// English (supported too but doesn't get a landing page - no search wedge
-// there) = 11 supported languages in total.
+// product can't be configured to speak. Hindi, English (India) and the nine
+// other Indian languages = 11 supported languages, each with its own page.
 
 export interface LanguagePage {
   /** URL slug, e.g. "hindi" -> /languages/hindi */
@@ -1127,6 +1126,8 @@ export interface LanguagePage {
   name: string
   /** Native-script endonym, shown as the visual hook. */
   native: string
+  /** Name in the page H1 when it should differ from `name` (e.g. "Indian English"). */
+  heroName?: string
   /** BCP-47-ish code used by the agent builder. */
   code: string
   /** Where this language actually concentrates - grounds the copy. */
@@ -1168,6 +1169,19 @@ export interface LanguagePage {
   related?: { to: string; label: string }[]
   /** Sentences linking to related guides, shown above the related links. Each may contain [text](/path) links. */
   guides?: string[]
+  /** A page for callers outside India (EXTRA_LANGUAGE_PAGES): hides the Indian
+   * script marquee and the Indian-language FAQs that every other page shares. */
+  international?: boolean
+  /** Label under the first hero stat; defaults to the native-script line. */
+  statLabel?: string
+  /** First trust-band fact; defaults to "<name> and <mixWith> in one call". */
+  trustFirst?: { icon: string; title: string; body: string }
+  /** Heading for the sample-call section; defaults to "<codeMixing.name> is the normal case". */
+  mixHeading?: string
+  /** Caption under the written example heading. */
+  exampleNote?: string
+  /** Body of the "Voices that speak <name>" aside; defaults to the Indian voices list. */
+  voicesNote?: string
 }
 
 /** Voices that speak every one of the ten Indian languages and keep the same
@@ -1228,13 +1242,83 @@ export const LANGUAGES: LanguagePage[] = [
     ],
   },
   {
+    slug: 'english',
+    name: 'English',
+    native: 'English',
+    heroName: 'Indian English',
+    code: 'en-IN',
+    region: 'Pan-India',
+    greeting: 'Hello',
+    blurb: 'Clear Indian English for callers from every state, with Indian names and numbers, and Hindi when the caller moves into it.',
+    intro: 'An AI voice agent in Indian English for callers from every part of the country. It understands Indian accents, names, phone numbers and rupee amounts, answers in clear Indian English, and follows the caller into Hindi or another Indian language mid-call.',
+    trustFirst: { icon: 'translate', title: 'English and Hindi in one call', body: 'The agent follows the caller between languages without changing voice. It speaks more than 130 languages, including Hindi, English and 9 other Indian languages.' },
+    regionalHeading: 'Where an AI voice agent in Indian English helps most.',
+    localUseCases: [
+      'Pan-India enquiry lines where callers move between English and Hindi',
+      'Software and IT services calls: demo bookings, renewals and account follow-ups',
+      'Support and order calls from customers who would rather speak English than pick a regional menu',
+    ],
+    callBehaviors: [
+      'Answers in clear Indian English and follows the caller into Hindi or another Indian language',
+      'Captures names, phone numbers, dates and amounts in CRM-ready notes',
+      'Answers from your approved information and offers a callback or transfer when it should not guess',
+    ],
+    seoFaq: {
+      q: 'Is this an English AI calling agent for Indian callers, or a voice bot built for another market?',
+      a: 'It is set up for Indian callers. The agent’s language is English (India), the voices are Indian, and it follows the Hindi words and code-mixing Indian callers use. Like every language on Vistrow Voice, it listens, answers from your approved information, books or transfers the call, and logs everything.',
+    },
+    extraFaqs: [
+      { q: 'Can the agent open in Hindi and continue in English?', a: 'Yes. Set Hindi as the agent’s default language and it greets callers in Hindi; if the caller answers in English, the agent carries on in English from its next line. The sample call on this page works that way.' },
+      { q: 'Does English work on both phone calls and the website widget?', a: 'Yes. The same agent can answer phone calls and website voice-widget conversations in English, and each conversation is saved with its transcript and summary.' },
+      { q: 'How should I test English calls before going live?', a: 'Run test calls with the accents your callers actually have, read out names, phone numbers and amounts, and include a caller who moves into Hindi halfway. Check the transcripts in the dashboard and adjust the welcome message and knowledge base before you switch your number over.' },
+    ],
+    sampleExchange: {
+      context: 'An outbound demo-booking call for a Bengaluru software company',
+      turns: [
+        { speaker: 'Agent', native: 'Hello Vikram ji, this is Artha from Kaveri Software. You had asked for a demo of our HR software. Is this a good time?', gloss: '' },
+        { speaker: 'Caller', native: 'Haan, bolo. Actually we are around sixty people, payroll is the main thing.', gloss: 'Yes, go ahead. Actually we are around sixty people; payroll is the main thing.' },
+        { speaker: 'Agent', native: 'Got it, payroll for about sixty people. Shall I book a thirty-minute online demo on Thursday at 3 PM?', gloss: '' },
+        { speaker: 'Caller', native: 'Thursday 3 PM is fine. Send the link on my email.', gloss: 'Thursday 3 PM is fine. Send the link to my email.' },
+      ],
+      outcome: 'The team size, the main need and the demo slot are saved on the call, so the sales team joins the demo already knowing what to show.',
+    },
+    codeMixing: {
+      name: 'Mixing in Hindi',
+      body: 'Indian English calls rarely stay in one language. Callers say “haan”, “theek hai” or “bolo”, give amounts in lakh, and some move into Hindi or their own language when the detail gets tricky. The agent understands those words inside an English sentence, keeps answering in English, and switches fully to Hindi or another Indian language if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Demo bookings and B2B follow-ups', body: 'Callbacks on website demo requests for software and IT services firms in Bengaluru, Pune, Hyderabad and Gurugram, with the demo slot booked on the call.', to: '/product/outbound', link: 'Outbound calling' },
+      { title: 'Renewal and payment reminders', body: 'Polite policy, subscription and payment reminders in English, inside the permitted calling window and checked against your Do-Not-Call list.', to: '/solutions/finance', link: 'Finance and collections calls' },
+      { title: 'Support and order calls', body: 'Order status, returns and first-line support for customers across India who prefer English, handed to your team with context when needed.', to: '/solutions/support', link: 'Customer support calls' },
+    ],
+    guide: [
+      { title: 'Accents and names', body: 'A caller from Chennai, Kolkata, Delhi or Guwahati speaks English differently, and Indian names trip up voice systems built for other markets. Run test calls with the accents your callers have, and add your product names and local place names to the knowledge base.' },
+      { title: 'Numbers, dates and rupees', body: 'Indian callers say “two lakh”, “fifteenth of next month” and read phone numbers in pairs. Test calls that read out amounts, dates and phone numbers, and check in the transcript that they were captured correctly before you go live.' },
+      { title: 'Pick the opening language', body: 'If most of your callers start in Hindi, open in Hindi and let the agent move to English when the caller does, as in the sample call on this page. A national line that mostly hears English can open in English instead. Either way, set a transfer or callback for anything the agent cannot answer.' },
+    ],
+    guides: [
+      'Taking English, Hindi and Punjabi calls on one number? Read our guide to [a multilingual AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english).',
+
+      'Calling customers in the US or UK? See the [American and British English AI voice agent](/languages/american-british-english).',
+    ],
+    related: [
+      { to: '/languages/hindi', label: 'Hindi calling agent' },
+      { to: '/product/inbound', label: 'Inbound call answering' },
+      { to: '/product/outbound', label: 'Outbound calling' },
+      { to: '/product/widget', label: 'Website voice widget' },
+      { to: '/product/knowledge-base', label: 'Knowledge base' },
+      { to: '/solutions/support', label: 'Customer support calls' },
+    ],
+  },
+  {
     slug: 'marathi',
     name: 'Marathi',
     native: 'मराठी',
     code: 'mr-IN',
     region: 'Maharashtra',
     greeting: 'नमस्कार',
-    blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.',
+    blurb: 'Answer Pune and Mumbai callers in Marathi: when a caller answers in Marathi, the agent carries on in Marathi.',
+    intro: 'A Marathi AI voice agent for Pune, Mumbai and the rest of Maharashtra, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Marathi when the caller answers in Marathi.',
     localUseCases: [
       'Pune, Mumbai, Nashik, and Nagpur property enquiries',
       'Local support calls where Marathi builds trust faster than English',
@@ -1293,7 +1377,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'ta-IN',
     region: 'Tamil Nadu',
     greeting: 'வணக்கம்',
-    blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.',
+    blurb: 'Tamil callers who answer in Tamil get Tamil back, without having to ask for it.',
+    intro: 'A Tamil AI voice agent for Chennai and Tamil Nadu that answers enquiries and makes follow-up calls on your phone lines and website. It opens in your business’s default language, English in the sample call below, and carries on in Tamil when the caller answers in Tamil.',
     localUseCases: [
       'Chennai and Tamil Nadu property, clinic and service enquiries answered in Tamil',
       'Follow-up calls to new enquiries, placed in Tamil shortly after the form arrives',
@@ -1484,7 +1569,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'bn-IN',
     region: 'West Bengal',
     greeting: 'নমস্কার',
-    blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.',
+    blurb: 'Kolkata and West Bengal callers who answer in Bengali are answered in Bengali.',
+    intro: 'A Bengali AI voice agent for Kolkata, Howrah, Siliguri and the rest of West Bengal, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Bengali as soon as the caller answers in it.',
     localUseCases: [
       'Kolkata, Howrah, Siliguri and West Bengal enquiries answered in Bengali',
       'Order-status, delivery and support calls for sellers whose customers expect Bengali',
@@ -1543,6 +1629,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Gujarat',
     greeting: 'નમસ્તે',
     blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.',
+    intro: 'A Gujarati AI voice agent for Ahmedabad, Surat, Vadodara and Rajkot, built for enquiries, follow-ups and payment reminders. It opens in your business’s default language, Hindi in the sample call below, and carries on in Gujarati when the contact answers in it.',
     localUseCases: [
       'Ahmedabad, Surat, Vadodara and Rajkot property and business enquiries',
       'Outstanding-invoice and payment reminders between traders and small businesses',
@@ -1600,7 +1687,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'ml-IN',
     region: 'Kerala',
     greeting: 'നമസ്കാരം',
-    blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.',
+    blurb: 'Answer Kerala enquiries in Malayalam: callers who reply in Malayalam get Malayalam back.',
+    intro: 'A Malayalam AI voice agent for Kochi, Thiruvananthapuram and the rest of Kerala, on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and carries on in Malayalam as soon as the caller answers in it.',
     localUseCases: [
       'Kochi, Thiruvananthapuram, Kozhikode and Thrissur enquiries answered in Malayalam',
       'Calls from family members abroad who ask about property, a clinic or a service on behalf of someone in Kerala',
@@ -1663,6 +1751,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Punjab',
     greeting: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ',
     blurb: 'Punjabi-speaking customers, handled in Punjabi - including mixed Punjabi-Hindi speech.',
+    intro: 'A Punjabi AI voice agent for customers in Punjab, Chandigarh and Delhi NCR, on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and carries on in Punjabi when the caller answers, including mixed Punjabi-Hindi speech.',
     localUseCases: [
       'Enquiry and booking calls from Punjabi-speaking customers in Punjab, Chandigarh and Delhi NCR',
       'Study-abroad, coaching and clinic appointment lines that fill up outside office hours',
@@ -1704,7 +1793,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'od-IN',
     region: 'Odisha',
     greeting: 'ନମସ୍କାର',
-    blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.',
+    blurb: 'Odisha callers who answer in Odia get Odia back, instead of an English or Hindi menu.',
+    intro: 'An Odia AI voice agent for Bhubaneswar, Cuttack and the rest of Odisha, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Odia as soon as the caller answers in it.',
     localUseCases: [
       'Bhubaneswar, Cuttack and Odisha enquiries from callers who would rather speak Odia than navigate an English or Hindi menu',
       'Admissions, coaching and clinic lines that get calls in the evening and on weekends',
@@ -1758,9 +1848,123 @@ export const LANGUAGES: LanguagePage[] = [
   },
 ]
 
+// Pages under /languages/<slug> that are not one of the eleven call languages
+// above, so they stay out of the nav, footer, homepage greeting and script
+// marquee that LANGUAGES drives. LanguageDetail renders them with the same
+// template. Claims here are checked against what tenants can pick today: the
+// self-serve voice list has no American or British English voice, so those
+// are "set up with you", and the live agent does not change accent mid-call
+// (only the demo does).
+export const EXTRA_LANGUAGE_PAGES: LanguagePage[] = [
+  {
+    slug: 'american-british-english',
+    international: true,
+    name: 'US and UK English',
+    native: 'US · UK',
+    heroName: 'American and British English',
+    code: 'en-US',
+    region: 'US, UK and global',
+    greeting: 'Hello',
+    statLabel: 'American and British accents',
+    blurb: 'Natural American or British English for callers in the US, the UK and anywhere English is the working language.',
+    intro:
+      'An American and British English AI voice agent that answers calls, qualifies leads and books meetings by phone and web. The demo opens American and continues British; on a live line, the accent is set up per line.',
+    regionalHeading: 'Where an American or British English AI voice agent helps most.',
+    localUseCases: [
+      'Front-desk and after-hours lines for businesses in the US and UK',
+      'Indian companies serving NRI, US or UK customers who expect a familiar accent',
+      'BPO and outsourcing teams adding an AI first line or overflow cover on English-language accounts',
+    ],
+    callBehaviors: [
+      'Holds a natural two-way conversation in English, and moves into Hindi or another language if the caller does',
+      'Books demos, appointments and callbacks, and captures names, numbers and dates in CRM-ready notes',
+      'Answers from your approved information and offers a callback or transfer when it should not guess',
+    ],
+    seoFaq: {
+      q: 'Can the AI voice agent speak with an American or British accent?',
+      a: 'Yes. Vistrow Voice agents can speak natural American or British English, and in the demo call on this page the agent opens in American English and continues in British English. American and British voices are set up with you on request rather than picked from the self-serve voice list, so tell us which accent your callers expect.',
+    },
+    extraFaqs: [
+      {
+        q: 'Will the live agent change accent mid-call like the demo?',
+        a: 'Not on its own today. The demo shows what the voices can do; on a live line the agent keeps the voice and accent it was set up with. Most businesses choose the one accent their callers expect, American for a US line and British for a UK line. The agent still moves into another language, such as Hindi, if the caller does.',
+      },
+      {
+        q: 'Can it work as an AI receptionist for a US or UK business?',
+        a: 'Yes. The agent answers your line or website call button at any hour, answers questions from your approved information, books appointments or callbacks and passes urgent calls to your team, with a transcript and summary of every call.',
+      },
+      {
+        q: 'Do you provide US or UK phone numbers?',
+        a: 'No. Telephony is bring your own: you connect a number from your own telephony provider over SIP, and overseas calling depends on that provider. The website voice widget works from any browser and needs no phone number.',
+      },
+      {
+        q: 'Can an Indian company use it for NRI, US or UK customers?',
+        a: 'Yes. The agent can speak English to customers abroad and move into Hindi, Punjabi, Gujarati or another Indian language if the caller does, which suits real-estate, education and financial-services firms with NRI customers.',
+      },
+      {
+        q: 'Can a BPO or outsourcing team use it on English-language accounts?',
+        a: 'Yes, as a first line or overflow: the agent answers routine calls, captures the details and hands complex calls to your human agents with a summary. Test it on your own call types and scripts before putting it on a client account.',
+      },
+      {
+        q: 'How is call data handled?',
+        a: 'You decide whether calls are recorded, whether spoken consent is required and how long call records are kept. If you work in a regulated sector, check your own obligations and ask us for our data-processing details before you go live.',
+      },
+    ],
+    sampleExchange: {
+      context: 'An outbound demo-booking call',
+      turns: [
+        { speaker: 'Agent', native: "Hi, is this Oliver? This is Artha from Tidewell. You asked for a demo on our website, so I’m just calling to set that up.", gloss: '' },
+        { speaker: 'Caller', native: "Oh, hello, yes, that was me. Erm, sorry, I’m just on my way into a meeting, but go ahead.", gloss: '' },
+        { speaker: 'Agent', native: 'No worries at all, I’ll be quick. Would Thursday afternoon work, say around half past two?', gloss: '' },
+        { speaker: 'Caller', native: "Thursday... yeah, half two’s fine. Could my colleague join as well?", gloss: '' },
+        { speaker: 'Agent', native: 'Of course! I’ll send the invite to you, and you can forward it to anyone on the team.', gloss: '' },
+        { speaker: 'Caller', native: 'Oh, lovely.', gloss: '' },
+        { speaker: 'Agent', native: "Perfect, that’s all booked for Thursday at half past two. Thanks so much, Oliver, and have a lovely afternoon!", gloss: '' },
+      ],
+      outcome: 'The agreed slot, Thursday at half past two, and the request to include a colleague are saved on the call for your team.',
+    },
+    exampleNote: 'The demo call above, written out: the agent opens in American English and continues in British English. Not a recording of a customer call.',
+    mixHeading: 'Hear a call in American and British English',
+    codeMixing: {
+      name: 'Accent',
+      body: 'A caller in Manchester says “half two” where a caller in Chicago says “two thirty”. In the demo call, Artha opens in American English and carries on in British English, saying “half past two” where an American line would say “two thirty”. On a live line, you set the agent up with the accent your callers expect.',
+    },
+    trustFirst: {
+      icon: 'translate',
+      title: 'American or British English',
+      body: 'Natural English voices in either accent, set up with you for your line. The same platform speaks more than 130 languages, including Hindi, English and 9 other Indian languages, if the caller moves into them.',
+    },
+    voicesNote:
+      'The self-serve voice list is built around Indian English and Indian languages. American and British English voices, like the ones in the demo call, are set up with you on request: tell us your callers’ accent and we will help you configure and test the agent before it goes live.',
+    regionalCalls: [
+      { title: 'Front desk and after-hours calls', body: 'Clinics, agencies, salons and trades in the US and UK that miss calls after hours: the agent answers, books or takes a message, and logs the call.', to: '/ai-receptionist', link: 'AI receptionist' },
+      { title: 'Demo bookings and lead follow-ups', body: 'Callbacks on website enquiries for software and services firms, like the demo call on this page, with the slot captured on the call.', to: '/product/outbound', link: 'Outbound calling' },
+      { title: 'NRI and overseas customers of Indian firms', body: 'Real-estate, education and financial-services firms in India whose customers live in the US, UK, Canada or the Gulf, in English or Hindi.', to: '/solutions/real-estate', link: 'Real estate calls' },
+      { title: 'Overflow for BPO and support teams', body: 'An AI first line on English-language accounts that answers routine calls and hands the rest to human agents with a summary.', to: '/ai-call-center', link: 'AI call center' },
+    ],
+    guide: [
+      { title: 'Pick one accent per line', body: 'Choose the accent your callers expect: American for a US line, British for a UK line. If your callers are split between markets, use the accent of the main one, or set up a separate agent per number.' },
+      { title: 'Dates, times and numbers', body: 'British and American callers say them differently: “the third of March” and “March third”, “half two” and “two thirty”, “oh” and “zero”. Run test calls that read out dates, times and phone numbers, and check the transcript before you go live.' },
+      { title: 'Telephony and disclosure', body: 'Connect a number from your own telephony provider over SIP, or start with the website voice widget. Tell callers they are speaking with an AI assistant where your local rules expect it, and set a transfer or callback for anything the agent cannot answer.' },
+    ],
+    guides: [
+      'Serving Hindi or Punjabi-speaking customers in the UK, Canada or the US? Read our guide to [a multilingual AI receptionist for Hindi, Punjabi and English callers](/resources/blog/multilingual-ai-receptionist-hindi-punjabi-english).',
+      'Calling customers in India in English? See the [Indian English AI voice agent](/languages/english).',
+    ],
+    related: [
+      { to: '/languages/english', label: 'Indian English calling agent' },
+      { to: '/ai-receptionist', label: 'AI receptionist' },
+      { to: '/product/inbound', label: 'Inbound call answering' },
+      { to: '/product/widget', label: 'Website voice widget' },
+      { to: '/ai-call-center', label: 'AI call center' },
+      { to: '/languages/hindi', label: 'Hindi calling agent' },
+    ],
+  },
+]
+
 // ---- Global languages (feeds /languages) ----
 //
-// The 10 entries above are the native Indian languages, which every voice
+// The 11 entries above are Hindi, English and the nine other Indian languages, which every voice
 // speaks. These are what the Gemini multilingual voices (Mira/Arin) add on
 // top — generated from agent/voice_catalog.py's GOOGLE_TTS_LANGUAGES so the
 // marketing list cannot drift from what the agent will actually accept.
@@ -2052,6 +2256,35 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { date: '22 October 2026', tag: 'New', title: 'Nurture follow-ups for interested leads', body: 'Leads who showed interest get follow-up calls on day 2, 5 and 10. If nobody answers, the lead moves on to the next step, and each agent can set its own follow-up time.' },
+  { date: '21 October 2026', tag: 'Improved', title: 'A cleaner dashboard on every screen', body: 'A slim navigation rail on desktop, an app-style tab bar on phones, and a date filter with presets and a range calendar that counts whole days in your own time zone.' },
+  { date: '21 October 2026', tag: 'New', title: 'Test calls with a live transcript', body: 'The dashboard test call now shows the conversation as it happens, with clearly labelled controls, so you can check an agent before real callers hear it.' },
+  { date: '21 October 2026', tag: 'Improved', title: 'A faster way to set up agents', body: 'The Agents page shows your agents as tiles or as a list, and the agent editor has a live try panel and a setup guide for your first agent.' },
+  { date: '21 October 2026', tag: 'Improved', title: 'Clearer cookie choices', body: 'The cookie banner now offers Accept all, Necessary only, or Customize, so visitors can choose exactly what they allow.' },
+  { date: '19 October 2026', tag: 'New', title: 'Speed to lead and business insights', body: 'The Dashboard shows how quickly new leads are called, who still needs a call, and what callers are asking about, alongside an analytics view of your calls.' },
+  { date: '19 October 2026', tag: 'New', title: 'Vistrow Live on every plan', body: 'Our realtime voice engine is open to every plan, with a voice picker that lists the voices you added and a warning when a long prompt would slow calls down.' },
+  { date: '16 October 2026', tag: 'New', title: 'Every call analysed automatically', body: 'Finished calls are analysed for outcome, sentiment and next steps without you lifting a finger, so the call list tells you what happened at a glance.' },
+  { date: '16 October 2026', tag: 'Improved', title: 'Each number calls out as itself', body: 'Every phone number in your workspace dials out on its own line with its own caller ID, so callers always see the number they know.' },
+  { date: '16 October 2026', tag: 'Improved', title: 'Dashboard search finds calls and contacts', body: 'Search from anywhere in the dashboard now finds individual calls and contacts, not just pages.' },
+  { date: '15 October 2026', tag: 'New', title: 'Smarter follow-up calls', body: 'Per-agent follow-up settings, retries that depend on why a call was missed, a Not Reachable report, and call-back and visit reminders.' },
+  { date: '15 October 2026', tag: 'New', title: 'Guided onboarding', body: 'New workspaces start with a short setup that uses your answers to build your first agent, so you begin with something that already fits your business.' },
+  { date: '15 October 2026', tag: 'Improved', title: 'Stronger account security', body: 'Turn on two-step sign-in with an authenticator app from Settings, and the tokens for your connected tools are now encrypted at rest.' },
+  { date: '14 October 2026', tag: 'New', title: 'Native voices for each language', body: 'A new set of native voices, each locked to the language it speaks best, alongside 97 Bharat voices tuned for business calls.' },
+  { date: '13 October 2026', tag: 'Improved', title: 'Recording links that expire', body: 'Recording links sent to your CRM or spreadsheet now expire after a period you choose, and an admin can revoke every link at once.' },
+  { date: '12 October 2026', tag: 'New', title: 'Build an agent with AI', body: 'Describe your business in plain words and get a ready-to-edit agent, with instructions, a voice and the fields to fill after each call. Hear the greeting before you create it.' },
+  { date: '12 October 2026', tag: 'New', title: 'How-to videos in the help centre', body: 'Key help articles now open with a short video, and dashboard pages have a Watch how button that plays the guide for that page.' },
+  { date: '12 October 2026', tag: 'New', title: 'An assistant that knows your workspace', body: 'The in-app assistant answers from your own calls, leads, agents and bookings, shows how it got the answer, and can take actions once you confirm them.' },
+  { date: '11 October 2026', tag: 'New', title: 'A Usage page of its own', body: 'See usage by day with a date filter, breakdowns by channel and agent, and the calls that are live right now.' },
+  { date: '10 October 2026', tag: 'Improved', title: 'A page for every integration', body: 'Each integration has its own page. Lead sheets come branded with a tab per agent, and you choose which fields are sent.' },
+  { date: '24 September 2026', tag: 'New', title: 'A public help centre', body: 'Every guide from the in-app Help & Support page is now published at /help, so you can find answers before you sign in.' },
+  { date: '21 September 2026', tag: 'Fixed', title: 'Transfers on outbound calls', body: 'Handing a caller to a colleague now works on calls the agent places as well as calls it answers, and the agent never goes silent if your colleague does not pick up.' },
+  { date: '18 September 2026', tag: 'Improved', title: 'Steadier campaign dialling', body: 'Campaign calls are paced across all running campaigns, retries rotate through your numbers, and Resume runs the same checks as Launch.' },
+  { date: '10 September 2026', tag: 'Improved', title: 'Clearer recordings and corrected details', body: 'Recordings keep the caller and the agent on separate channels, and callers can correct a detail they gave earlier without starting over.' },
+  { date: '3 September 2026', tag: 'New', title: 'Office ambience on calls', body: 'Turn on a soft background office sound for an agent, on phone calls as well as website calls, so the line never sounds empty.' },
+  { date: '2 September 2026', tag: 'New', title: 'Choose where each agent sends leads', body: 'Pick which integrations receive leads from each agent, so a clinic line and a sales line can feed different tools.' },
+  { date: '24 August 2026', tag: 'Improved', title: 'Call direction on phone calls', body: 'Phone calls are labelled inbound or outbound everywhere in the dashboard, so reports split the two correctly.' },
+  { date: '13 August 2026', tag: 'New', title: 'Privacy requests and device sign-out', body: 'Account preferences and security controls, including signing out other devices, plus a workflow to request a copy or deletion of your data.' },
+  { date: '12 August 2026', tag: 'New', title: 'Slack notifications', body: 'Install the Slack app from Integrations to get a message in your channel for every qualified lead.' },
   { date: '29 July 2026', tag: 'Improved', title: 'Faster first hello on phone calls', body: 'The agent’s opening line is now prepared while the call is still connecting, so callers hear it the moment they pick up instead of a few seconds of silence.' },
   { date: '28 July 2026', tag: 'New', title: 'New voices: Tara and Bunty', body: 'Two more voices added to the catalog - one female, one male - both previewable in the agent builder before you publish.' },
   { date: '28 July 2026', tag: 'Improved', title: 'Steadier language switching mid-call', body: 'The agent now waits for a clearer signal before switching languages, so a single ambiguous word no longer flips the whole conversation.' },

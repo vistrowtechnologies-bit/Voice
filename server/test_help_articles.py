@@ -44,6 +44,7 @@ class Content(unittest.TestCase):
         self.assertEqual(help_articles.search("send leads to zoho crm")[0]["slug"], "connect-integrations")
         self.assertEqual(help_articles.search("screenshot request support")[0]["slug"], "contact-support")
         self.assertEqual(help_articles.search("do not call list")[0]["topicSlug"], "compliance")
+        self.assertEqual(help_articles.search("reschedule a follow-up call")[0]["slug"], "follow-up-calls")
         self.assertEqual(help_articles.search("?"), [])
 
 

@@ -268,7 +268,7 @@ export const OLDER_POST_UPGRADES: Record<string, OlderPostUpgrade> = {
         "heading": "Which languages should you pilot first?",
         "paragraphs": [
           "India's Constitution lists 22 languages in its Eighth Schedule, according to a Ministry of Home Affairs statement to the Lok Sabha, and many callers mix one of them with English. You do not need all of them on day one. Ask your front-line staff which languages callers actually use, and start with the top two or three.",
-          "Vistrow Voice can answer callers in more than 130 languages, including Hindi, English and 9 other Indian languages. Each Indian language has its own page, and pages such as the [Tamil AI voice agent overview](/languages/tamil) and the [Marathi AI voice agent overview](/languages/marathi) include a sample call in which the caller switches language. Use them to brief the native speakers testing your pilot."
+          "Vistrow Voice can answer callers in more than 130 languages, including Hindi, English and 9 other Indian languages. Each Indian language has its own page, and pages such as the [Tamil AI voice agent overview](/languages/tamil) and the [Marathi AI voice agent overview](/languages/marathi) include a sample call in which the AI agent follows the caller into their language. Use them to brief the native speakers testing your pilot."
         ]
       },
       {

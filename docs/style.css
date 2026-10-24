@@ -1,0 +1,14 @@
+/* Small touches that echo the vistrowvoice.com marketing kit. Purely cosmetic:
+   if Mintlify ignores this file, the docs still use the brand colours, fonts
+   and backgrounds set in docs.json. */
+
+/* "Book a demo" in the top bar: the marketing header's violet-to-magenta pill. */
+#topbar-cta-button a > span:first-child {
+  background: linear-gradient(135deg, #7e22ce, #c026d3);
+  border-radius: 9999px;
+}
+
+/* Cards: the kit's rounded-3xl corners. */
+.card {
+  border-radius: 1.5rem;
+}

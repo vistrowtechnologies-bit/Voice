@@ -549,3 +549,7 @@ Source: `web-demo/src/pages/marketing/Home.tsx`
 - `npx tsx scripts/check-blog-seo.ts`: passed.
 - Spot-checked the prerendered HTML for /solutions/healthcare and two demo-call pages: new lines present, the flagged Kannada line unchanged.
 - Not verified: a native-speaker read of each language. Sarvam is a strong Indic model, but a human pass per language is still the real check.
+
+## 2026-10-23: voice note
+
+The lines in this doc are on-page text only; no audio was made from them. The only Sarvam-voiced demo audio on the marketing site is the ten /languages sample calls (`web-demo/public/media/samples/*-switch.m4a`). Following the owner's decision that all demo audio uses Bulbul v4 Flash with Aarti as the agent, their agent lines were re-voiced with `aarti_hi_customer` on 2026-10-23. See docs/SEO-VOICE-SAMPLES-2026-10-15.md.
