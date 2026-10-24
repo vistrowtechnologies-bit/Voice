@@ -657,7 +657,14 @@ export function Voices() {
   // The spotlight follows the chosen voice while it stays in view, else the
   // first one listed, so the panel is never empty when the list is not.
   const current = shown.find((v) => v.value === selectedValue) ?? shown[0]
-  const previewLang = current ? langChoice[current.value] || current.forceLang || current.nativeLang || lang : lang
+  // The page's Hindi/English switch wins for any voice that speaks that
+  // language; it used to come after nativeLang, which nearly every voice has,
+  // so the switch did nothing (owner, 24 Oct).
+  const speaksPageLang = (v: VoiceEntry) =>
+    listensInAnyLanguage(v) || v.languages.some((c) => c.split('-')[0] === lang)
+  const previewLang = current
+    ? langChoice[current.value] || current.forceLang || (speaksPageLang(current) ? lang : current.nativeLang || lang)
+    : lang
   const listenLangs =
     current && listensInAnyLanguage(current)
       ? [...new Set(current.languages.map((c) => c.split('-')[0]))]
@@ -798,7 +805,11 @@ export function Voices() {
                   {PREVIEW_LANGS.map((l) => (
                     <button
                       key={l.code}
-                      onClick={() => setLang(l.code)}
+                      onClick={() => {
+                        setLang(l.code)
+                        // A page-wide switch overrides earlier per-voice "Listen in" picks.
+                        setLangChoice({})
+                      }}
                       aria-pressed={lang === l.code}
                       className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
                         lang === l.code ? 'bg-primary text-white' : 'bg-transparent text-text-muted hover:text-text'
