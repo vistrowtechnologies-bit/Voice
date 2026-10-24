@@ -107,7 +107,7 @@ class LiveOwnerOnlyUntilComboTests(unittest.TestCase):
     def test_tenant_cannot_pick_live_38_owner_can(self):
         guard, HTTPException = self._guard()
         for model in ("gemini-live:gemini-3.8-live", "gemini-live", "gemini-live:gemini-3.1-flash-live-preview", "gpt-5-nano", "groq/x",
-                      "gpt-live:gpt-live-1"):
+                      "duplex:live-1"):
             with self.assertRaises(HTTPException, msg=model):
                 guard({"model": model}, 99)
             guard({"model": model}, 1)

@@ -116,8 +116,8 @@ def _model_tier(model: str | None) -> str:
         return "standard"
     if name.startswith("gemini-live"):
         return "realtime" if name == "gemini-live" or "2.5" in name else "realtime_plus"
-    if name.startswith("gpt-live"):
-        # OpenAI GPT-Live 1 ($0.05/min + backend): realtime, never 1x.
+    if name.startswith("duplex"):
+        # Vistrow Duplex = OpenAI GPT-Live 1 ($0.05/min + backend): realtime, never 1x.
         return "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"

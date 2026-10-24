@@ -4149,8 +4149,9 @@ def agents_activity(user: dict = Depends(current_user)) -> list[dict]:
 # the recommended default. It matches gpt-4.1-mini on the grounding benchmark
 # (9/12 each) and is roughly twice as fast on live calls — llmTtft 450-500ms
 # median against 1,058ms over eight comparable calls.
-# gpt-live: OpenAI GPT-Live 1 ("Vistrow Duplex"), owner-only until tested (24 Oct 2026).
-_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live", "gpt-live")
+# duplex: "Vistrow Duplex" (OpenAI GPT-Live 1, id kept vendor-neutral because
+# it ships in the dashboard bundle), owner-only until tested (24 Oct 2026).
+_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live", "duplex")
 _ADMIN_ONLY_MODELS = {"gpt-5-nano"}
 # Vistrow Live 3.8 was opened to every plan on 19 Oct 2026 (billed 2 credits
 # per call minute, plan_policy) but the dashboard picker kept it owner-only.
