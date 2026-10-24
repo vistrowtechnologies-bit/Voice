@@ -492,7 +492,7 @@ export const SOLUTIONS: Solution[] = [
     label: 'Real Estate',
     to: '/solutions/real-estate',
     icon: 'apartment',
-    desc: 'Qualify buyers and book site visits - 24/7, in 130+ languages, including Hindi and 9 more Indian languages.',
+    desc: 'Qualify buyers and book site visits - 24/7, in more than 130 languages, including Hindi, English and 9 other Indian languages.',
     headline: 'AI calling agent for real estate enquiries and site visits.',
     subhead:
       'Artha answers property enquiries and calls new leads back within seconds, in more than 130 languages, including Hindi, English and 9 other Indian languages. It qualifies budget, location, configuration, timeline and purpose, and books site visits on your calendar, day or night.',
@@ -742,7 +742,7 @@ export const SOLUTIONS: Solution[] = [
           { icon: 'api', title: 'Order status through a custom function', body: 'A custom function calls your order system with the order number the customer gives and reads back what it returns. Test it with sample orders before real customers call.', to: '/help/agents/agent-functions-and-transfer', link: 'Functions and transfer' },
           { icon: 'confirmation_number', title: 'Cases to your helpdesk', body: 'Damaged-delivery and return requests are posted as JSON to any helpdesk or automation tool that accepts a webhook, with the transcript and the outcome the customer asked for.', to: '/integrations', link: 'All integrations' },
           { icon: 'graphic_eq', title: 'A voice button on product pages', body: 'Put the website widget on product or order-tracking pages so a shopper can ask a question out loud without leaving the page. Page rules can send each page to a different agent.', to: '/product/widget', link: 'Website call widget' },
-          { icon: 'translate', title: 'The language your customer shops in', body: 'The same agent answers in more than 130 languages, including Hindi, English and 9 more Indian languages, and follows a customer who switches mid-call, which matters when you sell across several states.', to: '/languages', link: 'Supported languages' },
+          { icon: 'translate', title: 'The language your customer shops in', body: 'The same agent answers in more than 130 languages, including Hindi, English and 9 other Indian languages, and follows a customer who switches mid-call, which matters when you sell across several states.', to: '/languages', link: 'Supported languages' },
         ],
         note: 'Refunds, replacements and exceptions should stay with your team. The agent collects the facts and the customer’s request so nobody has to ask twice.',
       },
@@ -1316,7 +1316,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'mr-IN',
     region: 'Maharashtra',
     greeting: 'नमस्कार',
-    blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.',
+    blurb: 'Answer Pune and Mumbai callers in Marathi: when a caller answers in Marathi, the agent carries on in Marathi.',
+    intro: 'A Marathi AI voice agent for Pune, Mumbai and the rest of Maharashtra that answers and makes calls on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and when the caller answers in Marathi it carries on in Marathi without being asked. It shifts into Hindi or English when the caller does and saves a structured summary of every call.',
     localUseCases: [
       'Pune, Mumbai, Nashik, and Nagpur property enquiries',
       'Local support calls where Marathi builds trust faster than English',
@@ -1375,7 +1376,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'ta-IN',
     region: 'Tamil Nadu',
     greeting: 'வணக்கம்',
-    blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.',
+    blurb: 'Tamil callers who answer in Tamil get Tamil back, without having to ask for it.',
+    intro: 'A Tamil AI voice agent for Chennai and Tamil Nadu that answers enquiries and makes follow-up calls on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and when the caller answers in Tamil it carries on in Tamil without being asked. It follows Tamil-English switching, captures the lead details and logs every call.',
     localUseCases: [
       'Chennai and Tamil Nadu property, clinic and service enquiries answered in Tamil',
       'Follow-up calls to new enquiries, placed in Tamil shortly after the form arrives',
@@ -1566,7 +1568,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'bn-IN',
     region: 'West Bengal',
     greeting: 'নমস্কার',
-    blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.',
+    blurb: 'Kolkata and West Bengal callers who answer in Bengali are answered in Bengali.',
+    intro: 'A Bengali AI voice agent for Kolkata, Howrah, Siliguri and the rest of West Bengal, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Bengali as soon as the caller answers in it. It follows the caller into English or Hindi mid-call, answers from your approved information and saves every call.',
     localUseCases: [
       'Kolkata, Howrah, Siliguri and West Bengal enquiries answered in Bengali',
       'Order-status, delivery and support calls for sellers whose customers expect Bengali',
@@ -1625,6 +1628,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Gujarat',
     greeting: 'નમસ્તે',
     blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.',
+    intro: 'A Gujarati AI voice agent for Ahmedabad, Surat, Vadodara and Rajkot, built for Gujarat’s business-heavy calls: enquiries, follow-ups and payment reminders. It opens in your business’s default language, Hindi in the sample call below, and carries on in Gujarati when the contact answers in it. It follows calls that move between Gujarati, Hindi and English, and records the promised payment date or visit time.',
     localUseCases: [
       'Ahmedabad, Surat, Vadodara and Rajkot property and business enquiries',
       'Outstanding-invoice and payment reminders between traders and small businesses',
@@ -1682,7 +1686,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'ml-IN',
     region: 'Kerala',
     greeting: 'നമസ്കാരം',
-    blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.',
+    blurb: 'Answer Kerala enquiries in Malayalam: callers who reply in Malayalam get Malayalam back.',
+    intro: 'A Malayalam AI voice agent for Kochi, Thiruvananthapuram and the rest of Kerala, on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and carries on in Malayalam as soon as the caller answers in it. It follows the caller back into English mid-call, captures the lead details and saves every call for your team.',
     localUseCases: [
       'Kochi, Thiruvananthapuram, Kozhikode and Thrissur enquiries answered in Malayalam',
       'Calls from family members abroad who ask about property, a clinic or a service on behalf of someone in Kerala',
@@ -1745,6 +1750,7 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Punjab',
     greeting: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ',
     blurb: 'Punjabi-speaking customers, handled in Punjabi - including mixed Punjabi-Hindi speech.',
+    intro: 'A Punjabi AI voice agent for customers in Punjab, Chandigarh and Delhi NCR, on your phone lines and your website. It opens in your business’s default language, English in the sample call below, and carries on in Punjabi when the caller answers in it, including mixed Punjabi-Hindi speech. It books appointments inside your bookable hours or takes a callback request, and saves every call.',
     localUseCases: [
       'Enquiry and booking calls from Punjabi-speaking customers in Punjab, Chandigarh and Delhi NCR',
       'Study-abroad, coaching and clinic appointment lines that fill up outside office hours',
@@ -1786,7 +1792,8 @@ export const LANGUAGES: LanguagePage[] = [
     code: 'od-IN',
     region: 'Odisha',
     greeting: 'ନମସ୍କାର',
-    blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.',
+    blurb: 'Odisha callers who answer in Odia get Odia back, instead of an English or Hindi menu.',
+    intro: 'An Odia AI voice agent for Bhubaneswar, Cuttack and the rest of Odisha, on your phone lines and your website. It opens in your business’s default language, Hindi in the sample call below, and carries on in Odia as soon as the caller answers in it. It follows the caller into English or Hindi mid-call, offers a callback when it should not guess, and saves every call.',
     localUseCases: [
       'Bhubaneswar, Cuttack and Odisha enquiries from callers who would rather speak Odia than navigate an English or Hindi menu',
       'Admissions, coaching and clinic lines that get calls in the evening and on weekends',
@@ -1860,7 +1867,7 @@ export const EXTRA_LANGUAGE_PAGES: LanguagePage[] = [
     statLabel: 'American and British accents',
     blurb: 'Natural American or British English for callers in the US, the UK and anywhere English is the working language.',
     intro:
-      'An AI voice agent that speaks natural American or British English on phone and website calls. It answers enquiries, qualifies leads, books demos and appointments and logs every call, for businesses in the US and UK, Indian companies with customers abroad, and outsourcing teams. In the demo call below, the agent opens in an American accent and continues in a British one to match the caller. The same platform speaks more than 130 languages, including Hindi, English and 9 other Indian languages.',
+      'An AI voice agent that speaks natural American or British English on phone and website calls. It answers enquiries, qualifies leads, books demos and appointments and logs every call, for businesses in the US and UK, Indian companies with customers abroad, and outsourcing teams. In the demo call below, the agent opens in American English and continues in British English; on a live line, you set it up with the accent your callers expect. The same platform speaks more than 130 languages, including Hindi, English and 9 other Indian languages.',
     regionalHeading: 'Where an American or British English AI voice agent helps most.',
     localUseCases: [
       'Front-desk and after-hours lines for businesses in the US and UK',
@@ -1874,7 +1881,7 @@ export const EXTRA_LANGUAGE_PAGES: LanguagePage[] = [
     ],
     seoFaq: {
       q: 'Can the AI voice agent speak with an American or British accent?',
-      a: 'Yes. Vistrow Voice agents can speak natural American or British English, and in the demo call on this page the agent opens in an American accent and continues in a British one to match the caller. American and British voices are set up with you on request rather than picked from the self-serve voice list, so tell us which accent your callers expect.',
+      a: 'Yes. Vistrow Voice agents can speak natural American or British English, and in the demo call on this page the agent opens in American English and continues in British English. American and British voices are set up with you on request rather than picked from the self-serve voice list, so tell us which accent your callers expect.',
     },
     extraFaqs: [
       {
@@ -1903,21 +1910,23 @@ export const EXTRA_LANGUAGE_PAGES: LanguagePage[] = [
       },
     ],
     sampleExchange: {
-      context: 'An inbound call to a London dental practice',
+      context: 'An outbound demo-booking call',
       turns: [
-        { speaker: 'Agent', native: 'Good morning, Harbour Dental, this is Artha. How can I help?', gloss: '' },
-        { speaker: 'Caller', native: 'Hi, I chipped a tooth last night. Have you got anything this week?', gloss: '' },
-        { speaker: 'Agent', native: 'Sorry to hear that. We have Wednesday at quarter past nine, or Friday at four. Which suits you better?', gloss: '' },
-        { speaker: 'Caller', native: 'Wednesday morning, please.', gloss: '' },
-        { speaker: 'Agent', native: 'Lovely. I have noted Wednesday at quarter past nine for a chipped tooth, and the team will confirm it with you shortly.', gloss: '' },
+        { speaker: 'Agent', native: "Hi, is this Oliver? This is Artha from Tidewell. You asked for a demo on our website, so I’m just calling to set that up.", gloss: '' },
+        { speaker: 'Caller', native: "Oh, hello, yes, that was me. Erm, sorry, I’m just on my way into a meeting, but go ahead.", gloss: '' },
+        { speaker: 'Agent', native: 'No worries at all, I’ll be quick. Would Thursday afternoon work, say around half past two?', gloss: '' },
+        { speaker: 'Caller', native: "Thursday... yeah, half two’s fine. Could my colleague join as well?", gloss: '' },
+        { speaker: 'Agent', native: 'Of course! I’ll send the invite to you, and you can forward it to anyone on the team.', gloss: '' },
+        { speaker: 'Caller', native: 'Oh, lovely.', gloss: '' },
+        { speaker: 'Agent', native: "Perfect, that’s all booked for Thursday at half past two. Thanks so much, Oliver, and have a lovely afternoon!", gloss: '' },
       ],
-      outcome: 'The caller’s name, the reason for the visit and the requested slot are saved on the call, so the practice team only has to confirm it.',
+      outcome: 'The agreed slot, Thursday at half past two, and the request to include a colleague are saved on the call for your team.',
     },
-    exampleNote: 'A short written sample to show the style of a British English call. It is not a recording of a customer call.',
-    mixHeading: 'An agent that matches the caller’s accent',
+    exampleNote: 'The demo call above, written out: the agent opens in American English and continues in British English. Not a recording of a customer call.',
+    mixHeading: 'Hear a call in American and British English',
     codeMixing: {
       name: 'Accent',
-      body: 'A caller in Manchester says “half two” where a caller in Chicago says “two thirty”. In the demo call, Artha opens in American English, the caller answers with a British accent, and Artha carries on in British English, saying “half past two” the way the caller would. On a live line, you set the agent up with the accent your callers expect.',
+      body: 'A caller in Manchester says “half two” where a caller in Chicago says “two thirty”. In the demo call, Artha opens in American English and carries on in British English, saying “half past two” where an American line would say “two thirty”. On a live line, you set the agent up with the accent your callers expect.',
     },
     trustFirst: {
       icon: 'translate',

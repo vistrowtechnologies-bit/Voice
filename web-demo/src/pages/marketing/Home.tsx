@@ -37,7 +37,7 @@ import { HOME_DASHBOARD, HOME_LANGUAGE_SWITCH, HOME_ONE_AGENT, HOME_REAL_ESTATE_
 const FAQ = [
   {
     q: 'What is Vistrow Voice?',
-    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls 24/7 in more than 130 languages, including Hindi, English and 9 more Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia).',
+    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls 24/7 in more than 130 languages, including Hindi, English and 9 other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia).',
   },
   {
     q: 'Do I need to write code to set it up?',
@@ -202,8 +202,8 @@ export function Home() {
         <div className="lg:col-start-1 lg:row-start-2">
           <p className="max-w-xl text-[15px] leading-6 text-text-muted sm:mt-5 sm:text-lg sm:leading-relaxed">
             Vistrow Voice is an AI voice agent for Indian businesses, built for how India actually speaks. Your AI voice
-            calling agent answers, qualifies, and books customers across phone and web in Hindi, English and 9 more
-            Indian languages, with natural Hinglish and mid-sentence language switching.
+            calling agent answers, qualifies, and books customers across phone and web in more than 130 languages, including Hindi,
+            English and 9 other Indian languages, with natural Hinglish and mid-sentence language switching.
           </p>
           {/* No "Book a demo" here: the header already has it (owner, 21 Oct). */}
           <div ref={heroCtaRef} className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
@@ -499,7 +499,7 @@ export function Home() {
           <FeatureList
             items={[
               { icon: 'mic', title: 'Live voice and chat', body: 'Test real conversations in the browser, by phone, or through your website.' },
-              { icon: 'translate', title: '130+ languages, one agent', body: 'More than 130 languages, including Hindi, English and 9 more Indian languages, with natural code-switching and no separate deployment per language.' },
+              { icon: 'translate', title: '130+ languages, one agent', body: 'More than 130 languages, including Hindi, English and 9 other Indian languages, with natural code-switching and no separate deployment per language.' },
               { icon: 'analytics', title: 'Calls, transcripts and feedback', body: 'Review outcomes, recordings, ratings, and operational analytics in one dashboard.' },
             ]}
           />

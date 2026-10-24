@@ -54,7 +54,7 @@ const BASE_COMPARE_VENDORS: CompareVendor[] = [
     rows: [
       { dimension: 'Core use case', vendor: 'Business calling, IVR, tracking, and routing.', vistrow: 'AI-led inbound, outbound, and web conversations.' },
       { dimension: 'Caller experience', vendor: 'Structured call flows and routing logic.', vistrow: 'Natural spoken conversation with knowledge-grounded answers.' },
-      { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'More than 130 languages, including Hindi, English and 9 more Indian languages, with a default language per agent and mid-call switching.' },
+      { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'More than 130 languages, including Hindi, English and 9 other Indian languages, with a default language per agent and mid-call switching.' },
       { dimension: 'CRM output', vendor: 'Depends on integration configuration.', vistrow: 'Lead fields, transcript, call outcome, and recording link are prepared for CRM sync.' },
       { dimension: 'Where it fits', vendor: 'Telephony-first teams.', vistrow: 'Teams that want the AI agent to do the first conversation.' },
     ],

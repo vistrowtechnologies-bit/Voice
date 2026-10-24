@@ -79,7 +79,7 @@ export function About() {
             <p>
               Vistrow Voice is built by Vistrow Technologies Pvt. Ltd. It is an AI voice agent platform for Indian
               businesses: agents that answer inbound calls and website visitors, call new leads back, qualify them and
-              book appointments in more than 130 languages, including Hindi, English and 9 more Indian languages. The{' '}
+              book appointments in more than 130 languages, including Hindi, English and 9 other Indian languages. The{' '}
               <Link to="/product" className={LINK}>product overview</Link>{' '}
               shows the building blocks, and the{' '}
               <Link to="/languages" className={LINK}>languages page</Link>{' '}

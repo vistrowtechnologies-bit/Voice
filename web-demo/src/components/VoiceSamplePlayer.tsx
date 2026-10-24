@@ -293,11 +293,11 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
               {to.native !== to.name && !accents && <span className="font-normal text-text-muted"> · {to.name}</span>}
             </span>
           </p>
-          <p className="mt-0.5 text-[11px] leading-snug text-text-muted">Agent switched {accents ? 'accent ' : ''}automatically · {clock(switchAt)}</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-text-muted">{accents ? `Agent continues in ${to.name}` : 'Agent switched automatically'} · {clock(switchAt)}</p>
         </div>
       </div>
       <p className="sr-only" aria-live="polite">
-        {switched ? `The agent has switched to ${to.name}.` : ''}
+        {switched ? (accents ? `The agent continues in ${to.name}.` : `The agent has switched to ${to.name}.`) : ''}
       </p>
 
       <ol

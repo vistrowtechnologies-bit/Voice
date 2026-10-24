@@ -173,11 +173,14 @@ export function SeoRelatedLinks() {
   const paths = relatedPaths(pathname)
   const guides = guidePaths(pathname, paths)
   if (paths.length === 0 && guides.length === 0) return null
+  // Language pages name their language, so the twelve headings differ.
+  const current = SEO_BY_PATH.get(pathname.replace(/\/$/, '') || '/')
+  const heading = current?.kind === 'language' ? `More on ${current.label} calls` : 'Explore related'
 
   return (
     <nav aria-label="Related pages" className="mx-auto max-w-7xl px-5 pb-10 md:px-8">
       <div className="rounded-2xl border border-border bg-surface/70 px-5 py-4 sm:flex sm:items-center sm:gap-5">
-        <h2 className="shrink-0 text-xs font-bold uppercase tracking-widest text-text-muted">Explore related</h2>
+        <h2 className="shrink-0 text-xs font-bold uppercase tracking-widest text-text-muted">{heading}</h2>
         <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 sm:mt-0">
           {paths.map((path) => {
             const page = SEO_BY_PATH.get(path)
