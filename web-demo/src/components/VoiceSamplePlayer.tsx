@@ -67,6 +67,11 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [ended, setEnded] = useState(false)
+  // False in the server-rendered HTML (and the first client render), so
+  // crawlers and no-JS visitors get the whole transcript; once hydrated, lines
+  // appear only as they are spoken.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const accents = sample.accentLabels
   const from = langInfo(sample.languages[0], sample.from, accents)
@@ -78,6 +83,9 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
   const active = started ? sample.turns.reduce((cur, t, i) => (t.start <= time + 0.05 ? i : cur), 0) : -1
   const switched = started && time + 0.05 >= switchAt
   const current = active >= 0 ? sample.turns[active] : null
+  // Last transcript line on show: all of them before hydration and at the end,
+  // the first before play, then everything up to the line being spoken.
+  const shown = !mounted || ended ? sample.turns.length - 1 : Math.max(0, active)
   const progress = Math.min(100, (time / sample.seconds) * 100)
   // Fill of each track segment, 0-100 of its own width.
   const fromFill = Math.min(100, (progress / switchPct) * 100)
@@ -90,17 +98,16 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
     return { all: barsPath(peaks, 0, peaks.length), before: barsPath(peaks, 0, cut), after: barsPath(peaks, cut, peaks.length), n: peaks.length }
   }, [peaks, switchAt, sample.seconds])
 
-  // Keep the current line in view inside the transcript box only (never
-  // scrolls the page), low in the box so earlier lines stay readable above
-  // it and the next line peeks in below: the box never shows empty space.
+  // Keep the newest line in view at the bottom of the transcript box (scrolls
+  // the box only, never the page); earlier lines stay readable above it.
   useEffect(() => {
     const list = listRef.current
-    if (!list || active < 0) return
+    if (!list || !mounted || active < 0 || ended) return
     const item = list.children[active] as HTMLElement | undefined
     if (!item) return
-    const top = item.offsetTop + item.offsetHeight - list.clientHeight * 0.8
+    const top = item.offsetTop + item.offsetHeight + 10 - list.clientHeight
     list.scrollTo({ top: Math.max(0, top), behavior: reducedMotion() ? 'auto' : 'smooth' })
-  }, [active])
+  }, [active, mounted, ended])
 
   // Smooth playhead: read the element's clock every frame while playing
   // (timeupdate alone fires only about four times a second).
@@ -154,7 +161,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
   const speaking = current ? langInfo(current.lang, current.lang === to.code ? to.name : from.name, accents) : null
 
   return (
-    <div className="vs-card relative mx-auto w-full max-w-[460px] rounded-2xl border border-border bg-surface p-4 sm:p-5 lg:ml-auto">
+    <div className="vs-card relative mx-auto w-full max-w-[460px] rounded-2xl border border-border bg-surface p-4 sm:p-5 lg:ml-auto lg:flex lg:flex-1 lg:flex-col">
       {/* Header: who is calling, and the language pair the call moves through. */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -179,12 +186,12 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
       </div>
 
       {/* Transport: play/pause, what is happening now, and the clock. */}
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-3 flex items-center gap-3">
         <button
           type="button"
           onClick={toggle}
           aria-label={playing ? 'Pause the sample call' : `${started ? 'Resume' : 'Play'} the sample call, ${sample.from} to ${sample.to} (${sample.seconds} seconds)`}
-          className="vs-play flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-dark sm:h-[52px] sm:w-[52px]"
+          className="vs-play flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-dark sm:h-12 sm:w-12"
         >
           <Icon name={playing ? 'pause' : 'play_arrow'} className="vs-play-icon" />
         </button>
@@ -235,7 +242,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
         onPointerMove={(e) => dragging.current && seekFromPointer(e, false)}
         onPointerUp={() => (dragging.current = false)}
         onPointerCancel={() => (dragging.current = false)}
-        className="vs-wave relative mt-4 h-14 cursor-pointer touch-none select-none rounded-lg"
+        className="vs-wave relative mt-3 h-12 cursor-pointer touch-none select-none rounded-lg"
       >
         {paths && (
           <>
@@ -303,15 +310,14 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
       <ol
         ref={listRef}
         aria-label="Transcript"
-        className="vs-transcript relative mt-4 h-72 space-y-2 overflow-y-auto overscroll-contain rounded-xl border border-border bg-bg/40 p-2.5 sm:h-80"
+        className={`vs-transcript relative mt-3 h-60 space-y-2 overflow-y-auto overscroll-contain rounded-xl border border-border bg-bg/40 p-2.5 sm:h-64 lg:h-auto lg:max-h-80 lg:min-h-[200px] lg:flex-1 lg:basis-0 ${mounted ? 'is-live' : ''}`}
       >
         {sample.turns.map((turn, i) => {
           const agent = turn.speaker === 'Agent'
           const lang = langInfo(turn.lang, turn.lang === to.code ? to.name : from.name, accents)
           const target = turn.lang === to.code
-          const upcoming = started && i > active
           return (
-            <li key={i} className={`flex flex-col ${agent ? 'items-start' : 'items-end'}`}>
+            <li key={i} className={`${i <= shown ? 'flex' : 'hidden'} flex-col ${agent ? 'items-start' : 'items-end'}`}>
               {i === switchTurn && (
                 <p className="mb-2 flex w-full items-center gap-2 text-[11px] font-semibold text-primary">
                   <span className="h-px flex-1 bg-primary/25" />
@@ -334,7 +340,7 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
                     : agent
                       ? 'border-transparent bg-surface-high/70 hover:border-border'
                       : 'border-border bg-surface hover:border-primary/30'
-                } ${upcoming ? 'opacity-45' : ''}`}
+                }`}
               >
                 <span className="flex items-center gap-1.5">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{agent ? 'AI agent' : 'Caller'}</span>
@@ -349,9 +355,15 @@ export function VoiceSamplePlayer({ sample }: { sample: VoiceSample }) {
             </li>
           )
         })}
+        {mounted && !started && !ended && (
+          <li className="flex flex-col items-center gap-1 px-4 py-5 text-center text-xs leading-relaxed text-text-muted">
+            <Icon name="play_arrow" className="text-[18px] text-primary" />
+            <span>Press play to hear the call. The rest of the transcript appears as it is spoken.</span>
+          </li>
+        )}
       </ol>
 
-      <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-text-muted">
+      <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-relaxed text-text-muted">
         <Icon name="info" className="mt-px shrink-0 text-[14px]" />
         <span>Demo call voiced by Vistrow Voice. Not a real customer.</span>
       </p>

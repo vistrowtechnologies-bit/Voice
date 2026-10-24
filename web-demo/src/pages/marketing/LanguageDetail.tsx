@@ -190,7 +190,7 @@ export function LanguageDetail() {
         visual={voiceSample ? undefined : heroVisual}
         media={
           voiceSample ? (
-            <div className="w-full lg:pt-1">
+            <div className="w-full lg:flex lg:flex-col lg:self-stretch lg:pt-1">
               <VoiceSamplePlayer sample={voiceSample} />
             </div>
           ) : undefined
