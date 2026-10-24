@@ -97,8 +97,8 @@ function CheckList({ items, tone }: { items: string[]; tone: 'primary' | 'cyan' 
 
 // One template renders all eleven language pages, keyed by :slug, composed from
 // the premium showcase kit (components/showcase/) like /product/* and
-// /solutions/*: split hero with the native-script sample card, the scripted
-// sample-call player beside the code-mixing note, who it is for beside a
+// /solutions/*: split hero with the scripted sample-call player, the
+// native-script sample card beside the code-mixing note, who it is for beside a
 // call record, the written example in chat bubbles, the violet trust band,
 // regional calls, go-live notes as a timeline, objections, then FAQ. These
 // pages exist for long-tail search ("AI voice agent in Tamil"), which is why
@@ -122,7 +122,8 @@ export function LanguageDetail() {
   const demoCall = LANGUAGE_DEMO_CALLS[lang.slug]
   const voiceSample = VOICE_SAMPLES[lang.slug]
   const whoHeading = `Built for teams that take calls in ${lang.name}.`
-  // The native-script sample card (pageFigures.ts) is the hero visual.
+  // The native-script sample card (pageFigures.ts): the hero visual when a
+  // page has no recording, otherwise the figure beside the code-mixing note.
   const heroVisual = pageFigures(route, whoHeading)[0]
 
   const faqs = [
@@ -167,15 +168,16 @@ export function LanguageDetail() {
       />
 
       <SplitHero
-        kicker={
-          <p
+        eyebrowAside={
+          <span
             lang={lang.code}
             aria-hidden="true"
-            className="bg-gradient-to-r from-primary via-magenta to-cyan bg-clip-text pb-1 font-display text-4xl font-bold leading-tight text-transparent sm:text-5xl"
+            className="rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 font-display text-sm font-semibold text-primary"
           >
             {lang.greeting}
-          </p>
+          </span>
         }
+        alignTop
         eyebrow={`Languages · ${lang.name}`}
         title={
           <>
@@ -184,7 +186,14 @@ export function LanguageDetail() {
           </>
         }
         subhead={lang.intro ?? lang.blurb}
-        visual={heroVisual}
+        visual={voiceSample ? undefined : heroVisual}
+        media={
+          voiceSample ? (
+            <div className="w-full lg:pt-1">
+              <VoiceSamplePlayer sample={voiceSample} />
+            </div>
+          ) : undefined
+        }
         placement="language_hero"
         ctaRef={heroCtaRef}
         trust={
@@ -206,22 +215,14 @@ export function LanguageDetail() {
 
       {!lang.international && <ScriptMarquee />}
 
-      {/* ---------- Sample call player beside the code-mixing note ---------- */}
+      {/* ---------- Written sample card beside the code-mixing note ---------- */}
+      {/* The recording plays in the hero; the written transcript card that
+          used to be the hero figure sits here, so the page keeps its image. */}
       {(voiceSample || lang.codeMixing) && (
         <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 lg:py-16">
-          <SplitRow
-            className=""
-            aside={
-              voiceSample ? (
-                <div className="relative">
-                  <div aria-hidden="true" className="pointer-events-none absolute right-0 top-0 h-56 w-56 rounded-full bg-primary/20 blur-[90px]" />
-                  <VoiceSamplePlayer sample={voiceSample} />
-                </div>
-              ) : undefined
-            }
-          >
+          <SplitRow className="" figure={voiceSample ? heroVisual : undefined}>
             <Reveal>
-              <SectionEyebrow>Hear a sample call</SectionEyebrow>
+              <SectionEyebrow>{lang.codeMixing ? 'How callers really talk' : 'A written sample'}</SectionEyebrow>
               {lang.codeMixing ? (
                 <>
                   <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl">

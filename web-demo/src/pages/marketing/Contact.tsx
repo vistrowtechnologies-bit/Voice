@@ -5,7 +5,6 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 import { CONTACT_EMAIL, CONTACT_PHONE, CONTACT_WHATSAPP_URL } from '../../lib/marketingContent'
-import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { FeatureList, Reveal, SectionHead, ShowcaseStyles, SplitRow } from '../../components/showcase'
 import { CONTACT_CALL } from './premium-w5/visuals'
 
@@ -107,12 +106,8 @@ export function Contact() {
             filling its half of the grid. */}
         <div className="w-full lg:pl-6">
           {sent ? (
-            // DemoOrbCard supplies its own card chrome (rounded corners,
-            // border, glow) - it isn't nested inside the form's wrapper div,
-            // it replaces it. A static "we'll be in touch" card left a
-            // visitor doing nothing for however long email takes; a voice
-            // product's own best pitch is letting them actually hear Artha
-            // right now instead of just reading that someone will call.
+            // The live tap-to-talk demo is homepage-only (owner, 2026-10-24),
+            // so the form is replaced by the confirmation alone.
             <div className="flex flex-col gap-5">
               <div className="flex items-center gap-3 rounded-2xl border border-success/30 bg-success/5 px-5 py-3.5 text-left">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
@@ -123,10 +118,6 @@ export function Contact() {
                   <p className="text-xs text-text-muted">Our team will reach out shortly to set up your walkthrough.</p>
                 </div>
               </div>
-              <p className="text-center text-sm font-semibold text-text-muted">
-                While you wait, talk to Artha yourself -
-              </p>
-              <DemoOrbCard />
             </div>
           ) : (
             <div className="w-full rounded-[2rem] border border-border bg-surface p-7 shadow-[0_40px_80px_-48px_rgba(76,29,149,0.7)] sm:p-9">

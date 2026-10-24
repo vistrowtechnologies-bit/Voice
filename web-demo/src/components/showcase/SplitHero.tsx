@@ -16,6 +16,10 @@ export interface SplitHeroProps {
   /** Small line above the eyebrow (e.g. the "Built for Bharat" mark). */
   kicker?: ReactNode
   eyebrow: string
+  /** Small inline mark beside the eyebrow (e.g. a native-script greeting). */
+  eyebrowAside?: ReactNode
+  /** Top-align the two columns instead of centring them (for tall media). */
+  alignTop?: boolean
   title: ReactNode
   subhead: ReactNode
   /** The hero visual (LCP image): loaded eagerly and preloaded. */
@@ -42,6 +46,8 @@ const PORTRAIT_SIZES = '(min-width: 1024px) 460px, calc(100vw - 40px)'
 export function SplitHero({
   kicker,
   eyebrow,
+  eyebrowAside,
+  alignTop = false,
   title,
   subhead,
   visual,
@@ -71,10 +77,17 @@ export function SplitHero({
         <div className="absolute -right-32 top-0 h-[520px] w-[620px] rounded-full bg-primary/20 blur-[120px]" />
         <div className="absolute right-[18%] top-[45%] h-[300px] w-[380px] rounded-full bg-magenta/15 blur-[110px]" />
       </div>
-      <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-5 pb-12 pt-8 md:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10 lg:pb-14 lg:pt-12">
+      <div className={`mx-auto grid max-w-7xl grid-cols-1 ${alignTop ? 'items-start' : 'items-center'} gap-10 px-5 pb-12 pt-8 md:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10 lg:pb-14 lg:pt-12`}>
         <div className="max-w-xl">
           {kicker && <div className="mb-4">{kicker}</div>}
-          <SectionEyebrow>{eyebrow}</SectionEyebrow>
+          {eyebrowAside ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <SectionEyebrow>{eyebrow}</SectionEyebrow>
+              {eyebrowAside}
+            </div>
+          ) : (
+            <SectionEyebrow>{eyebrow}</SectionEyebrow>
+          )}
           <h1 className="mt-4 font-display text-4xl font-bold leading-[1.08] tracking-tight text-balance sm:text-5xl lg:text-[52px]">
             {title}
           </h1>

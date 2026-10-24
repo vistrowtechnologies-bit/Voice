@@ -5,12 +5,11 @@ import { Icon3D } from '../../components/Icon3D'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
+import { CTABand, LIVE_DEMO_HREF, SectionEyebrow, useGoToLiveDemo } from '../../components/MarketingBits'
 import { ScriptMarquee } from '../../components/BharatBits'
 import { HERO_STATS, SOLUTIONS } from '../../lib/marketingContent'
 import { LOCAL_REAL_ESTATE_PAGES } from '../../lib/seoExpansionContent'
 import { pageFigures } from '../../lib/pageFigures'
-import { DemoOrbCard } from '../../components/DemoOrbCard'
 import {
   Bento,
   CALLOUTS_BY_VIEW,
@@ -64,6 +63,9 @@ export function SolutionDetail() {
   const { slug } = useParams()
   const [activeScenario, setActiveScenario] = useState(0)
   const { heroCtaRef, endRef } = useStickyRefs()
+  // The live tap-to-talk demo is homepage-only (owner, 2026-10-24): these
+  // buttons go to it there, like every Talk to Artha button.
+  const goToDemo = useGoToLiveDemo('solution_try_call')
   const solution = SOLUTIONS.find((s) => s.to === `/solutions/${slug}`)
 
   useEffect(() => {
@@ -74,7 +76,6 @@ export function SolutionDetail() {
 
   const route = solution.to
   const scenario = solution.scenarios[activeScenario]
-  const scrollToDemo = () => document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   const outcomeVisual = pageFigures(route, 'showcase-outcome')[0]
   const dashboardView = pageFigures(route, 'showcase-dashboard')[0]
   const dashboardCallouts = dashboardView ? CALLOUTS_BY_VIEW[dashboardView.src] : undefined
@@ -131,16 +132,15 @@ export function SolutionDetail() {
   return (
     <MarketingLayout>
       <Seo title={`${solution.headline} - Vistrow Voice`} description={solution.subhead} path={route} jsonLd={faqJsonLd} />
-      <button
-        type="button"
-        onClick={scrollToDemo}
-        aria-controls="live-demo"
+      <a
+        href={LIVE_DEMO_HREF}
+        onClick={goToDemo}
         className="independence-ribbon flex w-full items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-semibold text-text sm:text-sm"
       >
         <span className="ribbon-tricolour" aria-hidden="true"><i /><i /><i /></span>
-        <span>Try a real {solution.label} call with Artha, no signup required</span>
+        <span>Talk to Artha live, no signup required</span>
         <Icon name="arrow_forward" className="text-[16px]" />
-      </button>
+      </a>
 
       <SplitHero
         kicker={<BharatMark />}
@@ -203,19 +203,19 @@ export function SolutionDetail() {
 
       {/* A useful demo needs a job, not just an orb. Each choice represents a
           real call this industry's agent is configured to handle and gives
-          the visitor a natural opening line to try; the live demo sits right
-          beside it, so "Start this call" is one short scroll away. */}
+          the visitor a natural opening line to try. "Start this call" opens the
+          live demo on the homepage (the only page that hosts it). */}
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-16">
         <Reveal>
           <SectionHead
             center
             eyebrow="Choose a real call"
-            title="Don’t watch a generic demo. Test the work."
-            intro={`Pick a situation your team handles today, then say the sample line or use your own words. Artha stays in role as ${solution.demoBusiness}.`}
+            title="Test it on a call your team takes today."
+            intro="Pick a situation your team handles today, then say the sample line or use your own words."
           />
         </Reveal>
 
-        <div className={`mt-10 grid items-start gap-8 ${solution.demoSlug ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-10' : ''}`}>
+        <div className="mx-auto mt-10 max-w-4xl">
           <div className="min-w-0">
             <div className="flex snap-x gap-3 overflow-x-auto pb-2" role="tablist" aria-label={`${solution.label} call scenarios`}>
               {solution.scenarios.map((item, index) => (
@@ -242,14 +242,14 @@ export function SolutionDetail() {
                 <blockquote className="mt-4 font-display text-2xl font-semibold leading-snug text-text sm:text-3xl">
                   {scenario.callerLine}
                 </blockquote>
-                <button
-                  type="button"
-                  onClick={scrollToDemo}
+                <a
+                  href={LIVE_DEMO_HREF}
+                  onClick={goToDemo}
                   className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-5 py-2.5 text-sm font-bold text-white shadow-[0_14px_36px_-14px_rgba(147,51,234,0.8)] transition-transform hover:-translate-y-0.5"
                 >
                   <Icon name="mic" className="text-[18px]" />
                   Start this call
-                </button>
+                </a>
               </div>
               <div className="grid sm:grid-cols-2">
                 <div className="p-6 sm:p-8">
@@ -270,15 +270,6 @@ export function SolutionDetail() {
             </div>
           </div>
 
-          {solution.demoSlug && (
-            <div className="flex flex-col gap-3 lg:sticky lg:top-28">
-              <DemoOrbCard demoSlug={solution.demoSlug} badgeLabel={solution.demoBadge} accentHue={solution.demoAccentHue} />
-              <p className="mx-auto max-w-[420px] text-center text-xs text-text-muted">
-                You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span>, a
-                demo business we made up, answered live by Artha. {solution.demoPrompt}
-              </p>
-            </div>
-          )}
         </div>
       </section>
 
