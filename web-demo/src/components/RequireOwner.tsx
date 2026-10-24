@@ -1,11 +1,15 @@
-import { useEffect, type ReactNode } from 'react'
+import { lazy, useEffect, type ReactNode } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { ADMIN_HOST, ADMIN_HOST_LIVE, canOpenAdmin, isAdminHost } from '../lib/adminHost'
 import { AuthShell } from '../pages/AuthShell'
 import { Icon } from './Icon'
-import { AdminLayout } from './AdminLayout'
 import { AppLoadingScreen } from './AppLoadingScreen'
+
+// App.tsx imports this gate eagerly, so a static AdminLayout import pulled the
+// whole dashboard shell (and the LiveKit test-call client) into every
+// marketing page. The App-level <Suspense> covers the load.
+const AdminLayout = lazy(() => import('./AdminLayout').then((m) => ({ default: m.AdminLayout })))
 
 /** Gate around every /admin/* route. Only the platform owner (accounts
  * .is_platform_owner) reaches it; everyone else - including logged-in tenants
