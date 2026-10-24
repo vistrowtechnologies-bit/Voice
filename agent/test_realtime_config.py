@@ -197,3 +197,27 @@ def test_38_captions_are_hinted_hindi_and_english():
     assert config.input_transcription(config.MODEL_38, "hi-IN").language_codes == ["hi-IN", "en-IN"]
     assert config.input_transcription(config.MODEL_38, "auto").language_codes is None
     assert config.input_transcription(config.MODEL_31, "en-IN").language_codes is None
+
+
+def test_affective_dialog_is_opt_in_and_38_only(monkeypatch):
+    monkeypatch.delenv("REALTIME_AFFECTIVE_DIALOG", raising=False)
+    for model in config.API_MODELS:
+        assert config.affective_options(model) == {}
+    monkeypatch.setenv("REALTIME_AFFECTIVE_DIALOG", "1")
+    # Google's Live guide: not supported on 3.1 Flash Live; documented on v1beta.
+    assert config.affective_options(config.MODEL_31) == {}
+    assert config.affective_options(config.DEFAULT_MODEL) == {}
+    assert config.affective_options(config.MODEL_38) == {"enable_affective_dialog": True, "api_version": "v1beta"}
+
+
+def test_affective_options_reach_the_realtime_model(monkeypatch):
+    import main
+    captured = {}
+    monkeypatch.setenv("GEMINI_API_KEY", "x")
+    monkeypatch.setenv("REALTIME_AFFECTIVE_DIALOG", "1")
+    monkeypatch.setattr(main.google.beta.realtime, "RealtimeModel", lambda **kw: captured.update(kw) or kw)
+    main._build_realtime_llm("gemini-live:" + config.MODEL_38, "Be brief.", "google:kore", "hi-IN")
+    assert captured["enable_affective_dialog"] is True and captured["api_version"] == "v1beta"
+    captured.clear()
+    main._build_realtime_llm("gemini-live:" + config.MODEL_31, "Be brief.", "google:kore", "hi-IN")
+    assert "enable_affective_dialog" not in captured and "api_version" not in captured

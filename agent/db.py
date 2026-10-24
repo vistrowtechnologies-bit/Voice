@@ -116,6 +116,9 @@ def _model_tier(model: str | None) -> str:
         return "standard"
     if name.startswith("gemini-live"):
         return "realtime" if name == "gemini-live" or "2.5" in name else "realtime_plus"
+    if name.startswith("duplex"):
+        # Vistrow Duplex = OpenAI GPT-Live 1 ($0.05/min + backend): realtime, never 1x.
+        return "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:
@@ -530,11 +533,16 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
     on the call's critical path — this was the single largest piece of the
     "still listening" gap reported after the caller stops talking, and
     predates streaming/turn-detection entirely: the agent hadn't even
-    started session.start() yet."""
+    started session.start() yet.
+
+    The cache holds the full text and each caller gets its own cut: realtime
+    asks for ~5,500 characters and pipelines for 8,000, and a cache of the
+    first caller's cut served that length to the other (Codex, 24 Oct 2026)."""
     cached = _kb_cache.get(kb_id)
     now = time.monotonic()
     if cached is not None and now - cached[0] < _KB_CACHE_TTL_S:
-        return cached[1]
+        content, strict = cached[1]
+        return content[:max_chars], strict
     conn = dbconn.connect()
     try:
         parts: list[str] = []
@@ -554,7 +562,7 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
             (kb_id,),
         ).fetchall()
         parts.extend(f"## {r['name']}\n{r['content']}" for r in rows)
-        content = "\n\n".join(parts)[:max_chars]
+        content = "\n\n".join(parts)
         strict_row = conn.execute("SELECT strict FROM knowledge_bases WHERE id = ?", (kb_id,)).fetchone()
         strict = bool(strict_row["strict"]) if strict_row is not None else True
     except psycopg.Error:
@@ -563,9 +571,8 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
         return "", True
     finally:
         conn.close()
-    result = (content, strict)
-    _kb_cache[kb_id] = (now, result)
-    return result
+    _kb_cache[kb_id] = (now, (content, strict))
+    return content[:max_chars], strict
 
 
 # Confirmed live (2026-09-01): a one-shot prewarm at process boot doesn't

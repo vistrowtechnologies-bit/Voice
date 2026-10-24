@@ -15,6 +15,7 @@ from livekit.agents import RunContext
 from livekit.agents.llm import function_tool
 
 import db
+import safe_http
 from lead_placeholders import PLACEHOLDER_VALUES
 from language import (
     catalog_locality,
@@ -631,16 +632,19 @@ async def _post_webhook(context: RunContext, payload: dict) -> None:
     for url in (account_url, userdata.get("agent_webhook_url")):
         # The account's webhook (Integrations page) and this agent's own
         # (Agents → Webhook); the same URL in both gets one delivery, not two.
-        if url and url.startswith(("https://", "http://")) and url not in urls:
+        if safe_http.is_http_url(url) and url not in urls:
             urls.append(url)
     if not urls:
         return
     timeout = aiohttp.ClientTimeout(total=5)
-    async with aiohttp.ClientSession(timeout=timeout) as http:
+    async with safe_http.public_session(timeout) as http:
         for url in urls:
             try:
-                await http.post(url, json=payload)
-                logger.info("posted %s event to webhook", payload.get("type"))
+                async with http.post(url, json=payload) as resp:
+                    if 200 <= resp.status < 300:
+                        logger.info("posted %s event to webhook", payload.get("type"))
+                    else:
+                        logger.warning("webhook answered HTTP %s for %s event", resp.status, payload.get("type"))
             except Exception:
                 # One dead endpoint must not stop delivery to the other.
                 logger.warning("webhook post failed", exc_info=True)
@@ -1586,7 +1590,9 @@ async def _deliver_to_integrations(
         return
     try:
         timeout = aiohttp.ClientTimeout(total=5)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
+        # Public addresses only: generic webhook, Slack and Apps Script URLs
+        # are customer-supplied (server deliveries already check them).
+        async with safe_http.public_session(timeout) as http:
             all_fields_lead = lead
             for integ in integrations:
                 lead = all_fields_lead
@@ -3911,7 +3917,7 @@ def build_custom_function_tools(custom_functions: list[dict]) -> list:
             async def _call(raw_arguments: dict) -> str:
                 try:
                     timeout = aiohttp.ClientTimeout(total=10)
-                    async with aiohttp.ClientSession(timeout=timeout) as http:
+                    async with safe_http.public_session(timeout) as http:
                         if method == "GET":
                             resp = await http.get(url, params=raw_arguments, headers=headers)
                         else:

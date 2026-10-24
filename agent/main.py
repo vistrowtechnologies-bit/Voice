@@ -2119,6 +2119,49 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         # Live API. 2.5 could not be tested.
         **({"context_window_compression": realtime_config.context_compression(instructions)}
            if name in (realtime_config.MODEL_31, realtime_config.MODEL_38) else {}),
+        **realtime_config.affective_options(name),
+    )
+
+
+# OpenAI GPT-Live 1 ("Vistrow Duplex", owner-only since 24 Oct 2026): a
+# full-duplex speech-to-speech model, Ravan's "Duplex" engine. LiveKit wraps
+# it (DuplexRealtimeAdapter) so it takes Gemini Live's place as the agent's
+# llm, with no separate STT/TTS. Tools run on a backend Responses model.
+# Pricing (developers.openai.com/api/docs/pricing, 24 Oct 2026): $0.05 per
+# session minute, plus the backend's tokens (gpt-5.6-luna $0.20/M in,
+# $1.20/M out, the plugin's default backend).
+# The saved id is vendor-neutral ("duplex:live-1") because it ships in the
+# dashboard bundle; the OpenAI model name lives only here.
+_GPT_LIVE_PREFIX = "duplex"
+_GPT_LIVE_DEFAULT_MODEL = "gpt-live-1"
+_GPT_LIVE_MODELS = {"live-1": "gpt-live-1"}
+_REALTIME_PREFIXES = (_GEMINI_LIVE_PREFIX, _GPT_LIVE_PREFIX)
+# OpenAI's GPT-Live voice list has one Indian voice, "nira" (Hindi,
+# feminine), and no Hindi masculine voice; GPT_LIVE_VOICE overrides it.
+_GPT_LIVE_DEFAULT_VOICE = "nira"
+_GPT_LIVE_DEFAULT_BACKEND = "gpt-5.6-luna"
+
+
+def _gpt_live_model_name(model: str) -> str:
+    """"duplex:live-1" -> "gpt-live-1"; a bare "duplex" or an unknown suffix -> the default."""
+    suffix = model.split(":", 1)[1].strip() if ":" in model else ""
+    return _GPT_LIVE_MODELS.get(suffix, _GPT_LIVE_DEFAULT_MODEL)
+
+
+def _build_gpt_live_llm(model: str, instructions: str):
+    """GPT-Live DuplexModel. The agent's instructions reach the voice model
+    through the session (fixed once it starts); the same text goes to the
+    backend so tool calls follow the same business rules."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise RuntimeError(f"{model} is selected, but OPENAI_API_KEY is not configured.")
+    return openai.realtime.GPTLiveModel(
+        model=_gpt_live_model_name(model),
+        voice=os.environ.get("GPT_LIVE_VOICE") or _GPT_LIVE_DEFAULT_VOICE,
+        delegation="responses",
+        responses_options={
+            "model": os.environ.get("GPT_LIVE_BACKEND_MODEL") or _GPT_LIVE_DEFAULT_BACKEND,
+            "instructions": instructions,
+        },
     )
 
 
@@ -4258,7 +4301,7 @@ class RealEstateAgent(Agent):
         instructions += date_instruction
         # A speech-to-speech model has no TTS, so everything below that shapes
         # a TTS voice (3.8 style hints, the TTS client itself) is skipped.
-        _rt_selected = (config.get("model") or "").startswith(_GEMINI_LIVE_PREFIX)
+        _rt_selected = (config.get("model") or "").startswith(_REALTIME_PREFIXES)
         if not _rt_selected and voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
             # The Gemini persona's short descriptor should shape what the
             # LLM says as well as how TTS renders it. The agent's explicit
@@ -4326,12 +4369,17 @@ class RealEstateAgent(Agent):
         # No saved model -> Vistrow Bharat, the same default the agents.model
         # column and the agent builder use (GPT-4 retired 2026-10-14).
         _model_name = config.get("model") or "sarvam/sarvam-105b-conversations"
-        self._is_realtime = _model_name.startswith(_GEMINI_LIVE_PREFIX)
-        # The Google model id, resolved exactly as _build_realtime_llm does.
-        self._realtime_model_name = (
-            (_model_name[len(_GEMINI_LIVE_PREFIX):].lstrip(":-") or _GEMINI_LIVE_DEFAULT_MODEL)
-            if self._is_realtime else ""
-        )
+        self._is_realtime = _model_name.startswith(_REALTIME_PREFIXES)
+        self._is_gpt_live = _model_name.startswith(_GPT_LIVE_PREFIX)
+        # The provider's model id, resolved exactly as its builder does.
+        if self._is_gpt_live:
+            self._realtime_model_name = _gpt_live_model_name(_model_name)
+        elif self._is_realtime:
+            self._realtime_model_name = (
+                _model_name[len(_GEMINI_LIVE_PREFIX):].lstrip(":-") or _GEMINI_LIVE_DEFAULT_MODEL
+            )
+        else:
+            self._realtime_model_name = ""
         if self._is_realtime:
             # The assembled instruction is written for a separate TTS voice and runs to
             # ~35,000 characters that Google re-bills every turn. Reshape it for a
@@ -4352,10 +4400,15 @@ class RealEstateAgent(Agent):
             # one, which is precisely the bug that took every call down
             # earlier (see _direction at the top of this method). One
             # super().__init__, one path through the rest.
-            _rt = _build_realtime_llm(_model_name, instructions, voice_value, reply_language)
+            if self._is_gpt_live:
+                _rt = _build_gpt_live_llm(_model_name, instructions)
+                _rt_voice = os.environ.get("GPT_LIVE_VOICE") or _GPT_LIVE_DEFAULT_VOICE
+            else:
+                _rt = _build_realtime_llm(_model_name, instructions, voice_value, reply_language)
+                _rt_voice = _gemini_live_voice(voice_value)
             logger.info(
                 "speech-to-speech mode: %s, voice=%s, language=%s (no separate STT/TTS)",
-                _model_name, _gemini_live_voice(voice_value), reply_language,
+                _model_name, _rt_voice, reply_language,
             )
         super().__init__(
             instructions=instructions,
@@ -8749,12 +8802,8 @@ async def entrypoint(ctx: JobContext) -> None:
         provider = getattr(metadata, "model_provider", None) if metadata else None
         model = getattr(metadata, "model_name", None) if metadata else None
         if metric_type == "realtime_model_metrics" and _rt_call:
-            provider = provider or "google"
-            configured_model = (cfg.get("model") or "")
-            model = model or (
-                configured_model[len(_GEMINI_LIVE_PREFIX):].lstrip(":-")
-                or _GEMINI_LIVE_DEFAULT_MODEL
-            )
+            provider = provider or ("openai" if getattr(agent, "_is_gpt_live", False) else "google")
+            model = model or getattr(agent, "_realtime_model_name", "") or _GEMINI_LIVE_DEFAULT_MODEL
         label = "/".join(part for part in (provider, model) if part)
         # A RealtimeModel emits no metadata, so provider and model are both
         # None and the joined label comes out empty — which is how a realtime

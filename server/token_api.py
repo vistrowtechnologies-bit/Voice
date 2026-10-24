@@ -4149,22 +4149,46 @@ def agents_activity(user: dict = Depends(current_user)) -> list[dict]:
 # the recommended default. It matches gpt-4.1-mini on the grounding benchmark
 # (9/12 each) and is roughly twice as fast on live calls — llmTtft 450-500ms
 # median against 1,058ms over eight comparable calls.
-_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live")
+# duplex: "Vistrow Duplex" (OpenAI GPT-Live 1, id kept vendor-neutral because
+# it ships in the dashboard bundle), owner-only until tested (24 Oct 2026).
+_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live", "duplex")
 _ADMIN_ONLY_MODELS = {"gpt-5-nano"}
-# Owner, 19 Oct 2026: Vistrow Live 3.8 opens to every plan, billed 2 credits
-# per call minute (plan_policy). Measured on real calls that day: ~Rs 3.3-3.7
-# per minute on the website and ~Rs 3.7-4.1 on a phone line at a normal pace,
-# with prompts held to ~1,000 tokens and the realtime KB capped. The retired
-# 3.1 and 2.5 ids stay owner-only.
-_TENANT_REALTIME_MODELS = {"gemini-live:gemini-3.8-live"}
+# Vistrow Live 3.8 was opened to every plan on 19 Oct 2026 (billed 2 credits
+# per call minute, plan_policy) but the dashboard picker kept it owner-only.
+# Owner, 24 Oct 2026: owner-only again until the combo tests pick the model
+# line-up; the API now matches the picker. Only the platform demo agent used
+# it that day. An agent already saved with an owner-only model keeps it.
 
 
-def _guard_admin_only_model(data: dict | None, account_id: int) -> None:
+def _guard_admin_only_model(data: dict | None, account_id: int, agent_id: int | None = None) -> None:
     model = str((data or {}).get("model") or "")
-    if model in _TENANT_REALTIME_MODELS:
-        return
+    if model and agent_id is not None:
+        saved = calls_db.get_agent_by_id_unscoped(agent_id)
+        if saved and saved.get("model") == model and calls_db.agent_account_id(agent_id) == account_id:
+            return
     if (model.startswith(_ADMIN_ONLY_MODEL_PREFIXES) or model in _ADMIN_ONLY_MODELS) and not calls_db.is_platform_owner(account_id):
         raise HTTPException(400, "That model is available only to the Vistrow admin account.")
+
+
+def _guard_custom_functions(data: dict | None) -> None:
+    """Custom-function URLs must be http(s) to a hostname or public IP. The
+    agent re-checks the resolved address on every call (agent/safe_http.py);
+    this rejects the obvious cases at save time with a readable message."""
+    specs = (data or {}).get("customFunctions", (data or {}).get("custom_functions"))
+    if isinstance(specs, str):
+        try:
+            specs = json.loads(specs or "[]")
+        except ValueError:
+            raise HTTPException(400, "Custom functions must be a list.") from None
+    for spec in specs or []:
+        url = str((spec or {}).get("url") or "").strip() if isinstance(spec, dict) else ""
+        if not url:
+            continue
+        try:
+            kb_crawl._assert_public_url(url)
+        except ValueError as exc:
+            name = spec.get("name") or "custom function"
+            raise HTTPException(400, f"{name}: {exc}") from None
 
 
 def _guard_stt_provider(data: dict | None) -> None:
@@ -4263,6 +4287,7 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
     _guard_voice_tier(data, user["account_id"])
     _guard_realtime_voice(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
+    _guard_custom_functions(data)
     try:
         return calls_db.create_agent(data, user["account_id"])
     except calls_db.AgentLimitError as e:
@@ -4297,7 +4322,8 @@ def _guard_agent_patch(data: dict, account_id: int, agent_id: int) -> dict:
     _guard_stt_provider(data)
     _guard_voice_tier(data, account_id, agent_id)
     _guard_realtime_voice(data, account_id, agent_id)
-    _guard_admin_only_model(data, account_id)
+    _guard_admin_only_model(data, account_id, agent_id)
+    _guard_custom_functions(data)
     for fields, feature in ((('kbId', 'kb_id'), 'knowledge'),
                             (('liveCatalogEnabled', 'live_catalog_enabled'), 'live_catalog')):
         if any(data.get(field) for field in fields):

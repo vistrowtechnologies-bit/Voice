@@ -48,14 +48,22 @@ class AgentWebhookIsDelivered(unittest.TestCase):
         import tools
         posted = []
 
+        class Request:
+            # Like aiohttp's: the request goes out on entering `async with`.
+            def __init__(self, url): self.url = url
+            async def __aenter__(self):
+                posted.append(self.url)
+                if self.url in fail:
+                    raise RuntimeError("endpoint down")
+                return MagicMock(status=200)
+            async def __aexit__(self, *a): return False
+
         class Session:
             def __init__(self, *a, **k): pass
             async def __aenter__(self): return self
             async def __aexit__(self, *a): return False
-            async def post(self, url, json=None):
-                posted.append(url)
-                if url in fail:
-                    raise RuntimeError("endpoint down")
+            def post(self, url, json=None):
+                return Request(url)
 
         ctx = MagicMock()
         ctx.userdata = {"account_id": 2, "agent_webhook_url": agent_url}
