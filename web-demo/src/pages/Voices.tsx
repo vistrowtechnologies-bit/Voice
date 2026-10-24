@@ -59,7 +59,7 @@ function voiceCredits(entry: VoiceEntry): string {
 // Vistrow Live bills by model: every version uses 3 minutes per minute
 // (agent/plan_policy.py MODEL_TIER_MULTIPLIERS realtime).
 function liveMultiplier(modelValue: string | undefined): number {
-  const key = modelValue && (modelValue === 'gemini-live' || modelValue.includes('2.5')) ? '2.5' : 'default'
+  const key = modelValue === 'vistrow-live-2-5' ? '2.5' : 'default'
   return LIVE_MODEL_MULTIPLIER[key]
 }
 function liveCredits(modelValue: string | undefined): string {
@@ -83,7 +83,8 @@ function languageSummary(entry: VoiceEntry): string {
 
 // Voices the preview can play in any language it speaks: one model, every
 // language. Gemini voices are left out because their TTS quota is tiny.
-const listensInAnyLanguage = (v: VoiceEntry) => v.value.startsWith('sarvam4:') || v.value.startsWith('google:chirp3:')
+// The server says so (public_ids.public_voice): voice ids are neutral.
+const listensInAnyLanguage = (v: VoiceEntry) => Boolean(v.previewAnyLanguage)
 
 const LANGUAGE_NAMES: Record<string, string> = {
   hi: 'Hindi', en: 'English', mr: 'Marathi', ta: 'Tamil', te: 'Telugu', kn: 'Kannada',
@@ -91,7 +92,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
 }
 
 // Realtime tabs are one per Live model: `rt:<model value>`.
-type TabKey = 'sarvam4' | 'expressive' | 'hd' | 'native' | 'gemini' | 'premium' | `rt:${string}`
+type TabKey = 'bharat' | 'expressive' | 'hd' | 'native' | 'studio' | 'premium' | `rt:${string}`
 type FilterKey = 'all' | 'added' | 'female' | 'male'
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -107,7 +108,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 // voices, so a second tab only confused the page (owner, 2026-10-14). Agents
 // already on 3.1 keep it under Model.
 const REALTIME_MODELS = ADMIN_ONLY_MODELS.filter(
-  (m) => m.value.startsWith('gemini-live') && m.value !== 'gemini-live:gemini-3.1-flash-live-preview',
+  (m) => m.value.startsWith('vistrow-live-') && m.value !== 'vistrow-live-3-1',
 )
 // "Vistrow Live 3.1 · realtime" -> "Live 3.1"
 const shortModelLabel = (label: string) => label.replace(/^Vistrow /, '').replace(/ · realtime$/, '')
@@ -477,7 +478,7 @@ export function Voices() {
   const [busyVoice, setBusyVoice] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [tab, setTab] = useState<TabKey>('sarvam4')
+  const [tab, setTab] = useState<TabKey>('bharat')
   const [filter, setFilter] = useState<FilterKey>('all')
   const [expanded, setExpanded] = useState(false)
   const [selectedValue, setSelectedValue] = useState<string | null>(null)
@@ -529,26 +530,27 @@ export function Voices() {
   const tabs: Tab[] = useMemo(() => {
     const all = (data?.voices ?? []).filter((v) => !v.preview)
     const stable = (tier: string) => all.filter((v) => v.tier === tier)
-    const isChirp = (v: VoiceEntry) => v.value.toLowerCase().includes('chirp3')
+    // Voice ids are neutral (server/public_ids.py); the server sends each
+    // voice's family, so the tabs never read the id.
     const list: Tab[] = [
       {
         key: 'expressive',
         credits: 2 * BHARAT_MODEL_MULTIPLIER,
         label: 'Expressive',
         note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · follows the caller’s emotion · about 0.7 s slower than HD`,
-        voices: stable('premium').filter((v) => v.multilingual && v.value.startsWith('google:')),
+        voices: stable('premium').filter((v) => v.family === 'expressive'),
       },
       {
-        key: 'sarvam4',
+        key: 'bharat',
         credits: 1 * BHARAT_MODEL_MULTIPLIER,
         label: 'Bharat',
         note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · Indian persona voices first, then the classic voices · switches language live`,
-        // Every non-Chirp standard voice is a Sarvam voice: v4 (`sarvam4:`) and
-        // the classic Bulbul ids (pooja, shubh, ...). Since PR #85 billed v4 at
-        // standard, a separate "Standard" tab listed all 201 v4 voices again.
+        // Persona voices (they preview in any language) first, then the
+        // classic ones (pooja, shubh, ...). Since PR #85 billed the persona
+        // voices at standard, a separate "Standard" tab listed them all again.
         voices: [
-          ...stable('standard').filter((v) => v.value.startsWith('sarvam4:')),
-          ...stable('standard').filter((v) => !isChirp(v) && !v.value.startsWith('sarvam4:')),
+          ...stable('standard').filter((v) => v.family === 'bharat' && v.previewAnyLanguage),
+          ...stable('standard').filter((v) => v.family === 'bharat' && !v.previewAnyLanguage),
         ],
       },
       {
@@ -556,23 +558,23 @@ export function Voices() {
         credits: 1 * BHARAT_MODEL_MULTIPLIER,
         label: 'HD',
         note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · fastest voices · switches language mid-call`,
-        voices: stable('standard').filter(isChirp),
+        voices: stable('standard').filter((v) => v.family === 'hd'),
       },
       {
         key: 'native',
         credits: 1 * BHARAT_MODEL_MULTIPLIER,
         label: 'Native',
         note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · native Indian languages · one language each · a little slower to start`,
-        voices: (data?.voices ?? []).filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
+        voices: (data?.voices ?? []).filter((v) => v.family === 'native'),
       },
       {
-        key: 'gemini',
+        key: 'studio',
         credits: 2 * BHARAT_MODEL_MULTIPLIER,
         label: 'Studio',
         note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · text-to-speech for normal agents · not the realtime Live models`,
         // These are flagged "preview" (owner-only), so they come from the full list
         // rather than from `all`, which drops previews.
-        voices: (data?.voices ?? []).filter((v) => v.value.startsWith('google38:') || v.value.startsWith('google38flash:')),
+        voices: (data?.voices ?? []).filter((v) => v.family === 'studio-lite' || v.family === 'studio'),
       },
       {
         key: 'premium',
@@ -593,13 +595,14 @@ export function Voices() {
   const { realtimeVoices, realtimeHdFor } = useMemo(() => {
     const all = data?.voices ?? []
     const hdFor = new Map<string, VoiceEntry>()
+    // Studio Lite voices name a Live persona and the HD voice with the same
+    // persona (hdTwin), whose Indian name the realtime voice is shown under.
     const list = all
-      .filter((v) => v.value.startsWith('google38:'))
+      .filter((v) => v.family === 'studio-lite' && v.livePersona)
       .map((v) => {
-        const persona = v.value.slice('google38:'.length)
-        const hd = all.find((h) => h.value.toLowerCase() === `google:chirp3:${persona}`)
+        const hd = v.hdTwin ? all.find((h) => h.value === v.hdTwin) : undefined
         if (hd) hdFor.set(v.value, hd)
-        const gemini = persona.charAt(0).toUpperCase() + persona.slice(1)
+        const gemini = v.livePersona!
         return {
           ...v,
           // The Indian name the agent picker uses (Myra); the vendor's voice

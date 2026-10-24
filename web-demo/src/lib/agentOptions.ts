@@ -1,99 +1,10 @@
 import type { VoiceEntry } from './types'
 
-// Curated down to one male (shubh) and one female (priya) voice - the full
-// bulbul:v3 roster was overwhelming with no real differentiation for most
-// operators. The voice picked here is exactly what agent/main.py passes to
-// sarvam.TTS; an agent already saved with a different (now-hidden) speaker
-// keeps working, it just won't be selectable again from this dropdown.
-export const VOICES = ['shubh', 'priya', 'aditya', 'ritu', 'rohan', 'simran', 'kavya', 'amit', 'pooja']
-// bulbul:v3 is ~94% of Sarvam spend by character count. These bulbul:v2
-// speakers - cheaper per Sarvam's pricing - are offered so an operator can
-// compare quality against v3 before switching a live agent over. Matches
-// agent/main.py's _SARVAM_V2_SPEAKERS exactly; the raw speaker name (no
-// prefix) is what's stored as the agent's `voice` field, same as VOICES -
-// _build_tts picks the right Sarvam model per speaker automatically.
-export const SARVAM_V2_VOICES = [
-  { value: 'abhilash', label: 'Abhilash (v2)' },
-  { value: 'hitesh', label: 'Hitesh (v2)' },
-  { value: 'karun', label: 'Karun (v2)' },
-  { value: 'anushka', label: 'Anushka (v2)' },
-  { value: 'arya', label: 'Arya (v2)' },
-  { value: 'manisha', label: 'Manisha (v2)' },
-] as const
-// Google Cloud TTS voices, offered alongside Sarvam so an operator can try
-// Google's voice quality directly rather than only hitting it as an
-// automatic outage fallback. The "google:" prefix is how agent/main.py's
-// _build_tts tells these apart from a Sarvam speaker name; only takes
-// effect once GOOGLE_APPLICATION_CREDENTIALS_JSON is configured on the
-// agent service - selecting one before that just falls back to Sarvam
-// "shubh" silently.
-export const GOOGLE_VOICES = [
-  // Gemini's multilingual voice personas - not locked to one locale, this
-  // same voice speaks whatever language the conversation is actually in
-  // (matches _build_tts's _GOOGLE_MULTILINGUAL_VOICES set exactly).
-  { value: 'google:charon', label: 'Arin - Multilingual Male' },
-  { value: 'google:kore', label: 'Mira - Multilingual Female' },
-  // Locale-specific, native Indian-language voices for operators who want
-  // a fixed regional voice rather than the multilingual Gemini persona.
-  { value: 'google:en-IN-Standard-D', label: 'English (India), Female' },
-  { value: 'google:en-IN-Standard-B', label: 'English (India), Male' },
-  { value: 'google:hi-IN-Standard-A', label: 'Hindi, Female' },
-  { value: 'google:hi-IN-Standard-B', label: 'Hindi, Male' },
-  { value: 'google:mr-IN-Standard-A', label: 'Marathi, Female' },
-  { value: 'google:mr-IN-Standard-B', label: 'Marathi, Male' },
-  { value: 'google:ta-IN-Standard-A', label: 'Tamil, Female' },
-  { value: 'google:ta-IN-Standard-B', label: 'Tamil, Male' },
-  { value: 'google:te-IN-Standard-A', label: 'Telugu, Female' },
-  { value: 'google:te-IN-Standard-B', label: 'Telugu, Male' },
-  { value: 'google:kn-IN-Standard-A', label: 'Kannada, Female' },
-  { value: 'google:kn-IN-Standard-B', label: 'Kannada, Male' },
-  { value: 'google:ml-IN-Standard-A', label: 'Malayalam, Female' },
-  { value: 'google:ml-IN-Standard-B', label: 'Malayalam, Male' },
-  { value: 'google:gu-IN-Standard-A', label: 'Gujarati, Female' },
-  { value: 'google:gu-IN-Standard-B', label: 'Gujarati, Male' },
-  { value: 'google:bn-IN-Standard-A', label: 'Bengali, Female' },
-  { value: 'google:bn-IN-Standard-B', label: 'Bengali, Male' },
-  { value: 'google:pa-IN-Standard-A', label: 'Punjabi, Female' },
-  { value: 'google:pa-IN-Standard-B', label: 'Punjabi, Male' },
-] as const
-// Two premium voices from the operator's own ElevenLabs account -
-// multilingual by model (eleven_flash_v2_5 in agent/main.py), not by voice,
-// so either can speak every language this platform supports. The
-// "elevenlabs:" prefix is how _build_tts tells these apart from a Sarvam
-// speaker name; only takes effect once ELEVEN_API_KEY is configured on the
-// agent service - selecting one before that just falls back to Sarvam
-// "shubh" silently, same as an unconfigured Google voice above. Vendor name
-// stays out of the label - same "operator sees a Vistrow tier, not which
-// vendor model powers it" convention as MODEL_OPTIONS below.
-// "Premium+" (ElevenLabs v3, [audio tag] support) was folded back into
-// Premium on 2026-07-14 - v3's realtime endpoint 403s in production, so it
-// was never usable for live calls without a choppy non-streaming workaround.
-// Every voice below runs on Flash v2.5 now; Abhi/Monika/Saavi are the three
-// that used to be v3-only. server/calls_db.py's init_tables() rewrites any
-// stored "elevenlabs-v3:" voice to the matching "elevenlabs:" entry here.
-export const ELEVENLABS_VOICES = [
-  { value: 'elevenlabs:zT03pEAEi0VHKciJODfn', label: '✨ Saurabh (Male)' },
-  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Siya (Female)' },
-  { value: 'elevenlabs:FmBhnvP58BK0vz65OOj7', label: '✨ Viraj (Male)' },
-  { value: 'elevenlabs:cFvQm3lZl5miSWHxawFj', label: '✨ Aarush (Male)' },
-  { value: 'elevenlabs:UgBBYS2sOqTuMpoF3BR0', label: '✨ Mark (English)' },
-  { value: 'elevenlabs:7qBNUtXRGP0jPi0H4r8k', label: '✨ Abhi (Male)' },
-  { value: 'elevenlabs:1qEiC6qsybMkmnNdVMbK', label: '✨ Monika (Female)' },
-  { value: 'elevenlabs:9lx2GDtpvyyNBM7O9Mmx', label: '✨ Saavi (Female)' },
-  { value: 'elevenlabs:mActWQg9kibLro6Z2ouY', label: '✨ Riya (Female)' },
-] as const
-// The agent voice picker is now driven by the account's curated menu
-// (GET /voices/mine, see the Voices page) rather than these hardcoded arrays.
-// The arrays are kept only as a label lookup for a legacy/out-of-menu voice a
-// stored agent might still carry (e.g. a google: voice), so the dropdown's
-// fallback option shows a friendly name instead of the raw string.
-export const voiceLabel = (voice: string) =>
-  ({ 'google31:kore': 'Mira Next (Preview)', 'google31:charon': 'Arin Next (Preview)' } as Record<string, string>)[voice] ??
-  GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
-  ELEVENLABS_VOICES.find((v) => v.value === voice)?.label ??
-  SARVAM_V2_VOICES.find((v) => v.value === voice)?.label ??
-  (VOICES.includes(voice) ? voice : undefined) ??
-  voice
+// The agent voice picker is driven by the account's curated menu (GET
+// /voices/mine, see the Voices page). Voice and model values are neutral
+// public ids (server/public_ids.py); the server sends each voice's name, so
+// this only covers a voice neither in the menu nor named by the server.
+export const voiceLabel = (_voice: string, name?: string) => name || 'Earlier voice'
 // The picker is ordered by credit multiplier first, then by product family.
 // A voice belongs to exactly one group: the old tier-first implementation
 // duplicated Google multilingual voices inside Premium, then showed their
@@ -104,9 +15,10 @@ export const voiceLabel = (voice: string) =>
 // AND multilingual, so every one an owner added silently vanished from the
 // picker (17 Oct). "Other" catches anything a future voice family adds
 // before it gets a group of its own: a voice the owner added is never hidden.
+// The server says which family a voice is in (public_ids.voice_family); the
+// id itself is neutral and says nothing.
 export const voicePickerGroups = (voices: VoiceEntry[]) => {
   const stable = voices.filter((v) => !v.preview)
-  const isChirp = (v: VoiceEntry) => v.value.toLowerCase().includes('chirp3')
   const groups: { key: string; label: string; note: string; voices: VoiceEntry[] }[] = [
     {
       key: 'native',
@@ -124,23 +36,24 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => {
       // one already, so an operator picking one deserves to know before a live
       // call rather than after.
       note: '1 min per min · one language each · a little slower to start',
-      voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
+      voices: voices.filter((v) => v.family === 'native'),
     },
     {
-      key: 'sarvam4',
+      key: 'bharat',
       label: 'Bharat',
       note: '1 min per min · Indian persona voices · switches language live',
-      // New persona voices first, then the classic ids (priya, shubh, ...).
+      // New persona voices first (they preview in any language), then the
+      // classic ones.
       voices: [
-        ...stable.filter((v) => v.tier === 'standard' && v.value.startsWith('sarvam4:')),
-        ...stable.filter((v) => v.tier === 'standard' && !isChirp(v) && !v.value.startsWith('sarvam4:')),
+        ...stable.filter((v) => v.tier === 'standard' && v.family === 'bharat' && v.previewAnyLanguage),
+        ...stable.filter((v) => v.tier === 'standard' && v.family === 'bharat' && !v.previewAnyLanguage),
       ],
     },
     {
-      key: 'chirp3-hd',
+      key: 'hd',
       label: 'Vistrow HD',
       note: '1 min per min · fastest voices · switches language mid-call',
-      voices: stable.filter((v) => v.tier === 'standard' && isChirp(v)),
+      voices: stable.filter((v) => v.tier === 'standard' && v.family === 'hd'),
     },
     {
       key: 'expressive',
@@ -149,16 +62,16 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => {
       voices: stable.filter((v) => v.tier === 'premium' && v.multilingual),
     },
     {
-      key: 'gemini38-lite',
+      key: 'studio-lite',
       label: 'Studio Lite',
       note: '2 min per min · lower latency and cost · test before live calls',
-      voices: voices.filter((v) => v.preview && v.value.startsWith('google38:')),
+      voices: voices.filter((v) => v.preview && v.family === 'studio-lite'),
     },
     {
-      key: 'gemini38-flash',
+      key: 'studio',
       label: 'Studio',
       note: '2 min per min · richer expression and voice fidelity · test before live calls',
-      voices: voices.filter((v) => v.preview && v.value.startsWith('google38flash:')),
+      voices: voices.filter((v) => v.preview && v.family === 'studio'),
     },
     {
       key: 'premium',
@@ -210,7 +123,7 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => {
 // while billing 2x, and "Standard" bills 1x - the old copy had it exactly
 // backwards.
 export const MODEL_OPTIONS = [
-  { value: 'sarvam/sarvam-105b-conversations', label: 'Vistrow Bharat', tag: 'Recommended · fastest, built for Indian languages' },
+  { value: 'vistrow-bharat-1', label: 'Vistrow Bharat', tag: 'Recommended · fastest, built for Indian languages' },
 ] as const
 // 2026-10-12: Vistrow Swift (gpt-4.1-mini) left the tenant picker. Real test
 // calls on the production worker, same question, Chirp 3 voice: Sarvam's turn
@@ -321,55 +234,36 @@ export const MODEL_OPTIONS = [
 // the TypeScript production build (tsc -b, which `tsc --noEmit` does not
 // reproduce - that difference shipped a broken Vercel build once already).
 export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = [
-  { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest cost; measure quality before rollout' },
+  { value: 'vistrow-nano-lab', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest cost; measure quality before rollout' },
   // Re-listed at the platform owner's request for a controlled retest. Keep
   // this owner-only: prior calls showed slower audio and turn-handling errors.
   // Owner, 18 Oct 2026: 3.8 Live is the primary realtime model (Google GA,
   // same price as 3.1). 3.1 (Google shutdown from 17 Nov 2026) and 2.5 are
   // retired and, from 19 Oct, no longer offered; RETIRED_MODELS keeps their
   // names for call history (no agent used either on 19 Oct).
-  { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · primary realtime model · speech-to-speech in about 1-2 s' },
-  // Runtime, 24 Oct (main 27e343c2): a second speech-to-speech engine. The id
-  // is vendor-neutral on purpose; the agent maps it internally.
-  { value: 'duplex:live-1', label: 'Vistrow Duplex · realtime', tag: 'Owner-only · testing' },
+  { value: 'vistrow-live-3-8', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · primary realtime model · speech-to-speech in about 1-2 s' },
+  // Runtime, 24 Oct (main 27e343c2): a second speech-to-speech engine.
+  { value: 'vistrow-duplex-1', label: 'Vistrow Duplex · realtime', tag: 'Owner-only · testing' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
-export const isRealtimeModel = (value: string) => value.startsWith('gemini-live') || value.startsWith('duplex')
+export const isRealtimeModel = (value: string) => value.startsWith('vistrow-live-') || value.startsWith('vistrow-duplex-')
 
 /** Duplex speaks with its own built-in voice, so the agent's voice setting
  *  does not apply to it. */
-export const usesBuiltInVoice = (value: string) => value.startsWith('duplex')
+export const usesBuiltInVoice = (value: string) => value.startsWith('vistrow-duplex-')
 
 /** The engine every tenant agent runs on (Vistrow Bharat), and the one Live
  *  model still offered (owner-only). */
 export const STANDARD_MODEL = MODEL_OPTIONS[0].value
 export const LIVE_MODEL = ADMIN_ONLY_MODELS.find((m) => isRealtimeModel(m.value))!.value
 
-// Gemini Live's own voice list (agent/main.py _GEMINI_LIVE_VOICES). A realtime
-// agent speaks with the persona its voice value names; any other voice is
-// replaced with Kore at call time.
-const GEMINI_LIVE_VOICES = new Set([
-  'achernar', 'achird', 'algenib', 'algieba', 'alnilam', 'aoede', 'autonoe', 'callirrhoe',
-  'charon', 'despina', 'enceladus', 'erinome', 'fenrir', 'gacrux', 'iapetus', 'kore',
-  'laomedeia', 'leda', 'orus', 'pulcherrima', 'puck', 'rasalgethi', 'sadachbia',
-  'sadaltager', 'schedar', 'sulafat', 'umbriel', 'vindemiatrix', 'zephyr', 'zubenelgenubi',
-])
-
-/** The Gemini Live persona a voice value maps to ("google:chirp3:Aoede" -> "Aoede",
- *  "google:chirp3:hi-IN-Chirp3-HD-Aoede" -> "Aoede"), or null if a realtime
- *  model can't use it. */
-export const geminiLiveVoiceName = (value: string): string | null => {
-  const tail = (value || '').split(':').pop()!.trim()
-  const persona = tail.split('-').pop()!.toLowerCase()
-  return GEMINI_LIVE_VOICES.has(persona) ? persona.charAt(0).toUpperCase() + persona.slice(1) : null
-}
-
-/** Whether an agent on this model can speak with this voice. The one rule the
- *  voice picker uses; the server enforces the same on save
- *  (token_api._guard_realtime_voice). */
-export const voiceWorksWithModel = (model: string, voice: string) =>
-  !model.startsWith('gemini-live') || geminiLiveVoiceName(voice) !== null
+/** Whether an agent on this model can speak with this voice: a Vistrow Live
+ *  model needs a voice the server marks with a Live persona (livePersona);
+ *  the server enforces the same on save (token_api._guard_realtime_voice).
+ *  An unknown voice (not in the menu) counts as unusable on Live. */
+export const voiceWorksWithModel = (model: string, voice: Pick<VoiceEntry, 'livePersona'> | undefined) =>
+  !model.startsWith('vistrow-live-') || Boolean(voice?.livePersona)
 
 /** The voice to switch to when the model changes and the current voice can't
  *  be used: the same voice if it works, else one of the same gender, else
@@ -380,7 +274,7 @@ export const nearestVoiceFor = (
   currentGender: VoiceEntry['gender'] | undefined,
   voices: readonly VoiceEntry[],
 ): VoiceEntry | null => {
-  const usable = voices.filter((v) => voiceWorksWithModel(model, v.value))
+  const usable = voices.filter((v) => voiceWorksWithModel(model, v))
   return (
     usable.find((v) => v.value === currentVoice) ??
     usable.find((v) => currentGender && v.gender === currentGender) ??
@@ -392,10 +286,10 @@ export const nearestVoiceFor = (
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
 // under a name instead of leaking the raw vendor string at a tenant.
 const RETIRED_ADMIN_MODELS = [
-  { value: 'groq/openai/gpt-oss-20b', label: 'Vistrow Lab 20B (retired)' },
-  { value: 'groq/openai/gpt-oss-120b', label: 'Vistrow Lab 120B (retired)' },
-  { value: 'groq/qwen/qwen3.6-27b', label: 'Vistrow Lab 27B (retired)' },
-  { value: 'groq/qwen/qwen3.8-27b', label: 'Vistrow Lab 27B v2 (retired)' },
+  { value: 'vistrow-lab-20b', label: 'Vistrow Lab 20B (retired)' },
+  { value: 'vistrow-lab-120b', label: 'Vistrow Lab 120B (retired)' },
+  { value: 'vistrow-lab-27b', label: 'Vistrow Lab 27B (retired)' },
+  { value: 'vistrow-lab-27b-2', label: 'Vistrow Lab 27B v2 (retired)' },
 ] as const
 
 export const modelOptionsFor = (isPlatformOwner: boolean) =>
@@ -407,22 +301,22 @@ export const modelOptionsFor = (isPlatformOwner: boolean) =>
 // and the call history starts printing "gpt-4.1" at a tenant — the exact
 // vendor-name leak calls_db guards against everywhere else.
 const RETIRED_MODELS = [
-  { value: 'gpt-4.1-mini', label: 'Vistrow Swift' },
-  { value: 'gpt-4.1', label: 'Vistrow Prime' },
-  // GPT-5 successors (plan_policy.OPENAI_MODEL_SUCCESSORS) that retired GPT-4
-  // agents are rewritten to: same names, still not offered for new picks.
-  { value: 'gpt-5.4-nano', label: 'Vistrow Swift' },
-  { value: 'gpt-5.4-mini', label: 'Vistrow Prime' },
-  { value: 'gpt-4o', label: 'Vistrow Pro' },
-  { value: 'gemini-3.6-flash', label: 'Vistrow Flash' },
-  { value: 'gpt-4o-mini', label: 'Vistrow Standard' },
-  { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite' },
+  { value: 'vistrow-swift', label: 'Vistrow Swift' },
+  { value: 'vistrow-prime', label: 'Vistrow Prime' },
+  // Successors that retired agents were rewritten to
+  // (plan_policy.OPENAI_MODEL_SUCCESSORS): same names, not offered for new picks.
+  { value: 'vistrow-swift-2', label: 'Vistrow Swift' },
+  { value: 'vistrow-prime-2', label: 'Vistrow Prime' },
+  { value: 'vistrow-pro', label: 'Vistrow Pro' },
+  { value: 'vistrow-flash', label: 'Vistrow Flash' },
+  { value: 'vistrow-standard', label: 'Vistrow Standard' },
+  { value: 'vistrow-lite', label: 'Vistrow Lite' },
   // 2026-10-08: Gemini Live 2.5 was retired after tests showed slower phone audio
   // (median 4.2 s vs 2.5 s on clean audio), missed greetings, repeated answers after
   // the lead tool, and premature hangups. It is now exposed only to the platform owner
   // for a controlled retest; tenant accounts cannot select it.
-  { value: 'gemini-live', label: 'Vistrow Live 2.5 (retired)' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 (retired)' },
+  { value: 'vistrow-live-2-5', label: 'Vistrow Live 2.5 (retired)' },
+  { value: 'vistrow-live-3-1', label: 'Vistrow Live 3.1 (retired)' },
 ] as const
 
 export const modelLabel = (value: string) =>
@@ -430,7 +324,7 @@ export const modelLabel = (value: string) =>
   ADMIN_ONLY_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_ADMIN_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_MODELS.find((m) => m.value === value)?.label ??
-  value
+  (value ? 'Vistrow model' : '')
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch - controls how
 // the voice is actually delivered (speed + prosodic variation), separate
 // from the LLM's wording. Must mirror agent/main.py's TONE_PRESETS exactly.

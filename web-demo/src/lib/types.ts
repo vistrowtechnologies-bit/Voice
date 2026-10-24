@@ -415,7 +415,8 @@ export interface AgentConfig {
   // the raw vendor string — see calls_db._agent_dict.
   voiceName?: string
   /** Speech recognition engine. Independent from the LLM and speaking voice. */
-  sttProvider: 'sarvam' | 'google-chirp3'
+  // Neutral names for the speech recogniser (server/public_ids.STT_PROVIDERS).
+  sttProvider: 'standard' | 'alt'
   language: string
   status: 'live' | 'paused'
   systemPrompt: string
@@ -954,6 +955,15 @@ export interface VoiceEntry {
   nativeLang?: string
   nativeLanguage?: string
   selected?: boolean
+  // `value` is a neutral public id (server/public_ids.py), so the facts the
+  // dashboard used to read off the vendor id come from the server:
+  // the Voices tab / picker group, the Live persona a realtime agent speaks
+  // with (null = Live can't use it), whether the preview plays any language,
+  // and for a Studio Lite voice the HD voice with the same persona.
+  family?: 'bharat' | 'hd' | 'native' | 'expressive' | 'premium' | 'studio' | 'studio-lite' | 'custom' | 'other'
+  livePersona?: string | null
+  previewAnyLanguage?: boolean
+  hdTwin?: string
 }
 
 export interface VoiceCatalog {
