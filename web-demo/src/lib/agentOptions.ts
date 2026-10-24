@@ -39,7 +39,7 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => {
       voices: voices.filter((v) => v.family === 'native'),
     },
     {
-      key: 'sarvam4',
+      key: 'bharat',
       label: 'Bharat',
       note: '1 min per min · Indian persona voices · switches language live',
       // New persona voices first (they preview in any language), then the
@@ -50,7 +50,7 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => {
       ],
     },
     {
-      key: 'chirp3-hd',
+      key: 'hd',
       label: 'Vistrow HD',
       note: '1 min per min · fastest voices · switches language mid-call',
       voices: stable.filter((v) => v.tier === 'standard' && v.family === 'hd'),
@@ -62,13 +62,13 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => {
       voices: stable.filter((v) => v.tier === 'premium' && v.multilingual),
     },
     {
-      key: 'gemini38-lite',
+      key: 'studio-lite',
       label: 'Studio Lite',
       note: '2 min per min · lower latency and cost · test before live calls',
       voices: voices.filter((v) => v.preview && v.family === 'studio-lite'),
     },
     {
-      key: 'gemini38-flash',
+      key: 'studio',
       label: 'Studio',
       note: '2 min per min · richer expression and voice fidelity · test before live calls',
       voices: voices.filter((v) => v.preview && v.family === 'studio'),
