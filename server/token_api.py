@@ -586,24 +586,47 @@ def _client_ip(request: Request) -> str:
     per-IP rate limiter must go through this, or it silently shares one
     bucket (Railway's own proxy IP) across every real visitor.
     """
+    edge = _edge_visitor(request)
+    if edge and edge["ip"]:
+        return edge["ip"]
     forwarded = request.headers.get("x-forwarded-for", "")
     if forwarded:
         return forwarded.split(",")[0].strip()
     return (request.client.host if request.client else "") or "unknown"
 
 
-def _visitor_context(request: Request) -> dict:
-    """Where and when a website lead arrived: exact time in IST, IP, and the
-    country/region/city Vercel's edge adds to requests it proxies to /api
-    (x-vercel-ip-*; absent on direct calls such as the embeddable widget on a
-    customer's site). Informational only — never used for access decisions."""
+def _edge_visitor(request: Request) -> dict | None:
+    """The visitor's IP and location as web-demo/middleware.ts passes them on
+    website routes. The site's /api rewrite reaches Railway from Vercel's
+    servers, so X-Forwarded-For there names Vercel, not the visitor. Trusted
+    only when x-vv-edge carries VV_EDGE_SECRET (set on Vercel and Railway);
+    anything else could be a direct call faking the headers."""
+    secret = os.environ.get("VV_EDGE_SECRET", "")
+    sent = request.headers.get("x-vv-edge", "")
+    if not secret or not hmac.compare_digest(sent.encode(), secret.encode()):
+        return None
     headers = request.headers
+    return {
+        "ip": headers.get("x-visitor-ip", "").strip()[:64],
+        "country": headers.get("x-visitor-country", "")[:8],
+        "region": headers.get("x-visitor-region", "")[:16],
+        "city": urllib.parse.unquote(headers.get("x-visitor-city", ""))[:80],
+    }
+
+
+def _visitor_context(request: Request) -> dict:
+    """Where and when a website lead arrived: exact time in IST, IP, and
+    country/region/city from the site's edge middleware (_edge_visitor;
+    absent on direct calls such as the embeddable widget on a customer's
+    site). Informational only — never used for access decisions."""
+    headers = request.headers
+    edge = _edge_visitor(request) or {}
     return {
         "time_ist": visitor_info.ist(),
         "ip": _client_ip(request),
-        "country": headers.get("x-vercel-ip-country", "")[:8],
-        "region": headers.get("x-vercel-ip-country-region", "")[:16],
-        "city": urllib.parse.unquote(headers.get("x-vercel-ip-city", ""))[:80],
+        "country": edge.get("country", ""),
+        "region": edge.get("region", ""),
+        "city": edge.get("city", ""),
         "browser": visitor_info.browser_family(headers.get("user-agent", "")),
     }
 
