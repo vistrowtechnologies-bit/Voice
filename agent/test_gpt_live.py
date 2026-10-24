@@ -16,9 +16,10 @@ from test_agent_constructs import BASE  # noqa: E402
 
 class ModelName(unittest.TestCase):
     def test_parsing(self):
-        self.assertEqual(main._gpt_live_model_name("gpt-live:gpt-live-1"), "gpt-live-1")
-        self.assertEqual(main._gpt_live_model_name("gpt-live"), "gpt-live-1")
-        self.assertEqual(main._gpt_live_model_name("gpt-live:"), "gpt-live-1")
+        self.assertEqual(main._gpt_live_model_name("duplex:live-1"), "gpt-live-1")
+        self.assertEqual(main._gpt_live_model_name("duplex"), "gpt-live-1")
+        self.assertEqual(main._gpt_live_model_name("duplex:"), "gpt-live-1")
+        self.assertEqual(main._gpt_live_model_name("duplex:unknown"), "gpt-live-1")
 
 
 class Builder(unittest.TestCase):
@@ -26,7 +27,7 @@ class Builder(unittest.TestCase):
         with patch.dict(os.environ, {"OPENAI_API_KEY": "offline-not-used"}):
             os.environ.pop("GPT_LIVE_VOICE", None)
             os.environ.pop("GPT_LIVE_BACKEND_MODEL", None)
-            m = main._build_gpt_live_llm("gpt-live:gpt-live-1", "RESPOND IN HINDI")
+            m = main._build_gpt_live_llm("duplex:live-1", "RESPOND IN HINDI")
         self.assertIsInstance(m, openai.realtime.GPTLiveModel)
         self.assertIsInstance(m, DuplexModel)
         self.assertEqual(m._opts.model, "gpt-live-1")
@@ -37,14 +38,14 @@ class Builder(unittest.TestCase):
     def test_env_overrides(self):
         env = {"OPENAI_API_KEY": "offline-not-used", "GPT_LIVE_VOICE": "marin", "GPT_LIVE_BACKEND_MODEL": "gpt-5.4-nano"}
         with patch.dict(os.environ, env):
-            m = main._build_gpt_live_llm("gpt-live", "x")
+            m = main._build_gpt_live_llm("duplex", "x")
         self.assertEqual(m._opts.voice, "marin")
         self.assertEqual(m._opts.responses["model"], "gpt-5.4-nano")
 
     def test_missing_key_is_a_clear_error(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(RuntimeError):
-                main._build_gpt_live_llm("gpt-live:gpt-live-1", "x")
+                main._build_gpt_live_llm("duplex:live-1", "x")
 
 
 class AgentUsesIt(unittest.TestCase):
@@ -53,7 +54,7 @@ class AgentUsesIt(unittest.TestCase):
         os.environ["GEMINI_API_KEY"] = os.environ.get("GEMINI_API_KEY") or "test-key-not-used-offline"
 
     def test_gpt_live_agent_is_speech_to_speech(self):
-        a = main.RealEstateAgent(dict(BASE, model="gpt-live:gpt-live-1", voice="google:chirp3:Aoede"), call_type="widget")
+        a = main.RealEstateAgent(dict(BASE, model="duplex:live-1", voice="google:chirp3:Aoede"), call_type="widget")
         self.assertTrue(a._is_realtime)
         self.assertTrue(a._is_gpt_live)
         self.assertEqual(a._realtime_model_name, "gpt-live-1")

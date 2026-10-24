@@ -2130,8 +2130,11 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
 # Pricing (developers.openai.com/api/docs/pricing, 24 Oct 2026): $0.05 per
 # session minute, plus the backend's tokens (gpt-5.6-luna $0.20/M in,
 # $1.20/M out, the plugin's default backend).
-_GPT_LIVE_PREFIX = "gpt-live"
+# The saved id is vendor-neutral ("duplex:live-1") because it ships in the
+# dashboard bundle; the OpenAI model name lives only here.
+_GPT_LIVE_PREFIX = "duplex"
 _GPT_LIVE_DEFAULT_MODEL = "gpt-live-1"
+_GPT_LIVE_MODELS = {"live-1": "gpt-live-1"}
 _REALTIME_PREFIXES = (_GEMINI_LIVE_PREFIX, _GPT_LIVE_PREFIX)
 # OpenAI's GPT-Live voice list has one Indian voice, "nira" (Hindi,
 # feminine), and no Hindi masculine voice; GPT_LIVE_VOICE overrides it.
@@ -2140,8 +2143,9 @@ _GPT_LIVE_DEFAULT_BACKEND = "gpt-5.6-luna"
 
 
 def _gpt_live_model_name(model: str) -> str:
-    """"gpt-live:gpt-live-1" -> "gpt-live-1"; a bare "gpt-live" -> the default."""
-    return (model.split(":", 1)[1].strip() if ":" in model else "") or _GPT_LIVE_DEFAULT_MODEL
+    """"duplex:live-1" -> "gpt-live-1"; a bare "duplex" or an unknown suffix -> the default."""
+    suffix = model.split(":", 1)[1].strip() if ":" in model else ""
+    return _GPT_LIVE_MODELS.get(suffix, _GPT_LIVE_DEFAULT_MODEL)
 
 
 def _build_gpt_live_llm(model: str, instructions: str):

@@ -10621,7 +10621,7 @@ def model_tier(model: str | None) -> str:
         return "realtime" if name == "gemini-live" or "2.5" in name else "realtime_plus"
     # OpenAI GPT-Live 1 ("Vistrow Duplex", owner-only): $0.05/min (~Rs 4.8)
     # plus the backend model, so realtime pricing, never 1x.
-    if name.startswith("gpt-live"):
+    if name.startswith("duplex"):
         return "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"

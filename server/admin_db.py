@@ -1123,7 +1123,7 @@ def vendor_cost_per_minute(model: str | None, call_type: str | None) -> float:
     if name.startswith("gemini-live"):
         # 3.8 Live is priced like 3.1; only the 2.5 default is cheaper.
         engine = "realtime_25" if name == "gemini-live" or "2.5" in name else "realtime_31"
-    elif name.startswith("gpt-live"):
+    elif name.startswith("duplex"):
         engine = "realtime_gpt_live"
     else:
         engine = "pipeline"
