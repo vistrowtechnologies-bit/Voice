@@ -120,6 +120,29 @@ class LeadEmail(unittest.TestCase):
         self.assertNotIn("Combo bot", body, "dashboard and automated test calls are never leads")
         self.assertNotIn("203.0.113.9", body, "a tenant's email has no visitor IP")
 
+    def test_vistrows_leads_also_reach_both_sales_inboxes(self):
+        import email_sender
+
+        first = self.call(f"voice-agent-demo-{self.n}d", f"+9198{self.n:06d}66", name="Kiran")
+        seen = {}
+        orig_send, orig_recipients, orig_owner = self.nw._send, self.nw.recipients, self.db.is_platform_owner
+        orig_env = os.environ.get("SALES_NOTIFY_EMAIL")
+        os.environ["SALES_NOTIFY_EMAIL"] = "VistrowAI@gmail.com, vistrowtechnologies@gmail.com"
+        self.nw._send = lambda to, *a: seen.update(to=to) or 1
+        self.nw.recipients = lambda account_id, pref: ["vistrowai@gmail.com"]
+        self.db.is_platform_owner = lambda account_id: True
+        try:
+            self.db.set_setting(self.nw._LEADS_MARK, str(first - 1), self.account)
+            self.nw.check_leads(self.account)
+        finally:
+            self.nw._send, self.nw.recipients, self.db.is_platform_owner = orig_send, orig_recipients, orig_owner
+            if orig_env is None:
+                os.environ.pop("SALES_NOTIFY_EMAIL", None)
+            else:
+                os.environ["SALES_NOTIFY_EMAIL"] = orig_env
+        self.assertEqual(seen["to"], ["vistrowai@gmail.com", "vistrowtechnologies@gmail.com"])
+        self.assertEqual(email_sender.sales_inboxes(), ["vistrowai@gmail.com"], "default when unset")
+
     def test_vistrows_own_email_adds_ip_and_browser(self):
         first = self.call(f"widget-1-{self.n}c", f"+9198{self.n:06d}33", name="Ravi", call_type="widget",
                           page="/pricing")

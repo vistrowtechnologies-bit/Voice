@@ -189,12 +189,16 @@ def check_leads(account_id: int) -> int:
     if not leads:
         return 0
     leads = leads[:_MAX_LEADS_PER_EMAIL]
+    with_visitor = calls_db.is_platform_owner(account_id)
     to = recipients(account_id, "notify_leads")
+    if with_visitor:
+        # Vistrow's own leads (website demo, widget, phone, ads) always reach
+        # the sales inboxes too, whatever the workspace users' preferences.
+        to = list(dict.fromkeys([*to, *email_sender.sales_inboxes()]))
     if not to:
         calls_db.set_setting(_LEADS_MARK, str(leads[-1]["id"]), account_id)
         return 0
     people = group_leads(leads)
-    with_visitor = calls_db.is_platform_owner(account_id)
     rows = "".join(_lead_row(l, account_id, with_visitor) for l in people)
     n = len(people)
     subject = f"{n} new leads from your AI agent" if n > 1 else f"New lead: {people[0]['lead_name'] or people[0]['lead_phone']}"

@@ -44,6 +44,14 @@ FROM_SUPPORT = "Vistrow Voice Support <support@vistrowvoice.com>"
 FROM_BILLING = "Vistrow Voice Billing <billing@vistrowvoice.com>"  # receipts and invoices
 
 
+def sales_inboxes() -> list[str]:
+    """Where Vistrow's own leads are announced: the contact form and the lead
+    emails for Vistrow's workspace. SALES_NOTIFY_EMAIL is a comma-separated
+    list (owner, 24 Oct: vistrowai@ and vistrowtechnologies@)."""
+    raw = os.environ.get("SALES_NOTIFY_EMAIL") or "vistrowai@gmail.com"
+    return list(dict.fromkeys(a.strip().lower() for a in raw.split(",") if "@" in a))
+
+
 def is_configured() -> bool:
     return bool(os.environ.get("RESEND_API_KEY") or os.environ.get("SMTP_HOST"))
 

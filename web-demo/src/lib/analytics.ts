@@ -51,7 +51,7 @@ type PageArea = 'marketing' | 'app' | 'auth' | 'admin'
 
 // demo_form: the homepage demo's name/phone form (24 Oct) is where a visitor
 // becomes a lead; the call itself then fires demo_call_start below.
-type LeadSource = 'signup' | 'contact_form' | 'demo_form'
+type LeadSource = 'signup' | 'contact_form' | 'demo_form' | 'widget_voice'
 
 export type MarketingCta =
   | 'book_demo'
@@ -167,6 +167,42 @@ export function trackQualifyLead(source: LeadSource): void {
   // preserves the existing Key Event, while generate_lead makes Google Ads
   // and GA4 recommendations easier to connect later.
   window.gtag('event', 'generate_lead', params)
+}
+
+// The floating "Ask me anything" widget on this site (widget/src/widget.ts)
+// pushes Tag Manager events this site never read (it uses gtag.js), so none
+// reached GA4. It now also announces each moment as a page event; these are
+// forwarded with a widget_mode tag (voice / chat) and voice/chat-specific
+// names (owner, 24 Oct).
+const WIDGET_EVENTS: Record<string, string | ((mode: string) => string)> = {
+  open: 'widget_open',
+  experience_selected: (mode) => `widget_${mode}_selected`,
+  chat_opened: 'widget_chat_start',
+  chat_message_sent: 'widget_chat_message',
+  chat_ended: 'widget_chat_end',
+  call_started: 'widget_voice_start',
+  call_connected: 'widget_voice_connected',
+  conversation_completed: (mode) => `widget_${mode}_completed`,
+  call_failed: 'widget_voice_failed',
+  post_call_cta_clicked: (mode) => `widget_${mode}_cta_click`,
+}
+
+// Started when this module first loads (every page imports it).
+if (typeof window !== 'undefined') {
+  window.addEventListener('vistrow-widget', (e) => {
+    const detail = (e as CustomEvent<{ action?: string; mode?: string }>).detail || {}
+    const mode = detail.mode === 'chat' ? 'chat' : 'voice'
+    if (detail.action === 'lead_submitted') {
+      trackQualifyLead('widget_voice')
+      return
+    }
+    const name = WIDGET_EVENTS[detail.action ?? '']
+    if (!name || typeof window.gtag !== 'function' || !analyticsAllowed()) return
+    window.gtag('event', typeof name === 'function' ? name(mode) : name, {
+      widget_mode: mode,
+      ...commonPageParams(window.location.pathname + window.location.search),
+    })
+  })
 }
 
 /** A homepage demo call actually connecting (not a key event: the lead was

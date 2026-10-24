@@ -2283,8 +2283,7 @@ def public_contact(req: ContactRequest, request: Request) -> dict:
         )
     except Exception:
         logger.exception("contact form: could not save lead")
-    notify_to = os.environ.get("SALES_NOTIFY_EMAIL") or "vistrowai@gmail.com"
-    where = ", ".join(p for p in (context["city"], context["region"], context["country"]) if p) or "Unknown"
+    where =", ".join(p for p in (context["city"], context["region"], context["country"]) if p) or "Unknown"
     utm = " / ".join(source[k] for k in ("utm_source", "utm_medium", "utm_campaign") if source.get(k))
     # Call volume and timeline let sales prioritise; phone lets them call back.
     fields = [
@@ -2314,13 +2313,11 @@ def public_contact(req: ContactRequest, request: Request) -> dict:
         for label, value in fields
     )
     email_text = "\n".join(f"{label}: {value}" for label, value in fields)
-    sent = email_sender.send_email(
-        notify_to,
-        f"Demo request from {name}",
-        email_html,
-        email_sender.FROM_WEBSITE,
-        reply_to=email,
-        text=email_text,
+    # Every sales inbox gets it; any one arriving counts as sent.
+    sent = sum(
+        bool(email_sender.send_email(to, f"Demo request from {name}", email_html, email_sender.FROM_WEBSITE,
+                                     reply_to=email, text=email_text))
+        for to in email_sender.sales_inboxes()
     )
     if not sent:
         logger.warning("contact form email failed (contact saved=%s): %s %s", saved, name, phone)
