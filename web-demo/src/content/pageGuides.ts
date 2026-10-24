@@ -9,4 +9,7 @@ export const PAGE_GUIDES: Record<string, string[]> = {
   '/product/inbound': [
     'New to the idea? Start with [what an AI receptionist does on a call](/resources/blog/what-is-an-ai-receptionist).',
   ],
+  '/ai-ivr': [
+    'Our guide to [turning an IVR tree into a conversation](/resources/blog/ai-ivr-replacing-phone-menus-with-conversation) shows how to rewrite each menu option before you switch.',
+  ],
 }

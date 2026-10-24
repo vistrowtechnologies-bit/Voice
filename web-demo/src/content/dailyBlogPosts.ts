@@ -290,12 +290,117 @@ export const DAILY_POSTS: DailyBlogPost[] = [
       }
     ]
   },
+  {
+    "slug": "ai-ivr-replacing-phone-menus-with-conversation",
+    "title": "AI IVR: replacing phone menus with a conversation",
+    "seoTitle": "AI IVR: Replacing Phone Menus With a Conversation",
+    "metaDescription": "How an AI IVR replaces press-1 menus with one open question: designing the opening, turning your IVR tree into instructions, and switching safely.",
+    "shortAnswer": "An AI IVR answers your business number with a question such as “How can I help?” instead of a keypad menu. It understands the caller’s sentence, then answers from approved information, books a slot, takes a callback request or transfers the call. Replacing a menu well means rewriting each menu branch as an intent, an answer source and an owner.",
+    "excerpt": "Removing a phone menu is easy. Replacing what it did is the real work. Here is how to design the opening question, convert your IVR tree and move one line at a time.",
+    "category": "IVR & phone systems",
+    "publishedAt": "2026-10-24",
+    "readTime": "",
+    "related": [
+      "what-is-ivr-interactive-voice-response",
+      "ivr-vs-ai-voice-agent-india",
+      "ai-receptionist-vs-answering-service-vs-ivr"
+    ],
+    "sections": [
+      {
+        "heading": "What is an AI IVR?",
+        "paragraphs": [
+          "A traditional IVR answers a call with recorded prompts and waits for keypad tones or a few expected words. The technology is mature: the W3C published VoiceXML 2.0, a standard language for these menu dialogs, as a Recommendation in 2004. Our [guide to how IVR works](/resources/blog/what-is-ivr-interactive-voice-response) explains menus, DTMF and IVR trees in detail.",
+          "An AI IVR keeps the job of the IVR, which is to answer, understand and resolve or route, but drops the menu. The caller says what they need in their own words and an AI voice agent works out the intent. The [AI IVR overview](/ai-ivr) shows how this runs on a business number. This article is about the practical part: what you put in place of the menu so callers are never worse off than before."
+        ]
+      },
+      {
+        "heading": "What replaces the menu when you remove it?",
+        "paragraphs": [
+          "One open question replaces the whole first level of the tree. The greeting should name the business, say briefly that the caller is speaking with an AI assistant, and ask what they need. Keep it short: callers who are used to menus wait for options, and a long introduction feels like one.",
+          "The agent then does what a good menu designer tried to do with branches, but in conversation. If the request is clear, it acts. If it is vague, it asks one follow-up question. If it is outside scope, it routes. On Vistrow Voice that opening line is the welcome message you write for inbound calls, set per agent on the [inbound call answering page](/product/inbound)."
+        ],
+        "points": [
+          "Good opening: “Namaste, Sharma Diagnostics. You are speaking with our AI assistant. How can I help?”",
+          "Too long: a paragraph about the company, its services and opening hours before the caller can speak.",
+          "Too vague: “Please state your query,” which sounds like a menu without options."
+        ]
+      },
+      {
+        "heading": "How do you turn an IVR tree into instructions for the agent?",
+        "paragraphs": [
+          "Take your current menu and rewrite every option as four things: the intent in plain words, how callers usually phrase it, where the answer comes from and who owns it if the agent cannot finish. Answers go into a [knowledge base of approved answers](/product/knowledge-base); actions such as booking or transfer go into the agent’s functions; everything else becomes a rule in its instructions."
+        ],
+        "points": [
+          "Press 1 for timings becomes: answer opening hours and location from the knowledge base.",
+          "Press 2 for appointments becomes: offer free slots inside business hours and book, or take a callback request if nothing fits.",
+          "Press 3 for an existing order becomes: capture the order number and transfer, or take a callback, unless the agent has an approved way to look it up.",
+          "Press 9 for an executive becomes: transfer on request, at any point in the call."
+        ]
+      },
+      {
+        "heading": "What happens to the language menu?",
+        "paragraphs": [
+          "It goes. “Press 1 for English, press 2 for Hindi” is often the first thing callers hear, and it delays every call. An AI IVR can open in your default language and switch when the caller does. Vistrow Voice speaks more than 130 languages, including Hindi, English and nine other Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, Odia), and follows mixed speech such as Hinglish; the [supported languages page](/languages) has a page for each Indian language.",
+          "Choose the opening language by who calls most. A Bengaluru clinic might open in English, a Pune property line in Marathi or Hindi. Test with native speakers before launch, because names, numbers and addresses are where recognition slips first."
+        ]
+      },
+      {
+        "heading": "How should an AI IVR handle callers it does not understand?",
+        "paragraphs": [
+          "A menu has a simple fallback: repeat the options. A conversation needs a designed one. Decide what the agent does after a short silence, after a second unclear answer, and when a caller is in a noisy place. The usual pattern is to rephrase once, offer a narrower question, and then route the caller to a person or take a callback request rather than loop. The [AI agent vs IVR comparison](/vs-ivr) covers where each approach is stronger."
+        ],
+        "points": [
+          "Silence: prompt once, then ask a yes or no question the caller can answer briefly.",
+          "Unclear twice: offer a person or a callback instead of asking a third time.",
+          "Caller asks for a person: transfer straight away on phone calls, without arguing.",
+          "Caller prefers keys or has difficulty speaking: keep an alternative route, such as a separate line or a short keypad option on your existing system."
+        ]
+      },
+      {
+        "heading": "What should an AI IVR send to your team after the call?",
+        "paragraphs": [
+          "A menu IVR tells you which keys were pressed. An AI IVR can tell you what the caller wanted. Every Vistrow Voice call is saved with a transcript, a summary and the fields you chose to extract, plus the recording if recording is on. Those details can go to Zoho CRM, Google Sheets, Slack, ArthaLeads or a webhook as the call ends, through the [CRM and app integrations](/product/integrations).",
+          "Agree the fields with the people who pick up transferred calls. Name, number, call reason and preferred callback time are a common minimum, so nobody asks the caller to start again."
+        ]
+      },
+      {
+        "heading": "How do you switch from a menu to an AI IVR safely?",
+        "paragraphs": [
+          "Move one line at a time. Pick a number with predictable calls, such as an after-hours line or a single enquiry number, route it to the agent and leave the others on the existing IVR. Vistrow Voice lets you set the hours, active days and how many calls the line takes at once for each number. Read a sample of transcripts every day for the first week and fix the cause of each failed call: a missing fact, a vague instruction or a topic that belongs with a person.",
+          "Keep the old flow ready until the new one has run on real traffic, so switching back is a routing change rather than a rebuild. Our [IVR vs AI voice agent decision guide](/resources/blog/ivr-vs-ai-voice-agent-india) explains how to choose which call reasons move first, and the [Vistrow Voice pricing page](/pricing) lists current plans."
+        ]
+      }
+    ],
+    "faqs": [
+      {
+        "q": "What is an AI IVR?",
+        "a": "An AI IVR answers a phone line with a conversation instead of a keypad menu. It understands what the caller says and answers, books, takes a callback request or transfers the call."
+      },
+      {
+        "q": "Do I need a new phone number for an AI IVR?",
+        "a": "Not necessarily. The number stays with your telephony provider and is routed to the agent. Check the connection setup with your provider, or use a new number."
+      },
+      {
+        "q": "Can an AI IVR transfer calls to a person?",
+        "a": "Yes. On Vistrow Voice, set a transfer number and the agent dials your colleague into the call and stays on until they answer."
+      },
+      {
+        "q": "Does an AI IVR still need a language menu?",
+        "a": "No. The agent opens in your default language and follows the caller if they switch, including Hindi, English and nine other Indian languages."
+      },
+      {
+        "q": "Should I replace every IVR line at once?",
+        "a": "No. Move one line with predictable calls first, read the transcripts for a week, and keep the old flow until the new one has proved itself on real traffic."
+      }
+    ]
+  },
 ]
 
 export const DAILY_IMAGE_ALTS: Record<string, string> = {
   'multilingual-ai-receptionist-hindi-punjabi-english': 'Large Hindi and Punjabi greetings and Hello beside a Sikh caller at a front desk, with an Artha AI badge',
   'ai-receptionist-vs-answering-service-vs-ivr': 'Comparison cover: Artha, the AI receptionist, wearing a headset beside three cards for an IVR menu, an answering service and an AI receptionist',
   'what-is-an-ai-receptionist': 'Artha, the AI receptionist, at a bright front desk wearing a headset, with a white card asking what an AI receptionist is',
+  'ai-ivr-replacing-phone-menus-with-conversation': 'Before and after: a frustrated caller stuck in a press-1 phone menu, beside Artha, the AI agent, asking how she can help',
 }
 
 export const DAILY_SOURCES: Record<string, VoiceBlogPost['sources']> = {
@@ -305,10 +410,12 @@ export const DAILY_SOURCES: Record<string, VoiceBlogPost['sources']> = {
   ],
   'ai-receptionist-vs-answering-service-vs-ivr': [{"title":"US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists","url":"https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm"}],
   'what-is-an-ai-receptionist': [{"title":"US Bureau of Labor Statistics: Occupational Outlook Handbook, Receptionists","url":"https://www.bls.gov/ooh/office-and-administrative-support/receptionists.htm"}],
+  'ai-ivr-replacing-phone-menus-with-conversation': [{"title":"W3C: Voice Extensible Markup Language (VoiceXML) Version 2.0, Recommendation 16 March 2004","url":"https://www.w3.org/TR/voicexml20/"}],
 }
 
 export const DAILY_CONTEXTUAL_LINKS: Record<string, string> = {
   'multilingual-ai-receptionist-hindi-punjabi-english': 'To see how this works for a small team, read how an [AI receptionist answers and routes calls](/ai-receptionist), or browse every [language the voice agent supports](/languages).',
   'ai-receptionist-vs-answering-service-vs-ivr': 'To go deeper on the options, read [how an AI voice agent works on a call](/resources/blog/what-is-an-ai-voice-agent) or see [how an AI receptionist answers and routes calls](/ai-receptionist).',
   'what-is-an-ai-receptionist': 'To see this in practice, explore the [Vistrow Voice AI receptionist](/ai-receptionist) or browse every [language the voice agent supports](/languages).',
+  'ai-ivr-replacing-phone-menus-with-conversation': 'To plan the change, see how an [AI IVR answers your business number](/ai-ivr) or compare the [AI agent and IVR side by side](/vs-ivr).',
 }
