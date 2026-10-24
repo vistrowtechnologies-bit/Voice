@@ -31,3 +31,11 @@ def test_report_only_by_default(tmp_path):
     assert c.main([str(tmp_path), "--strict"]) == 1
     (tmp_path / "a.js").write_text("x=`Vistrow HD`")
     assert c.main([str(tmp_path), "--strict"]) == 0
+
+
+def test_allowlisted_path_keeps_ids_but_drops_names(tmp_path):
+    page = tmp_path / "compare" / "x" / "index.html"
+    page.parent.mkdir(parents=True)
+    page.write_text("Sarvam pricing table elevenlabs:abc")
+    (ids, names), = c.scan_paths([tmp_path], ALLOW).values()
+    assert len(ids) == 1 and names == []

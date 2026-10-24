@@ -92,6 +92,8 @@ def scan_paths(paths: list[Path], allowlist: list[re.Pattern]) -> dict[str, tupl
             if f.suffix.lower() not in SCANNED_SUFFIXES or f.name.endswith(".map"):
                 continue
             ids, names = scan_text(f.read_text(encoding="utf-8", errors="ignore"), allowlist)
+            if any(rx.search(f.as_posix()) for rx in allowlist):
+                names = []  # whole file allowlisted (e.g. prerendered /compare/ pages); ids still count
             if ids or names:
                 results[str(f)] = (ids, names)
     return results

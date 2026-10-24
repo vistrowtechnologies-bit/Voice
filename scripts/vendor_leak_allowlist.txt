@@ -3,10 +3,11 @@
 
 # Privacy / sub-processor disclosure (legal; wording is the owner's call).
 sub-?processor
+/privacy/
 purpose:`Language model
 purpose:`[^`]*(speech|voice|language model)
 
-# Competitor comparison pages (/compare/...).
+# Competitor comparison pages (/compare/...); also matched against file paths.
 /compare/
 Vistrow (Voice )?vs\.?
 slug:`(sarvam-ai|elevenlabs|openai|gemini)`
