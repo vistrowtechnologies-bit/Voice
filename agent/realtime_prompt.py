@@ -122,6 +122,10 @@ _DEMO_KEEP = (
     "# Platform rules",
     "# Only state back",
     "# Current date and time",
+    # Name and phone from the website's pre-call form. Dropped until 24 Oct
+    # 2026, so Artha greeted visitors generically (calls 1415, 1487,
+    # 1512-1515) and on call 1415 asked for the name and number just typed.
+    "# Caller context",
 )
 # "# Language" and "# How to talk" are produced by this module, so an input
 # that already carries them (a previously compacted text) has them rebuilt
