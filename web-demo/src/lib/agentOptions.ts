@@ -329,10 +329,17 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
   // retired and, from 19 Oct, no longer offered; RETIRED_MODELS keeps their
   // names for call history (no agent used either on 19 Oct).
   { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · primary realtime model · speech-to-speech in about 1-2 s' },
+  // Runtime, 24 Oct (main 27e343c2): a second speech-to-speech engine. The id
+  // is vendor-neutral on purpose; the agent maps it internally.
+  { value: 'duplex:live-1', label: 'Vistrow Duplex · realtime', tag: 'Owner-only · testing' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
-export const isRealtimeModel = (value: string) => value.startsWith('gemini-live')
+export const isRealtimeModel = (value: string) => value.startsWith('gemini-live') || value.startsWith('duplex')
+
+/** Duplex speaks with its own built-in voice, so the agent's voice setting
+ *  does not apply to it. */
+export const usesBuiltInVoice = (value: string) => value.startsWith('duplex')
 
 /** The engine every tenant agent runs on (Vistrow Bharat), and the one Live
  *  model still offered (owner-only). */
@@ -362,7 +369,7 @@ export const geminiLiveVoiceName = (value: string): string | null => {
  *  voice picker uses; the server enforces the same on save
  *  (token_api._guard_realtime_voice). */
 export const voiceWorksWithModel = (model: string, voice: string) =>
-  !isRealtimeModel(model) || geminiLiveVoiceName(voice) !== null
+  !model.startsWith('gemini-live') || geminiLiveVoiceName(voice) !== null
 
 /** The voice to switch to when the model changes and the current voice can't
  *  be used: the same voice if it works, else one of the same gender, else
