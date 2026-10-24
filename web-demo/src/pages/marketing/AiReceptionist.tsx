@@ -205,7 +205,7 @@ export function AiReceptionist() {
               tone="violet"
               items={[
                 'Answers at any hour your route allows, including nights and holidays',
-                '130+ languages, including Hindi, English and 9 more Indian languages, switching when the caller does',
+                '130+ languages, including Hindi, English and 9 other Indian languages, switching when the caller does',
                 'Books into the built-in Appointments calendar',
                 'Transcript, summary and captured details for every call',
               ]}
