@@ -54,6 +54,8 @@ export function demoVisitorFields(): { name: string; phone: string; contactConse
  * typo is caught before a round trip. */
 export function looksLikeRealPhone(phone: string): boolean {
   if (!/^\+[1-9]\d{7,14}$/.test(phone)) return false
+  // An Indian number must be a real mobile: 10 digits starting 6-9.
+  if (phone.startsWith('+91') && !/^\+91[6-9]\d{9}$/.test(phone)) return false
   const digits = phone.replace(/\D/g, '')
   const local = digits.length >= 10 ? digits.slice(-10) : digits
   if (new Set(local).size <= 3) return false

@@ -721,7 +721,9 @@ def _demo_visitor_gate(name: str, phone: str, contact_consent: bool, client_ip: 
     phone = re.sub(r"[\s\-()]", "", str(phone or ""))
     if len(name) < 2:
         raise HTTPException(400, "Please enter your name to start the call.")
-    if not _looks_like_real_phone(phone):
+    # An Indian number must be a real mobile: 10 digits starting 6-9 (owner
+    # 24 Oct: 1234567899 got through the generic junk filter).
+    if not _looks_like_real_phone(phone) or (phone.startswith("+91") and not re.fullmatch(r"\+91[6-9]\d{9}", phone)):
         raise HTTPException(400, "Please enter a valid mobile number to start the call.")
     if not contact_consent:
         raise HTTPException(400, "Please tick the box so we can follow up with you.")

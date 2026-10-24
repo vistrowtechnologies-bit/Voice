@@ -54,7 +54,8 @@ class Gate(unittest.TestCase):
         self.assertEqual(self.refused("Priya", "+919820134567", False, "ip"), 400)
 
     def test_typed_junk_numbers_are_refused(self):
-        for junk in ("+919999999999", "+911234567890", "9820134567", "+91abc"):
+        for junk in ("+919999999999", "+911234567890", "9820134567", "+91abc", "+911234567899",
+                     "+915820134567", "+91982013456", "+9198201345678"):
             self.assertEqual(self.refused("Priya", junk, True, "ip"), 400, junk)
 
     def test_one_number_gets_ten_calls_a_day(self):

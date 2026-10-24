@@ -1155,7 +1155,7 @@ function ConsentPrompt({
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!askDetails) return onAccept(null)
-    const phone = `${code}${number.replace(/\D/g, '').replace(/^0+/, '')}`
+    const phone = `${code}${number.replace(/^0+/, '')}`
     if (name.trim().length < 2) return setError('Please enter your name.')
     if (!looksLikeRealPhone(phone)) return setError('Please enter a valid mobile number.')
     if (!agreed) return setError('Please tick the box to continue.')
@@ -1188,7 +1188,15 @@ function ConsentPrompt({
             aria-label="Your name"
           />
           <div className="flex gap-2">
-            <select className={`${box} w-[5.5rem] shrink-0 px-2`} value={code} onChange={(e) => setCode(e.target.value)} aria-label="Country code">
+            <select
+              className={`${box} w-[5.5rem] shrink-0 px-2`}
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value)
+                if (e.target.value === '+91') setNumber((n) => n.slice(0, 10))
+              }}
+              aria-label="Country code"
+            >
               {COUNTRY_CODES.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -1200,9 +1208,9 @@ function ConsentPrompt({
               placeholder="98200 00000"
               inputMode="tel"
               autoComplete="tel-national"
-              maxLength={16}
+              maxLength={code === '+91' ? 10 : 14}
               value={number}
-              onChange={(e) => setNumber(e.target.value)}
+              onChange={(e) => setNumber(e.target.value.replace(/\D/g, '').slice(0, code === '+91' ? 10 : 14))}
               aria-label="Mobile number"
             />
           </div>
